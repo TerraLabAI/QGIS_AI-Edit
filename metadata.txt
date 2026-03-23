@@ -1,0 +1,73 @@
+[general]
+name=AI Edit by TerraLab
+description=Show a project on real aerial imagery, from a text prompt: a redevelopment before it is built, a street planted with trees, a flood, or an orthophoto redrawn as a clean site plan. Land cover maps, cloud and object removal too. Georeferenced output.
+qgisMinimumVersion=3.22
+qgisMaximumVersion=4.99
+# Qt6 builds of QGIS 3.x refuse to load a plugin that omits this line.
+# QGIS 4 dropped the check and a Qt5 build never runs it.
+supportsQt6=True
+version=1.12.0
+author=Yvann and Lilien from TerraLab
+email=yvann.barbot@terra-lab.ai
+license=GPLv2
+
+changelog=
+    1.12.0
+    - The zone is an "Area of interest" layer, saved with the project and shared by our other plugins
+    - Generate starts on slow connections, with the layers above the image still sent as references
+    - Opening Sessions no longer crashes QGIS
+    - Clearer interface text in all 11 languages
+
+    1.11.0
+    - On a slow or unstable connection, AI Edit waits and retries instead of failing
+    - A result cut off while downloading resumes where it stopped, never saved half-empty
+    - Before/after compare works on QGIS builds without WebP support
+    - A prompt too short to work is refused before any credit is used
+
+    1.10.0
+    - Drag a box on the map to draw a zone, with a hint on the map; right-click finishes
+    - The demo map opens with a ready zone and prompt, plus three one-click starting prompts
+    - Try again makes a new variation; Same edit elsewhere reuses your prompt on a new zone
+    - Closing the panel keeps your zone and prompt, and new results show up ticked on the map
+
+    1.9.3
+    - Vectorize runs again on QGIS 3.44 instead of stopping with a Python error
+    - Vectorized classes fit together with no gap or overlap, rounded corners included
+    - Shapes under the minimum size join the class around them instead of leaving holes
+    - A class renamed in the attribute table stays visible on the map
+
+    1.9.2
+    - Smaller download: the same plugin, without the developer notes in its source
+
+about=
+    Show a project before it exists, on the aerial imagery you already have open
+
+    • Select an area, write what you want, get the result back as a georeferenced layer on the same extent and CRS as your source imagery, tagged as AI-generated
+
+    • The most used case: an orthophoto redrawn as a clean illustrative site plan. Then redevelopments, planted streets, densified blocks, parks, solar farms, flood and sea level scenarios, enhanced aerials, clouds and cars removed, land cover drawn as flat colours
+
+    • Works on any raster on your map: GeoTIFF, JPG, PNG, and online basemaps (WMS, XYZ tiles). Vector layers and other rasters can guide the result as references
+
+    • Guide the result: reference images or layers, a sketch on the map, iterations, and a before/after slider
+
+    • Vectorize: a generated map with flat colours becomes editable polygons, exported to GeoPackage, Shapefile or GeoJSON
+
+    • 100+ ready-made prompts, ranked by what people actually run, or write your own
+
+    • What it is not: a preview, not a document. No dimensions, no legal value, not a site plan for a permit. Not a detector: for building, tree or parcel outlines with real geometry, use AI Segmentation. Not a prediction: a flood scenario is an illustration
+
+    • Windows, macOS, Linux, no GPU needed. Free tier without a card. Powered by Google's Nano Banana image model, run on TerraLab servers
+
+tracker=https://github.com/TerraLabAI/QGIS_AI-Edit/issues
+repository=https://github.com/TerraLabAI/QGIS_AI-Edit
+homepage=https://terra-lab.ai/ai-edit
+
+hasProcessingProvider=yes
+
+tags=ai, artificial intelligence, machine learning, deep learning, neural network, computer vision, generative ai, image generation, image editing, image processing, image classification, classification, raster, satellite, satellite imagery, satellite images, remote sensing, remote-sensing, aerial, orthophoto, orthomosaic, ortofoto, drone, uav, sentinel, sentinel-2, landsat, copernicus, geotiff, multispectral, land cover, landcover, land use, lulc, building detection, buildings, feature extraction, vegetation, cloud removal, cloud masking, super resolution, upscaling, enhancement, inpainting, colorization, restoration, flood, flooding, inundation, simulation, climate change, terrain, urban planning, urbanisme, urban, agriculture, precision agriculture, archaeology, solar, energy, cartography, vectorization, vector, vetor, digitizing, georeferencing, georreferenciamento, geojson, shapefile, gpkg, nano banana, ia
+
+category=Raster
+icon=resources/icons/icon.png
+
+experimental=False
+deprecated=False
