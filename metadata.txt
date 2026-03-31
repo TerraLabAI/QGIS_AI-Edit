@@ -1,19 +1,41 @@
 [general]
 name=AI Edit by TerraLab
-qgisMinimumVersion=3.28
-qgisMaximumVersion=4.99
 description=AI-powered image editing for geospatial data. Select a zone, describe the transformation, get a georeferenced result.
+qgisMinimumVersion=3.22
+qgisMaximumVersion=4.99
 version=0.1.0
-author=TerraLab
-email=contact@terra-lab.ai
+author=Yvann and Lilien from TerraLab
+email=yvann.barbot@terra-lab.ai
 license=GPLv2
-about=Transform map imagery using AI. Select a rectangular zone on your map canvas, write a natural language prompt describing the desired transformation, and receive the result as a georeferenced raster layer. Powered by Nano Banana 2
+
+
+about=
+    AI-powered image editing tool for geospatial rasters. Powered by Nano Banana 2.
+
+    • Select & transform: draw a rectangle on your map, describe the change in natural language
+
+    • Works on any layer: local rasters (GeoTIFF, JPG, PNG) & online layers (WMS, XYZ tiles)
+
+    • Georeferenced output: results are saved as GeoTIFF with full spatial metadata
+
+    • Prompt templates: clouds removal, vegetation, urban planning, flood simulation & more
+
+    • Smart resolution: automatically adapts to your map's zoom level
+
+    • Universal: Windows, macOS, Linux
+
+changelog=
+
 tracker=https://github.com/TerraLabAI/QGIS_AI-Edit/issues
 repository=https://github.com/TerraLabAI/QGIS_AI-Edit
-tags=ai,image,editing,raster,generation,nano banana
 homepage=https://terra-lab.ai/ai-edit
+
+hasProcessingProvider=no
+
+tags=ai, artificial intelligence, machine learning, deep learning, image editing, image generation, raster, satellite, satellite imagery, remote sensing, drone, geotiff, generative ai, nano banana, cloud removal, vegetation, urban planning, flood simulation, terrain, automatic, automation, interactive, python, ia
+
 category=Raster
 icon=resources/icons/icon.png
-hasProcessingProvider=no
+
 experimental=True
 deprecated=False
