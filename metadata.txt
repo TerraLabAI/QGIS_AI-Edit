@@ -1,0 +1,19 @@
+[general]
+name=AI Edit by TerraLab
+qgisMinimumVersion=3.28
+qgisMaximumVersion=4.99
+description=AI-powered image editing for geospatial data. Select a zone, describe the transformation, get a georeferenced result.
+version=0.1.0
+author=TerraLab
+email=contact@terra-lab.ai
+license=GPLv2
+about=Transform map imagery using AI. Select a rectangular zone on your map canvas, write a natural language prompt describing the desired transformation, and receive the result as a georeferenced raster layer. Powered by Nano Banana 2
+tracker=https://github.com/TerraLabAI/QGIS_AI-Edit/issues
+repository=https://github.com/TerraLabAI/QGIS_AI-Edit
+tags=ai,image,editing,raster,generation,nano banana
+homepage=https://terra-lab.ai/ai-edit
+category=Raster
+icon=resources/icons/icon.png
+hasProcessingProvider=no
+experimental=True
+deprecated=False
