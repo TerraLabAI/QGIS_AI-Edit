@@ -1,7 +1,7 @@
 [general]
 name=AI Edit by TerraLab
 description=AI-powered image editing for geospatial data. Select a zone, describe the transformation, get a georeferenced result.
-qgisMinimumVersion=3.22
+qgisMinimumVersion=3.0
 qgisMaximumVersion=4.99
 version=0.1.0
 author=Yvann and Lilien from TerraLab
