@@ -52,8 +52,8 @@ class PipelineContext:
         warnings = []
         if (
             self.aspect_ratio
-            and self.submitted_aspect_ratio
-            and self.aspect_ratio != self.submitted_aspect_ratio
+            and self.submitted_aspect_ratio  # noqa: W503
+            and self.aspect_ratio != self.submitted_aspect_ratio  # noqa: W503
         ):
             warnings.append(
                 f"Aspect ratio mismatch: export={self.aspect_ratio}, "
@@ -61,8 +61,8 @@ class PipelineContext:
             )
         if (
             self.export_width
-            and self.received_image_width
-            and self.export_width != self.received_image_width
+            and self.received_image_width  # noqa: W503
+            and self.export_width != self.received_image_width  # noqa: W503
         ):
             warnings.append(
                 f"Width mismatch: sent={self.export_width}, "
@@ -70,8 +70,8 @@ class PipelineContext:
             )
         if (
             self.export_height
-            and self.received_image_height
-            and self.export_height != self.received_image_height
+            and self.received_image_height  # noqa: W503
+            and self.export_height != self.received_image_height  # noqa: W503
         ):
             warnings.append(
                 f"Height mismatch: sent={self.export_height}, "
