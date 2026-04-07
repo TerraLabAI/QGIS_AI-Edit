@@ -2,6 +2,8 @@ import time
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+from .logger import log
+
 # Supported aspect ratios for Nano Banana 2 (label, width/height ratio)
 ASPECT_RATIOS = [
     ("1:1", 1.0),
@@ -61,10 +63,10 @@ class GenerationService:
         image_b64: str,
         prompt: str,
         auth: dict,
+        suggested_resolution: str,
         aspect_ratio: str = "1:1",
         on_progress: Callable = None,
         ctx=None,
-        suggested_resolution: str = "1K",
     ) -> GenerationResult:
         """Submit image for generation and poll until complete."""
         if self._cancelled:
@@ -86,6 +88,24 @@ class GenerationService:
 
         request_id = resp["request_id"]
 
+        # Use server-suggested polling config if available
+        poll_interval = resp.get("poll_interval", self._poll_interval)
+        estimated_time = resp.get("estimated_time")
+        if estimated_time:
+            max_polls = max(10, int(estimated_time * 2 / poll_interval))
+            log(
+                "Polling: server hints poll_interval={}s, "
+                "estimated_time={}s, max_polls={}".format(
+                    poll_interval, estimated_time, max_polls
+                )
+            )
+        else:
+            max_polls = self._max_polls
+            log(
+                "Polling: using defaults poll_interval={}s, "
+                "max_polls={}".format(poll_interval, max_polls)
+            )
+
         if ctx is not None:
             ctx.submitted_resolution = suggested_resolution
             ctx.submitted_aspect_ratio = aspect_ratio
@@ -105,7 +125,7 @@ class GenerationService:
             )
 
         # Poll
-        for i in range(self._max_polls):
+        for i in range(max_polls):
             if self._cancelled:
                 return GenerationResult(
                     success=False, error="Generation cancelled", request_id=request_id
@@ -117,7 +137,7 @@ class GenerationService:
             if "error" in status_resp and "status" not in status_resp:
                 if ctx is not None:
                     ctx.poll_count = i + 1
-                    ctx.total_wait_seconds = (i + 1) * self._poll_interval
+                    ctx.total_wait_seconds = (i + 1) * poll_interval
                     ctx.final_status = "error"
                 return GenerationResult(
                     success=False,
@@ -129,12 +149,12 @@ class GenerationService:
             status = status_resp.get("status", "unknown")
 
             if on_progress:
-                on_progress(status, i + 1, self._max_polls)
+                on_progress(status, i + 1, max_polls)
 
             if status == "completed":
                 if ctx is not None:
                     ctx.poll_count = i + 1
-                    ctx.total_wait_seconds = (i + 1) * self._poll_interval
+                    ctx.total_wait_seconds = (i + 1) * poll_interval
                     ctx.final_status = "completed"
                 return GenerationResult(
                     success=True,
@@ -145,7 +165,7 @@ class GenerationService:
             if status == "failed":
                 if ctx is not None:
                     ctx.poll_count = i + 1
-                    ctx.total_wait_seconds = (i + 1) * self._poll_interval
+                    ctx.total_wait_seconds = (i + 1) * poll_interval
                     ctx.final_status = "failed"
                 return GenerationResult(
                     success=False,
@@ -153,12 +173,12 @@ class GenerationService:
                     request_id=request_id,
                 )
 
-            if self._poll_interval > 0:
-                time.sleep(self._poll_interval)
+            if poll_interval > 0:
+                time.sleep(poll_interval)
 
         if ctx is not None:
-            ctx.poll_count = self._max_polls
-            ctx.total_wait_seconds = self._max_polls * self._poll_interval
+            ctx.poll_count = max_polls
+            ctx.total_wait_seconds = max_polls * poll_interval
             ctx.final_status = "timeout"
 
         return GenerationResult(

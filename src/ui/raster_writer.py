@@ -115,9 +115,9 @@ def write_geotiff(
             "AI_EDIT_EXTENT", f"{xmin:.6f},{ymin:.6f},{xmax:.6f},{ymax:.6f}"
         )
         dst_ds.SetMetadataItem(
-            "AI_EDIT_RESOLUTION", ctx.submitted_resolution if ctx else "1K"
+            "AI_EDIT_RESOLUTION", ctx.submitted_resolution if ctx else "unknown"
         )
-        dst_ds.SetMetadataItem("AI_EDIT_MODEL", "Nano Banana 2")
+        dst_ds.SetMetadataItem("AI_EDIT_MODEL", "AI Edit")
 
         # Copy all bands (full image, no crop)
         for i in range(1, bands + 1):

@@ -120,6 +120,16 @@ def save_debug_artifacts(
         with open(os.path.join(run_dir, "received.png"), "wb") as f:
             f.write(received_png)
 
+    # Save both sent and received as GeoTIFFs for visual alignment check.
+    # Load sent.tif + received.tif in QGIS to see which one is offset.
+    if ctx.extent and ctx.crs_wkt:
+        _save_debug_geotiff(
+            run_dir, "sent.tif", sent_png, ctx.extent, ctx.crs_wkt
+        )
+        _save_debug_geotiff(
+            run_dir, "received.tif", received_png, ctx.extent, ctx.crs_wkt
+        )
+
     ctx_dict = {}
     for k, v in asdict(ctx).items():
         if v is not None:
@@ -129,6 +139,48 @@ def save_debug_artifacts(
 
     _cleanup_old_runs(debug_dir, max_runs)
     return run_dir
+
+
+def _save_debug_geotiff(
+    run_dir: str,
+    filename: str,
+    image_bytes: Optional[bytes],
+    extent: Dict,
+    crs_wkt: str,
+):
+    """Write a debug GeoTIFF from raw PNG bytes + extent. Fails silently."""
+    if not image_bytes:
+        return
+    try:
+        from osgeo import gdal, osr
+
+        temp_png = os.path.join(run_dir, f"_tmp_{filename}.png")
+        tif_path = os.path.join(run_dir, filename)
+        with open(temp_png, "wb") as f:
+            f.write(image_bytes)
+        src = gdal.Open(temp_png)
+        if src is None:
+            return
+        w, h, bands = src.RasterXSize, src.RasterYSize, min(src.RasterCount, 3)
+        ext_w = extent["xmax"] - extent["xmin"]
+        ext_h = extent["ymax"] - extent["ymin"]
+        drv = gdal.GetDriverByName("GTiff")
+        dst = drv.Create(tif_path, w, h, bands, gdal.GDT_Byte)
+        dst.SetGeoTransform((
+            extent["xmin"], ext_w / w, 0,
+            extent["ymax"], 0, -(ext_h / h),
+        ))
+        srs = osr.SpatialReference()
+        srs.ImportFromWkt(crs_wkt)
+        dst.SetProjection(srs.ExportToWkt())
+        for i in range(1, bands + 1):
+            dst.GetRasterBand(i).WriteArray(src.GetRasterBand(i).ReadAsArray())
+        dst.FlushCache()
+        dst = None
+        src = None
+        os.remove(temp_png)
+    except Exception:
+        pass
 
 
 def _cleanup_old_runs(debug_dir: str, max_runs: int):

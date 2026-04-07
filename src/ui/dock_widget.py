@@ -15,12 +15,13 @@ from qgis.PyQt.QtWidgets import (
     QMenu,
     QStyle,
     QToolButton,
+    QWidgetAction,
 )
 from qgis.PyQt.QtGui import QDesktopServices, QKeySequence
 from qgis.core import QgsProject
 
-from ..core.activation_manager import get_subscribe_url
-from ..core.prompt_presets import PRESET_CATEGORIES
+from ..core.activation_manager import get_subscribe_url, tr
+from ..core.prompt_presets import get_translated_categories
 
 # Brand colors (matching AI Segmentation)
 BRAND_GREEN = "#2e7d32"
@@ -45,7 +46,7 @@ class AIEditDockWidget(QDockWidget):
     change_key_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
-        super().__init__("AI Edit by TerraLab", parent)
+        super().__init__(tr("dock_title"), parent)
         self.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
 
         self._setup_title_bar()
@@ -53,8 +54,8 @@ class AIEditDockWidget(QDockWidget):
         # Main content
         main_widget = QWidget()
         layout = QVBoxLayout(main_widget)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(8)
+        layout.setContentsMargins(8, 4, 8, 8)
+        layout.setSpacing(6)
 
         # --- Activation section ---
         self._activation_widget = self._build_activation_section()
@@ -63,11 +64,11 @@ class AIEditDockWidget(QDockWidget):
         # --- Main content section ---
         self._main_widget = QWidget()
         main_layout = QVBoxLayout(self._main_widget)
-        main_layout.setContentsMargins(0, 8, 0, 0)
-        main_layout.setSpacing(8)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(4)
 
         # Bold label (always visible)
-        self._bold_label = QLabel("Select an Area to Edit with AI:")
+        self._bold_label = QLabel(tr("select_area"))
         self._bold_label.setStyleSheet("font-weight: bold; color: palette(text);")
         main_layout.addWidget(self._bold_label)
 
@@ -77,7 +78,7 @@ class AIEditDockWidget(QDockWidget):
         main_layout.addWidget(self._warning_widget)
 
         # Start button (green, matches AI Segmentation)
-        self._start_btn = QPushButton("Start AI Edit")
+        self._start_btn = QPushButton(tr("start_ai_edit"))
         self._start_btn.setCursor(Qt.PointingHandCursor)
         self._start_btn.setStyleSheet(
             f"QPushButton {{ background-color: {BRAND_GREEN}; padding: 8px 16px; }}"
@@ -87,7 +88,7 @@ class AIEditDockWidget(QDockWidget):
         main_layout.addWidget(self._start_btn)
 
         # Instruction info box (shown during drawing)
-        self._instruction_box = QLabel("Click and drag to select your edit area")
+        self._instruction_box = QLabel(tr("click_drag"))
         self._instruction_box.setWordWrap(True)
         self._instruction_box.setStyleSheet(
             "QLabel {"
@@ -106,16 +107,14 @@ class AIEditDockWidget(QDockWidget):
         self._prompt_section = QWidget()
         prompt_layout = QVBoxLayout(self._prompt_section)
         prompt_layout.setContentsMargins(0, 0, 0, 0)
-        prompt_layout.setSpacing(6)
+        prompt_layout.setSpacing(4)
 
-        self._prompt_label = QLabel("What should AI change?")
+        self._prompt_label = QLabel(tr("what_change"))
         self._prompt_label.setStyleSheet("font-weight: bold; color: palette(text);")
         prompt_layout.addWidget(self._prompt_label)
 
         self._prompt_input = QTextEdit()
-        self._prompt_input.setPlaceholderText(
-            "Type your prompt or use a template below..."
-        )
+        self._prompt_input.setPlaceholderText(tr("prompt_placeholder"))
         self._prompt_input.setFixedHeight(60)
         self._prompt_input.setStyleSheet(
             "border: 1px solid rgba(128,128,128,0.3); border-radius: 4px; padding: 6px;"
@@ -124,7 +123,7 @@ class AIEditDockWidget(QDockWidget):
         prompt_layout.addWidget(self._prompt_input)
 
         # Templates button (flat dropdown trigger, below prompt input)
-        self._templates_btn = QPushButton("\u25bc Prompt Templates")
+        self._templates_btn = QPushButton(tr("prompt_templates"))
         self._templates_btn.setCursor(Qt.PointingHandCursor)
         self._templates_btn.setStyleSheet(
             "QPushButton { text-align: left; color: palette(text); "
@@ -141,7 +140,7 @@ class AIEditDockWidget(QDockWidget):
         main_layout.addWidget(self._prompt_section)
 
         # Generate button
-        self._generate_btn = QPushButton("Generate")
+        self._generate_btn = QPushButton(tr("generate"))
         self._generate_btn.setCursor(Qt.PointingHandCursor)
         self._generate_btn.setEnabled(False)
         self._update_generate_style()
@@ -150,7 +149,7 @@ class AIEditDockWidget(QDockWidget):
         main_layout.addWidget(self._generate_btn)
 
         # Stop button (small gray, below Generate)
-        self._stop_btn = QPushButton("Stop")
+        self._stop_btn = QPushButton(tr("stop"))
         self._stop_btn.setCursor(Qt.PointingHandCursor)
         self._stop_btn.setStyleSheet(
             f"QPushButton {{ background-color: {BRAND_GRAY}; padding: 4px 8px; }}"
@@ -164,7 +163,7 @@ class AIEditDockWidget(QDockWidget):
         progress_layout = QVBoxLayout(self._progress_widget)
         progress_layout.setContentsMargins(0, 0, 0, 0)
         progress_layout.setSpacing(4)
-        self._progress_label = QLabel("Preparing...")
+        self._progress_label = QLabel(tr("preparing"))
         self._progress_label.setStyleSheet("font-size: 11px; color: palette(text);")
         progress_layout.addWidget(self._progress_label)
         self._progress_bar = QProgressBar()
@@ -206,6 +205,8 @@ class AIEditDockWidget(QDockWidget):
         self._trial_info_box.setVisible(False)
         main_layout.addWidget(self._trial_info_box)
 
+        main_layout.addStretch()
+
         layout.addWidget(self._main_widget)
 
         # Spacer to push footer to bottom
@@ -219,7 +220,7 @@ class AIEditDockWidget(QDockWidget):
         footer_layout.addStretch()
 
         self._change_key_link = QLabel(
-            f'<a href="#" style="color: {BRAND_BLUE};">Change key</a>'
+            f'<a href="#" style="color: {BRAND_BLUE};">{tr("change_key")}</a>'
         )
         self._change_key_link.setStyleSheet("font-size: 13px;")
         self._change_key_link.setCursor(Qt.PointingHandCursor)
@@ -228,9 +229,9 @@ class AIEditDockWidget(QDockWidget):
         footer_layout.addWidget(self._change_key_link)
 
         for text, url, handler in [
-            ("Report a bug", "#", self._on_report_bug),
-            ("Tutorial", "https://terra-lab.ai/docs/ai-edit", None),
-            ("About us", "https://terra-lab.ai/about", None),
+            (tr("report_bug"), "#", self._on_report_bug),
+            (tr("tutorial"), "https://terra-lab.ai/docs/ai-edit", None),
+            (tr("about_us"), "https://terra-lab.ai/about", None),
         ]:
             link = QLabel(f'<a href="{url}" style="color: {BRAND_BLUE};">{text}</a>')
             link.setStyleSheet("font-size: 13px;")
@@ -323,12 +324,12 @@ class AIEditDockWidget(QDockWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        title = QLabel("Activate AI Edit")
+        title = QLabel(tr("activate_title"))
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet("font-weight: bold; font-size: 13px; color: palette(text);")
         layout.addWidget(title)
 
-        get_key_btn = QPushButton("Get your activation key")
+        get_key_btn = QPushButton(tr("get_key"))
         get_key_btn.setMinimumHeight(36)
         get_key_btn.setCursor(Qt.PointingHandCursor)
         get_key_btn.setStyleSheet(
@@ -339,7 +340,7 @@ class AIEditDockWidget(QDockWidget):
         get_key_btn.clicked.connect(self._on_get_key_clicked)
         layout.addWidget(get_key_btn)
 
-        paste_label = QLabel("Then paste your activation key:")
+        paste_label = QLabel(tr("paste_key"))
         paste_label.setStyleSheet(
             "font-size: 11px; margin-top: 2px; color: palette(text);"
         )
@@ -353,7 +354,7 @@ class AIEditDockWidget(QDockWidget):
         self._code_input.returnPressed.connect(self._on_unlock_clicked)
         code_row.addWidget(self._code_input)
 
-        unlock_btn = QPushButton("Activate")
+        unlock_btn = QPushButton(tr("activate"))
         unlock_btn.setMinimumHeight(28)
         unlock_btn.setMinimumWidth(70)
         unlock_btn.setStyleSheet(
@@ -393,23 +394,54 @@ class AIEditDockWidget(QDockWidget):
         icon_label.setFixedSize(16, 16)
         warning_layout.addWidget(icon_label, 0, Qt.AlignTop)
 
-        self._warning_text = QLabel("No visible layer. Add imagery to your project.")
+        self._warning_text = QLabel(tr("no_visible_layer"))
         self._warning_text.setWordWrap(True)
         warning_layout.addWidget(self._warning_text, 1)
 
         return widget
 
-    def _build_templates_menu(self):
-        """Build flat popup menu with category headers (no submenus)."""
+    def _build_templates_menu(self, categories=None):
+        """Build flat popup menu with category headers and indented items."""
+        if categories is None:
+            categories = get_translated_categories()
         menu = QMenu(self)
-        for category in PRESET_CATEGORIES:
-            menu.addSection(category["label"])
+        menu.setStyleSheet(
+            "QMenu::item { padding: 3px 12px 3px 20px;"
+            "  color: rgba(255,255,255,0.72); }"
+            "QMenu::item:selected { background: rgba(255,255,255,0.08); }"
+            "QMenu::separator { margin: 4px 8px; }"
+        )
+        header_html = {
+            "remove": (
+                '<span style="color:#e06060;">\u2715</span>'
+                ' <span style="color:rgba(255,255,255,0.50);">Remove</span>'
+            ),
+            "add": (
+                '<span style="color:#60c060;">+</span>'
+                ' <span style="color:rgba(255,255,255,0.50);">Add</span>'
+            ),
+        }
+        for i, category in enumerate(categories):
+            if i > 0:
+                menu.addSeparator()
+            html = header_html.get(category["key"], category["label"])
+            header_label = QLabel(html)
+            header_label.setTextFormat(Qt.RichText)
+            header_label.setStyleSheet("padding: 6px 12px 2px 8px;")
+            header_action = QWidgetAction(menu)
+            header_action.setDefaultWidget(header_label)
+            header_action.setEnabled(False)
+            menu.addAction(header_action)
             for preset in category["presets"]:
-                action = menu.addAction(preset["label"])
+                action = menu.addAction("  \u2022 " + preset["label"])
                 action.triggered.connect(
                     lambda checked, p=preset: self._on_preset_clicked(p)
                 )
         self._templates_btn.setMenu(menu)
+
+    def update_presets(self, categories):
+        """Rebuild the templates menu with new categories (e.g. from server)."""
+        self._build_templates_menu(categories)
 
     # --- Public methods ---
 
@@ -428,6 +460,7 @@ class AIEditDockWidget(QDockWidget):
     def set_active_mode(self):
         """Enter active mode: drawing rectangle."""
         self._active = True
+        self._bold_label.setVisible(False)
         self._start_btn.setVisible(False)
         self._warning_widget.setVisible(False)
         self._instruction_box.setVisible(True)
@@ -436,6 +469,7 @@ class AIEditDockWidget(QDockWidget):
     def set_zone_selected(self):
         """Zone drawn: show prompt flow (no Start button)."""
         self._zone_selected = True
+        self._bold_label.setVisible(False)
         self._instruction_box.setVisible(False)
         self._prompt_section.setVisible(True)
         self._generate_btn.setVisible(True)
@@ -446,6 +480,7 @@ class AIEditDockWidget(QDockWidget):
         """Reset everything to initial state."""
         self._active = False
         self._zone_selected = False
+        self._bold_label.setVisible(True)
         self._start_btn.setVisible(True)
         self._stop_btn.setVisible(False)
         self._instruction_box.setVisible(False)
@@ -480,7 +515,7 @@ class AIEditDockWidget(QDockWidget):
             self._templates_btn.setEnabled(False)
             self._generate_btn.setVisible(False)
             self._stop_btn.setVisible(True)
-            self._progress_label.setText("Preparing...")
+            self._progress_label.setText(tr("preparing"))
         else:
             # Restore prompt interaction
             self._prompt_input.setReadOnly(False)
@@ -509,9 +544,10 @@ class AIEditDockWidget(QDockWidget):
     def set_generation_complete(self, layer_name: str):
         """Show success message and reset to idle state."""
         self._progress_widget.setVisible(False)
-        self.set_status(f"\u2705 {layer_name}")
+        self._status_label.setText("")
         self._active = False
         self._zone_selected = False
+        self._bold_label.setVisible(True)
         self._start_btn.setVisible(True)
         self._start_btn.setEnabled(True)
         self._stop_btn.setVisible(False)
@@ -529,12 +565,11 @@ class AIEditDockWidget(QDockWidget):
 
     def show_trial_exhausted_info(self, message: str, subscribe_url: str):
         self._trial_info_text.setText(
-            f"{message}\n\nAI Edit runs on cloud AI infrastructure with real "
-            "costs. Your subscription helps keep the plugin open source."
+            f"{message}\n\n{tr('trial_exhausted_info')}"
         )
         self._trial_info_link.setText(
             f'<a href="{subscribe_url}" style="color: {BRAND_BLUE}; '
-            f'font-weight: bold;">Subscribe at terra-lab.ai</a>'
+            f'font-weight: bold;">{tr("subscribe_link")}</a>'
         )
         self._trial_info_box.setVisible(True)
         self._status_label.setText("")
@@ -584,7 +619,7 @@ class AIEditDockWidget(QDockWidget):
     def _on_unlock_clicked(self):
         code = self._code_input.text().strip()
         if not code:
-            self.set_activation_message("Enter your code", is_error=True)
+            self.set_activation_message(tr("enter_code"), is_error=True)
             return
         self.activation_attempted.emit(code)
 

@@ -15,3 +15,11 @@ supabase/
 .superpowers/
 .debug/
 note
+.gstack/
+
+# Internal dev docs — never publish
+docs/
+RECAP_TODO.md
+CLAUDE.md
+.claude/
+terralab-website/

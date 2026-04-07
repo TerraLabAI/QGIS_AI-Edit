@@ -1,12 +1,39 @@
 import base64
-from typing import Tuple
+from typing import Tuple, Optional
 
 from qgis.PyQt.QtCore import QSize, QBuffer, QIODevice
 from qgis.PyQt.QtGui import QImage, QPainter
 from qgis.core import QgsMapSettings, QgsMapRendererCustomPainterJob, QgsRectangle
 
 
-MAX_DIMENSION = 1024
+# Global server config (set by plugin.py at startup)
+# Plugin cannot export without server config
+_server_config: Optional[dict] = None
+
+
+def set_server_config(config: dict):
+    """Set server export config fetched at plugin startup."""
+    global _server_config
+    _server_config = config
+
+
+def has_server_config() -> bool:
+    """Check if server config has been loaded."""
+    return _server_config is not None
+
+
+def _get_max_dimension() -> Optional[int]:
+    """Get max dimension from server config. Returns None if unavailable."""
+    if _server_config:
+        return _server_config.get("max_dimension")
+    return None
+
+
+def _get_align() -> Optional[int]:
+    """Get pixel alignment from server config. Returns None if unavailable."""
+    if _server_config:
+        return _server_config.get("align")
+    return None
 
 
 def export_canvas_zone(
@@ -28,21 +55,34 @@ def export_canvas_zone(
 
     # Use canvas scale to determine resolution (zoom level),
     # but derive pixel aspect ratio from the geographic extent (the truth).
+    max_dim = _get_max_dimension()
+    align = _get_align()
+
+    if max_dim is None or align is None:
+        raise RuntimeError(
+            "Export config not loaded from server. "
+            "Check your internet connection and restart QGIS."
+        )
+
     px_w, px_h = get_zone_pixel_size(map_settings, extent)
     longest = max(max(px_w, px_h), 1)
-    longest = min(longest, MAX_DIMENSION)
+    longest = min(longest, max_dim)
 
     ext_ratio = extent.width() / extent.height()
     if ext_ratio >= 1:
         out_w = longest
-        out_h = max(1, int(round(longest / ext_ratio)))
+        out_h = max(align, int(round(longest / ext_ratio)))
     else:
         out_h = longest
-        out_w = max(1, int(round(longest * ext_ratio)))
+        out_w = max(align, int(round(longest * ext_ratio)))
+
+    # Round to multiples of align so AI model doesn't need to pad
+    out_w = max(align, (out_w // align) * align)
+    out_h = max(align, (out_h // align) * align)
 
     # Final clamp
-    out_w = min(MAX_DIMENSION, max(1, out_w))
-    out_h = min(MAX_DIMENSION, max(1, out_h))
+    out_w = min(max_dim, out_w)
+    out_h = min(max_dim, out_h)
 
     # Adjust the extent to exactly match the output pixel aspect ratio.
     # This prevents QGIS from expanding the extent, ensuring the rendered
@@ -77,9 +117,9 @@ def export_canvas_zone(
     settings.setOutputSize(QSize(out_w, out_h))
     settings.setBackgroundColor(map_settings.backgroundColor())
 
-    # Use our pre-adjusted extent as the spatial truth — not settings.extent()
-    # which may shift by up to half a pixel due to QGIS grid snapping.
-    actual_extent = adjusted_extent
+    # Use visibleExtent(): the actual geographic area QGIS rendered,
+    # after any internal adjustment for pixel grid alignment.
+    actual_extent = settings.visibleExtent()
 
     # Render to QImage
     image = QImage(QSize(out_w, out_h), QImage.Format_ARGB32)
@@ -140,15 +180,23 @@ def calculate_suggested_resolution(
 ) -> str:
     """Calculate ideal resolution based on native pixel density of visible data.
 
-    Returns one of: "0.5K", "1K", "2K", "4K"
+    Uses server-provided thresholds. Raises RuntimeError if not available.
     """
+    if not _server_config or "resolution_thresholds" not in _server_config:
+        raise RuntimeError(
+            "Export config not loaded from server. "
+            "Check your internet connection and restart QGIS."
+        )
+
     px_w, px_h = get_zone_pixel_size(map_settings, extent)
     native_px = max(px_w, px_h)
 
-    if native_px <= 600:
-        return "0.5K"
-    elif native_px <= 1200:
-        return "1K"
-    elif native_px <= 2400:
-        return "2K"
-    return "4K"
+    thresholds = _server_config["resolution_thresholds"]
+
+    # Find first threshold where native_px <= max_px
+    for threshold in thresholds:
+        if native_px <= threshold["max_px"]:
+            return threshold["resolution"]
+
+    # Fallback to last resolution if none matched
+    return thresholds[-1]["resolution"] if thresholds else "medium"

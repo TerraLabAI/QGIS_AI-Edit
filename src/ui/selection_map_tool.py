@@ -86,13 +86,26 @@ class RectangleSelectionTool(QgsMapTool):
         height_delta = abs(new_height - rect.height())
         width_delta = abs(new_width - rect.width())
 
-        cx, cy = rect.center().x(), rect.center().y()
-        if height_delta <= width_delta:
-            rect.setYMinimum(cy - new_height / 2)
-            rect.setYMaximum(cy + new_height / 2)
+        sp = self._start_point
+        if sp is not None:
+            if height_delta <= width_delta:
+                if abs(sp.y() - rect.yMinimum()) < abs(sp.y() - rect.yMaximum()):
+                    rect.setYMaximum(rect.yMinimum() + new_height)
+                else:
+                    rect.setYMinimum(rect.yMaximum() - new_height)
+            else:
+                if abs(sp.x() - rect.xMinimum()) < abs(sp.x() - rect.xMaximum()):
+                    rect.setXMaximum(rect.xMinimum() + new_width)
+                else:
+                    rect.setXMinimum(rect.xMaximum() - new_width)
         else:
-            rect.setXMinimum(cx - new_width / 2)
-            rect.setXMaximum(cx + new_width / 2)
+            cx, cy = rect.center().x(), rect.center().y()
+            if height_delta <= width_delta:
+                rect.setYMinimum(cy - new_height / 2)
+                rect.setYMaximum(cy + new_height / 2)
+            else:
+                rect.setXMinimum(cx - new_width / 2)
+                rect.setXMaximum(cx + new_width / 2)
 
         return rect, best
 

@@ -1,8 +1,8 @@
 import os
 
-from qgis.PyQt.QtCore import QSettings, Qt
-from qgis.PyQt.QtWidgets import QAction
-from qgis.PyQt.QtGui import QIcon, QColor
+from qgis.PyQt.QtCore import QSettings, Qt, QUrl, QThread, pyqtSignal
+from qgis.PyQt.QtWidgets import QAction, QMessageBox
+from qgis.PyQt.QtGui import QIcon, QColor, QDesktopServices
 from qgis.core import QgsRectangle, QgsWkbTypes, QgsPointXY
 from qgis.gui import QgsRubberBand
 
@@ -14,20 +14,71 @@ from ..core.activation_manager import (
     save_activation,
     clear_activation,
     validate_key_with_server,
+    has_consent,
+    save_consent,
+    tr,
 )
 from ..core.logger import log, log_warning
 from ..core.pipeline_context import PipelineContext
 from ..workers.generation_worker import GenerationWorker
 from .dock_widget import AIEditDockWidget
 from .selection_map_tool import RectangleSelectionTool
-from .canvas_exporter import export_canvas_zone, calculate_suggested_resolution
+from .canvas_exporter import (
+    export_canvas_zone,
+    calculate_suggested_resolution,
+    set_server_config,
+    has_server_config,
+)
 from .raster_writer import add_geotiff_to_project, get_output_dir
 
+
+from ..core.prompt_presets import fetch_remote_presets
 
 SETTINGS_KEY_PREFIX = "AIEdit"
 
 DASHBOARD_URL = "https://terra-lab.ai/dashboard"
 SUBSCRIBE_URL = "https://terra-lab.ai/ai-edit"
+
+
+class _PresetLoaderWorker(QThread):
+    """Background worker to fetch remote presets without blocking QGIS."""
+
+    loaded = pyqtSignal(list)
+
+    def __init__(self, client):
+        super().__init__()
+        self._client = client
+
+    def run(self):
+        result = fetch_remote_presets(self._client)
+        if result:
+            self.loaded.emit(result)
+
+
+class _ExportConfigLoaderWorker(QThread):
+    """Background worker to fetch export config from server without blocking QGIS."""
+
+    loaded = pyqtSignal(dict)
+    failed = pyqtSignal(str)
+
+    def __init__(self, client):
+        super().__init__()
+        self._client = client
+
+    def run(self):
+        try:
+            log("Export config: fetching from server...")
+            config = self._client.get_export_config()
+            if "error" not in config:
+                log("Export config: loaded from server")
+                self.loaded.emit(config)
+            else:
+                error_msg = config.get("error", "Unknown error")
+                log_warning(f"Export config: server returned error - {error_msg}")
+                self.failed.emit(f"Server error: {error_msg}")
+        except Exception as e:
+            log_warning(f"Export config: fetch failed - {e}")
+            self.failed.emit(f"Connection error: {e}")
 
 
 def _enrich_error_message(error: str, code: str = "") -> str:
@@ -72,6 +123,8 @@ class AIEditPlugin:
         self._selection_rubber_band = None
         self._previous_map_tool = None
         self._terralab_toolbar = None
+        self._preset_loader = None
+        self._export_config_loader = None
 
         # Initialize tiers
         self._dev_mode = False
@@ -122,12 +175,10 @@ class AIEditPlugin:
 
         self._action = QAction(
             QIcon(icon_path) if os.path.exists(icon_path) else QIcon(),
-            "AI Edit",
+            tr("ai_edit"),
             main_window,
         )
-        self._action.setToolTip(
-            "AI Edit by TerraLab\nAI-powered image editing for geospatial data"
-        )
+        self._action.setToolTip(tr("ai_edit_tooltip"))
         self._action.triggered.connect(self._toggle_dock)
         add_plugin_to_menu(self._terralab_menu, self._action, "ai-edit")
 
@@ -171,6 +222,12 @@ class AIEditPlugin:
         from .error_report_dialog import start_log_collector
 
         start_log_collector()
+
+        # Load remote presets in background (non-blocking)
+        self._load_remote_presets()
+
+        # Load export config in background (non-blocking)
+        self._load_export_config()
 
         if self._dev_mode:
             log("AI Edit plugin loaded [DEV MODE]")
@@ -225,6 +282,38 @@ class AIEditPlugin:
         else:
             self._dock_widget.show()
 
+    def _load_remote_presets(self):
+        """Fetch presets from server in background thread."""
+        self._preset_loader = _PresetLoaderWorker(self._client)
+        self._preset_loader.loaded.connect(self._on_presets_loaded)
+        self._preset_loader.start()
+
+    def _on_presets_loaded(self, categories):
+        """Update dock widget menu with remote presets."""
+        if self._dock_widget:
+            self._dock_widget.update_presets(categories)
+
+    def _load_export_config(self):
+        """Fetch export config from server in background thread."""
+        self._export_config_loader = _ExportConfigLoaderWorker(self._client)
+        self._export_config_loader.loaded.connect(self._on_export_config_loaded)
+        self._export_config_loader.failed.connect(self._on_export_config_failed)
+        self._export_config_loader.start()
+
+    def _on_export_config_loaded(self, config):
+        """Set global export config from server response."""
+        set_server_config(config)
+
+    def _on_export_config_failed(self, error_message: str):
+        """Handle export config loading failure."""
+        log_warning(f"Export config failed to load: {error_message}")
+        if self._dock_widget:
+            self._dock_widget.set_status(
+                f"Warning: Cannot connect to server ({error_message}). "
+                "Plugin requires internet connection to function.",
+                is_error=True
+            )
+
     def _activate_selection_tool(self):
         current_tool = self._canvas.mapTool()
         if current_tool and current_tool != self._map_tool:
@@ -261,7 +350,7 @@ class AIEditPlugin:
 
     def _on_zone_too_small(self):
         self._dock_widget.set_status(
-            "Selected zone too small (min 50x50px)", is_error=True
+            tr("zone_too_small"), is_error=True
         )
 
     def _on_change_key(self):
@@ -273,13 +362,37 @@ class AIEditPlugin:
         self._dock_widget.set_activation_message("")
         log("Activation key cleared by user")
 
+    def _show_consent_dialog(self) -> bool:
+        """Show the terms/privacy consent dialog. Returns True if accepted."""
+        msg = QMessageBox(self._iface.mainWindow())
+        msg.setWindowTitle(tr("consent_title"))
+        msg.setText(tr("consent_text"))
+        msg.setInformativeText(
+            f'<a href="https://terra-lab.ai/terms-of-sale">{tr("consent_terms_link")}</a> | '
+            f'<a href="https://terra-lab.ai/privacy-policy">{tr("consent_privacy_link")}</a>'
+        )
+        accept_btn = msg.addButton(tr("consent_accept"), QMessageBox.AcceptRole)
+        msg.addButton(tr("consent_decline"), QMessageBox.RejectRole)
+        msg.setDefaultButton(accept_btn)
+        msg.exec_()
+        return msg.clickedButton() == accept_btn
+
     def _on_activation_attempted(self, key: str):
+        # Show consent dialog on first activation attempt
+        if not has_consent():
+            if not self._show_consent_dialog():
+                self._dock_widget.set_activation_message(
+                    tr("consent_decline"), is_error=True
+                )
+                return
+            save_consent()
+
         success, message = validate_key_with_server(self._client, key)
         if success:
             save_activation(key)
             self._auth_manager.set_activation_key(key)
             self._dock_widget.set_activated(True)
-            self._dock_widget.set_activation_message("Activated!", is_error=False)
+            self._dock_widget.set_activation_message(tr("key_verified"), is_error=False)
             log("Activation successful")
         else:
             self._dock_widget.set_activation_message(message, is_error=True)
@@ -289,7 +402,16 @@ class AIEditPlugin:
         if self._worker and self._worker.isRunning():
             return
         if not self._selected_extent:
-            self._dock_widget.set_status("No zone selected", is_error=True)
+            self._dock_widget.set_status(tr("no_zone"), is_error=True)
+            return
+
+        # Ensure server config is loaded before generation
+        if not has_server_config():
+            self._dock_widget.set_status(
+                "Cannot generate: export config not loaded from server. "
+                "Check your internet connection and restart QGIS.",
+                is_error=True
+            )
             return
 
         ctx = PipelineContext()
@@ -300,7 +422,9 @@ class AIEditPlugin:
                 map_settings, self._selected_extent, ctx=ctx
             )
         except Exception as e:
-            self._dock_widget.set_status(f"Export error: {e}", is_error=True)
+            self._dock_widget.set_status(
+                tr("export_error").format(error=e), is_error=True
+            )
             return
 
         suggested_res = calculate_suggested_resolution(
@@ -377,11 +501,15 @@ class AIEditPlugin:
             layer = add_geotiff_to_project(
                 result_info["geotiff_path"], result_info.get("prompt", "")
             )
-            self._dock_widget.set_generation_complete(f"Layer added: {layer.name()}")
+            self._dock_widget.set_generation_complete(
+                tr("layer_added").format(name=layer.name())
+            )
             log(f"Generation complete: {result_info['geotiff_path']}")
         except Exception as e:
             self._dock_widget.set_idle()
-            self._dock_widget.set_status(f"Error adding layer: {e}", is_error=True)
+            self._dock_widget.set_status(
+                tr("error_adding_layer").format(error=e), is_error=True
+            )
             log_warning(f"Failed to add layer: {e}")
 
     def _cleanup_worker(self):

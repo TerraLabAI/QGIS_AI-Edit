@@ -53,11 +53,11 @@ class GenerationWorker(QThread):
         extent_dict,
         crs_wkt,
         output_dir,
+        suggested_resolution,
         ctx=None,
         debug_mode=False,
         plugin_dir="",
         skip_trial_check=False,
-        suggested_resolution="1K",
     ):
         super().__init__()
         self._client = client
@@ -130,13 +130,6 @@ class GenerationWorker(QThread):
             self.error.emit(f"Failed to download result image: {e}", "DOWNLOAD_ERROR")
             return
 
-        # Validate pipeline context
-        if self._ctx is not None:
-            warnings = self._ctx.validate()
-            for w in warnings:
-                log_warning(f"Pipeline: {w}")
-            log(f"Pipeline: {self._ctx.safe_log_summary()}")
-
         self.progress.emit("Saving...", 0, 0)
 
         try:
@@ -155,6 +148,13 @@ class GenerationWorker(QThread):
         except Exception as e:
             self.error.emit(f"Failed to write GeoTIFF: {e}", "WRITE_ERROR")
             return
+
+        # Validate after write_geotiff so received dimensions are populated
+        if self._ctx is not None:
+            warnings = self._ctx.validate()
+            for w in warnings:
+                log_warning(f"Pipeline: {w}")
+            log(f"Pipeline: {self._ctx.safe_log_summary()}")
 
         self.finished.emit({"geotiff_path": geotiff_path, "prompt": self._prompt})
 
