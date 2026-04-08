@@ -130,13 +130,10 @@ def export_canvas_zone(
     job.waitForFinished()
     painter.end()
 
-    # Convert to base64 JPEG (significantly smaller than PNG for aerial imagery,
-    # keeping the payload well under Vercel's 4.5 MB body-size limit).
-    # The image is always opaque (background fill applied above), so JPEG is safe.
+    # Convert to base64 PNG
     buffer = QBuffer()
     buffer.open(QIODevice.WriteOnly)
-    rgb_image = image.convertToFormat(QImage.Format_RGB32)
-    rgb_image.save(buffer, "JPEG", 85)
+    image.save(buffer, "PNG")
     b64 = base64.b64encode(buffer.data().data()).decode("ascii")
 
     # Populate pipeline context

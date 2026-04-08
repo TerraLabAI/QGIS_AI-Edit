@@ -38,8 +38,8 @@ class AuthManager:
         auth = self.get_auth_header()
         try:
             usage = self._client.get_usage(auth=auth)
-        except Exception as e:
-            return False, f"Connection error: {e}", "CONNECTION_ERROR"
+        except Exception:
+            return False, "Connection error. Check your internet connection.", "CONNECTION_ERROR"
 
         if "error" in usage:
             code = usage.get("code", "")

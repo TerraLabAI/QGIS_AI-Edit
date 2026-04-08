@@ -6,6 +6,7 @@ Emits Qt signals for progress, errors, and completion.
 
 import base64
 import random
+import time
 
 from qgis.PyQt.QtCore import QThread, pyqtSignal
 
@@ -34,12 +35,15 @@ PROGRESS_MESSAGES = [
     "Magic in progress...",
 ]
 
+# Fallback if server doesn't return estimated_time
+DEFAULT_ESTIMATED_TIME = 35
+
 
 class GenerationWorker(QThread):
     """Worker thread for auth check, generation, download, and GeoTIFF writing."""
 
     finished = pyqtSignal(object)  # dict with result info
-    progress = pyqtSignal(str, int, int)  # status, current, total
+    progress = pyqtSignal(str, int)  # status message, percentage (0-100)
     error = pyqtSignal(str, str)  # error message, error code
 
     def __init__(
@@ -76,7 +80,7 @@ class GenerationWorker(QThread):
         self._suggested_resolution = suggested_resolution
 
     def run(self):
-        self.progress.emit("Preparing...", 0, 0)
+        self.progress.emit("Preparing...", 0)
 
         if not self._skip_trial_check:
             try:
@@ -89,21 +93,32 @@ class GenerationWorker(QThread):
                 self.error.emit(reason, code)
                 return
 
-        self.progress.emit("Uploading...", 0, 0)
+        self.progress.emit("Uploading...", 0)
 
         # Shuffle messages so each generation feels different
         messages = list(PROGRESS_MESSAGES)
         random.shuffle(messages)
         self._msg_index = 0
         self._poll_count = 0
+        self._start_time = time.time()
 
-        def _on_progress(status, current, total):
+        def _on_progress(status, current, total, estimated_time=None, elapsed=None):
             # Only change message every 2 polls (~4s) for a smoother feel
             self._poll_count += 1
             if self._poll_count % 2 == 1:
                 msg = messages[self._msg_index % len(messages)]
                 self._msg_index += 1
-                self.progress.emit(msg, current, total)
+
+                # Compute percentage with ease-out curve
+                est = estimated_time or DEFAULT_ESTIMATED_TIME
+                t_elapsed = elapsed if elapsed is not None else (time.time() - self._start_time)
+                t = min(t_elapsed / est, 1.0) if est > 0 else 0
+                # Ease-out quadratic: fast start, slows near end
+                pct = min(95, int(100 * (1 - (1 - t) ** 2)))
+
+                remaining = max(0, int(est - t_elapsed))
+                time_text = "  ~{}s".format(remaining) if remaining > 5 else ""
+                self.progress.emit("{}{}".format(msg, time_text), pct)
 
         result = self._service.generate(
             image_b64=self._image_b64,
@@ -121,7 +136,7 @@ class GenerationWorker(QThread):
             )
             return
 
-        self.progress.emit("Downloading...", 0, 0)
+        self.progress.emit("Downloading...", 96)
 
         try:
             image_data = self._client.download_image(result.image_url)
@@ -130,7 +145,7 @@ class GenerationWorker(QThread):
             self.error.emit(f"Failed to download result image: {e}", "DOWNLOAD_ERROR")
             return
 
-        self.progress.emit("Saving...", 0, 0)
+        self.progress.emit("Saving...", 98)
 
         try:
             ext = self._extent_dict

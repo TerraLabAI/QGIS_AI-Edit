@@ -1,7 +1,7 @@
 import os
 
 from qgis.PyQt.QtCore import QSettings, Qt, QUrl, QThread, pyqtSignal
-from qgis.PyQt.QtWidgets import QAction, QMessageBox
+from qgis.PyQt.QtWidgets import QAction
 from qgis.PyQt.QtGui import QIcon, QColor, QDesktopServices
 from qgis.core import QgsRectangle, QgsWkbTypes, QgsPointXY
 from qgis.gui import QgsRubberBand
@@ -14,6 +14,9 @@ from ..core.activation_manager import (
     save_activation,
     clear_activation,
     validate_key_with_server,
+    send_magic_link,
+    get_dashboard_url,
+    get_server_config,
     has_consent,
     save_consent,
     tr,
@@ -83,13 +86,23 @@ class _ExportConfigLoaderWorker(QThread):
 
 def _enrich_error_message(error: str, code: str = "") -> str:
     """Add actionable guidance to error messages based on error code."""
-    if code in ("INVALID_KEY", "SUBSCRIPTION_INACTIVE"):
+    if code in ("INVALID_KEY", "SUBSCRIPTION_INACTIVE", "FREE_TIER_EXPIRED"):
         return f'{error} — <a href="{DASHBOARD_URL}">Check your dashboard</a>'
     if code == "TRIAL_EXHAUSTED":
+        config = get_server_config()
+        dashboard = config.get("upgrade_url", get_dashboard_url())
+        if config.get("promo_active") and config.get("promo_code"):
+            promo_msg = tr("free_promo_message").replace(
+                "{credits}", str(config.get("free_credits", 10))
+            ).replace("{code}", config["promo_code"])
+            return (
+                f'{tr("free_exhausted").replace("{credits}", str(config.get("free_credits", 10)))} '
+                f'{promo_msg} '
+                f'<a href="{dashboard}">{tr("free_subscribe")}</a>'
+            )
         return (
-            f"{error}. AI Edit runs on cloud AI infrastructure with real costs. "
-            f"Your subscription helps keep the plugin open source. "
-            f'<a href="{SUBSCRIBE_URL}">Subscribe at terra-lab.ai</a>'
+            f"{error}. "
+            f'<a href="{dashboard}">{tr("free_subscribe")}</a>'
         )
     if code == "PROXY_ERROR":
         return f"{error} — Check QGIS proxy settings: Settings > Options > Network"
@@ -200,6 +213,7 @@ class AIEditPlugin:
         self._dock_widget.stop_clicked.connect(self._on_stop)
         self._dock_widget.generate_clicked.connect(self._on_generate)
         self._dock_widget.activation_attempted.connect(self._on_activation_attempted)
+        self._dock_widget.free_signup_requested.connect(self._on_free_signup)
         self._dock_widget.change_key_clicked.connect(self._on_change_key)
 
         # Create map tool
@@ -233,12 +247,35 @@ class AIEditPlugin:
             log("AI Edit plugin loaded [DEV MODE]")
         else:
             log("AI Edit plugin loaded")
+        if self._skip_trial_check:
+            log_warning("DEV MODE: SKIP_TRIAL_CHECK is active — auth checks bypassed")
 
     def unload(self):
         """Called by QGIS when plugin is unloaded."""
+        # Stop generation worker with fallback to terminate
         if self._worker and self._worker.isRunning():
             self._generation_service.cancel()
-            self._worker.wait(5000)
+            for sig in [self._worker.finished, self._worker.progress, self._worker.error]:
+                try:
+                    sig.disconnect()
+                except (RuntimeError, TypeError):
+                    pass
+            self._worker.quit()
+            if not self._worker.wait(3000):
+                self._worker.terminate()
+                self._worker.wait(1000)
+        self._worker = None
+
+        # Stop background loader workers
+        for loader in [self._preset_loader, self._export_config_loader]:
+            if loader and loader.isRunning():
+                try:
+                    loader.quit()
+                    loader.wait(1000)
+                except RuntimeError:
+                    pass
+        self._preset_loader = None
+        self._export_config_loader = None
 
         self._clear_selection_rectangle()
 
@@ -341,52 +378,28 @@ class AIEditPlugin:
 
     def _on_zone_selected(self, extent: QgsRectangle):
         self._selected_extent = extent
-        self._dock_widget.set_zone_selected()
-        # Show persistent selection rectangle before deactivating the tool
+        # Show rectangle and deactivate tool BEFORE setting focus on prompt
         self._show_selection_rectangle(extent)
         self._canvas.unsetMapTool(self._map_tool)
         self._restore_previous_map_tool()
+        # Focus set LAST — after map tool ops that steal focus
+        self._dock_widget.set_zone_selected()
         log("Zone selected")
 
     def _on_zone_too_small(self):
-        self._dock_widget.set_status(
-            tr("zone_too_small"), is_error=True
-        )
+        self._canvas.unsetMapTool(self._map_tool)
+        self._restore_previous_map_tool()
+        self._dock_widget.set_idle()
+        self._dock_widget.set_status(tr("zone_too_small"), is_error=True)
 
     def _on_change_key(self):
         """Reset activation state so user can enter a new key."""
         clear_activation()
         self._auth_manager.set_activation_key("")
-        self._dock_widget.set_activated(False)
-        self._dock_widget.set_activation_key("")
-        self._dock_widget.set_activation_message("")
+        self._dock_widget.show_change_key_mode()
         log("Activation key cleared by user")
 
-    def _show_consent_dialog(self) -> bool:
-        """Show the terms/privacy consent dialog. Returns True if accepted."""
-        msg = QMessageBox(self._iface.mainWindow())
-        msg.setWindowTitle(tr("consent_title"))
-        msg.setText(tr("consent_text"))
-        msg.setInformativeText(
-            f'<a href="https://terra-lab.ai/terms-of-sale">{tr("consent_terms_link")}</a> | '
-            f'<a href="https://terra-lab.ai/privacy-policy">{tr("consent_privacy_link")}</a>'
-        )
-        accept_btn = msg.addButton(tr("consent_accept"), QMessageBox.AcceptRole)
-        msg.addButton(tr("consent_decline"), QMessageBox.RejectRole)
-        msg.setDefaultButton(accept_btn)
-        msg.exec_()
-        return msg.clickedButton() == accept_btn
-
     def _on_activation_attempted(self, key: str):
-        # Show consent dialog on first activation attempt
-        if not has_consent():
-            if not self._show_consent_dialog():
-                self._dock_widget.set_activation_message(
-                    tr("consent_decline"), is_error=True
-                )
-                return
-            save_consent()
-
         success, message = validate_key_with_server(self._client, key)
         if success:
             save_activation(key)
@@ -398,12 +411,29 @@ class AIEditPlugin:
             self._dock_widget.set_activation_message(message, is_error=True)
             log_warning(f"Activation failed: {message}")
 
+    def _on_free_signup(self, email: str):
+        """Handle free tier signup: send magic link via API."""
+        success, message_key = send_magic_link(self._client, email)
+        self._dock_widget.reset_free_signup_button()
+        self._dock_widget.set_activation_message(tr(message_key), is_error=not success)
+        if success:
+            self._dock_widget.show_post_signup_state()
+            log("Magic link sent")
+        else:
+            log_warning("Magic link failed: {}".format(message_key))
+
     def _on_generate(self, prompt: str):
         if self._worker and self._worker.isRunning():
+            self._dock_widget.set_status("Generation already in progress", is_error=True)
             return
         if not self._selected_extent:
             self._dock_widget.set_status(tr("no_zone"), is_error=True)
             return
+
+        # Save consent on first generation and hide checkbox
+        if not has_consent():
+            save_consent()
+            self._dock_widget.hide_consent()
 
         # Ensure server config is loaded before generation
         if not has_server_config():
@@ -452,7 +482,7 @@ class AIEditPlugin:
         self._dock_widget.set_generating(True)
         self._dock_widget.set_status("")
         self._generation_service.reset()
-        log(f"Generation started: prompt='{prompt[:50]}', ratio={aspect_ratio}")
+        log(f"Generation started: prompt_len={len(prompt)}, ratio={aspect_ratio}")
 
         plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
@@ -477,16 +507,19 @@ class AIEditPlugin:
         self._worker.error.connect(self._on_generation_error)
         self._worker.start()
 
-    def _on_generation_progress(self, status: str, current: int, total: int):
-        self._dock_widget.set_progress_message(status)
+    def _on_generation_progress(self, status: str, percentage: int):
+        self._dock_widget.set_progress_message(status, percentage)
 
     def _on_generation_error(self, message: str, code: str):
+        self._selected_extent = None
         self._dock_widget.set_idle()
         self._clear_selection_rectangle()
         self._restore_previous_map_tool()
         self._cleanup_worker()
         if code == "TRIAL_EXHAUSTED":
-            self._dock_widget.show_trial_exhausted_info(message, SUBSCRIBE_URL)
+            config = get_server_config(self._client)
+            dashboard = config.get("upgrade_url", get_dashboard_url())
+            self._dock_widget.show_trial_exhausted_info(message, dashboard)
         else:
             enriched = _enrich_error_message(message, code)
             self._dock_widget.set_status(enriched, is_error=True)
@@ -516,6 +549,12 @@ class AIEditPlugin:
         """Safely clean up the worker thread without crashing QGIS."""
         if self._worker is None:
             return
+        # Disconnect signals first to prevent callbacks on deleted UI
+        for sig in [self._worker.finished, self._worker.progress, self._worker.error]:
+            try:
+                sig.disconnect()
+            except (RuntimeError, TypeError):
+                pass
         try:
             self._worker.wait(5000)
         except RuntimeError:

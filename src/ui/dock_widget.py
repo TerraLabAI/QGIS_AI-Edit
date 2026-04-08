@@ -1,4 +1,4 @@
-from qgis.PyQt.QtCore import pyqtSignal, Qt, QUrl
+from qgis.PyQt.QtCore import pyqtSignal, Qt, QUrl, QTimer
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
     QWidget,
@@ -16,11 +16,12 @@ from qgis.PyQt.QtWidgets import (
     QStyle,
     QToolButton,
     QWidgetAction,
+    QCheckBox,
 )
 from qgis.PyQt.QtGui import QDesktopServices, QKeySequence
 from qgis.core import QgsProject
 
-from ..core.activation_manager import get_subscribe_url, tr
+from ..core.activation_manager import get_subscribe_url, get_dashboard_url, get_shared_email, get_tutorial_url, has_consent, tr
 from ..core.prompt_presets import get_translated_categories
 
 # Brand colors (matching AI Segmentation)
@@ -43,6 +44,7 @@ class AIEditDockWidget(QDockWidget):
     stop_clicked = pyqtSignal()
     generate_clicked = pyqtSignal(str)
     activation_attempted = pyqtSignal(str)
+    free_signup_requested = pyqtSignal(str)
     change_key_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -139,6 +141,30 @@ class AIEditDockWidget(QDockWidget):
         self._prompt_section.setVisible(False)
         main_layout.addWidget(self._prompt_section)
 
+        # Consent checkbox (shown only until first generation)
+        self._consent_check = QCheckBox()
+        self._consent_check.setStyleSheet("font-size: 11px; color: palette(text);")
+        self._consent_check.setText("")  # text set via label below
+        consent_layout = QHBoxLayout()
+        consent_layout.setContentsMargins(0, 0, 0, 0)
+        consent_layout.setSpacing(4)
+        consent_layout.addWidget(self._consent_check, 0)
+        consent_text = QLabel(
+            'I agree to the <a href="https://terra-lab.ai/terms-of-sale" '
+            f'style="color: {BRAND_BLUE};">Terms</a> and '
+            '<a href="https://terra-lab.ai/privacy-policy" '
+            f'style="color: {BRAND_BLUE};">Privacy Policy</a>'
+        )
+        consent_text.setOpenExternalLinks(True)
+        consent_text.setWordWrap(True)
+        consent_text.setStyleSheet("font-size: 11px; color: palette(text);")
+        consent_layout.addWidget(consent_text, 1)
+        self._consent_widget = QWidget()
+        self._consent_widget.setLayout(consent_layout)
+        self._consent_widget.setVisible(False)
+        self._consent_check.stateChanged.connect(self._on_consent_changed)
+        main_layout.addWidget(self._consent_widget)
+
         # Generate button
         self._generate_btn = QPushButton(tr("generate"))
         self._generate_btn.setCursor(Qt.PointingHandCursor)
@@ -167,7 +193,8 @@ class AIEditDockWidget(QDockWidget):
         self._progress_label.setStyleSheet("font-size: 11px; color: palette(text);")
         progress_layout.addWidget(self._progress_label)
         self._progress_bar = QProgressBar()
-        self._progress_bar.setRange(0, 0)
+        self._progress_bar.setRange(0, 100)
+        self._progress_bar.setValue(0)
         self._progress_bar.setTextVisible(False)
         progress_layout.addWidget(self._progress_bar)
         self._progress_widget.setVisible(False)
@@ -230,8 +257,8 @@ class AIEditDockWidget(QDockWidget):
 
         for text, url, handler in [
             (tr("report_bug"), "#", self._on_report_bug),
-            (tr("tutorial"), "https://terra-lab.ai/docs/ai-edit", None),
-            (tr("about_us"), "https://terra-lab.ai/about", None),
+            (tr("tutorial"), get_tutorial_url(), None),
+            ("AI Edit demo", "https://terra-lab.ai/ai-edit", None),
         ]:
             link = QLabel(f'<a href="{url}" style="color: {BRAND_BLUE};">{text}</a>')
             link.setStyleSheet("font-size: 13px;")
@@ -324,32 +351,87 @@ class AIEditDockWidget(QDockWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        title = QLabel(tr("activate_title"))
+        # --- Email signup section (hidden after successful signup) ---
+        self._signup_section = QWidget()
+        signup_layout = QVBoxLayout(self._signup_section)
+        signup_layout.setContentsMargins(0, 0, 0, 0)
+        signup_layout.setSpacing(8)
+
+        title = QLabel(tr("free_title"))
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet("font-weight: bold; font-size: 13px; color: palette(text);")
-        layout.addWidget(title)
+        signup_layout.addWidget(title)
 
-        get_key_btn = QPushButton(tr("get_key"))
-        get_key_btn.setMinimumHeight(36)
-        get_key_btn.setCursor(Qt.PointingHandCursor)
-        get_key_btn.setStyleSheet(
+        subtitle = QLabel(tr("free_subtitle"))
+        subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setStyleSheet("font-size: 11px; color: palette(text);")
+        signup_layout.addWidget(subtitle)
+
+        self._email_input = QLineEdit()
+        self._email_input.setPlaceholderText(tr("free_email_placeholder"))
+        self._email_input.setMinimumHeight(32)
+        self._email_input.setStyleSheet("color: palette(text);")
+        shared_email = get_shared_email()
+        if shared_email:
+            self._email_input.setText(shared_email)
+        signup_layout.addWidget(self._email_input)
+
+        self._free_submit_btn = QPushButton(tr("free_submit").replace("{credits}", "10"))
+        self._free_submit_btn.setMinimumHeight(36)
+        self._free_submit_btn.setCursor(Qt.PointingHandCursor)
+        self._free_submit_btn.setStyleSheet(
             f"QPushButton {{ background-color: {BRAND_GREEN}; color: white; "
             f"font-weight: bold; border-radius: 4px; padding: 8px 16px; }}"
             f"QPushButton:hover {{ background-color: {BRAND_GREEN_HOVER}; }}"
         )
-        get_key_btn.clicked.connect(self._on_get_key_clicked)
-        layout.addWidget(get_key_btn)
+        self._free_submit_btn.clicked.connect(self._on_free_signup_clicked)
+        self._email_input.returnPressed.connect(self._on_free_signup_clicked)
+        signup_layout.addWidget(self._free_submit_btn)
 
-        paste_label = QLabel(tr("paste_key"))
-        paste_label.setStyleSheet(
-            "font-size: 11px; margin-top: 2px; color: palette(text);"
+        # Flow info (small text below button)
+        flow_info = QLabel(tr("free_flow_info"))
+        flow_info.setAlignment(Qt.AlignCenter)
+        flow_info.setWordWrap(True)
+        flow_info.setStyleSheet("font-size: 10px; color: palette(text); margin-top: 2px;")
+        signup_layout.addWidget(flow_info)
+
+        layout.addWidget(self._signup_section)
+
+        # Activation message (errors / success) - right below signup section
+        self._activation_message = QLabel("")
+        self._activation_message.setAlignment(Qt.AlignCenter)
+        self._activation_message.setWordWrap(True)
+        self._activation_message.setStyleSheet("font-size: 11px;")
+        self._activation_message.setVisible(False)
+        layout.addWidget(self._activation_message)
+
+        # --- Collapsible key section (dropdown) ---
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(separator)
+
+        self._key_toggle = QToolButton()
+        self._key_toggle.setText(tr("free_or_paste_key"))
+        self._key_toggle.setArrowType(Qt.ArrowType.RightArrow)
+        self._key_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self._key_toggle.setStyleSheet(
+            "QToolButton { border: none; font-size: 11px; color: palette(text); }"
         )
-        layout.addWidget(paste_label)
+        self._key_toggle.setCursor(Qt.PointingHandCursor)
+        self._key_toggle.clicked.connect(self._toggle_key_section)
+        layout.addWidget(self._key_toggle)
+
+        self._key_content = QWidget()
+        self._key_content.setVisible(False)
+        key_layout = QVBoxLayout(self._key_content)
+        key_layout.setContentsMargins(0, 0, 0, 0)
+        key_layout.setSpacing(6)
 
         code_row = QHBoxLayout()
         code_row.setSpacing(6)
         self._code_input = QLineEdit()
-        self._code_input.setPlaceholderText("tl_pro_...")
+        self._code_input.setPlaceholderText("tl_pro_... / tl_free_...")
         self._code_input.setMinimumHeight(28)
         self._code_input.returnPressed.connect(self._on_unlock_clicked)
         code_row.addWidget(self._code_input)
@@ -364,14 +446,9 @@ class AIEditDockWidget(QDockWidget):
         )
         unlock_btn.clicked.connect(self._on_unlock_clicked)
         code_row.addWidget(unlock_btn)
-        layout.addLayout(code_row)
+        key_layout.addLayout(code_row)
 
-        self._activation_message = QLabel("")
-        self._activation_message.setAlignment(Qt.AlignCenter)
-        self._activation_message.setWordWrap(True)
-        self._activation_message.setStyleSheet("font-size: 11px;")
-        self._activation_message.setVisible(False)
-        layout.addWidget(self._activation_message)
+        layout.addWidget(self._key_content)
 
         return widget
 
@@ -450,9 +527,71 @@ class AIEditDockWidget(QDockWidget):
         self._activation_widget.setVisible(not activated)
         self._main_widget.setVisible(activated)
         self._change_key_link.setVisible(activated)
+        if not activated:
+            # Reset to full signup view (for new users)
+            self._signup_section.setVisible(True)
+            self._key_toggle.setEnabled(True)
+            self._key_toggle.setText(tr("free_or_paste_key"))
+            self._key_toggle.setArrowType(Qt.ArrowType.RightArrow)
+            self._key_toggle.setStyleSheet(
+                "QToolButton { border: none; font-size: 11px; color: palette(text); }"
+            )
+            self._key_content.setVisible(False)
+            self._activation_message.setVisible(False)
+
+    def show_change_key_mode(self):
+        """Show only the key input, no signup flow. For users changing their key."""
+        self._activated = False
+        self._activation_widget.setVisible(True)
+        self._main_widget.setVisible(False)
+        self._change_key_link.setVisible(False)
+        # Hide signup, show only key input
+        self._signup_section.setVisible(False)
+        self._key_toggle.setArrowType(Qt.ArrowType.NoArrow)
+        self._key_toggle.setText(tr("change_key_paste"))
+        self._key_toggle.setEnabled(False)
+        self._key_toggle.setStyleSheet(
+            "QToolButton { border: none; font-size: 11px; color: palette(text); font-weight: bold; }"
+        )
+        self._key_content.setVisible(True)
+        self._activation_message.setVisible(False)
+        self._code_input.clear()
+        self._code_input.setFocus()
+
+    def reset_free_signup_button(self):
+        """Re-enable the free signup button after result."""
+        self._free_submit_btn.setEnabled(True)
+        self._free_submit_btn.setText(tr("free_submit").replace("{credits}", "10"))
+
+    def show_post_signup_state(self):
+        """After successful email send, hide signup section and show key input directly."""
+        self._signup_section.setVisible(False)
+        # Replace the dropdown toggle with a plain label
+        self._key_toggle.setArrowType(Qt.ArrowType.NoArrow)
+        self._key_toggle.setText(tr("free_post_signup_hint"))
+        self._key_toggle.setEnabled(False)
+        self._key_toggle.setStyleSheet(
+            "QToolButton { border: none; font-size: 11px; color: palette(text); font-weight: bold; }"
+        )
+        # Show key input directly (not as dropdown)
+        self._key_content.setVisible(True)
+        self._code_input.setFocus()
+
+    def _toggle_key_section(self):
+        """Toggle the collapsible key input section."""
+        visible = not self._key_content.isVisible()
+        self._key_content.setVisible(visible)
+        self._key_toggle.setArrowType(
+            Qt.ArrowType.DownArrow if visible else Qt.ArrowType.RightArrow
+        )
+
+    def hide_consent(self):
+        """Hide the consent checkbox after first generation."""
+        self._consent_widget.setVisible(False)
 
     def set_activation_message(self, text: str, is_error: bool = False):
-        color = BRAND_RED if is_error else BRAND_GREEN
+        # Use brighter variants for dark theme readability
+        color = "#ef5350" if is_error else "#66bb6a"
         self._activation_message.setStyleSheet(f"font-size: 11px; color: {color};")
         self._activation_message.setText(text)
         self._activation_message.setVisible(True)
@@ -472,9 +611,12 @@ class AIEditDockWidget(QDockWidget):
         self._bold_label.setVisible(False)
         self._instruction_box.setVisible(False)
         self._prompt_section.setVisible(True)
+        self._consent_widget.setVisible(not has_consent())
         self._generate_btn.setVisible(True)
         self._stop_btn.setVisible(True)
         self._update_generate_enabled()
+        # Deferred focus: survives Qt layout recalculations from visibility changes
+        QTimer.singleShot(0, self._prompt_input.setFocus)
 
     def set_idle(self):
         """Reset everything to initial state."""
@@ -485,6 +627,7 @@ class AIEditDockWidget(QDockWidget):
         self._stop_btn.setVisible(False)
         self._instruction_box.setVisible(False)
         self._prompt_section.setVisible(False)
+        self._consent_widget.setVisible(False)
         self._generate_btn.setVisible(False)
         self._progress_widget.setVisible(False)
         self._start_shortcut.setEnabled(True)
@@ -504,6 +647,9 @@ class AIEditDockWidget(QDockWidget):
         self._warning_widget.setVisible(False)
 
         if generating:
+            # Reset progress bar to determinate 0%
+            self._progress_bar.setRange(0, 100)
+            self._progress_bar.setValue(0)
             # Keep prompt section visible but disable interaction
             self._prompt_section.setVisible(True)
             self._prompt_input.setReadOnly(True)
@@ -513,6 +659,7 @@ class AIEditDockWidget(QDockWidget):
                 "background-color: rgba(128,128,128,0.1); color: #999;"
             )
             self._templates_btn.setEnabled(False)
+            self._consent_widget.setVisible(False)
             self._generate_btn.setVisible(False)
             self._stop_btn.setVisible(True)
             self._progress_label.setText(tr("preparing"))
@@ -524,6 +671,7 @@ class AIEditDockWidget(QDockWidget):
                 "border-radius: 4px; padding: 6px;"
             )
             self._templates_btn.setEnabled(True)
+            self._consent_widget.setVisible(not has_consent() and self._zone_selected)
             self._generate_btn.setVisible(self._zone_selected)
             self._stop_btn.setVisible(self._zone_selected)
             self._prompt_section.setVisible(self._zone_selected)
@@ -531,9 +679,12 @@ class AIEditDockWidget(QDockWidget):
         self._start_shortcut.setEnabled(not generating)
         self._stop_shortcut.setEnabled(not generating)
 
-    def set_progress_message(self, message: str):
-        """Update the progress label during generation."""
+    def set_progress_message(self, message: str, percentage: int = -1):
+        """Update the progress label and bar during generation."""
         self._progress_label.setText(message)
+        if percentage >= 0:
+            self._progress_bar.setRange(0, 100)
+            self._progress_bar.setValue(percentage)
 
     def set_status(self, message: str, is_error: bool = False):
         color = BRAND_RED if is_error else "#888"
@@ -543,6 +694,7 @@ class AIEditDockWidget(QDockWidget):
 
     def set_generation_complete(self, layer_name: str):
         """Show success message and reset to idle state."""
+        self._progress_bar.setValue(100)
         self._progress_widget.setVisible(False)
         self._status_label.setText("")
         self._active = False
@@ -616,6 +768,19 @@ class AIEditDockWidget(QDockWidget):
     def _on_get_key_clicked(self):
         QDesktopServices.openUrl(QUrl(get_subscribe_url()))
 
+    def _on_free_signup_clicked(self):
+        """Handle free tier email signup."""
+        email = self._email_input.text().strip()
+        if not email or "@" not in email:
+            self.set_activation_message(tr("free_error_invalid_email"), is_error=True)
+            return
+
+        # Disable button during send
+        self._free_submit_btn.setEnabled(False)
+        self._free_submit_btn.setText(tr("free_sending"))
+
+        self.free_signup_requested.emit(email)
+
     def _on_unlock_clicked(self):
         code = self._code_input.text().strip()
         if not code:
@@ -625,6 +790,7 @@ class AIEditDockWidget(QDockWidget):
 
     def _on_preset_clicked(self, preset: dict):
         self._prompt_input.setPlainText(preset["prompt"])
+        self._prompt_input.setFocus()
 
     def _on_prompt_changed(self):
         self._update_generate_enabled()
@@ -642,9 +808,14 @@ class AIEditDockWidget(QDockWidget):
 
         show_bug_report(self)
 
+    def _on_consent_changed(self):
+        """Re-evaluate Generate button when consent checkbox changes."""
+        self._update_generate_enabled()
+
     def _update_generate_enabled(self):
         has_prompt = bool(self.get_prompt())
-        enabled = self._zone_selected and has_prompt
+        consent_ok = has_consent() or self._consent_check.isChecked()
+        enabled = self._zone_selected and has_prompt and consent_ok
         self._generate_btn.setEnabled(enabled)
         self._update_generate_style()
 
@@ -661,7 +832,9 @@ class AIEditDockWidget(QDockWidget):
             )
 
     def closeEvent(self, event):
-        """Disconnect signals on close."""
+        """Cancel generation and disconnect signals on close."""
+        if self._progress_widget.isVisible():
+            self.stop_clicked.emit()
         try:
             QgsProject.instance().layersAdded.disconnect(self._update_layer_warning)
             QgsProject.instance().layersRemoved.disconnect(self._update_layer_warning)

@@ -51,7 +51,7 @@ def _classify_network_error(
     if qt_error == QNetworkReply.HostNotFoundError:
         return (
             "DNS_ERROR",
-            "Cannot reach the server.",
+            "Cannot reach the server. Check your internet connection.",
         )
 
     if qt_error == QNetworkReply.ConnectionRefusedError:
@@ -88,22 +88,10 @@ def _classify_network_error(
             "Authentication failed. Check your activation key.",
         )
 
-    # 5xx server error reported by Qt as UnknownServerError (499)
-    if http_status and http_status >= 500:
-        if http_status in (502, 503, 504):
-            return (
-                "CONNECTION_REFUSED",
-                "The service is temporarily unavailable. Try again in a moment.",
-            )
-        return (
-            "CONNECTION_REFUSED",
-            "Server error (HTTP {}).".format(http_status),
-        )
-
     # Fallback
     return (
         "NO_INTERNET",
-        "Network error.",
+        "Network error. Check your internet connection.",
     )
 
 
@@ -175,6 +163,21 @@ class TerraLabClient:
         """Fetch export config from the server (no auth required)."""
         return self._request("GET", "/api/ai-edit/export-config")
 
+    def get_config(self, product: str) -> dict:
+        """Fetch server-driven plugin config (no auth required)."""
+        return self._request(
+            "GET", "/api/plugin/config?product={}".format(product)
+        )
+
+    def send_magic_link(self, email: str, device_id: str, product: str) -> dict:
+        """Send a magic link for free tier signup."""
+        body = json.dumps({
+            "email": email,
+            "device_id": device_id,
+            "product": product,
+        }).encode("utf-8")
+        return self._request("POST", "/api/auth/magic-link", body=body)
+
     def download_image(self, url: str) -> bytes:
         """Download image bytes from a signed URL.
 
@@ -236,6 +239,18 @@ class TerraLabClient:
 
         # -- Network-level failure -----------------------------------------
         if err != QgsBlockingNetworkRequest.NoError:
+            # Still try to parse the HTTP response body: QgsBlockingNetworkRequest
+            # treats HTTP 4xx/5xx as errors, but we need the JSON reason codes.
+            reply = blocker.reply()
+            if reply:
+                http_attr = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+                if http_attr and int(http_attr) >= 400:
+                    raw = bytes(reply.content()).decode("utf-8")
+                    if raw:
+                        try:
+                            return json.loads(raw)
+                        except Exception:
+                            pass
             code, msg = _classify_network_error(blocker)
             return {"error": msg, "code": code}
 
@@ -243,19 +258,6 @@ class TerraLabClient:
         reply = blocker.reply()
         http_status = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
         raw_body = bytes(reply.content()).decode("utf-8")
-
-        if http_status and int(http_status) == 429:
-            # Rate limited
-            retry_after = "60"
-            try:
-                retry_after = json.loads(raw_body).get("retry_after", "60")
-            except Exception:
-                pass
-            return {
-                "error": "Too many requests, please wait {}s".format(retry_after),
-                "code": "RATE_LIMITED",
-                "retry_after": int(retry_after),
-            }
 
         if http_status and int(http_status) >= 400:
             # Server returned an error — try to parse JSON body

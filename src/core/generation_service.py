@@ -4,7 +4,7 @@ from typing import Callable, Optional
 
 from .logger import log
 
-# Supported aspect ratios for Nano Banana 2 (label, width/height ratio)
+# Supported aspect ratios (label, width/height ratio)
 ASPECT_RATIOS = [
     ("1:1", 1.0),
     ("5:4", 5 / 4),
@@ -87,12 +87,25 @@ class GenerationService:
             )
 
         request_id = resp["request_id"]
+        submit_time = time.time()
+        log(
+            "Submitted: request_id={}, resolution={}, aspect={}, est={}s".format(
+                request_id,
+                resp.get("resolution", "?"),
+                resp.get("aspect_ratio", "?"),
+                resp.get("estimated_time", "?"),
+            )
+        )
 
         # Use server-suggested polling config if available
         poll_interval = resp.get("poll_interval", self._poll_interval)
         estimated_time = resp.get("estimated_time")
+        # Absolute max wait: credits are consumed at submit, so timeout = lost credit.
+        # Be generous to handle server-side outliers (GPU queuing, slow inference).
+        absolute_max_polls = int(360 / poll_interval)
         if estimated_time:
-            max_polls = max(10, int(estimated_time * 2 / poll_interval))
+            # Use 3x estimated time, but never less than absolute max
+            max_polls = max(absolute_max_polls, int(estimated_time * 3 / poll_interval))
             log(
                 "Polling: server hints poll_interval={}s, "
                 "estimated_time={}s, max_polls={}".format(
@@ -100,7 +113,7 @@ class GenerationService:
                 )
             )
         else:
-            max_polls = self._max_polls
+            max_polls = absolute_max_polls
             log(
                 "Polling: using defaults poll_interval={}s, "
                 "max_polls={}".format(poll_interval, max_polls)
@@ -149,7 +162,8 @@ class GenerationService:
             status = status_resp.get("status", "unknown")
 
             if on_progress:
-                on_progress(status, i + 1, max_polls)
+                elapsed = time.time() - submit_time
+                on_progress(status, i + 1, max_polls, estimated_time, elapsed)
 
             if status == "completed":
                 if ctx is not None:
@@ -174,7 +188,14 @@ class GenerationService:
                 )
 
             if poll_interval > 0:
-                time.sleep(poll_interval)
+                # Sleep in small chunks so cancellation is responsive
+                for _ in range(int(poll_interval * 5)):
+                    if self._cancelled:
+                        return GenerationResult(
+                            success=False, error="Generation cancelled",
+                            request_id=request_id,
+                        )
+                    time.sleep(0.2)
 
         if ctx is not None:
             ctx.poll_count = max_polls

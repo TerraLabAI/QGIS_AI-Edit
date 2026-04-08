@@ -3,11 +3,23 @@
 Validates activation keys against the TerraLab backend.
 """
 
-from typing import Tuple
+import uuid
+from typing import Tuple, Optional
 from qgis.core import QgsSettings, QgsApplication
 
 SETTINGS_PREFIX = "AIEdit/"
+TERRALAB_PREFIX = "TerraLab/"
 SUBSCRIBE_URL = "https://terra-lab.ai/ai-edit"
+DASHBOARD_URL = "https://terra-lab.ai/dashboard/ai-edit"
+
+# Hardcoded fallback config (used when server is unreachable)
+DEFAULT_CONFIG = {
+    "free_credits": 10,
+    "free_tier_active": True,
+    "promo_active": True,
+    "promo_code": "EARLYBIRD",
+    "upgrade_url": "https://terra-lab.ai/dashboard/ai-edit",
+}
 
 # Localized strings — en / fr / es / pt
 _STRINGS = {
@@ -49,6 +61,7 @@ _STRINGS = {
         "activate": "Activate",
         "enter_code": "Enter your code",
         "change_key": "Change key",
+        "change_key_paste": "Enter your new activation key:",
         "report_bug": "Report a bug",
         "tutorial": "Tutorial",
         "about_us": "About us",
@@ -57,6 +70,25 @@ _STRINGS = {
             "costs. Your subscription helps keep the plugin open source."
         ),
         "subscribe_link": "Subscribe at terra-lab.ai",
+        # Free tier
+        "free_title": "Try AI Edit for free",
+        "free_subtitle": "No credit card required.",
+        "free_email_placeholder": "your@email.com",
+        "free_submit": "Get {credits} free AI edits",
+        "free_check_email": "Check your email! Click the link to access your dashboard.",
+        "free_post_signup_hint": "Paste your key from terra-lab.ai/dashboard:",
+        "free_flow_info": "Enter your email, check your inbox, get your free key from the dashboard, paste it here.",
+        "free_sending": "Sending...",
+        "free_error_invalid_email": "Please enter a valid email address.",
+        "free_error_disposable": "Please use a non-disposable email address.",
+        "free_error_device_used": "Free edits already claimed on this device.",
+        "free_error_already_registered": "This email already has free edits. Check your dashboard.",
+        "free_error_rate_limited": "Too many attempts. Please wait a moment.",
+        "free_error_send_failed": "Could not send the email. Please try again.",
+        "free_exhausted": "You have used all {credits} free edits.",
+        "free_promo_message": "Subscribe now. First month at 13 euros instead of 19 euros with code {code}.",
+        "free_subscribe": "Subscribe now",
+        "free_or_paste_key": "Already have a key? Paste it here",
         # Plugin
         "ai_edit": "AI Edit",
         "ai_edit_tooltip": "AI Edit by TerraLab\nAI-powered image editing for geospatial data",
@@ -117,6 +149,7 @@ _STRINGS = {
         "activate": "Activer",
         "enter_code": "Entrez votre code",
         "change_key": "Changer de clé",
+        "change_key_paste": "Entrez votre nouvelle cle d'activation :",
         "report_bug": "Signaler un bug",
         "tutorial": "Tutoriel",
         "about_us": "À propos",
@@ -125,6 +158,25 @@ _STRINGS = {
             "Votre abonnement contribue à maintenir le plugin open source."
         ),
         "subscribe_link": "S'abonner sur terra-lab.ai",
+        # Free tier
+        "free_title": "Essayez AI Edit gratuitement",
+        "free_subtitle": "Aucune carte bancaire requise.",
+        "free_email_placeholder": "votre@email.com",
+        "free_submit": "Obtenir {credits} edits AI gratuits",
+        "free_check_email": "Consultez votre email ! Cliquez sur le lien pour acceder a votre dashboard.",
+        "free_post_signup_hint": "Collez votre cle depuis terra-lab.ai/dashboard :",
+        "free_flow_info": "Entrez votre email, consultez votre boite mail, recuperez votre cle gratuite sur le dashboard, collez-la ici.",
+        "free_sending": "Envoi en cours...",
+        "free_error_invalid_email": "Veuillez entrer une adresse email valide.",
+        "free_error_disposable": "Veuillez utiliser une adresse email non jetable.",
+        "free_error_device_used": "Les edits gratuits ont deja ete utilises sur cet appareil.",
+        "free_error_already_registered": "Cet email a deja des edits gratuits. Consultez votre dashboard.",
+        "free_error_rate_limited": "Trop de tentatives. Veuillez patienter un moment.",
+        "free_error_send_failed": "Impossible d'envoyer l'email. Veuillez reessayer.",
+        "free_exhausted": "Vous avez utilise vos {credits} edits gratuits.",
+        "free_promo_message": "Abonnez-vous. Premier mois a 13 euros au lieu de 19 euros avec le code {code}.",
+        "free_subscribe": "S'abonner maintenant",
+        "free_or_paste_key": "Vous avez deja une cle ? Collez-la ici",
         # Plugin
         "ai_edit": "AI Edit",
         "ai_edit_tooltip": "AI Edit par TerraLab\nÉdition d'images géospatiales par IA",
@@ -184,6 +236,7 @@ _STRINGS = {
         "activate": "Activar",
         "enter_code": "Ingrese su código",
         "change_key": "Cambiar clave",
+        "change_key_paste": "Ingrese su nueva clave de activacion:",
         "report_bug": "Reportar un error",
         "tutorial": "Tutorial",
         "about_us": "Acerca de nosotros",
@@ -192,6 +245,25 @@ _STRINGS = {
             "Su suscripción ayuda a mantener el plugin de código abierto."
         ),
         "subscribe_link": "Suscribirse en terra-lab.ai",
+        # Free tier
+        "free_title": "Pruebe AI Edit gratis",
+        "free_subtitle": "Sin tarjeta de credito.",
+        "free_email_placeholder": "su@email.com",
+        "free_submit": "Obtener {credits} ediciones AI gratis",
+        "free_check_email": "Revise su email. Haga clic en el enlace para acceder a su dashboard.",
+        "free_post_signup_hint": "Pegue su clave desde terra-lab.ai/dashboard:",
+        "free_flow_info": "Ingrese su email, revise su bandeja, obtenga su clave gratuita en el dashboard, peguela aqui.",
+        "free_sending": "Enviando...",
+        "free_error_invalid_email": "Ingrese una direccion de email valida.",
+        "free_error_disposable": "Use una direccion de email no desechable.",
+        "free_error_device_used": "Las ediciones gratis ya fueron reclamadas en este dispositivo.",
+        "free_error_already_registered": "Este email ya tiene ediciones gratis. Revise su dashboard.",
+        "free_error_rate_limited": "Demasiados intentos. Espere un momento.",
+        "free_error_send_failed": "No se pudo enviar el email. Intente de nuevo.",
+        "free_exhausted": "Ha usado sus {credits} ediciones gratis.",
+        "free_promo_message": "Suscribase ahora. Primer mes a 13 euros en lugar de 19 euros con el codigo {code}.",
+        "free_subscribe": "Suscribirse ahora",
+        "free_or_paste_key": "Ya tiene una clave? Peguela aqui",
         # Plugin
         "ai_edit": "AI Edit",
         "ai_edit_tooltip": "AI Edit por TerraLab\nEdición de imágenes geoespaciales con IA",
@@ -251,6 +323,7 @@ _STRINGS = {
         "activate": "Ativar",
         "enter_code": "Insira seu código",
         "change_key": "Alterar chave",
+        "change_key_paste": "Insira sua nova chave de ativacao:",
         "report_bug": "Reportar um erro",
         "tutorial": "Tutorial",
         "about_us": "Sobre nós",
@@ -259,6 +332,25 @@ _STRINGS = {
             "Sua assinatura ajuda a manter o plugin de código aberto."
         ),
         "subscribe_link": "Assinar em terra-lab.ai",
+        # Free tier
+        "free_title": "Experimente AI Edit gratis",
+        "free_subtitle": "Sem cartao de credito.",
+        "free_email_placeholder": "seu@email.com",
+        "free_submit": "Obter {credits} edicoes AI gratis",
+        "free_check_email": "Verifique seu email! Clique no link para acessar seu dashboard.",
+        "free_post_signup_hint": "Cole sua chave de terra-lab.ai/dashboard:",
+        "free_flow_info": "Insira seu email, verifique sua caixa de entrada, obtenha sua chave gratuita no dashboard, cole aqui.",
+        "free_sending": "Enviando...",
+        "free_error_invalid_email": "Insira um endereco de email valido.",
+        "free_error_disposable": "Use um endereco de email nao descartavel.",
+        "free_error_device_used": "As edicoes gratis ja foram utilizadas neste dispositivo.",
+        "free_error_already_registered": "Este email ja tem edicoes gratis. Verifique seu dashboard.",
+        "free_error_rate_limited": "Muitas tentativas. Aguarde um momento.",
+        "free_error_send_failed": "Nao foi possivel enviar o email. Tente novamente.",
+        "free_exhausted": "Voce usou suas {credits} edicoes gratis.",
+        "free_promo_message": "Assine agora. Primeiro mes a 13 euros em vez de 19 euros com o codigo {code}.",
+        "free_subscribe": "Assinar agora",
+        "free_or_paste_key": "Ja tem uma chave? Cole aqui",
         # Plugin
         "ai_edit": "AI Edit",
         "ai_edit_tooltip": "AI Edit por TerraLab\nEdição de imagens geoespaciais com IA",
@@ -348,7 +440,7 @@ def validate_key_with_server(client, key: str) -> Tuple[bool, str]:
     if not key:
         return False, tr("enter_key")
 
-    if not key.startswith("tl_pro_"):
+    if not key.startswith("tl_pro_") and not key.startswith("tl_free_"):
         return False, tr("invalid_format")
 
     # Call /api/plugin/usage with the key as Bearer token
@@ -374,3 +466,102 @@ def validate_key_with_server(client, key: str) -> Tuple[bool, str]:
 
 def get_subscribe_url() -> str:
     return SUBSCRIBE_URL
+
+
+def get_dashboard_url() -> str:
+    return DASHBOARD_URL
+
+
+def get_tutorial_url(client=None) -> str:
+    """Get tutorial URL from server config, falling back to product page."""
+    config = get_server_config(client)
+    return config.get("tutorial_url", "https://terra-lab.ai/ai-edit")
+
+
+# -- Device ID management --
+
+def get_device_id(settings=None) -> str:
+    """Get or generate a persistent device ID."""
+    s = settings or QgsSettings()
+    device_id = s.value(f"{TERRALAB_PREFIX}device_id", "")
+    if not device_id:
+        device_id = str(uuid.uuid4())
+        s.setValue(f"{TERRALAB_PREFIX}device_id", device_id)
+    return device_id
+
+
+# -- Cross-plugin email sharing --
+
+def get_shared_email(settings=None) -> str:
+    """Get email from shared TerraLab namespace (set by any plugin)."""
+    s = settings or QgsSettings()
+    return s.value(f"{TERRALAB_PREFIX}user_email", "")
+
+
+def save_shared_email(email: str, settings=None):
+    """Save email to shared TerraLab namespace for cross-plugin use."""
+    s = settings or QgsSettings()
+    s.setValue(f"{TERRALAB_PREFIX}user_email", email.strip())
+
+
+# -- Server config --
+
+_cached_config: Optional[dict] = None
+
+
+def get_server_config(client=None) -> dict:
+    """Fetch server-driven config, with local caching and fallback."""
+    global _cached_config
+    if _cached_config is not None:
+        return _cached_config
+
+    if client is None:
+        return DEFAULT_CONFIG
+
+    try:
+        result = client.get_config("ai-edit")
+        if "error" not in result:
+            _cached_config = result
+            return result
+    except Exception:
+        pass
+
+    return DEFAULT_CONFIG
+
+
+def clear_config_cache():
+    """Clear cached config (e.g. on plugin reload)."""
+    global _cached_config
+    _cached_config = None
+
+
+# -- Magic link signup --
+
+def send_magic_link(client, email: str) -> Tuple[bool, str]:
+    """Send a magic link for free tier signup.
+
+    Returns (success, message_key).
+    """
+    email = email.strip()
+    if not email or "@" not in email:
+        return False, "free_error_invalid_email"
+
+    device_id = get_device_id()
+    try:
+        result = client.send_magic_link(email, device_id, "ai-edit")
+    except Exception:
+        return False, "free_error_send_failed"
+
+    if result.get("ok"):
+        save_shared_email(email)
+        return True, "free_check_email"
+
+    reason = result.get("reason", "")
+    reason_map = {
+        "INVALID_EMAIL": "free_error_invalid_email",
+        "DEVICE_ALREADY_USED": "free_error_device_used",
+        "RATE_LIMITED": "free_error_rate_limited",
+        "ALREADY_REGISTERED": "free_error_already_registered",
+        "EMAIL_SEND_FAILED": "free_error_send_failed",
+    }
+    return False, reason_map.get(reason, "free_error_send_failed")
