@@ -51,7 +51,7 @@ def _classify_network_error(
     if qt_error == QNetworkReply.HostNotFoundError:
         return (
             "DNS_ERROR",
-            "Cannot reach the server. Check your internet connection.",
+            "Cannot reach the server.",
         )
 
     if qt_error == QNetworkReply.ConnectionRefusedError:
@@ -88,10 +88,22 @@ def _classify_network_error(
             "Authentication failed. Check your activation key.",
         )
 
+    # 5xx server error reported by Qt as UnknownServerError (499)
+    if http_status and http_status >= 500:
+        if http_status in (502, 503, 504):
+            return (
+                "CONNECTION_REFUSED",
+                "The service is temporarily unavailable. Try again in a moment.",
+            )
+        return (
+            "CONNECTION_REFUSED",
+            "Server error (HTTP {}).".format(http_status),
+        )
+
     # Fallback
     return (
         "NO_INTERNET",
-        "Network error. Check your internet connection.",
+        "Network error.",
     )
 
 
