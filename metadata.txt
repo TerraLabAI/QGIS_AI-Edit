@@ -10,7 +10,7 @@ license=GPLv2
 
 
 about=
-    AI-powered image editing tool for geospatial rasters. Powered by Nano Banana 2.
+    AI-powered image editing tool for geospatial rasters.
 
     • Select & transform: draw a rectangle on your map, describe the change in natural language
 
@@ -32,7 +32,7 @@ homepage=https://terra-lab.ai/ai-edit
 
 hasProcessingProvider=no
 
-tags=ai, artificial intelligence, machine learning, deep learning, image editing, image generation, raster, satellite, satellite imagery, remote sensing, drone, geotiff, generative ai, nano banana, cloud removal, vegetation, urban planning, flood simulation, terrain, automatic, automation, interactive, python, ia
+tags=ai, artificial intelligence, machine learning, deep learning, image editing, image generation, raster, satellite, satellite imagery, remote sensing, drone, geotiff, generative ai, cloud removal, vegetation, urban planning, flood simulation, terrain, automatic, automation, interactive, python, ia
 
 category=Raster
 icon=resources/icons/icon.png
