@@ -35,5 +35,5 @@ tags=ai, artificial intelligence, machine learning, deep learning, image editing
 category=Raster
 icon=resources/icons/icon.png
 
-experimental=True
+experimental=False
 deprecated=False
