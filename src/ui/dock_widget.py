@@ -21,7 +21,7 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtGui import QDesktopServices, QKeySequence
 from qgis.core import QgsProject
 
-from ..core.activation_manager import get_subscribe_url, get_dashboard_url, get_shared_email, get_tutorial_url, has_consent, tr
+from ..core.activation_manager import get_subscribe_url, get_shared_email, get_tutorial_url, has_consent, tr
 from ..core.prompt_presets import get_translated_categories
 
 # Brand colors (matching AI Segmentation)
@@ -506,20 +506,14 @@ class AIEditDockWidget(QDockWidget):
             categories = get_translated_categories()
         menu = QMenu(self)
         menu.setStyleSheet(
-            "QMenu::item { padding: 3px 12px 3px 20px;"
-            "  color: rgba(255,255,255,0.72); }"
-            "QMenu::item:selected { background: rgba(255,255,255,0.08); }"
+            "QMenu { background-color: palette(window); }"
+            "QMenu::item { padding: 3px 12px 3px 20px; color: palette(text); }"
+            "QMenu::item:selected { background: rgba(128,128,128,0.15); color: palette(text); }"
             "QMenu::separator { margin: 4px 8px; }"
         )
         header_html = {
-            "remove": (
-                '<span style="color:#e06060;">\u2715</span>'
-                ' <span style="color:rgba(255,255,255,0.50);">Remove</span>'
-            ),
-            "add": (
-                '<span style="color:#60c060;">+</span>'
-                ' <span style="color:rgba(255,255,255,0.50);">Add</span>'
-            ),
+            "remove": '<span style="color:#e06060;">\u2715</span> Remove',
+            "add": '<span style="color:#60c060;">+</span> Add',
         }
         for i, category in enumerate(categories):
             if i > 0:
@@ -527,7 +521,10 @@ class AIEditDockWidget(QDockWidget):
             html = header_html.get(category["key"], category["label"])
             header_label = QLabel(html)
             header_label.setTextFormat(Qt.RichText)
-            header_label.setStyleSheet("padding: 6px 12px 2px 8px;")
+            header_label.setStyleSheet(
+                "padding: 6px 12px 2px 8px; font-size: 10px;"
+                " color: palette(text); font-weight: bold;"
+            )
             header_action = QWidgetAction(menu)
             header_action.setDefaultWidget(header_label)
             header_action.setEnabled(False)
