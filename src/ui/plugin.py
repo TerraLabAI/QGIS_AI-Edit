@@ -1,8 +1,8 @@
 import os
 
-from qgis.PyQt.QtCore import QSettings, Qt, QUrl, QThread, pyqtSignal
+from qgis.PyQt.QtCore import QSettings, Qt, QThread, pyqtSignal
 from qgis.PyQt.QtWidgets import QAction
-from qgis.PyQt.QtGui import QIcon, QColor, QDesktopServices
+from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.core import QgsRectangle, QgsWkbTypes, QgsPointXY
 from qgis.gui import QgsRubberBand
 

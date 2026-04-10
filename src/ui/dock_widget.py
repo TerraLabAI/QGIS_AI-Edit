@@ -21,7 +21,7 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtGui import QDesktopServices, QKeySequence
 from qgis.core import QgsProject
 
-from ..core.activation_manager import get_subscribe_url, get_dashboard_url, get_shared_email, get_tutorial_url, has_consent, tr
+from ..core.activation_manager import get_subscribe_url, get_shared_email, get_tutorial_url, has_consent, tr
 from ..core.prompt_presets import get_translated_categories
 
 # Brand colors (matching AI Segmentation)
