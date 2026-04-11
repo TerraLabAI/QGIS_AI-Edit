@@ -1,11 +1,13 @@
 """Cooperative TerraLab menu management for QGIS plugins."""
+from __future__ import annotations
 
 import os
-from qgis.PyQt.QtCore import QUrl
-from qgis.PyQt.QtWidgets import QMenu
-from qgis.PyQt.QtGui import QDesktopServices, QIcon
 
-TERRALAB_URL = "https://terra-lab.ai"
+from qgis.PyQt.QtCore import QUrl
+from qgis.PyQt.QtGui import QDesktopServices, QIcon
+from qgis.PyQt.QtWidgets import QMenu
+
+TERRALAB_URL = "https://terra-lab.ai?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=menu_more"
 _UTILITY_SEPARATOR = "_terralab_utility_sep"
 _PLUGINS_MENU_NAME = "TerraLab"
 

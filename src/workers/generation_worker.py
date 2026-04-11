@@ -3,6 +3,7 @@
 Runs off the main thread: auth check → generate → download → write GeoTIFF.
 Emits Qt signals for progress, errors, and completion.
 """
+from __future__ import annotations
 
 import base64
 import random

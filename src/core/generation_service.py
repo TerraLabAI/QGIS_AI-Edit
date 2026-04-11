@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable
 
 from .logger import log
 
@@ -37,10 +39,10 @@ def calculate_closest_aspect_ratio(width: int, height: int) -> str:
 @dataclass
 class GenerationResult:
     success: bool
-    image_url: Optional[str] = None
-    error: Optional[str] = None
-    error_code: Optional[str] = None
-    request_id: Optional[str] = None
+    image_url: str | None = None
+    error: str | None = None
+    error_code: str | None = None
+    request_id: str | None = None
 
 
 class GenerationService:
@@ -107,16 +109,14 @@ class GenerationService:
             # Use 3x estimated time, but never less than absolute max
             max_polls = max(absolute_max_polls, int(estimated_time * 3 / poll_interval))
             log(
-                "Polling: server hints poll_interval={}s, "
-                "estimated_time={}s, max_polls={}".format(
-                    poll_interval, estimated_time, max_polls
-                )
+                f"Polling: server hints poll_interval={poll_interval}s, "
+                f"estimated_time={estimated_time}s, max_polls={max_polls}"
             )
         else:
             max_polls = absolute_max_polls
             log(
-                "Polling: using defaults poll_interval={}s, "
-                "max_polls={}".format(poll_interval, max_polls)
+                f"Polling: using defaults poll_interval={poll_interval}s, "
+                f"max_polls={max_polls}"
             )
 
         if ctx is not None:

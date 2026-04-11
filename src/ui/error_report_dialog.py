@@ -1,8 +1,9 @@
-"""
-Error report dialog for the AI Edit plugin.
+"""Error report dialog for the AI Edit plugin.
+
 Minimal dialog: error message + copy logs + email contact.
 Also provides a bug report dialog for user-initiated reports.
 """
+from __future__ import annotations
 
 import os
 import platform
@@ -20,9 +21,8 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
 )
 
-
 SUPPORT_EMAIL = "yvann.barbot@terra-lab.ai"
-TERRALAB_URL = "https://terra-lab.ai/ai-edit"
+TERRALAB_URL = "https://terra-lab.ai/ai-edit?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=error_report"
 
 _log_buffer = deque(maxlen=100)
 _log_collector_connected = False
@@ -35,8 +35,7 @@ def _anonymize_paths(text: str) -> str:
     text = re.sub(r"/Users/[^/\s]+(?=/|$|\s)", "<USER>", text)
     text = re.sub(r"/home/[^/\s]+(?=/|$|\s)", "<USER>", text)
     text = re.sub(r"[A-Za-z]:[/\\]Users[/\\][^/\\\s]+(?=[/\\]|$|\s)", "<USER>", text)
-    text = re.sub(r"\\\\[^\\]+\\Users\\[^/\\\s]+(?=[/\\]|$|\s)", "<USER>", text)
-    return text
+    return re.sub(r"\\\\[^\\]+\\Users\\[^/\\\s]+(?=[/\\]|$|\s)", "<USER>", text)
 
 
 def start_log_collector():
@@ -70,7 +69,7 @@ def stop_log_collector():
 def _on_log_message(message, tag, level):
     if tag == "AI Edit":
         timestamp = datetime.now().strftime("%H:%M:%S")
-        _log_buffer.append("[{}] {}".format(timestamp, message))
+        _log_buffer.append(f"[{timestamp}] {message}")
 
 
 def _get_recent_logs() -> str:
@@ -99,7 +98,7 @@ def _collect_diagnostic_info(error_message: str) -> str:
         )
         metadata_path = os.path.join(plugin_dir, "metadata.txt")
         if os.path.exists(metadata_path):
-            with open(metadata_path, "r", encoding="utf-8") as f:
+            with open(metadata_path, encoding="utf-8") as f:
                 for line in f:
                     if line.startswith("version="):
                         lines.append(
@@ -113,19 +112,17 @@ def _collect_diagnostic_info(error_message: str) -> str:
     # System info
     lines.append("--- System ---")
     lines.append(
-        "OS: {} ({} {})".format(sys.platform, platform.system(), platform.release())
+        f"OS: {sys.platform} ({platform.system()} {platform.release()})"
     )
-    lines.append("Architecture: {}".format(platform.machine()))
+    lines.append(f"Architecture: {platform.machine()}")
     lines.append(
-        "Python: {}.{}.{}".format(
-            sys.version_info.major, sys.version_info.minor, sys.version_info.micro
-        )
+        f"Python: {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     )
 
     try:
         from qgis.core import Qgis
 
-        lines.append("QGIS: {}".format(Qgis.QGIS_VERSION))
+        lines.append(f"QGIS: {Qgis.QGIS_VERSION}")
     except Exception:
         lines.append("QGIS: unknown")
     lines.append("")
@@ -182,7 +179,7 @@ class ErrorReportDialog(QDialog):
         layout.addWidget(arrow_label)
 
         # Step 2: Email
-        self._email_btn = QPushButton("2. Click to send to {}".format(SUPPORT_EMAIL))
+        self._email_btn = QPushButton(f"2. Click to send to {SUPPORT_EMAIL}")
         self._email_btn.setToolTip("Open email client")
         self._email_btn.clicked.connect(self._on_open_email)
         layout.addWidget(self._email_btn)
@@ -203,7 +200,7 @@ class ErrorReportDialog(QDialog):
 
         subject = quote("AI Edit - Bug Report")
         QDesktopServices.openUrl(
-            QUrl("mailto:{}?subject={}".format(SUPPORT_EMAIL, subject))
+            QUrl(f"mailto:{SUPPORT_EMAIL}?subject={subject}")
         )
 
 
@@ -243,7 +240,7 @@ class BugReportDialog(QDialog):
         layout.addWidget(arrow_label)
 
         # Step 2: Email
-        self._email_btn = QPushButton("2. Click to send to {}".format(SUPPORT_EMAIL))
+        self._email_btn = QPushButton(f"2. Click to send to {SUPPORT_EMAIL}")
         self._email_btn.setToolTip("Open email client")
         self._email_btn.clicked.connect(self._on_open_email)
         layout.addWidget(self._email_btn)
@@ -264,7 +261,7 @@ class BugReportDialog(QDialog):
 
         subject = quote("AI Edit - Bug Report")
         QDesktopServices.openUrl(
-            QUrl("mailto:{}?subject={}".format(SUPPORT_EMAIL, subject))
+            QUrl(f"mailto:{SUPPORT_EMAIL}?subject={subject}")
         )
 
 

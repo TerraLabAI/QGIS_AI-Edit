@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import json
-from typing import Optional, Tuple
 
 from qgis.core import QgsBlockingNetworkRequest
 from qgis.PyQt.QtCore import QByteArray, QUrl
@@ -24,7 +25,7 @@ _PROXY_ERRORS = {
 
 def _classify_network_error(
     blocker: QgsBlockingNetworkRequest,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     """Map a QgsBlockingNetworkRequest failure to (error_code, user_message).
 
     Also logs full diagnostics for bug reports.
@@ -42,9 +43,7 @@ def _classify_network_error(
 
     # Log full diagnostics
     log_warning(
-        "Network error: qt_error={}, http_status={}, detail={}".format(
-            int(qt_error), http_status, error_string[:500]
-        )
+        f"Network error: qt_error={int(qt_error)}, http_status={http_status}, detail={error_string[:500]}"
     )
 
     # Classify
@@ -147,7 +146,7 @@ class TerraLabClient:
         """Poll generation status."""
         return self._request(
             "GET",
-            "/api/ai-edit/generate/status?request_id={}".format(request_id),
+            f"/api/ai-edit/generate/status?request_id={request_id}",
             auth=auth,
         )
 
@@ -166,7 +165,7 @@ class TerraLabClient:
     def get_config(self, product: str) -> dict:
         """Fetch server-driven plugin config (no auth required)."""
         return self._request(
-            "GET", "/api/plugin/config?product={}".format(product)
+            "GET", f"/api/plugin/config?product={product}"
         )
 
     def send_magic_link(self, email: str, device_id: str, product: str) -> dict:
@@ -177,6 +176,13 @@ class TerraLabClient:
             "product": product,
         }).encode("utf-8")
         return self._request("POST", "/api/auth/magic-link", body=body)
+
+    def send_telemetry_batch(self, events: list, auth: dict) -> dict:
+        """Send a batch of telemetry events to the track endpoint."""
+        body = json.dumps({"events": events}).encode("utf-8")
+        return self._request(
+            "POST", "/api/plugin/track", auth=auth, body=body, timeout_ms=5_000
+        )
 
     def download_image(self, url: str) -> bytes:
         """Download image bytes from a signed URL.
@@ -191,12 +197,12 @@ class TerraLabClient:
 
         if err != QgsBlockingNetworkRequest.NoError:
             code, msg = _classify_network_error(blocker)
-            raise RuntimeError("Download failed ({}): {}".format(code, msg))
+            raise RuntimeError(f"Download failed ({code}): {msg}")
 
         reply = blocker.reply()
         http_status = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
         if http_status and int(http_status) >= 400:
-            raise RuntimeError("Download failed: HTTP {}".format(http_status))
+            raise RuntimeError(f"Download failed: HTTP {http_status}")
 
         return bytes(reply.content())
 
@@ -206,8 +212,8 @@ class TerraLabClient:
         self,
         method: str,
         path: str,
-        auth: Optional[dict] = None,
-        body: Optional[bytes] = None,
+        auth: dict | None = None,
+        body: bytes | None = None,
         timeout_ms: int = _TIMEOUT_API,
     ) -> dict:
         """Execute an HTTP request via QGIS network stack.
@@ -215,7 +221,7 @@ class TerraLabClient:
         Returns a dict — either the parsed JSON response or
         {"error": "...", "code": "..."} on failure.
         """
-        url = "{}{}".format(self.base_url, path)
+        url = f"{self.base_url}{path}"
         req = QNetworkRequest(QUrl(url))
         req.setRawHeader(b"Content-Type", b"application/json")
         req.setTransferTimeout(timeout_ms)
@@ -233,7 +239,7 @@ class TerraLabClient:
             err = blocker.post(req, payload)
         else:
             return {
-                "error": "Unsupported method: {}".format(method),
+                "error": f"Unsupported method: {method}",
                 "code": "CLIENT_ERROR",
             }
 
@@ -261,7 +267,7 @@ class TerraLabClient:
 
         if http_status and int(http_status) >= 400:
             # Server returned an error — try to parse JSON body
-            log_warning("HTTP {}: {}".format(http_status, raw_body[:500]))
+            log_warning(f"HTTP {http_status}: {raw_body[:500]}")
             try:
                 error_body = json.loads(raw_body)
                 if "error" in error_body:
@@ -272,7 +278,7 @@ class TerraLabClient:
                 }
             except Exception:
                 return {
-                    "error": "Server error (HTTP {})".format(http_status),
+                    "error": f"Server error (HTTP {http_status})",
                     "code": "SERVER_ERROR",
                 }
 
@@ -282,5 +288,5 @@ class TerraLabClient:
         try:
             return json.loads(raw_body)
         except json.JSONDecodeError:
-            log_warning("Invalid JSON response: {}".format(raw_body[:500]))
+            log_warning(f"Invalid JSON response: {raw_body[:500]}")
             return {"error": "Invalid server response", "code": "SERVER_ERROR"}

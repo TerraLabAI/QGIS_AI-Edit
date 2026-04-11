@@ -1,4 +1,4 @@
-from typing import Tuple
+from __future__ import annotations
 
 
 class AuthManager:
@@ -26,7 +26,7 @@ class AuthManager:
             "X-Product-ID": "ai-edit",
         }
 
-    def check_can_generate(self) -> Tuple[bool, str, str]:
+    def check_can_generate(self) -> tuple[bool, str, str]:
         """Check if user can generate.
 
         Returns:
@@ -59,6 +59,9 @@ class AuthManager:
         limit = usage.get("images_limit", 0)
 
         if used >= limit:
+            is_free = usage.get("is_free_tier", False)
+            if is_free:
+                return False, f"All {limit} free credits used. Subscribe to continue.", "TRIAL_EXHAUSTED"
             return False, f"Monthly limit reached ({used}/{limit}).", "QUOTA_EXCEEDED"
 
         return True, f"{used}/{limit} images used", ""

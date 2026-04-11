@@ -1,4 +1,6 @@
-from qgis.core import QgsMessageLog, Qgis
+from __future__ import annotations
+
+from qgis.core import Qgis, QgsMessageLog
 
 TAG = "AI Edit"
 

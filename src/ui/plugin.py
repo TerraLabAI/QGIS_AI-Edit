@@ -1,46 +1,48 @@
-import os
+from __future__ import annotations
 
-from qgis.PyQt.QtCore import QSettings, Qt, QThread, pyqtSignal
-from qgis.PyQt.QtWidgets import QAction
-from qgis.PyQt.QtGui import QIcon, QColor
-from qgis.core import QgsRectangle, QgsWkbTypes, QgsPointXY
+import os
+import time
+
+from qgis.core import QgsPointXY, QgsRectangle, QgsWkbTypes
 from qgis.gui import QgsRubberBand
+from qgis.PyQt.QtCore import QSettings, Qt, QThread, pyqtSignal
+from qgis.PyQt.QtGui import QColor, QIcon
+from qgis.PyQt.QtWidgets import QAction
 
 from ..api.terralab_client import TerraLabClient
-from ..core.auth_manager import AuthManager
-from ..core.generation_service import GenerationService, calculate_closest_aspect_ratio
+from ..core import telemetry
 from ..core.activation_manager import (
-    get_activation_key,
-    save_activation,
     clear_activation,
-    validate_key_with_server,
-    send_magic_link,
+    get_activation_key,
     get_dashboard_url,
     get_server_config,
     has_consent,
+    save_activation,
     save_consent,
-    tr,
+    send_magic_link,
+    validate_key_with_server,
 )
+from ..core.auth_manager import AuthManager
+from ..core.generation_service import GenerationService, calculate_closest_aspect_ratio
+from ..core.i18n import tr
 from ..core.logger import log, log_warning
 from ..core.pipeline_context import PipelineContext
-from ..workers.generation_worker import GenerationWorker
-from .dock_widget import AIEditDockWidget
-from .selection_map_tool import RectangleSelectionTool
-from .canvas_exporter import (
-    export_canvas_zone,
-    calculate_suggested_resolution,
-    set_server_config,
-    has_server_config,
-)
-from .raster_writer import add_geotiff_to_project, get_output_dir
-
-
 from ..core.prompt_presets import fetch_remote_presets
+from ..workers.generation_worker import GenerationWorker
+from .canvas_exporter import (
+    calculate_suggested_resolution,
+    export_canvas_zone,
+    has_server_config,
+    set_server_config,
+)
+from .dock_widget import AIEditDockWidget
+from .raster_writer import add_geotiff_to_project, get_output_dir
+from .selection_map_tool import RectangleSelectionTool
 
 SETTINGS_KEY_PREFIX = "AIEdit"
 
-DASHBOARD_URL = "https://terra-lab.ai/dashboard"
-SUBSCRIBE_URL = "https://terra-lab.ai/ai-edit"
+DASHBOARD_URL = "https://terra-lab.ai/dashboard?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=dashboard_error"
+SUBSCRIBE_URL = "https://terra-lab.ai/dashboard/ai-edit?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=subscribe"
 
 
 class _PresetLoaderWorker(QThread):
@@ -55,6 +57,21 @@ class _PresetLoaderWorker(QThread):
     def run(self):
         result = fetch_remote_presets(self._client)
         if result:
+            self.loaded.emit(result)
+
+
+class _CreditsLoaderWorker(QThread):
+    """Background worker to fetch usage/credits without blocking QGIS."""
+
+    loaded = pyqtSignal(dict)
+
+    def __init__(self, auth_manager):
+        super().__init__()
+        self._auth_manager = auth_manager
+
+    def run(self):
+        result = self._auth_manager.get_usage_info()
+        if "error" not in result:
             self.loaded.emit(result)
 
 
@@ -91,19 +108,12 @@ def _enrich_error_message(error: str, code: str = "") -> str:
     if code == "TRIAL_EXHAUSTED":
         config = get_server_config()
         dashboard = config.get("upgrade_url", get_dashboard_url())
-        if config.get("promo_active") and config.get("promo_code"):
-            promo_msg = tr("free_promo_message").replace(
-                "{credits}", str(config.get("free_credits", 10))
-            ).replace("{code}", config["promo_code"])
-            return (
-                f'{tr("free_exhausted").replace("{credits}", str(config.get("free_credits", 10)))} '
-                f'{promo_msg} '
-                f'<a href="{dashboard}">{tr("free_subscribe")}</a>'
-            )
-        return (
-            f"{error}. "
-            f'<a href="{dashboard}">{tr("free_subscribe")}</a>'
-        )
+        promo_text = config.get("promo_text", "") if config.get("promo_active") else ""
+        parts = [error]
+        if promo_text:
+            parts.append(promo_text)
+        parts.append(f'<a href="{dashboard}">{tr("Subscribe now")}</a>')
+        return ". ".join(parts)
     if code == "PROXY_ERROR":
         return f"{error} — Check QGIS proxy settings: Settings > Options > Network"
     if code == "SSL_ERROR":
@@ -138,6 +148,7 @@ class AIEditPlugin:
         self._terralab_toolbar = None
         self._preset_loader = None
         self._export_config_loader = None
+        self._credits_loader = None
 
         # Initialize tiers
         self._dev_mode = False
@@ -162,7 +173,7 @@ class AIEditPlugin:
     def _load_env_file(path: str) -> dict:
         """Parse a simple KEY=VALUE env file (ignores comments and blank lines)."""
         env = {}
-        with open(path, "r") as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#"):
@@ -178,9 +189,9 @@ class AIEditPlugin:
         icon_path = os.path.join(plugin_dir, "resources", "icons", "icon.png")
 
         from .terralab_menu import (
-            get_or_create_terralab_menu,
             add_plugin_to_menu,
             add_to_plugins_menu,
+            get_or_create_terralab_menu,
         )
 
         main_window = self._iface.mainWindow()
@@ -188,16 +199,16 @@ class AIEditPlugin:
 
         self._action = QAction(
             QIcon(icon_path) if os.path.exists(icon_path) else QIcon(),
-            tr("ai_edit"),
+            tr("AI Edit"),
             main_window,
         )
-        self._action.setToolTip(tr("ai_edit_tooltip"))
+        self._action.setToolTip(tr("AI Edit by TerraLab\nAI-powered image editing for geospatial data"))
         self._action.triggered.connect(self._toggle_dock)
         add_plugin_to_menu(self._terralab_menu, self._action, "ai-edit")
 
         from .terralab_toolbar import (
-            get_or_create_terralab_toolbar,
             add_action_to_toolbar,
+            get_or_create_terralab_toolbar,
         )
 
         self._terralab_toolbar = get_or_create_terralab_toolbar(self._iface)
@@ -207,7 +218,7 @@ class AIEditPlugin:
 
         # Create dock widget and register it with QGIS (hidden by default)
         self._dock_widget = AIEditDockWidget(self._iface.mainWindow())
-        self._iface.addDockWidget(Qt.RightDockWidgetArea, self._dock_widget)
+        self._iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._dock_widget)
         self._dock_widget.hide()
         self._dock_widget.select_zone_clicked.connect(self._activate_selection_tool)
         self._dock_widget.stop_clicked.connect(self._on_stop)
@@ -228,6 +239,7 @@ class AIEditPlugin:
             self._auth_manager.set_activation_key(saved_key)
             self._dock_widget.set_activation_key(saved_key)
             self._dock_widget.set_activated(True)
+            self._refresh_credits()
         else:
             # No key stored: force activation screen (clears stale dev state)
             clear_activation(settings)
@@ -236,6 +248,9 @@ class AIEditPlugin:
         from .error_report_dialog import start_log_collector
 
         start_log_collector()
+
+        # Initialize telemetry (respects consent + auth, non-blocking)
+        telemetry.init_telemetry(self._client, self._auth_manager, "0.1.4")
 
         # Load remote presets in background (non-blocking)
         self._load_remote_presets()
@@ -266,16 +281,20 @@ class AIEditPlugin:
                 self._worker.wait(1000)
         self._worker = None
 
-        # Stop background loader workers
-        for loader in [self._preset_loader, self._export_config_loader]:
-            if loader and loader.isRunning():
+        # Stop background loader workers and disconnect signals
+        for loader in [self._preset_loader, self._export_config_loader, self._credits_loader]:
+            if loader:
                 try:
+                    loader.disconnect()
+                except (RuntimeError, TypeError):
+                    pass
+                if loader.isRunning():
                     loader.quit()
                     loader.wait(1000)
-                except RuntimeError:
-                    pass
+                loader.deleteLater()
         self._preset_loader = None
         self._export_config_loader = None
+        self._credits_loader = None
 
         self._clear_selection_rectangle()
 
@@ -289,7 +308,7 @@ class AIEditPlugin:
         stop_log_collector()
 
         if self._action:
-            from .terralab_menu import remove_plugin_from_menu, remove_from_plugins_menu
+            from .terralab_menu import remove_from_plugins_menu, remove_plugin_from_menu
 
             remove_from_plugins_menu(self._iface, self._action)
             remove_plugin_from_menu(
@@ -371,6 +390,12 @@ class AIEditPlugin:
 
     def _on_stop(self):
         """Stop button: reset everything."""
+        if self._worker and self._worker.isRunning():
+            duration = time.time() - getattr(self, "_generation_start_time", time.time())
+            telemetry.track("generation_cancelled", {
+                "duration_seconds": round(duration, 1),
+            })
+            telemetry.flush()
         self._canvas.unsetMapTool(self._map_tool)
         self._restore_previous_map_tool()
         self._clear_selection_rectangle()
@@ -390,7 +415,7 @@ class AIEditPlugin:
         self._canvas.unsetMapTool(self._map_tool)
         self._restore_previous_map_tool()
         self._dock_widget.set_idle()
-        self._dock_widget.set_status(tr("zone_too_small"), is_error=True)
+        self._dock_widget.set_status(tr("Selected zone too small (min 50x50px)"), is_error=True)
 
     def _on_change_key(self):
         """Reset activation state so user can enter a new key."""
@@ -400,34 +425,55 @@ class AIEditPlugin:
         log("Activation key cleared by user")
 
     def _on_activation_attempted(self, key: str):
-        success, message = validate_key_with_server(self._client, key)
+        success, message, code = validate_key_with_server(self._client, key)
         if success:
             save_activation(key)
             self._auth_manager.set_activation_key(key)
             self._dock_widget.set_activated(True)
-            self._dock_widget.set_activation_message(tr("key_verified"), is_error=False)
+            self._dock_widget.set_activation_message(tr("Activation key verified!"), is_error=False)
+            self._dock_widget.hide_activation_limit_cta()
+            self._refresh_credits()
+            telemetry.track("plugin_activated")
+            telemetry.flush()
             log("Activation successful")
         else:
             self._dock_widget.set_activation_message(message, is_error=True)
+            normalized_code = (code or "").strip().upper()
+            message_lower = (message or "").lower()
+            if normalized_code == "TRIAL_EXHAUSTED":
+                config = get_server_config(self._client)
+                dashboard = config.get("upgrade_url", SUBSCRIBE_URL)
+                self._dock_widget.show_activation_limit_cta(dashboard)
+            is_quota_error = (
+                normalized_code in {
+                    "QUOTA_EXCEEDED",
+                    "LIMIT_REACHED",
+                    "USAGE_LIMIT_REACHED",
+                    "MONTHLY_LIMIT_REACHED",
+                }
+                or "monthly limit reached" in message_lower
+            )
+            if is_quota_error:
+                self._dock_widget.show_activation_limit_cta(SUBSCRIBE_URL)
             log_warning(f"Activation failed: {message}")
 
     def _on_free_signup(self, email: str):
         """Handle free tier signup: send magic link via API."""
-        success, message_key = send_magic_link(self._client, email)
+        success, message = send_magic_link(self._client, email)
         self._dock_widget.reset_free_signup_button()
-        self._dock_widget.set_activation_message(tr(message_key), is_error=not success)
+        self._dock_widget.set_activation_message(tr(message), is_error=not success)
         if success:
             self._dock_widget.show_post_signup_state()
             log("Magic link sent")
         else:
-            log_warning("Magic link failed: {}".format(message_key))
+            log_warning(f"Magic link failed: {message}")
 
     def _on_generate(self, prompt: str):
         if self._worker and self._worker.isRunning():
             self._dock_widget.set_status("Generation already in progress", is_error=True)
             return
         if not self._selected_extent:
-            self._dock_widget.set_status(tr("no_zone"), is_error=True)
+            self._dock_widget.set_status(tr("No zone selected"), is_error=True)
             return
 
         # Save consent on first generation and hide checkbox
@@ -453,7 +499,7 @@ class AIEditPlugin:
             )
         except Exception as e:
             self._dock_widget.set_status(
-                tr("export_error").format(error=e), is_error=True
+                tr("Export error: {error}").format(error=e), is_error=True
             )
             return
 
@@ -482,6 +528,14 @@ class AIEditPlugin:
         self._dock_widget.set_generating(True)
         self._dock_widget.set_status("")
         self._generation_service.reset()
+        self._generation_start_time = time.time()
+        telemetry.track("generation_started", {
+            "prompt_length": len(prompt),
+            "aspect_ratio": aspect_ratio,
+            "resolution": suggested_res,
+            "zone_width_px": img_w,
+            "zone_height_px": img_h,
+        })
         log(f"Generation started: prompt_len={len(prompt)}, ratio={aspect_ratio}")
 
         plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -516,10 +570,30 @@ class AIEditPlugin:
         self._clear_selection_rectangle()
         self._restore_previous_map_tool()
         self._cleanup_worker()
-        if code == "TRIAL_EXHAUSTED":
+        normalized_code = (code or "").strip().upper()
+        message_lower = (message or "").lower()
+        is_quota_error = (
+            normalized_code in {
+                "QUOTA_EXCEEDED",
+                "LIMIT_REACHED",
+                "USAGE_LIMIT_REACHED",
+                "MONTHLY_LIMIT_REACHED",
+            }
+            or "monthly limit reached" in message_lower
+        )
+        duration = time.time() - getattr(self, "_generation_start_time", time.time())
+        telemetry.track("generation_failed", {
+            "error_code": code,
+            "duration_seconds": round(duration, 1),
+        })
+        telemetry.flush()
+        if normalized_code == "TRIAL_EXHAUSTED":
             config = get_server_config(self._client)
             dashboard = config.get("upgrade_url", get_dashboard_url())
-            self._dock_widget.show_trial_exhausted_info(message, dashboard)
+            promo_text = config.get("promo_text", "") if config.get("promo_active") else ""
+            self._dock_widget.show_trial_exhausted_info(message, dashboard, promo_text)
+        elif is_quota_error:
+            self._dock_widget.show_usage_limit_info(message, SUBSCRIBE_URL)
         else:
             enriched = _enrich_error_message(message, code)
             self._dock_widget.set_status(enriched, is_error=True)
@@ -529,19 +603,75 @@ class AIEditPlugin:
         self._cleanup_worker()
         self._clear_selection_rectangle()
         self._restore_previous_map_tool()
+        duration = time.time() - getattr(self, "_generation_start_time", time.time())
 
         try:
             layer = add_geotiff_to_project(
                 result_info["geotiff_path"], result_info.get("prompt", "")
             )
+            telemetry.track("generation_completed", {
+                "duration_seconds": round(duration, 1),
+            })
+            telemetry.flush()
             self._dock_widget.set_generation_complete(layer.name())
+            self._refresh_credits()
             log(f"Generation complete: {result_info['geotiff_path']}")
         except Exception as e:
+            telemetry.track("plugin_error", {
+                "error_type": "layer_add_failed",
+                "error_message": str(e)[:200],
+            })
+            telemetry.flush()
             self._dock_widget.set_idle()
             self._dock_widget.set_status(
-                tr("error_adding_layer").format(error=e), is_error=True
+                tr("Error adding layer: {error}").format(error=e), is_error=True
             )
             log_warning(f"Failed to add layer: {e}")
+
+    def _refresh_credits(self):
+        """Fetch and display current credits in background (non-blocking)."""
+        self._credits_loader = _CreditsLoaderWorker(self._auth_manager)
+        self._credits_loader.loaded.connect(self._on_credits_loaded)
+        self._credits_loader.start()
+
+    def _on_credits_loaded(self, usage: dict):
+        """Update dock widget with credits from background fetch."""
+        if self._dock_widget:
+            used = usage.get("images_used")
+            limit = usage.get("images_limit")
+            self._dock_widget.set_credits(
+                used=used,
+                limit=limit,
+                is_free_tier=usage.get("is_free_tier", False),
+            )
+            if (
+                isinstance(used, int)
+                and isinstance(limit, int)
+                and limit > 0
+                and used < limit
+            ):
+                self._dock_widget.hide_trial_info()
+            if (
+                isinstance(used, int)
+                and isinstance(limit, int)
+                and limit > 0
+                and used >= limit
+            ):
+                is_free = usage.get("is_free_tier", False)
+                if is_free:
+                    config = get_server_config(self._client)
+                    dashboard = config.get("upgrade_url", get_dashboard_url())
+                    promo_text = config.get("promo_text", "") if config.get("promo_active") else ""
+                    self._dock_widget.show_trial_exhausted_info(
+                        f"All {limit} free credits used. Subscribe to continue.",
+                        dashboard,
+                        promo_text,
+                    )
+                else:
+                    self._dock_widget.show_usage_limit_info(
+                        f"Monthly limit reached ({used}/{limit}).",
+                        SUBSCRIBE_URL,
+                    )
 
     def _cleanup_worker(self):
         """Safely clean up the worker thread without crashing QGIS."""
@@ -557,6 +687,7 @@ class AIEditPlugin:
             self._worker.wait(5000)
         except RuntimeError:
             pass
+        self._worker.deleteLater()
         self._worker = None
 
     # --- Selection rectangle management ---

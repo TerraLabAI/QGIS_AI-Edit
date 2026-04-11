@@ -1,14 +1,14 @@
+from __future__ import annotations
+
 import base64
-from typing import Tuple, Optional
 
-from qgis.PyQt.QtCore import QSize, QBuffer, QIODevice
+from qgis.core import QgsMapRendererCustomPainterJob, QgsMapSettings, QgsRectangle
+from qgis.PyQt.QtCore import QBuffer, QIODevice, QSize
 from qgis.PyQt.QtGui import QImage, QPainter
-from qgis.core import QgsMapSettings, QgsMapRendererCustomPainterJob, QgsRectangle
-
 
 # Global server config (set by plugin.py at startup)
 # Plugin cannot export without server config
-_server_config: Optional[dict] = None
+_server_config: dict | None = None
 
 
 def set_server_config(config: dict):
@@ -22,14 +22,14 @@ def has_server_config() -> bool:
     return _server_config is not None
 
 
-def _get_max_dimension() -> Optional[int]:
+def _get_max_dimension() -> int | None:
     """Get max dimension from server config. Returns None if unavailable."""
     if _server_config:
         return _server_config.get("max_dimension")
     return None
 
 
-def _get_align() -> Optional[int]:
+def _get_align() -> int | None:
     """Get pixel alignment from server config. Returns None if unavailable."""
     if _server_config:
         return _server_config.get("align")
@@ -38,7 +38,7 @@ def _get_align() -> Optional[int]:
 
 def export_canvas_zone(
     map_settings: QgsMapSettings, extent: QgsRectangle, ctx=None
-) -> Tuple[str, int, int, QgsRectangle]:
+) -> tuple[str, int, int, QgsRectangle]:
     """Export a zone of the QGIS canvas as a base64-encoded PNG string.
 
     Args:
@@ -154,7 +154,7 @@ def export_canvas_zone(
 
 def get_zone_pixel_size(
     map_settings: QgsMapSettings, extent: QgsRectangle
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     """Get the approximate pixel dimensions of a zone based on current map scale.
 
     Returns:

@@ -1,57 +1,57 @@
-from typing import Dict, List, Optional
+from __future__ import annotations
 
-from .activation_manager import tr, _get_locale
+from .i18n import get_locale, tr
 from .logger import log, log_warning
 
 # Local fallback presets: id-based, translated at runtime via tr().
 _PRESET_SPECS = [
     {
         "key": "remove",
-        "label_key": "remove",
+        "label": "Remove",
         "presets": [
-            {"id": "remove_clouds", "label_key": "remove_clouds",
+            {"id": "remove_clouds", "label": "Remove clouds",
              "prompt": "Remove clouds and haze, reveal clear terrain beneath"},
-            {"id": "remove_shadows", "label_key": "remove_shadows",
+            {"id": "remove_shadows", "label": "Remove shadows",
              "prompt": "Remove shadows to reveal features beneath"},
-            {"id": "remove_trees", "label_key": "remove_trees",
+            {"id": "remove_trees", "label": "Remove trees",
              "prompt": "Remove trees and vegetation, reveal bare ground beneath"},
-            {"id": "remove_water", "label_key": "remove_water",
+            {"id": "remove_water", "label": "Remove water",
              "prompt": "Remove water bodies, reveal dry terrain beneath"},
-            {"id": "remove_haze", "label_key": "remove_haze",
+            {"id": "remove_haze", "label": "Remove haze",
              "prompt": "Remove atmospheric haze and fog, restore clear visibility"},
         ],
     },
     {
         "key": "add",
-        "label_key": "add",
+        "label": "Add",
         "presets": [
-            {"id": "add_trees", "label_key": "add_trees",
+            {"id": "add_trees", "label": "Add trees",
              "prompt": "Add trees and vegetation to bare areas"},
-            {"id": "add_buildings", "label_key": "add_buildings",
+            {"id": "add_buildings", "label": "Add buildings",
              "prompt": "Add new buildings to empty areas"},
-            {"id": "add_solar_panels", "label_key": "add_solar_panels",
+            {"id": "add_solar_panels", "label": "Add solar panels",
              "prompt": "Add solar panels on rooftops"},
-            {"id": "add_road", "label_key": "add_road",
+            {"id": "add_road", "label": "Add road",
              "prompt": "Add a road through this area"},
-            {"id": "add_park", "label_key": "add_park",
+            {"id": "add_park", "label": "Add park",
              "prompt": "Transform this area into a park with trees and paths"},
-            {"id": "add_crops", "label_key": "add_crops",
+            {"id": "add_crops", "label": "Add crops",
              "prompt": "Show crop fields at harvest time"},
         ],
     },
 ]
 
 
-def get_translated_categories() -> List[Dict]:
+def get_translated_categories() -> list[dict]:
     """Return local categories with translated display labels."""
     return [
         {
             "key": cat["key"],
-            "label": tr(cat["label_key"]),
+            "label": tr(cat["label"]),
             "presets": [
                 {
                     "id": p["id"],
-                    "label": tr(p["label_key"]),
+                    "label": tr(p["label"]),
                     "prompt": p["prompt"],
                 }
                 for p in cat["presets"]
@@ -61,7 +61,7 @@ def get_translated_categories() -> List[Dict]:
     ]
 
 
-def parse_remote_presets(data: dict) -> Optional[List[Dict]]:
+def parse_remote_presets(data: dict) -> list[dict] | None:
     """Parse remote presets response into the format expected by the UI.
 
     Returns translated categories or None if parsing fails.
@@ -70,7 +70,7 @@ def parse_remote_presets(data: dict) -> Optional[List[Dict]]:
         categories = data.get("categories", [])
         if not categories:
             return None
-        locale = _get_locale()
+        locale = get_locale()
         result = []
         for cat in categories:
             presets = []
@@ -92,7 +92,7 @@ def parse_remote_presets(data: dict) -> Optional[List[Dict]]:
         return None
 
 
-def fetch_remote_presets(client) -> Optional[List[Dict]]:
+def fetch_remote_presets(client) -> list[dict] | None:
     """Fetch presets from the server. Returns parsed categories or None."""
     try:
         log("Remote presets: fetching from server...")
@@ -104,8 +104,8 @@ def fetch_remote_presets(client) -> Optional[List[Dict]]:
         if result:
             total = sum(len(c["presets"]) for c in result)
             log(
-                "Remote presets: loaded {} categories, "
-                "{} presets".format(len(result), total)
+                f"Remote presets: loaded {len(result)} categories, "
+                f"{total} presets"
             )
         return result
     except Exception:
@@ -113,7 +113,7 @@ def fetch_remote_presets(client) -> Optional[List[Dict]]:
         return None
 
 
-def get_preset_prompt(preset_id: str) -> Optional[str]:
+def get_preset_prompt(preset_id: str) -> str | None:
     """Get English prompt by preset ID."""
     for cat in _PRESET_SPECS:
         for p in cat["presets"]:
@@ -122,6 +122,6 @@ def get_preset_prompt(preset_id: str) -> Optional[str]:
     return None
 
 
-def get_preset_names() -> List[str]:
-    """Return all preset label keys."""
-    return [p["label_key"] for cat in _PRESET_SPECS for p in cat["presets"]]
+def get_preset_names() -> list[str]:
+    """Return all preset labels (English source text)."""
+    return [p["label"] for cat in _PRESET_SPECS for p in cat["presets"]]

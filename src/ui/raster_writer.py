@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import os
 import re
 import time
+
 from osgeo import gdal, osr
-from qgis.core import QgsRasterLayer, QgsProject
+from qgis.core import QgsProject, QgsRasterLayer
 
 from ..core.logger import log
 
