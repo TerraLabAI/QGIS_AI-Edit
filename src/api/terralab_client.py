@@ -154,6 +154,10 @@ class TerraLabClient:
         """Get usage info."""
         return self._request("GET", "/api/plugin/usage", auth=auth)
 
+    def get_account(self, auth: dict) -> dict:
+        """Get account info (email, subscriptions, usage)."""
+        return self._request("GET", "/api/plugin/account", auth=auth)
+
     def get_presets(self) -> dict:
         """Fetch prompt presets from the server (no auth required)."""
         return self._request("GET", "/api/ai-edit/presets")

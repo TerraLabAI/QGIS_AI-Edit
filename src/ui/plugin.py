@@ -141,6 +141,7 @@ class AIEditPlugin:
         self._dock_widget = None
         self._map_tool = None
         self._action = None
+        self._settings_action = None
         self._selected_extent = None
         self._worker = None
         self._selection_rubber_band = None
@@ -189,6 +190,7 @@ class AIEditPlugin:
         icon_path = os.path.join(plugin_dir, "resources", "icons", "icon.png")
 
         from .terralab_menu import (
+            _UTILITY_SEPARATOR,
             add_plugin_to_menu,
             add_to_plugins_menu,
             get_or_create_terralab_menu,
@@ -216,6 +218,27 @@ class AIEditPlugin:
 
         add_to_plugins_menu(self._iface, self._action)
 
+        # Add "Settings" to the TerraLab menu utility section
+        settings_icon = QIcon(":/images/themes/default/mActionOptions.svg")
+        self._settings_action = QAction(settings_icon, tr("Settings"), main_window)
+        # Prevent macOS from moving this to the app menu (Cocoa treats "Settings" as Preferences)
+        self._settings_action.setMenuRole(QAction.MenuRole.NoRole)
+        self._settings_action.triggered.connect(self._on_settings_clicked)
+        # Insert before "Check for Updates" (first action after the separator)
+        insert_before = None
+        found_sep = False
+        for a in self._terralab_menu.actions():
+            if a.objectName() == _UTILITY_SEPARATOR:
+                found_sep = True
+                continue
+            if found_sep:
+                insert_before = a
+                break
+        if insert_before:
+            self._terralab_menu.insertAction(insert_before, self._settings_action)
+        else:
+            self._terralab_menu.addAction(self._settings_action)
+
         # Create dock widget and register it with QGIS (hidden by default)
         self._dock_widget = AIEditDockWidget(self._iface.mainWindow())
         self._iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._dock_widget)
@@ -239,11 +262,13 @@ class AIEditPlugin:
             self._auth_manager.set_activation_key(saved_key)
             self._dock_widget.set_activation_key(saved_key)
             self._dock_widget.set_activated(True)
+            self._settings_action.setEnabled(True)
             self._refresh_credits()
         else:
             # No key stored: force activation screen (clears stale dev state)
             clear_activation(settings)
             self._dock_widget.set_activated(False)
+            self._settings_action.setEnabled(False)
 
         from .error_report_dialog import start_log_collector
 
@@ -307,6 +332,10 @@ class AIEditPlugin:
 
         stop_log_collector()
 
+        if self._settings_action and self._terralab_menu:
+            self._terralab_menu.removeAction(self._settings_action)
+            self._settings_action = None
+
         if self._action:
             from .terralab_menu import remove_from_plugins_menu, remove_plugin_from_menu
 
@@ -337,6 +366,21 @@ class AIEditPlugin:
             self._dock_widget.hide()
         else:
             self._dock_widget.show()
+
+    def _on_settings_clicked(self):
+        """Open the Account Settings dialog."""
+        if not self._auth_manager.has_activation_key():
+            return
+        from .account_settings_dialog import AccountSettingsDialog
+
+        dlg = AccountSettingsDialog(
+            client=self._client,
+            auth=self._auth_manager.get_auth_header(),
+            activation_key=self._auth_manager.get_activation_key(),
+            parent=self._iface.mainWindow(),
+        )
+        dlg.change_key_requested.connect(self._on_change_key)
+        dlg.exec()
 
     def _load_remote_presets(self):
         """Fetch presets from server in background thread."""
@@ -422,6 +466,7 @@ class AIEditPlugin:
         clear_activation()
         self._auth_manager.set_activation_key("")
         self._dock_widget.show_change_key_mode()
+        self._settings_action.setEnabled(False)
         log("Activation key cleared by user")
 
     def _on_activation_attempted(self, key: str):
@@ -432,6 +477,7 @@ class AIEditPlugin:
             self._dock_widget.set_activated(True)
             self._dock_widget.set_activation_message(tr("Activation key verified!"), is_error=False)
             self._dock_widget.hide_activation_limit_cta()
+            self._settings_action.setEnabled(True)
             self._refresh_credits()
             telemetry.track("plugin_activated")
             telemetry.flush()
