@@ -4,9 +4,9 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
-from .logger import log
+from .logger import log_debug
 
-# Supported aspect ratios (label, width/height ratio)
+# Supported aspect ratios for Nano Banana 2 (label, width/height ratio)
 ASPECT_RATIOS = [
     ("1:1", 1.0),
     ("5:4", 5 / 4),
@@ -18,6 +18,10 @@ ASPECT_RATIOS = [
     ("16:9", 16 / 9),
     ("9:16", 9 / 16),
     ("21:9", 21 / 9),
+    ("4:1", 4 / 1),
+    ("1:4", 1 / 4),
+    ("8:1", 8 / 1),
+    ("1:8", 1 / 8),
 ]
 
 
@@ -74,6 +78,12 @@ class GenerationService:
         if self._cancelled:
             return GenerationResult(success=False, error="Generation cancelled")
 
+        log_debug(
+            f"Submitting: resolution={suggested_resolution}, "
+            f"aspect={aspect_ratio}, prompt_len={len(prompt)}, "
+            f"image_b64_len={len(image_b64)}"
+        )
+
         # Submit (pre-prompt is applied server-side in website config)
         resp = self._client.submit_generation(
             image_b64=image_b64,
@@ -90,34 +100,21 @@ class GenerationService:
 
         request_id = resp["request_id"]
         submit_time = time.time()
-        log(
-            "Submitted: request_id={}, resolution={}, aspect={}, est={}s".format(
-                request_id,
-                resp.get("resolution", "?"),
-                resp.get("aspect_ratio", "?"),
-                resp.get("estimated_time", "?"),
-            )
+        log_debug(
+            f"Submitted: request_id={request_id}, "
+            f"resolution={resp.get('resolution', suggested_resolution)}, "
+            f"aspect={resp.get('aspect_ratio', aspect_ratio)}, "
+            f"est={resp.get('estimated_time', '?')}s"
         )
 
         # Use server-suggested polling config if available
         poll_interval = resp.get("poll_interval", self._poll_interval)
         estimated_time = resp.get("estimated_time")
-        # Absolute max wait: credits are consumed at submit, so timeout = lost credit.
-        # Be generous to handle server-side outliers (GPU queuing, slow inference).
         absolute_max_polls = int(360 / poll_interval)
         if estimated_time:
-            # Use 3x estimated time, but never less than absolute max
             max_polls = max(absolute_max_polls, int(estimated_time * 3 / poll_interval))
-            log(
-                f"Polling: server hints poll_interval={poll_interval}s, "
-                f"estimated_time={estimated_time}s, max_polls={max_polls}"
-            )
         else:
             max_polls = absolute_max_polls
-            log(
-                f"Polling: using defaults poll_interval={poll_interval}s, "
-                f"max_polls={max_polls}"
-            )
 
         if ctx is not None:
             ctx.submitted_resolution = suggested_resolution

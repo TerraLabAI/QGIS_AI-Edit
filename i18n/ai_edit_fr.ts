@@ -162,62 +162,18 @@ En continuant, vous acceptez nos Conditions Générales de Vente et notre Politi
         <translation>S'abonner sur terra-lab.ai</translation>
     </message>
 
-    <!-- Free tier -->
+    <!-- Login & activation -->
     <message>
-        <source>Try AI Edit for free</source>
-        <translation>Essayez AI Edit gratuitement</translation>
+        <source>Sign in on terra-lab.ai to get your activation key</source>
+        <translation>Connectez-vous sur terra-lab.ai pour obtenir votre cle d'activation</translation>
     </message>
     <message>
-        <source>No credit card required.</source>
-        <translation>Aucune carte bancaire requise.</translation>
-    </message>
-    <message>
-        <source>your@email.com</source>
-        <translation>votre@email.com</translation>
-    </message>
-    <message>
-        <source>Get {credits} free AI edits</source>
-        <translation>Obtenir {credits} edits AI gratuits</translation>
-    </message>
-    <message>
-        <source>Check your email! Click the link to access your dashboard.</source>
-        <translation>Consultez votre email ! Cliquez sur le lien pour acceder a votre dashboard.</translation>
+        <source>Login on terra-lab.ai</source>
+        <translation>Se connecter sur terra-lab.ai</translation>
     </message>
     <message>
         <source>Paste your key from terra-lab.ai/dashboard:</source>
         <translation>Collez votre cle depuis terra-lab.ai/dashboard :</translation>
-    </message>
-    <message>
-        <source>Enter your email, check your inbox, get your free key from the dashboard, paste it here.</source>
-        <translation>Entrez votre email, consultez votre boite mail, recuperez votre cle gratuite sur le dashboard, collez-la ici.</translation>
-    </message>
-    <message>
-        <source>Sending...</source>
-        <translation>Envoi en cours...</translation>
-    </message>
-    <message>
-        <source>Please enter a valid email address.</source>
-        <translation>Veuillez entrer une adresse email valide.</translation>
-    </message>
-    <message>
-        <source>Please use a non-disposable email address.</source>
-        <translation>Veuillez utiliser une adresse email non jetable.</translation>
-    </message>
-    <message>
-        <source>Free edits already claimed on this device.</source>
-        <translation>Les edits gratuits ont deja ete utilises sur cet appareil.</translation>
-    </message>
-    <message>
-        <source>This email already has free edits. Check your dashboard.</source>
-        <translation>Cet email a deja des edits gratuits. Consultez votre dashboard.</translation>
-    </message>
-    <message>
-        <source>Too many attempts. Please wait a moment.</source>
-        <translation>Trop de tentatives. Veuillez patienter un moment.</translation>
-    </message>
-    <message>
-        <source>Could not send the email. Please try again.</source>
-        <translation>Impossible d'envoyer l'email. Veuillez reessayer.</translation>
     </message>
     <message>
         <source>You have used all {credits} free edits.</source>
@@ -230,14 +186,6 @@ En continuant, vous acceptez nos Conditions Générales de Vente et notre Politi
     <message>
         <source>Subscribe now</source>
         <translation>S'abonner maintenant</translation>
-    </message>
-    <message>
-        <source>Already have a key? Paste it here</source>
-        <translation>Vous avez deja une cle ? Collez-la ici</translation>
-    </message>
-    <message>
-        <source>Resend in {seconds}s</source>
-        <translation>Renvoyer dans {seconds}s</translation>
     </message>
 
     <!-- Plugin -->

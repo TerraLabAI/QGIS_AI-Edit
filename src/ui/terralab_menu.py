@@ -93,13 +93,25 @@ def add_to_plugins_menu(iface, action):
         logo_path = _find_terralab_logo()
         logo_icon = QIcon(logo_path) if logo_path else QIcon()
         submenu = plugin_menu.addMenu(logo_icon, _PLUGINS_MENU_NAME)
-    insert_before = None
-    for existing in submenu.actions():
-        if existing.text() > action.text():
-            insert_before = existing
+        # Add utility actions (same as the TerraLab menu bar menu)
+        sep = submenu.addSeparator()
+        sep.setObjectName(_UTILITY_SEPARATOR)
+        update_icon = QIcon(":/images/themes/default/mActionRefresh.svg")
+        check_update = submenu.addAction(update_icon, "Check for Updates")
+        check_update.triggered.connect(_open_plugin_manager_updates)
+        website_icon = QIcon(logo_path) if logo_path else QIcon()
+        more_action = submenu.addAction(website_icon, "More from TerraLab...")
+        more_action.triggered.connect(
+            lambda: QDesktopServices.openUrl(QUrl(TERRALAB_URL))
+        )
+    # Insert plugin action before the utility separator
+    sep_action = None
+    for a in submenu.actions():
+        if a.objectName() == _UTILITY_SEPARATOR:
+            sep_action = a
             break
-    if insert_before:
-        submenu.insertAction(insert_before, action)
+    if sep_action:
+        submenu.insertAction(sep_action, action)
     else:
         submenu.addAction(action)
 

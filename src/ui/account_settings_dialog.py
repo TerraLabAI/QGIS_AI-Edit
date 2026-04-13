@@ -92,7 +92,7 @@ class AccountSettingsDialog(QDialog):
 
         # Loading state
         self._loading_label = QLabel(tr("Loading account info..."))
-        self._loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._loading_label.setAlignment(Qt.AlignCenter)
         self._loading_label.setStyleSheet("color: palette(text); padding: 16px;")
         self._layout.addWidget(self._loading_label)
 
@@ -103,7 +103,7 @@ class AccountSettingsDialog(QDialog):
         error_layout.setSpacing(8)
         self._error_label = QLabel()
         self._error_label.setWordWrap(True)
-        self._error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._error_label.setAlignment(Qt.AlignCenter)
         self._error_label.setStyleSheet(f"color: {BRAND_RED}; padding: 12px;")
         error_layout.addWidget(self._error_label)
         self._retry_btn = QPushButton(tr("Retry"))
@@ -168,7 +168,7 @@ class AccountSettingsDialog(QDialog):
             f'{tr("Manage subscription on terra-lab.ai")}</a>'
         )
         manage_label.setOpenExternalLinks(True)
-        manage_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        manage_label.setAlignment(Qt.AlignCenter)
         manage_label.setStyleSheet("font-size: 11px; padding-top: 2px;")
         self._content_layout.addWidget(manage_label)
 
@@ -198,12 +198,12 @@ class AccountSettingsDialog(QDialog):
         email_row.addWidget(email_lbl)
         email_row.addStretch()
         email_val = QLabel(data.get("email", "—"))
-        email_val.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        email_val.setTextInteractionFlags(Qt.TextSelectableByMouse)
         email_val.setStyleSheet("font-size: 12px; color: palette(text);")
         email_row.addWidget(email_val)
         email_copy = QPushButton(tr("Copy"))
         email_copy.setStyleSheet(_LINK_BTN)
-        email_copy.setCursor(Qt.CursorShape.PointingHandCursor)
+        email_copy.setCursor(Qt.PointingHandCursor)
         email_copy.clicked.connect(
             lambda: self._copy_text(data.get("email", ""), email_copy)
         )
@@ -226,7 +226,7 @@ class AccountSettingsDialog(QDialog):
         key_row.addStretch()
         self._key_label = QLabel(self._masked_key())
         self._key_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
+            Qt.TextSelectableByMouse
         )
         self._key_label.setStyleSheet(
             "font-size: 11px; font-family: monospace; color: palette(text);"
@@ -234,12 +234,12 @@ class AccountSettingsDialog(QDialog):
         key_row.addWidget(self._key_label)
         self._toggle_btn = QPushButton(tr("Show"))
         self._toggle_btn.setStyleSheet(_LINK_BTN)
-        self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._toggle_btn.setCursor(Qt.PointingHandCursor)
         self._toggle_btn.clicked.connect(self._toggle_key_visibility)
         key_row.addWidget(self._toggle_btn)
         self._copy_key_btn = QPushButton(tr("Copy"))
         self._copy_key_btn.setStyleSheet(_LINK_BTN)
-        self._copy_key_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._copy_key_btn.setCursor(Qt.PointingHandCursor)
         self._copy_key_btn.clicked.connect(
             lambda: self._copy_text(self._activation_key, self._copy_key_btn)
         )
@@ -251,7 +251,7 @@ class AccountSettingsDialog(QDialog):
         change_row.addStretch()
         change_btn = QPushButton(tr("Change activation key"))
         change_btn.setStyleSheet(_LINK_BTN)
-        change_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        change_btn.setCursor(Qt.PointingHandCursor)
         change_btn.clicked.connect(self._on_change_key)
         change_row.addWidget(change_btn)
         layout.addLayout(change_row)

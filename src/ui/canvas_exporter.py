@@ -130,10 +130,10 @@ def export_canvas_zone(
     job.waitForFinished()
     painter.end()
 
-    # Convert to base64 PNG
+    # Convert to base64 JPEG (matches server's data:image/jpeg URI)
     buffer = QBuffer()
     buffer.open(QIODevice.WriteOnly)
-    image.save(buffer, "PNG")
+    image.save(buffer, "JPEG", 92)
     b64 = base64.b64encode(buffer.data().data()).decode("ascii")
 
     # Populate pipeline context

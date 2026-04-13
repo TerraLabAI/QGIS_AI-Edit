@@ -19,18 +19,15 @@ from ..core.activation_manager import (
     has_consent,
     save_activation,
     save_consent,
-    send_magic_link,
     validate_key_with_server,
 )
 from ..core.auth_manager import AuthManager
-from ..core.generation_service import GenerationService, calculate_closest_aspect_ratio
+from ..core.generation_service import GenerationService
 from ..core.i18n import tr
-from ..core.logger import log, log_warning
+from ..core.logger import log, log_debug, log_warning
 from ..core.pipeline_context import PipelineContext
-from ..core.prompt_presets import fetch_remote_presets
 from ..workers.generation_worker import GenerationWorker
 from .canvas_exporter import (
-    calculate_suggested_resolution,
     export_canvas_zone,
     has_server_config,
     set_server_config,
@@ -43,21 +40,6 @@ SETTINGS_KEY_PREFIX = "AIEdit"
 
 DASHBOARD_URL = "https://terra-lab.ai/dashboard?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=dashboard_error"
 SUBSCRIBE_URL = "https://terra-lab.ai/dashboard/ai-edit?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=subscribe"
-
-
-class _PresetLoaderWorker(QThread):
-    """Background worker to fetch remote presets without blocking QGIS."""
-
-    loaded = pyqtSignal(list)
-
-    def __init__(self, client):
-        super().__init__()
-        self._client = client
-
-    def run(self):
-        result = fetch_remote_presets(self._client)
-        if result:
-            self.loaded.emit(result)
 
 
 class _CreditsLoaderWorker(QThread):
@@ -87,10 +69,10 @@ class _ExportConfigLoaderWorker(QThread):
 
     def run(self):
         try:
-            log("Export config: fetching from server...")
+            log_debug("Export config: fetching from server...")
             config = self._client.get_export_config()
             if "error" not in config:
-                log("Export config: loaded from server")
+                log_debug("Export config: loaded from server")
                 self.loaded.emit(config)
             else:
                 error_msg = config.get("error", "Unknown error")
@@ -147,9 +129,14 @@ class AIEditPlugin:
         self._selection_rubber_band = None
         self._previous_map_tool = None
         self._terralab_toolbar = None
-        self._preset_loader = None
         self._export_config_loader = None
         self._credits_loader = None
+        # Preserved for retry (re-generate from original, not from AI result)
+        self._last_image_b64 = None
+        self._last_extent_dict = None
+        self._last_crs_wkt = None
+        self._last_aspect_ratio = None
+        self._last_suggested_res = None
 
         # Initialize tiers
         self._dev_mode = False
@@ -241,14 +228,17 @@ class AIEditPlugin:
 
         # Create dock widget and register it with QGIS (hidden by default)
         self._dock_widget = AIEditDockWidget(self._iface.mainWindow())
-        self._iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._dock_widget)
+        self._iface.addDockWidget(Qt.RightDockWidgetArea, self._dock_widget)
         self._dock_widget.hide()
         self._dock_widget.select_zone_clicked.connect(self._activate_selection_tool)
         self._dock_widget.stop_clicked.connect(self._on_stop)
         self._dock_widget.generate_clicked.connect(self._on_generate)
+        self._dock_widget.retry_clicked.connect(self._on_retry)
+        self._dock_widget.new_zone_clicked.connect(self._on_new_zone)
+        self._dock_widget.template_selected.connect(self._on_template_selected)
         self._dock_widget.activation_attempted.connect(self._on_activation_attempted)
-        self._dock_widget.free_signup_requested.connect(self._on_free_signup)
         self._dock_widget.change_key_clicked.connect(self._on_change_key)
+        self._dock_widget.settings_clicked.connect(self._on_settings_clicked)
 
         # Create map tool
         self._map_tool = RectangleSelectionTool(self._canvas)
@@ -277,9 +267,6 @@ class AIEditPlugin:
         # Initialize telemetry (respects consent + auth, non-blocking)
         telemetry.init_telemetry(self._client, self._auth_manager, "0.1.4")
 
-        # Load remote presets in background (non-blocking)
-        self._load_remote_presets()
-
         # Load export config in background (non-blocking)
         self._load_export_config()
 
@@ -307,7 +294,7 @@ class AIEditPlugin:
         self._worker = None
 
         # Stop background loader workers and disconnect signals
-        for loader in [self._preset_loader, self._export_config_loader, self._credits_loader]:
+        for loader in [self._export_config_loader, self._credits_loader]:
             if loader:
                 try:
                     loader.disconnect()
@@ -317,7 +304,6 @@ class AIEditPlugin:
                     loader.quit()
                     loader.wait(1000)
                 loader.deleteLater()
-        self._preset_loader = None
         self._export_config_loader = None
         self._credits_loader = None
 
@@ -382,17 +368,6 @@ class AIEditPlugin:
         dlg.change_key_requested.connect(self._on_change_key)
         dlg.exec()
 
-    def _load_remote_presets(self):
-        """Fetch presets from server in background thread."""
-        self._preset_loader = _PresetLoaderWorker(self._client)
-        self._preset_loader.loaded.connect(self._on_presets_loaded)
-        self._preset_loader.start()
-
-    def _on_presets_loaded(self, categories):
-        """Update dock widget menu with remote presets."""
-        if self._dock_widget:
-            self._dock_widget.update_presets(categories)
-
     def _load_export_config(self):
         """Fetch export config from server in background thread."""
         self._export_config_loader = _ExportConfigLoaderWorker(self._client)
@@ -444,6 +419,90 @@ class AIEditPlugin:
         self._restore_previous_map_tool()
         self._clear_selection_rectangle()
         self._selected_extent = None
+        self._last_image_b64 = None
+
+    def _on_retry(self, prompt: str):
+        """Retry on same zone: re-generate from the ORIGINAL canvas export."""
+        if not self._last_image_b64 or not self._last_extent_dict:
+            self._dock_widget.set_status(
+                tr("Cannot retry: original zone data not available."), is_error=True
+            )
+            return
+        self._run_generation_from_stored(prompt)
+
+    def _on_new_zone(self, prompt: str):
+        """Keep prompt, start new zone selection."""
+        self._clear_selection_rectangle()
+        self._selected_extent = None
+        self._last_image_b64 = None  # Will be re-captured from new zone
+        self._dock_widget.set_active_mode()
+        self._activate_selection_tool()
+
+    def _on_template_selected(self, template_id: str):
+        """Track template selection for analytics."""
+        telemetry.track("template_selected", {"template_id": template_id})
+
+    def _run_generation_from_stored(self, prompt: str):
+        """Run generation using previously stored zone data (for retry)."""
+        if self._worker and self._worker.isRunning():
+            self._dock_widget.set_status("Generation already in progress", is_error=True)
+            return
+
+        if not has_consent():
+            save_consent()
+            self._dock_widget.hide_consent()
+
+        if not has_server_config():
+            self._dock_widget.set_status(
+                "Cannot generate: export config not loaded from server. "
+                "Check your internet connection and restart QGIS.",
+                is_error=True,
+            )
+            return
+
+        ctx = PipelineContext()
+        ctx.aspect_ratio = self._last_aspect_ratio
+
+        output_dir = get_output_dir()
+
+        # Show the zone rectangle during retry
+        if self._selected_extent:
+            self._show_selection_rectangle(self._selected_extent)
+
+        self._dock_widget.set_generating(True)
+        self._dock_widget.set_status("")
+        self._generation_service.reset()
+        self._generation_start_time = time.time()
+        telemetry.track("generation_started", {
+            "prompt_length": len(prompt),
+            "aspect_ratio": self._last_aspect_ratio or "",
+            "resolution": self._last_suggested_res or "",
+            "is_retry": True,
+        })
+        log_debug(f"Retry generation: prompt_len={len(prompt)}")
+
+        plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+
+        self._worker = GenerationWorker(
+            client=self._client,
+            auth_manager=self._auth_manager,
+            service=self._generation_service,
+            image_b64=self._last_image_b64,
+            prompt=prompt,
+            aspect_ratio=self._last_aspect_ratio or "",
+            extent_dict=self._last_extent_dict,
+            crs_wkt=self._last_crs_wkt or "",
+            output_dir=output_dir,
+            ctx=ctx,
+            debug_mode=self._dev_mode,
+            plugin_dir=plugin_dir,
+            skip_trial_check=self._skip_trial_check,
+            suggested_resolution=self._last_suggested_res or "1K",
+        )
+        self._worker.finished.connect(self._on_generation_finished)
+        self._worker.progress.connect(self._on_generation_progress)
+        self._worker.error.connect(self._on_generation_error)
+        self._worker.start()
 
     def _on_zone_selected(self, extent: QgsRectangle):
         self._selected_extent = extent
@@ -453,7 +512,7 @@ class AIEditPlugin:
         self._restore_previous_map_tool()
         # Focus set LAST — after map tool ops that steal focus
         self._dock_widget.set_zone_selected()
-        log("Zone selected")
+        log_debug("Zone selected")
 
     def _on_zone_too_small(self):
         self._canvas.unsetMapTool(self._map_tool)
@@ -467,7 +526,7 @@ class AIEditPlugin:
         self._auth_manager.set_activation_key("")
         self._dock_widget.show_change_key_mode()
         self._settings_action.setEnabled(False)
-        log("Activation key cleared by user")
+        log_debug("Activation key cleared by user")
 
     def _on_activation_attempted(self, key: str):
         success, message, code = validate_key_with_server(self._client, key)
@@ -502,17 +561,6 @@ class AIEditPlugin:
             if is_quota_error:
                 self._dock_widget.show_activation_limit_cta(SUBSCRIBE_URL)
             log_warning(f"Activation failed: {message}")
-
-    def _on_free_signup(self, email: str):
-        """Handle free tier signup: send magic link via API."""
-        success, message = send_magic_link(self._client, email)
-        self._dock_widget.reset_free_signup_button()
-        self._dock_widget.set_activation_message(tr(message), is_error=not success)
-        if success:
-            self._dock_widget.show_post_signup_state()
-            log("Magic link sent")
-        else:
-            log_warning(f"Magic link failed: {message}")
 
     def _on_generate(self, prompt: str):
         if self._worker and self._worker.isRunning():
@@ -549,11 +597,12 @@ class AIEditPlugin:
             )
             return
 
-        suggested_res = calculate_suggested_resolution(
-            map_settings, self._selected_extent
-        )
+        suggested_res = "1K"
 
-        aspect_ratio = calculate_closest_aspect_ratio(img_w, img_h)
+        # Use "auto" so the model preserves the input image dimensions.
+        # Explicit ratios (e.g. "21:9") cause the model to reshape the output,
+        # which creates alignment issues with the source imagery.
+        aspect_ratio = "auto"
         ctx.aspect_ratio = aspect_ratio
 
         # Use the actual rendered extent (QGIS may adjust it to match the
@@ -571,6 +620,13 @@ class AIEditPlugin:
         self._selected_extent = actual_extent
         self._show_selection_rectangle(actual_extent)
 
+        # Preserve original zone for retry (never chain from AI result)
+        self._last_image_b64 = image_b64
+        self._last_extent_dict = extent_dict
+        self._last_crs_wkt = crs_wkt
+        self._last_aspect_ratio = aspect_ratio
+        self._last_suggested_res = suggested_res
+
         self._dock_widget.set_generating(True)
         self._dock_widget.set_status("")
         self._generation_service.reset()
@@ -582,7 +638,7 @@ class AIEditPlugin:
             "zone_width_px": img_w,
             "zone_height_px": img_h,
         })
-        log(f"Generation started: prompt_len={len(prompt)}, ratio={aspect_ratio}")
+        log_debug(f"Generation: prompt_len={len(prompt)}, ratio={aspect_ratio}")
 
         plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
@@ -647,7 +703,7 @@ class AIEditPlugin:
 
     def _on_generation_finished(self, result_info: dict):
         self._cleanup_worker()
-        self._clear_selection_rectangle()
+        # Keep selection rectangle visible for retry/new zone flow
         self._restore_previous_map_tool()
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
 
@@ -661,7 +717,7 @@ class AIEditPlugin:
             telemetry.flush()
             self._dock_widget.set_generation_complete(layer.name())
             self._refresh_credits()
-            log(f"Generation complete: {result_info['geotiff_path']}")
+            log_debug(f"Generation complete: {result_info['geotiff_path']}")
         except Exception as e:
             telemetry.track("plugin_error", {
                 "error_type": "layer_add_failed",
@@ -669,6 +725,7 @@ class AIEditPlugin:
             })
             telemetry.flush()
             self._dock_widget.set_idle()
+            self._clear_selection_rectangle()
             self._dock_widget.set_status(
                 tr("Error adding layer: {error}").format(error=e), is_error=True
             )
@@ -741,9 +798,9 @@ class AIEditPlugin:
     def _show_selection_rectangle(self, extent):
         self._clear_selection_rectangle()
         rb = QgsRubberBand(self._canvas, QgsWkbTypes.PolygonGeometry)
-        rb.setColor(QColor(65, 105, 225, 80))
-        rb.setStrokeColor(QColor(65, 105, 225, 200))
-        rb.setWidth(2)
+        rb.setColor(QColor(65, 105, 225, 15))
+        rb.setStrokeColor(QColor(65, 105, 225, 180))
+        rb.setWidth(3)
         rb.addPoint(QgsPointXY(extent.xMinimum(), extent.yMinimum()), False)
         rb.addPoint(QgsPointXY(extent.xMaximum(), extent.yMinimum()), False)
         rb.addPoint(QgsPointXY(extent.xMaximum(), extent.yMaximum()), False)
