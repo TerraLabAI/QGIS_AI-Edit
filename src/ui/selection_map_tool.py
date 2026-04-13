@@ -33,10 +33,10 @@ class RectangleSelectionTool(QgsMapTool):
         self._start_point = None
         self._rubber_band = None
         self._is_drawing = False
-        self.setCursor(QCursor(Qt.CursorShape.CrossCursor))
+        self.setCursor(QCursor(Qt.CrossCursor))
 
     def canvasPressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.LeftButton:
             self._start_point = self.toMapCoordinates(event.pos())
             self._is_drawing = True
             self._create_rubber_band()
@@ -54,7 +54,7 @@ class RectangleSelectionTool(QgsMapTool):
             self._update_rubber_band(self._start_point, end_point)
 
     def canvasReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self._is_drawing:
+        if event.button() == Qt.LeftButton and self._is_drawing:
             self._is_drawing = False
             end_point = self.toMapCoordinates(event.pos())
             rect = QgsRectangle(self._start_point, end_point)
@@ -112,7 +112,7 @@ class RectangleSelectionTool(QgsMapTool):
         return rect, best
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Escape:
+        if event.key() == Qt.Key_Escape:
             self._is_drawing = False
             self._clear_rubber_band()
             self.selection_cancelled.emit()

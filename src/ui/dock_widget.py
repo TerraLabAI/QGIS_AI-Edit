@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 from qgis.core import QgsProject
-from qgis.PyQt.QtCore import Qt, QTimer, QUrl, pyqtSignal
-from qgis.PyQt.QtGui import QDesktopServices, QKeySequence
+from qgis.PyQt.QtCore import QSize, Qt, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtGui import QDesktopServices, QIcon, QKeySequence, QTextCursor
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QDockWidget,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMenu,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -21,17 +19,14 @@ from qgis.PyQt.QtWidgets import (
     QToolButton,
     QVBoxLayout,
     QWidget,
-    QWidgetAction,
 )
 
 from ..core.activation_manager import (
-    get_shared_email,
     get_subscribe_url,
     get_tutorial_url,
     has_consent,
 )
 from ..core.i18n import tr
-from ..core.prompt_presets import get_translated_categories
 
 # ---------------------------------------------------------------------------
 # Brand colors (Material Design 2 — shared with AI Segmentation)
@@ -55,27 +50,46 @@ SUPPORT_EMAIL = "yvann.barbot@terra-lab.ai"
 # Reusable QSS style constants (design system)
 # ---------------------------------------------------------------------------
 _BTN_GREEN = (
-    f"QPushButton {{ background-color: {BRAND_GREEN}; padding: 8px 16px; }}"
-    f"QPushButton:disabled {{ background-color: {BRAND_GREEN_DISABLED}; }}"
+    f"QPushButton {{ background-color: {BRAND_GREEN}; color: white;"
+    f" padding: 8px 16px; border-radius: 4px; border: none; }}"
+    f"QPushButton:hover {{ background-color: {BRAND_GREEN_HOVER}; }}"
+    f"QPushButton:disabled {{ background-color: {BRAND_GREEN_DISABLED};"
+    f" color: {DISABLED_TEXT}; }}"
 )
 
 _BTN_GREEN_COMPACT = (
-    f"QPushButton {{ background-color: {BRAND_GREEN}; padding: 6px 12px; }}"
-    f"QPushButton:disabled {{ background-color: {BRAND_GREEN_DISABLED}; }}"
+    f"QPushButton {{ background-color: {BRAND_GREEN}; color: white;"
+    f" padding: 6px 12px; border-radius: 4px; border: none; }}"
+    f"QPushButton:hover {{ background-color: {BRAND_GREEN_HOVER}; }}"
+    f"QPushButton:disabled {{ background-color: {BRAND_GREEN_DISABLED};"
+    f" color: {DISABLED_TEXT}; }}"
 )
 
 _BTN_BLUE = (
-    f"QPushButton {{ background-color: {BRAND_BLUE}; padding: 8px 16px; }}"
-    f"QPushButton:disabled {{ background-color: {BRAND_DISABLED}; }}"
+    f"QPushButton {{ background-color: {BRAND_BLUE}; color: white;"
+    f" padding: 8px 16px; border-radius: 4px; border: none; }}"
+    f"QPushButton:hover {{ background-color: {BRAND_BLUE_HOVER}; }}"
+    f"QPushButton:disabled {{ background-color: {BRAND_DISABLED};"
+    f" color: {DISABLED_TEXT}; }}"
 )
 
 _BTN_GRAY = (
-    f"QPushButton {{ background-color: {BRAND_GRAY}; padding: 4px 8px; }}"
+    f"QPushButton {{ background-color: {BRAND_GRAY}; color: white;"
+    f" padding: 8px 16px; border-radius: 4px; border: none; }}"
+    f"QPushButton:hover {{ background-color: {BRAND_GRAY_HOVER}; }}"
 )
 
 _BTN_DISABLED = (
     f"QPushButton {{ background-color: {BRAND_DISABLED}; color: {DISABLED_TEXT};"
-    f" padding: 8px 16px; }}"
+    f" padding: 8px 16px; border-radius: 4px; border: none; }}"
+)
+
+_BTN_GHOST = (
+    "QPushButton { background-color: transparent; color: palette(text);"
+    " padding: 8px 16px; border-radius: 4px;"
+    " border: 1px solid rgba(128, 128, 128, 0.35); }"
+    "QPushButton:hover { background-color: rgba(128, 128, 128, 0.15);"
+    " border: 1px solid rgba(128, 128, 128, 0.5); }"
 )
 
 _PROMPT_INPUT_NORMAL = (
@@ -108,28 +122,6 @@ _SECTION_HEADER_EXTRA_TOP = (
     "font-weight: bold; color: palette(text); padding-top: 6px;"
 )
 
-# QGroupBox style for collapsible sections (matches AI Segmentation refine_group)
-_GROUPBOX_COLLAPSIBLE = """
-    QGroupBox {
-        background-color: transparent;
-        border: none;
-        border-radius: 0px;
-        margin: 0px;
-        padding: 0px;
-        padding-top: 20px;
-    }
-    QGroupBox::title {
-        subcontrol-origin: padding;
-        subcontrol-position: top left;
-        padding: 2px 4px;
-        background-color: transparent;
-        border: none;
-    }
-"""
-
-# Collapsed height for QGroupBox (just title + arrow)
-_KEY_GROUP_COLLAPSED_HEIGHT = 25
-
 
 def _make_section_header(text: str, extra_top: bool = False) -> QLabel:
     """Create a section header label."""
@@ -138,19 +130,37 @@ def _make_section_header(text: str, extra_top: bool = False) -> QLabel:
     return label
 
 
+class _SubmitTextEdit(QTextEdit):
+    """QTextEdit where Enter submits and Shift+Enter inserts a newline."""
+
+    submitted = pyqtSignal()
+
+    def keyPressEvent(self, event):  # noqa: N802
+        if (
+            event.key() in (Qt.Key_Return, Qt.Key_Enter)
+            and not event.modifiers() & Qt.ShiftModifier  # noqa: W503
+        ):
+            self.submitted.emit()
+            return
+        super().keyPressEvent(event)
+
+
 class AIEditDockWidget(QDockWidget):
     """Dock widget with dynamic flow matching AI Segmentation pattern."""
 
     select_zone_clicked = pyqtSignal()
     stop_clicked = pyqtSignal()
     generate_clicked = pyqtSignal(str)
+    retry_clicked = pyqtSignal(str)       # retry on same zone with (possibly edited) prompt
+    new_zone_clicked = pyqtSignal(str)    # keep prompt, select new zone
     activation_attempted = pyqtSignal(str)
-    free_signup_requested = pyqtSignal(str)
     change_key_clicked = pyqtSignal()
+    settings_clicked = pyqtSignal()
+    template_selected = pyqtSignal(str)   # template preset ID (for analytics)
 
     def __init__(self, parent=None):
         super().__init__(tr("AI Edit by TerraLab"), parent)
-        self.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
+        self.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         self.setMinimumWidth(260)
 
         self._setup_title_bar()
@@ -160,12 +170,6 @@ class AIEditDockWidget(QDockWidget):
         layout = QVBoxLayout(main_widget)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
-
-        # Cooldown timer for free signup button (prevents spam clicks)
-        self._signup_cooldown_remaining = 0
-        self._signup_cooldown_timer = QTimer(self)
-        self._signup_cooldown_timer.setInterval(1000)
-        self._signup_cooldown_timer.timeout.connect(self._on_cooldown_tick)
 
         # --- Activation section ---
         self._activation_widget = self._build_activation_section()
@@ -178,7 +182,7 @@ class AIEditDockWidget(QDockWidget):
         main_layout.setSpacing(6)
 
         # Section header
-        self._edit_header = _make_section_header(tr("Select an Area to Edit with AI:"))
+        self._edit_header = _make_section_header(tr("Get started with AI Edit:"))
         main_layout.addWidget(self._edit_header)
 
         # Warning widget (no visible layer) — above start button
@@ -186,12 +190,33 @@ class AIEditDockWidget(QDockWidget):
         self._warning_widget.setVisible(False)
         main_layout.addWidget(self._warning_widget)
 
-        # Start button
-        self._start_btn = QPushButton(tr("Start AI Edit"))
-        self._start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._start_btn.setStyleSheet(_BTN_GREEN)
+        # --- IDLE entry points ---
+        self._idle_section = QWidget()
+        idle_layout = QVBoxLayout(self._idle_section)
+        idle_layout.setContentsMargins(0, 0, 0, 0)
+        idle_layout.setSpacing(6)
+
+        # Primary: browse templates (recommended path)
+        self._browse_btn = QPushButton(tr("Browse AI Prompts"))
+        self._browse_btn.setCursor(Qt.PointingHandCursor)
+        self._browse_btn.setStyleSheet(_BTN_GREEN)
+        self._browse_btn.clicked.connect(self._on_browse_templates_clicked)
+        idle_layout.addWidget(self._browse_btn)
+
+        # Separator "or"
+        or_label = QLabel(tr("or"))
+        or_label.setAlignment(Qt.AlignCenter)
+        or_label.setStyleSheet("font-size: 11px; color: palette(text); padding: 0px;")
+        idle_layout.addWidget(or_label)
+
+        # Secondary: write own prompt (free edit)
+        self._start_btn = QPushButton(tr("Write Your Own Prompt"))
+        self._start_btn.setCursor(Qt.PointingHandCursor)
+        self._start_btn.setStyleSheet(_BTN_BLUE)
         self._start_btn.clicked.connect(self._on_start_clicked)
-        main_layout.addWidget(self._start_btn)
+        idle_layout.addWidget(self._start_btn)
+
+        main_layout.addWidget(self._idle_section)
 
         # Instruction info box (shown during drawing)
         self._instruction_box = QLabel()
@@ -200,39 +225,38 @@ class AIEditDockWidget(QDockWidget):
         self._instruction_box.setVisible(False)
         main_layout.addWidget(self._instruction_box)
 
-        # --- Prompt section (hidden until zone selected) ---
+        # --- Prompt section (shown after zone selected) ---
         self._prompt_section = QWidget()
         prompt_layout = QVBoxLayout(self._prompt_section)
         prompt_layout.setContentsMargins(0, 0, 0, 0)
         prompt_layout.setSpacing(4)
 
-        # Section header: PROMPT
         self._prompt_header = _make_section_header(tr("What should AI change?"), extra_top=True)
         prompt_layout.addWidget(self._prompt_header)
 
-        self._prompt_input = QTextEdit()
-        self._prompt_input.setPlaceholderText(tr("Type your prompt or use a template below..."))
+        self._prompt_input = _SubmitTextEdit()
+        self._prompt_input.setPlaceholderText(tr("Type your prompt or use a template..."))
+        self._prompt_input.document().setDocumentMargin(0)
         self._prompt_input.setMinimumHeight(60)
         self._prompt_input.setMaximumHeight(60)
         self._prompt_input.setStyleSheet(_PROMPT_INPUT_NORMAL)
         self._prompt_input.textChanged.connect(self._on_prompt_changed)
+        self._prompt_input.submitted.connect(self._on_generate_clicked)
         self._prompt_input.document().documentLayout().documentSizeChanged.connect(
             self._adjust_prompt_height
         )
         prompt_layout.addWidget(self._prompt_input)
 
-        # Templates button (flat dropdown trigger, below prompt input)
-        self._templates_btn = QPushButton(tr("\u25bc Prompt Templates"))
-        self._templates_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._templates_btn = QPushButton(tr("Browse Templates"))
+        self._templates_btn.setCursor(Qt.PointingHandCursor)
         self._templates_btn.setStyleSheet(
             "QPushButton { text-align: left; color: palette(text); "
             "font-size: 11px; border: 1px solid rgba(128,128,128,0.25); "
             "border-radius: 4px; padding: 4px 8px; "
             "background-color: rgba(128,128,128,0.08); }"
             "QPushButton:hover { background-color: rgba(128,128,128,0.15); }"
-            "QPushButton::menu-indicator { image: none; }"
         )
-        self._build_templates_menu()
+        self._templates_btn.clicked.connect(self._on_browse_templates_clicked)
         prompt_layout.addWidget(self._templates_btn)
 
         self._prompt_section.setVisible(False)
@@ -264,7 +288,7 @@ class AIEditDockWidget(QDockWidget):
 
         # Generate button
         self._generate_btn = QPushButton(tr("Generate"))
-        self._generate_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._generate_btn.setCursor(Qt.PointingHandCursor)
         self._generate_btn.setEnabled(False)
         self._update_generate_style()
         self._generate_btn.clicked.connect(self._on_generate_clicked)
@@ -273,7 +297,7 @@ class AIEditDockWidget(QDockWidget):
 
         # Stop button
         self._stop_btn = QPushButton(tr("Stop"))
-        self._stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._stop_btn.setCursor(Qt.PointingHandCursor)
         self._stop_btn.setStyleSheet(_BTN_GRAY)
         self._stop_btn.clicked.connect(self._on_stop_clicked)
         self._stop_btn.setVisible(False)
@@ -308,7 +332,7 @@ class AIEditDockWidget(QDockWidget):
         self._status_icon.setFixedSize(_ico, _ico)
         self._status_icon_size = _ico
         status_box_layout.addWidget(
-            self._status_icon, 0, Qt.AlignmentFlag.AlignTop
+            self._status_icon, 0, Qt.AlignTop
         )
         self._status_label = QLabel("")
         self._status_label.setWordWrap(True)
@@ -321,12 +345,65 @@ class AIEditDockWidget(QDockWidget):
 
         # CTA button displayed for quota exhaustion
         self._limit_cta_btn = QPushButton(tr("Go to AI Edit page"))
-        self._limit_cta_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._limit_cta_btn.setCursor(Qt.PointingHandCursor)
         self._limit_cta_btn.setStyleSheet(_BTN_BLUE)
         self._limit_cta_btn.clicked.connect(self._on_limit_cta_clicked)
         self._limit_cta_btn.setVisible(False)
         main_layout.addWidget(self._limit_cta_btn)
         self._limit_cta_url = ""
+
+        # --- Result section (shown after generation complete, iteration flow) ---
+        self._result_section = QWidget()
+        result_layout = QVBoxLayout(self._result_section)
+        result_layout.setContentsMargins(0, 0, 0, 0)
+        result_layout.setSpacing(6)
+
+        # "What's next?" header
+        result_header = _make_section_header(tr("What's next?"))
+        result_layout.addWidget(result_header)
+
+        # Editable prompt (edit and retry)
+        self._result_prompt_input = _SubmitTextEdit()
+        self._result_prompt_input.setPlaceholderText(
+            tr("Edit the prompt above and retry, or pick a new action below")
+        )
+        self._result_prompt_input.document().setDocumentMargin(0)
+        self._result_prompt_input.setMinimumHeight(50)
+        self._result_prompt_input.setMaximumHeight(50)
+        self._result_prompt_input.setStyleSheet(_PROMPT_INPUT_NORMAL)
+        self._result_prompt_input.submitted.connect(self._on_retry_clicked)
+        self._result_prompt_input.document().documentLayout().documentSizeChanged.connect(
+            self._adjust_result_prompt_height
+        )
+        result_layout.addWidget(self._result_prompt_input)
+
+        # Primary: retry with edited prompt
+        self._retry_btn = QPushButton(tr("Retry on Same Area"))
+        self._retry_btn.setCursor(Qt.PointingHandCursor)
+        self._retry_btn.setStyleSheet(_BTN_GREEN)
+        self._retry_btn.clicked.connect(self._on_retry_clicked)
+        result_layout.addWidget(self._retry_btn)
+
+        # Secondary row: new area + done
+        secondary_row = QHBoxLayout()
+        secondary_row.setSpacing(6)
+
+        self._new_zone_btn = QPushButton(tr("New Area"))
+        self._new_zone_btn.setCursor(Qt.PointingHandCursor)
+        self._new_zone_btn.setStyleSheet(_BTN_BLUE)
+        self._new_zone_btn.clicked.connect(self._on_new_zone_clicked)
+        secondary_row.addWidget(self._new_zone_btn)
+
+        self._done_btn = QPushButton(tr("Done"))
+        self._done_btn.setCursor(Qt.PointingHandCursor)
+        self._done_btn.setStyleSheet(_BTN_GHOST)
+        self._done_btn.clicked.connect(self._on_done_clicked)
+        secondary_row.addWidget(self._done_btn)
+
+        result_layout.addLayout(secondary_row)
+
+        self._result_section.setVisible(False)
+        main_layout.addWidget(self._result_section)
 
         # Trial exhausted info box
         self._trial_info_box = QFrame()
@@ -367,7 +444,7 @@ class AIEditDockWidget(QDockWidget):
 
         # Credits line (right-aligned, above links)
         self._credits_label = QLabel()
-        self._credits_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._credits_label.setAlignment(Qt.AlignRight)
         self._credits_label.setStyleSheet(
             "font-size: 10px; color: palette(text); background: transparent; border: none;"
         )
@@ -381,14 +458,27 @@ class AIEditDockWidget(QDockWidget):
         footer_layout.setSpacing(16)
         footer_layout.addStretch()
 
-        self._change_key_link = QLabel(
-            f'<a href="#" style="color: {BRAND_BLUE};">{tr("Change key")}</a>'
+        self._settings_btn = QToolButton()
+        self._settings_btn.setIcon(QIcon(":/images/themes/default/mActionOptions.svg"))
+        self._settings_btn.setAutoRaise(True)
+        self._settings_btn.setToolTip(tr("Settings"))
+        self._settings_btn.setCursor(Qt.PointingHandCursor)
+        self._settings_btn.setFixedSize(20, 20)
+        self._settings_btn.setIconSize(QSize(14, 14))
+        self._settings_btn.clicked.connect(self._on_settings_btn_clicked)
+        self._settings_btn.setVisible(False)
+        footer_layout.addWidget(self._settings_btn)
+
+        self._upgrade_cta = QPushButton(tr("Upgrade to Pro"))
+        self._upgrade_cta.setCursor(Qt.PointingHandCursor)
+        self._upgrade_cta.setStyleSheet(
+            f"QPushButton {{ background: {BRAND_BLUE}; color: white; border: none;"
+            f" border-radius: 3px; padding: 2px 8px; font-size: 11px; font-weight: bold; }}"
+            f"QPushButton:hover {{ background: {BRAND_BLUE_HOVER}; }}"
         )
-        self._change_key_link.setStyleSheet("font-size: 13px;")
-        self._change_key_link.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._change_key_link.linkActivated.connect(self._on_change_key)
-        self._change_key_link.setVisible(False)
-        footer_layout.addWidget(self._change_key_link)
+        self._upgrade_cta.clicked.connect(self._on_upgrade_clicked)
+        self._upgrade_cta.setVisible(False)
+        footer_layout.addWidget(self._upgrade_cta)
 
         for text, url, handler in [
             (tr("Tutorial"), get_tutorial_url(), None),
@@ -396,7 +486,7 @@ class AIEditDockWidget(QDockWidget):
         ]:
             link = QLabel(f'<a href="{url}" style="color: {BRAND_BLUE};">{text}</a>')
             link.setStyleSheet("font-size: 13px;")
-            link.setCursor(Qt.CursorShape.PointingHandCursor)
+            link.setCursor(Qt.PointingHandCursor)
             if handler:
                 link.linkActivated.connect(handler)
             else:
@@ -417,6 +507,7 @@ class AIEditDockWidget(QDockWidget):
         self._active = False
         self._zone_selected = False
         self._activated = False
+        self._from_template = False
 
         # Keyboard shortcuts (G to start, Esc to stop)
         self._start_shortcut = QShortcut(QKeySequence("G"), self)
@@ -488,53 +579,30 @@ class AIEditDockWidget(QDockWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        # --- Email signup section (hidden after successful signup) ---
+        # --- Login section ---
         self._signup_section = QWidget()
         signup_layout = QVBoxLayout(self._signup_section)
         signup_layout.setContentsMargins(0, 0, 0, 0)
         signup_layout.setSpacing(8)
 
-        title = QLabel(tr("Try AI Edit for free"))
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title = QLabel(tr("Sign in on terra-lab.ai to get your activation key"))
+        title.setAlignment(Qt.AlignCenter)
+        title.setWordWrap(True)
         title.setStyleSheet("font-weight: bold; font-size: 13px; color: palette(text);")
         signup_layout.addWidget(title)
 
-        subtitle = QLabel(tr("No credit card required."))
-        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle.setStyleSheet("font-size: 11px; color: palette(text);")
-        signup_layout.addWidget(subtitle)
-
-        self._email_input = QLineEdit()
-        self._email_input.setPlaceholderText(tr("your@email.com"))
-        self._email_input.setMinimumHeight(32)
-        self._email_input.setStyleSheet("color: palette(text);")
-        shared_email = get_shared_email()
-        if shared_email:
-            self._email_input.setText(shared_email)
-        signup_layout.addWidget(self._email_input)
-
-        self._free_submit_btn = QPushButton(tr("Get {credits} free AI edits").replace("{credits}", "5"))
-        self._free_submit_btn.setMinimumHeight(36)
-        self._free_submit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._free_submit_btn.setStyleSheet(_BTN_GREEN)
-        self._free_submit_btn.clicked.connect(self._on_free_signup_clicked)
-        self._email_input.returnPressed.connect(self._on_free_signup_clicked)
-        signup_layout.addWidget(self._free_submit_btn)
-
-        # Flow info (small text below button)
-        flow_info = QLabel(
-            tr("Enter your email, check your inbox, get your free key from the dashboard, paste it here.")
-        )
-        flow_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        flow_info.setWordWrap(True)
-        flow_info.setStyleSheet("font-size: 10px; color: palette(text); margin-top: 2px;")
-        signup_layout.addWidget(flow_info)
+        self._login_btn = QPushButton(tr("Login on terra-lab.ai"))
+        self._login_btn.setMinimumHeight(36)
+        self._login_btn.setCursor(Qt.PointingHandCursor)
+        self._login_btn.setStyleSheet(_BTN_GREEN)
+        self._login_btn.clicked.connect(self._on_login_clicked)
+        signup_layout.addWidget(self._login_btn)
 
         layout.addWidget(self._signup_section)
 
         # Activation message (errors / success) - right below signup section
         self._activation_message = QLabel("")
-        self._activation_message.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._activation_message.setAlignment(Qt.AlignCenter)
         self._activation_message.setWordWrap(True)
         self._activation_message.setStyleSheet("font-size: 11px;")
         self._activation_message.setVisible(False)
@@ -542,34 +610,22 @@ class AIEditDockWidget(QDockWidget):
 
         # CTA button displayed on activation flow when usage limit is reached
         self._activation_limit_cta_btn = QPushButton(tr("Go to AI Edit page"))
-        self._activation_limit_cta_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._activation_limit_cta_btn.setCursor(Qt.PointingHandCursor)
         self._activation_limit_cta_btn.setStyleSheet(_BTN_BLUE)
         self._activation_limit_cta_btn.clicked.connect(self._on_activation_limit_cta_clicked)
         self._activation_limit_cta_btn.setVisible(False)
         layout.addWidget(self._activation_limit_cta_btn)
         self._activation_limit_cta_url = ""
 
-        # --- Collapsible key section (QGroupBox pattern from AI Segmentation) ---
+        # --- Activation key section ---
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setFrameShadow(QFrame.Sunken)
         layout.addWidget(separator)
 
-        self._key_group = QGroupBox("\u25b6 " + tr("Already have a key? Paste it here"))
-        self._key_group.setCheckable(False)
-        self._key_group.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._key_group.setStyleSheet(_GROUPBOX_COLLAPSIBLE)
-        self._key_group.mousePressEvent = self._on_key_group_clicked
-
-        key_group_layout = QVBoxLayout(self._key_group)
-        key_group_layout.setContentsMargins(0, 4, 0, 0)
-        key_group_layout.setSpacing(6)
-
-        self._key_content = QWidget()
-        self._key_content.setVisible(False)
-        key_layout = QVBoxLayout(self._key_content)
-        key_layout.setContentsMargins(0, 0, 0, 0)
-        key_layout.setSpacing(6)
+        key_label = QLabel(tr("Paste your key from terra-lab.ai/dashboard:"))
+        key_label.setStyleSheet("font-size: 11px; color: palette(text);")
+        layout.addWidget(key_label)
 
         code_row = QHBoxLayout()
         code_row.setSpacing(6)
@@ -585,10 +641,7 @@ class AIEditDockWidget(QDockWidget):
         unlock_btn.setStyleSheet(_BTN_BLUE)
         unlock_btn.clicked.connect(self._on_unlock_clicked)
         code_row.addWidget(unlock_btn)
-        key_layout.addLayout(code_row)
-
-        key_group_layout.addWidget(self._key_content)
-        layout.addWidget(self._key_group)
+        layout.addLayout(code_row)
 
         return widget
 
@@ -609,7 +662,7 @@ class AIEditDockWidget(QDockWidget):
         warning_icon = style.standardIcon(QStyle.StandardPixmap.SP_MessageBoxWarning)
         icon_label.setPixmap(warning_icon.pixmap(16, 16))
         icon_label.setFixedSize(16, 16)
-        warning_layout.addWidget(icon_label, 0, Qt.AlignmentFlag.AlignTop)
+        warning_layout.addWidget(icon_label, 0, Qt.AlignTop)
 
         self._warning_text = QLabel(tr("No visible layer. Add imagery to your project."))
         self._warning_text.setWordWrap(True)
@@ -617,45 +670,17 @@ class AIEditDockWidget(QDockWidget):
 
         return widget
 
-    def _build_templates_menu(self, categories=None):
-        """Build flat popup menu with category headers and indented items."""
-        if categories is None:
-            categories = get_translated_categories()
-        menu = QMenu(self)
-        menu.setStyleSheet(
-            "QMenu { background-color: palette(window); }"
-            "QMenu::item { padding: 3px 12px 3px 20px; color: palette(text); }"
-            "QMenu::item:selected { background: rgba(128,128,128,0.15); color: palette(text); }"
-            "QMenu::separator { margin: 4px 8px; }"
-        )
-        header_html = {
-            "remove": '<span style="color:#e06060;">\u2715</span> Remove',
-            "add": '<span style="color:#60c060;">+</span> Add',
-        }
-        for i, category in enumerate(categories):
-            if i > 0:
-                menu.addSeparator()
-            html = header_html.get(category["key"], category["label"])
-            header_label = QLabel(html)
-            header_label.setTextFormat(Qt.TextFormat.RichText)
-            header_label.setStyleSheet(
-                "padding: 6px 12px 2px 8px; font-size: 10px;"
-                " color: palette(text); font-weight: bold;"
-            )
-            header_action = QWidgetAction(menu)
-            header_action.setDefaultWidget(header_label)
-            header_action.setEnabled(False)
-            menu.addAction(header_action)
-            for preset in category["presets"]:
-                action = menu.addAction("  \u2022 " + preset["label"])
-                action.triggered.connect(
-                    lambda checked, p=preset: self._on_preset_clicked(p)
-                )
-        self._templates_btn.setMenu(menu)
+    def _open_templates_dialog(self) -> dict | None:
+        """Open the prompt templates dialog. Returns selected preset or None."""
+        from .prompt_templates_dialog import PromptTemplatesDialog
 
-    def update_presets(self, categories):
-        """Rebuild the templates menu with new categories (e.g. from server)."""
-        self._build_templates_menu(categories)
+        dlg = PromptTemplatesDialog(self)
+        if dlg.exec():
+            preset = dlg.get_selected_preset()
+            if preset:
+                self.template_selected.emit(preset["id"])
+            return preset
+        return None
 
     # --- Public methods ---
 
@@ -663,18 +688,13 @@ class AIEditDockWidget(QDockWidget):
         self._activated = activated
         self._activation_widget.setVisible(not activated)
         self._main_widget.setVisible(activated)
-        self._change_key_link.setVisible(activated)
+        self._settings_btn.setVisible(activated)
         if activated:
             self.hide_trial_info()
             self._update_layer_warning()
         else:
             # Reset to full signup view (for new users)
             self._signup_section.setVisible(True)
-            self._key_group.setTitle("\u25b6 " + tr("Already have a key? Paste it here"))
-            self._key_group.setCursor(Qt.CursorShape.PointingHandCursor)
-            self._key_group.setStyleSheet(_GROUPBOX_COLLAPSIBLE)
-            self._key_group.mousePressEvent = self._on_key_group_clicked
-            self._key_content.setVisible(False)
             self._activation_message.setVisible(False)
             self.hide_activation_limit_cta()
 
@@ -683,62 +703,14 @@ class AIEditDockWidget(QDockWidget):
         self._activated = False
         self._activation_widget.setVisible(True)
         self._main_widget.setVisible(False)
-        self._change_key_link.setVisible(False)
-        # Hide signup, show only key input
+        self._settings_btn.setVisible(False)
+        self._upgrade_cta.setVisible(False)
+        # Hide login section, show only key input
         self._signup_section.setVisible(False)
-        self._key_group.setTitle(tr("Enter your new activation key:"))
-        self._key_group.setCursor(Qt.CursorShape.ArrowCursor)
-        self._key_group.mousePressEvent = lambda e: None  # Disable toggle
-        self._key_content.setVisible(True)
         self._activation_message.setVisible(False)
         self.hide_activation_limit_cta()
         self._code_input.clear()
         self._code_input.setFocus()
-
-    def reset_free_signup_button(self, start_cooldown: bool = True):
-        """Start a 60s cooldown before re-enabling the free signup button.
-
-        Prevents users from spamming the magic link button, which would
-        trigger the per-user email interval (60s) or our IP rate limit.
-        """
-        if start_cooldown:
-            self._signup_cooldown_remaining = 60
-            self._free_submit_btn.setEnabled(False)
-            self._free_submit_btn.setText(tr("Resend in {seconds}s").format(seconds=60))
-            self._signup_cooldown_timer.start()
-        else:
-            self._free_submit_btn.setEnabled(True)
-            self._free_submit_btn.setText(tr("Get {credits} free AI edits").replace("{credits}", "5"))
-
-    def _on_cooldown_tick(self):
-        """Tick the cooldown timer, re-enable button when done."""
-        self._signup_cooldown_remaining -= 1
-        if self._signup_cooldown_remaining <= 0:
-            self._signup_cooldown_timer.stop()
-            self._free_submit_btn.setEnabled(True)
-            self._free_submit_btn.setText(tr("Get {credits} free AI edits").replace("{credits}", "5"))
-        else:
-            self._free_submit_btn.setText(
-                tr("Resend in {seconds}s").format(seconds=self._signup_cooldown_remaining)
-            )
-
-    def show_post_signup_state(self):
-        """After successful email send, hide signup section and show key input directly."""
-        self._signup_section.setVisible(False)
-        # Replace the dropdown toggle with a plain label
-        self._key_group.setTitle(tr("Paste your key from terra-lab.ai/dashboard:"))
-        self._key_group.setCursor(Qt.CursorShape.ArrowCursor)
-        self._key_group.mousePressEvent = lambda e: None  # Disable toggle
-        # Show key input directly (not as dropdown)
-        self._key_content.setVisible(True)
-        self._code_input.setFocus()
-
-    def _on_key_group_clicked(self, _event):
-        """Toggle the collapsible key input section."""
-        visible = not self._key_content.isVisible()
-        self._key_content.setVisible(visible)
-        prefix = "\u25bc " if visible else "\u25b6 "
-        self._key_group.setTitle(prefix + tr("Already have a key? Paste it here"))
 
     def hide_consent(self):
         """Hide the consent checkbox after first generation."""
@@ -777,13 +749,17 @@ class AIEditDockWidget(QDockWidget):
             self._credits_label.setVisible(True)
         else:
             self._credits_label.setVisible(False)
+        self._upgrade_cta.setVisible(is_free_tier and self._activated)
 
     def set_active_mode(self):
         """Enter active mode: drawing rectangle."""
         self._active = True
         self._edit_header.setVisible(False)
-        self._start_btn.setVisible(False)
+        self._idle_section.setVisible(False)
+
+        self._result_section.setVisible(False)
         self._warning_widget.setVisible(False)
+        self._upgrade_cta.setVisible(False)
         self._instruction_box.setVisible(True)
         self._hide_status_box()
 
@@ -791,17 +767,22 @@ class AIEditDockWidget(QDockWidget):
         """Zone drawn: show prompt flow (no Start button)."""
         self._zone_selected = True
         self._edit_header.setVisible(False)
-        self._start_btn.setVisible(False)
+        self._idle_section.setVisible(False)
+
+        self._result_section.setVisible(False)
+        self._upgrade_cta.setVisible(False)
         self._instruction_box.setVisible(False)
         self._hide_status_box()
         self._prompt_section.setVisible(True)
+        # Hide "Browse Templates" if user already picked a template
+        self._templates_btn.setVisible(not self._from_template)
         self._consent_widget.setVisible(not has_consent())
         self._generate_btn.setVisible(True)
         self._stop_btn.setVisible(True)
         self._start_shortcut.setEnabled(False)
         self._stop_shortcut.setEnabled(True)
+
         self._update_generate_enabled()
-        # Deferred focus: survives Qt layout recalculations from visibility changes
         QTimer.singleShot(0, self._prompt_input.setFocus)
 
     def _stop_progress_animation(self):
@@ -816,27 +797,36 @@ class AIEditDockWidget(QDockWidget):
         self._active = False
         self._zone_selected = False
         self._edit_header.setVisible(True)
-        self._start_btn.setVisible(True)
+        self._idle_section.setVisible(True)
+
         self._stop_btn.setVisible(False)
         self._instruction_box.setVisible(False)
         self._prompt_section.setVisible(False)
         self._consent_widget.setVisible(False)
         self._generate_btn.setVisible(False)
         self._progress_widget.setVisible(False)
+        self._result_section.setVisible(False)
         self._start_shortcut.setEnabled(True)
         self._stop_shortcut.setEnabled(True)
         self._prompt_input.clear()
-        self._prompt_input.setMaximumHeight(60)
+        self._prompt_input.setFixedHeight(60)
         self._prompt_input.setReadOnly(False)
         self._prompt_input.setStyleSheet(_PROMPT_INPUT_NORMAL)
+        self._result_prompt_input.clear()
         self._templates_btn.setEnabled(True)
+        self._templates_btn.setVisible(True)
+        self._from_template = False
         self._update_layer_warning()
 
     def set_generating(self, generating: bool):
         """Toggle generation state -- keep prompt visible but grayed out."""
         self._progress_widget.setVisible(generating)
-        self._start_btn.setVisible(False)
+        self._edit_header.setVisible(False)
+        self._idle_section.setVisible(False)
+
+        self._result_section.setVisible(False)
         self._warning_widget.setVisible(False)
+        self._upgrade_cta.setVisible(False)
 
         if generating:
             # Reset progress bar to determinate 0%
@@ -932,29 +922,34 @@ class AIEditDockWidget(QDockWidget):
         self._trial_info_box.setVisible(False)
 
     def set_generation_complete(self, layer_name: str):
-        """Show success message and reset to idle state."""
+        """Show RESULT state with iteration options (retry / new zone / done)."""
         self._stop_progress_animation()
         self._progress_bar.setValue(100)
         self._progress_widget.setVisible(False)
-        self._show_status_box(
-            f'Generation complete! Layer "{layer_name}" added.', "success"
-        )
+        self._show_status_box(tr("Generation complete!"), "success")
         self._active = False
-        self._zone_selected = False
-        self._edit_header.setVisible(True)
-        self._start_btn.setVisible(True)
-        self._start_btn.setEnabled(True)
-        self._stop_btn.setVisible(False)
+        # Keep zone_selected = True so retry can use the same zone
+
+        # Hide all non-result UI
+        self._edit_header.setVisible(False)
+        self._idle_section.setVisible(False)
+
+        self._instruction_box.setVisible(False)
         self._prompt_section.setVisible(False)
         self._generate_btn.setVisible(False)
-        self._start_shortcut.setEnabled(True)
+        self._stop_btn.setVisible(False)
+        self._consent_widget.setVisible(False)
+        self._upgrade_cta.setVisible(False)
+
+        # Show result section with prompt pre-filled for editing
+        last_prompt = self._prompt_input.toPlainText().strip()
+        self._result_prompt_input.setPlainText(last_prompt)
+        self._result_prompt_input.moveCursor(QTextCursor.End)
+        self._result_prompt_input.setReadOnly(False)
+        self._result_section.setVisible(True)
+
+        self._start_shortcut.setEnabled(False)
         self._stop_shortcut.setEnabled(True)
-        self._prompt_input.clear()
-        self._prompt_input.setMaximumHeight(60)
-        self._prompt_input.setReadOnly(False)
-        self._prompt_input.setStyleSheet(_PROMPT_INPUT_NORMAL)
-        self._templates_btn.setEnabled(True)
-        self._update_layer_warning()
 
     def show_trial_exhausted_info(self, message: str, subscribe_url: str, promo_text: str = ""):
         self._hide_limit_cta()
@@ -967,7 +962,7 @@ class AIEditDockWidget(QDockWidget):
             f'font-weight: bold;">{tr("Subscribe at terra-lab.ai")}</a>'
         )
         self._trial_info_box.setVisible(True)
-        self._start_btn.setVisible(False)
+        self._idle_section.setVisible(False)
         self._edit_header.setVisible(False)
         self._hide_status_box()
 
@@ -976,15 +971,18 @@ class AIEditDockWidget(QDockWidget):
         self._trial_info_box.setVisible(False)
         self._limit_cta_url = subscribe_url
         self._limit_cta_btn.setVisible(True)
-        self._start_btn.setVisible(False)
+        self._idle_section.setVisible(False)
         self._edit_header.setVisible(False)
 
     def hide_trial_info(self):
         self._trial_info_box.setVisible(False)
         self._hide_status_box()
         self._hide_limit_cta()
-        self._start_btn.setVisible(True)
-        self._edit_header.setVisible(True)
+        # Only restore idle UI if we're actually in idle state
+        # (not during result, generating, etc.)
+        if not self._zone_selected and not self._active and not self._result_section.isVisible():
+            self._idle_section.setVisible(True)
+            self._edit_header.setVisible(True)
 
     def get_activation_key(self) -> str:
         return self._code_input.text().strip()
@@ -1004,16 +1002,24 @@ class AIEditDockWidget(QDockWidget):
             return
         has_layers = bool(QgsProject.instance().mapLayers())
         self._warning_widget.setVisible(not has_layers)
+        self._browse_btn.setEnabled(has_layers)
         self._start_btn.setEnabled(has_layers)
 
     def _on_start_clicked(self):
-        """Start selection -- enter active mode."""
-        if self._active or not self._start_btn.isVisible():
+        """Start selection -- enter active mode (free edit path)."""
+        if self._active:
             return
         if not self._start_btn.isEnabled():
             return
+        self._from_template = False
         self.set_active_mode()
         self.select_zone_clicked.emit()
+
+    def _on_settings_btn_clicked(self):
+        self.settings_clicked.emit()
+
+    def _on_upgrade_clicked(self):
+        QDesktopServices.openUrl(QUrl(get_subscribe_url()))
 
     def _on_stop_clicked(self):
         """Stop -- reset to idle."""
@@ -1025,18 +1031,10 @@ class AIEditDockWidget(QDockWidget):
     def _on_get_key_clicked(self):
         QDesktopServices.openUrl(QUrl(get_subscribe_url()))
 
-    def _on_free_signup_clicked(self):
-        """Handle free tier email signup."""
-        email = self._email_input.text().strip()
-        if not email or "@" not in email:
-            self.set_activation_message(tr("Please enter a valid email address."), is_error=True)
-            return
-
-        # Disable button during send
-        self._free_submit_btn.setEnabled(False)
-        self._free_submit_btn.setText(tr("Sending..."))
-
-        self.free_signup_requested.emit(email)
+    def _on_login_clicked(self):
+        """Open terra-lab.ai login page in system browser."""
+        import webbrowser
+        webbrowser.open("https://terra-lab.ai/login?product=ai-edit")
 
     def _on_unlock_clicked(self):
         code = self._code_input.text().strip()
@@ -1045,9 +1043,28 @@ class AIEditDockWidget(QDockWidget):
             return
         self.activation_attempted.emit(code)
 
-    def _on_preset_clicked(self, preset: dict):
-        self._prompt_input.setPlainText(preset["prompt"])
-        self._prompt_input.setFocus()
+    def _on_browse_templates_clicked(self):
+        """Open templates dialog. Pick template -> start zone drawing directly."""
+        preset = self._open_templates_dialog()
+        if not preset:
+            return
+
+        if self._zone_selected:
+            # Already have a zone — fill the active prompt input
+            self._prompt_input.setPlainText(preset["prompt"])
+            self._prompt_input.moveCursor(QTextCursor.End)
+            self._prompt_input.setFocus()
+        elif self._result_section.isVisible():
+            # In result state — fill the result prompt
+            self._result_prompt_input.setPlainText(preset["prompt"])
+            self._result_prompt_input.moveCursor(QTextCursor.End)
+        else:
+            # IDLE state — store prompt and go directly to zone drawing
+            self._from_template = True
+            self._prompt_input.setPlainText(preset["prompt"])
+            self._prompt_input.moveCursor(QTextCursor.End)
+            self.set_active_mode()
+            self.select_zone_clicked.emit()
 
     def _on_prompt_changed(self):
         self._update_generate_enabled()
@@ -1055,11 +1072,51 @@ class AIEditDockWidget(QDockWidget):
     def _adjust_prompt_height(self):
         """Auto-expand prompt input to fit content (60px min, 140px max)."""
         doc_height = int(self._prompt_input.document().size().height())
-        # Add padding (top + bottom from QSS: 6px each) + frame margins
-        margins = self._prompt_input.contentsMargins()
-        target = doc_height + margins.top() + margins.bottom() + 2 * self._prompt_input.frameWidth()
+        padding = 12  # 6px top + 6px bottom from QSS padding
+        frame = 2 * self._prompt_input.frameWidth()
+        target = doc_height + padding + frame
         clamped = max(60, min(140, target))
-        self._prompt_input.setMaximumHeight(clamped)
+        self._prompt_input.setFixedHeight(clamped)
+
+    def _adjust_result_prompt_height(self):
+        """Auto-expand result prompt input (50px min, 140px max)."""
+        doc_height = int(self._result_prompt_input.document().size().height())
+        padding = 12  # 6px top + 6px bottom from QSS padding
+        frame = 2 * self._result_prompt_input.frameWidth()
+        target = doc_height + padding + frame
+        clamped = max(50, min(140, target))
+        self._result_prompt_input.setFixedHeight(clamped)
+
+    def _on_retry_clicked(self):
+        """Retry on same zone with the (possibly edited) prompt from result section."""
+        prompt = self._result_prompt_input.toPlainText().strip()
+        if not prompt:
+            return
+        if len(prompt) < 10 or len(prompt.split()) < 2:
+            self._show_status_box(
+                tr("Please describe what you want to change (at least 10 characters, 2 words)."),
+                "warning",
+            )
+            return
+        # Transfer prompt to main input for the generation flow
+        self._prompt_input.setPlainText(prompt)
+        self._result_section.setVisible(False)
+        self._hide_status_box()
+        self.retry_clicked.emit(prompt)
+
+    def _on_new_zone_clicked(self):
+        """Keep prompt, start new zone selection."""
+        prompt = self._result_prompt_input.toPlainText().strip()
+        if prompt:
+            self._prompt_input.setPlainText(prompt)
+        self._result_section.setVisible(False)
+        self._hide_status_box()
+        self.new_zone_clicked.emit(prompt)
+
+    def _on_done_clicked(self):
+        """Done — back to idle."""
+        self.set_idle()
+        self.stop_clicked.emit()
 
     def _on_generate_clicked(self):
         prompt = self.get_prompt()
@@ -1097,7 +1154,7 @@ class AIEditDockWidget(QDockWidget):
         lay.addWidget(msg)
 
         email_label = QLabel(f'<b>{SUPPORT_EMAIL}</b>')
-        email_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        email_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         lay.addWidget(email_label)
 
         copy_btn = QPushButton("Copy email address")
@@ -1110,7 +1167,7 @@ class AIEditDockWidget(QDockWidget):
         lay.addWidget(copy_btn)
 
         or_label = QLabel("or")
-        or_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        or_label.setAlignment(Qt.AlignCenter)
         or_label.setStyleSheet("color: palette(text);")
         lay.addWidget(or_label)
 
@@ -1153,7 +1210,6 @@ class AIEditDockWidget(QDockWidget):
 
     def closeEvent(self, event):
         """Cancel generation and disconnect signals on close."""
-        self._signup_cooldown_timer.stop()
         self._stop_progress_animation()
         if self._progress_widget.isVisible():
             self.stop_clicked.emit()

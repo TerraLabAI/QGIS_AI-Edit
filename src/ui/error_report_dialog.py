@@ -158,7 +158,7 @@ class ErrorReportDialog(QDialog):
 
         error_label = QLabel(self._error_message[:500])
         error_label.setWordWrap(True)
-        error_label.setTextFormat(Qt.TextFormat.PlainText)
+        error_label.setTextFormat(Qt.PlainText)
         layout.addWidget(error_label)
 
         help_label = QLabel(
@@ -175,7 +175,7 @@ class ErrorReportDialog(QDialog):
 
         # Arrow
         arrow_label = QLabel("\u25bc")
-        arrow_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        arrow_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(arrow_label)
 
         # Step 2: Email
@@ -236,7 +236,7 @@ class BugReportDialog(QDialog):
 
         # Arrow
         arrow_label = QLabel("\u25bc")
-        arrow_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        arrow_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(arrow_label)
 
         # Step 2: Email
