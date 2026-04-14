@@ -20,7 +20,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..core.i18n import tr
-from ..core.prompt_presets import get_all_categories, get_category_meta
+from ..core.prompt_presets import get_all_categories
 
 # ---------------------------------------------------------------------------
 # QSS
@@ -59,24 +59,34 @@ _SECTION_HEADER = (
     "color: {color}; padding: 4px 0px; }}"
 )
 
-# Colored HTML icons for sidebar (rendered as rich text for color support)
-_SIDEBAR_LABELS = {
-    "favorites": ('<span style="color:#e0a040; font-size:15px;">\u2605</span>', "Top Picks"),
-    "clean": ('<span style="color:#e06060; font-size:15px;">\u2716</span>', "Clean"),
-    "add": ('<span style="color:#60c060; font-size:15px;">+</span>', "Add"),
-    "style": ('<span style="color:#c080e0; font-size:15px;">\u25c6</span>', "Style"),
-    "detect": ('<span style="color:#e07030; font-size:15px;">\u25ce</span>', "Detect"),
-    "simulate": ('<span style="color:#e0c040; font-size:15px;">\u27f3</span>', "Simulate"),
+# Muted color per category — sidebar icons only
+_SIDEBAR_COLORS = {
+    "favorites": "#b89868",
+    "clean": "#b07878",
+    "add": "#68a868",
+    "style": "#9880b0",
+    "detect": "#b08858",
+    "simulate": "#a0a058",
 }
 
-# Plain icons for section headers (no HTML needed, styled via QSS color)
+# Colored HTML icons for sidebar (rendered as rich text for color support)
+_SIDEBAR_LABELS = {
+    "favorites": ('<span style="color:#b89868; font-size:15px;">\u2605</span>', "Top Picks"),
+    "clean": ('<span style="color:#b07878; font-size:15px;">\u232b</span>', "Clean"),
+    "add": ('<span style="color:#68a868; font-size:15px;">+</span>', "Add"),
+    "style": ('<span style="color:#9880b0; font-size:15px;">\u2726</span>', "Style"),
+    "detect": ('<span style="color:#b08858; font-size:15px;">\u25c9</span>', "Detect"),
+    "simulate": ('<span style="color:#a0a058; font-size:15px;">\u21bb</span>', "Simulate"),
+}
+
+# Plain icons for section headers
 _SECTION_ICONS = {
     "favorites": "\u2605",
-    "clean": "\u2716",
+    "clean": "\u232b",
     "add": "+",
-    "style": "\u25c6",
-    "detect": "\u25ce",
-    "simulate": "\u27f3",
+    "style": "\u2726",
+    "detect": "\u25c9",
+    "simulate": "\u21bb",
 }
 
 
@@ -133,7 +143,6 @@ class PromptTemplatesDialog(QDialog):
 
         self._selected_preset: dict | None = None
         self._categories = get_all_categories()
-        self._category_meta = get_category_meta()
         self._sidebar_buttons: list[_SidebarButton] = []
         self._section_widgets: dict[str, QWidget] = {}
         self._card_widgets: list[tuple[QWidget, dict, str]] = []
@@ -224,11 +233,10 @@ class PromptTemplatesDialog(QDialog):
         layout.setSpacing(5)
 
         cat_key = category["key"]
-        meta = self._category_meta.get(cat_key, {})
         icon = _SECTION_ICONS.get(cat_key, "")
-        color = meta.get("color", "palette(text)")
+        color = _SIDEBAR_COLORS.get(cat_key, "palette(text)")
 
-        header = QLabel(f"{icon}  {category['label'].upper()}")
+        header = QLabel(f"{icon}  {category['label']}")
         header.setStyleSheet(_SECTION_HEADER.format(color=color))
         layout.addWidget(header)
 
@@ -255,8 +263,7 @@ class PromptTemplatesDialog(QDialog):
         if cat_key == "favorites":
             src = preset.get("source_category", "")
             if src:
-                src_meta = self._category_meta.get(src, {})
-                color = src_meta.get("color", color)
+                color = _SIDEBAR_COLORS.get(src, color)
 
         label = QLabel(preset["label"])
         label.setStyleSheet(
@@ -297,7 +304,18 @@ class PromptTemplatesDialog(QDialog):
         self._update_sidebar_highlight(cat_key)
 
     def _on_scroll_changed(self):
-        viewport_top = self._scroll_area.verticalScrollBar().value()
+        sb = self._scroll_area.verticalScrollBar()
+        viewport_top = sb.value()
+
+        # When scrolled to the bottom, highlight the last section
+        if sb.value() >= sb.maximum() - 5:
+            cat_keys = list(self._section_widgets.keys())
+            if cat_keys:
+                last_key = cat_keys[-1]
+                if last_key != self._active_cat_key:
+                    self._update_sidebar_highlight(last_key)
+                return
+
         closest_key = "favorites"
         closest_dist = float("inf")
 
@@ -318,8 +336,7 @@ class PromptTemplatesDialog(QDialog):
         for btn in self._sidebar_buttons:
             cat_key = btn.property("cat_key")
             if cat_key == active_key:
-                meta = self._category_meta.get(cat_key, {})
-                color = meta.get("color", "palette(text)")
+                color = _SIDEBAR_COLORS.get(cat_key, "palette(text)")
                 btn.setStyleSheet(_SIDEBAR_ITEM_ACTIVE.format(color=color))
             else:
                 btn.setStyleSheet(_SIDEBAR_ITEM.format())

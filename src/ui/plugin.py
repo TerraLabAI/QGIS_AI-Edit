@@ -378,6 +378,9 @@ class AIEditPlugin:
     def _on_export_config_loaded(self, config):
         """Set global export config from server response."""
         set_server_config(config)
+        costs = config.get("resolution_credit_costs", {})
+        if self._dock_widget:
+            self._dock_widget.set_resolution_credit_costs(costs)
 
     def _on_export_config_failed(self, error_message: str):
         """Handle export config loading failure."""
@@ -459,6 +462,10 @@ class AIEditPlugin:
                 is_error=True,
             )
             return
+
+        # Update resolution from selector (user may have changed it on retry)
+        if not self._dock_widget._is_free_tier:
+            self._last_suggested_res = self._dock_widget.get_selected_resolution()
 
         ctx = PipelineContext()
         ctx.aspect_ratio = self._last_aspect_ratio
@@ -586,18 +593,23 @@ class AIEditPlugin:
 
         ctx = PipelineContext()
 
+        if self._dock_widget._is_free_tier:
+            suggested_res = "1K"
+        else:
+            suggested_res = self._dock_widget.get_selected_resolution()
+
         try:
             map_settings = self._canvas.mapSettings()
+            target_res = suggested_res if not self._dock_widget._is_free_tier else None
             image_b64, img_w, img_h, actual_extent = export_canvas_zone(
-                map_settings, self._selected_extent, ctx=ctx
+                map_settings, self._selected_extent, ctx=ctx,
+                target_resolution=target_res,
             )
         except Exception as e:
             self._dock_widget.set_status(
                 tr("Export error: {error}").format(error=e), is_error=True
             )
             return
-
-        suggested_res = "1K"
 
         # Use "auto" so the model preserves the input image dimensions.
         # Explicit ratios (e.g. "21:9") cause the model to reshape the output,

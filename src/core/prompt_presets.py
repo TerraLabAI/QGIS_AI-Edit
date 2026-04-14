@@ -9,12 +9,12 @@ from .i18n import tr
 # ---------------------------------------------------------------------------
 
 _CATEGORY_META = {
-    "favorites": {"icon": "\u2b50", "color": "#e0a040"},  # gold
-    "clean": {"icon": "\u2715", "color": "#e06060"},       # red
-    "add": {"icon": "+", "color": "#60c060"},              # green
-    "style": {"icon": "\u25c7", "color": "#c080e0"},       # violet
-    "detect": {"icon": "\u25ce", "color": "#e07030"},      # orange
-    "simulate": {"icon": "\u27f3", "color": "#e0c040"},    # yellow
+    "favorites": {"icon": "\u2605", "color": "#b89868"},   # muted warm gold
+    "clean": {"icon": "\u232b", "color": "#b07878"},       # muted dusty rose
+    "add": {"icon": "+", "color": "#68a868"},              # muted sage green
+    "style": {"icon": "\u2726", "color": "#9880b0"},       # muted soft lavender
+    "detect": {"icon": "\u25c9", "color": "#b08858"},      # muted warm amber
+    "simulate": {"icon": "\u21bb", "color": "#a0a058"},    # muted olive
 }
 
 # Presets by category (key -> list of presets).
