@@ -10,6 +10,9 @@ from qgis.PyQt.QtGui import QImage, QPainter
 # Plugin cannot export without server config
 _server_config: dict | None = None
 
+# Map user-facing resolution labels to target pixel counts (longest side)
+_RESOLUTION_TARGET_PX = {"1K": 1024, "2K": 2048, "4K": 4096}
+
 
 def set_server_config(config: dict):
     """Set server export config fetched at plugin startup."""
@@ -37,7 +40,10 @@ def _get_align() -> int | None:
 
 
 def export_canvas_zone(
-    map_settings: QgsMapSettings, extent: QgsRectangle, ctx=None
+    map_settings: QgsMapSettings,
+    extent: QgsRectangle,
+    ctx=None,
+    target_resolution: str | None = None,
 ) -> tuple[str, int, int, QgsRectangle]:
     """Export a zone of the QGIS canvas as a base64-encoded PNG string.
 
@@ -65,7 +71,10 @@ def export_canvas_zone(
         )
 
     px_w, px_h = get_zone_pixel_size(map_settings, extent)
-    longest = max(max(px_w, px_h), 1)
+    if target_resolution and target_resolution in _RESOLUTION_TARGET_PX:
+        longest = _RESOLUTION_TARGET_PX[target_resolution]
+    else:
+        longest = max(max(px_w, px_h), 1)
     longest = min(longest, max_dim)
 
     ext_ratio = extent.width() / extent.height()
@@ -131,9 +140,17 @@ def export_canvas_zone(
     painter.end()
 
     # Convert to base64 JPEG (matches server's data:image/jpeg URI)
+    # Scale quality down for larger images to keep payload under server limits
+    longest_side = max(out_w, out_h)
+    if longest_side > 2048:
+        jpeg_quality = 80
+    elif longest_side > 1024:
+        jpeg_quality = 85
+    else:
+        jpeg_quality = 92
     buffer = QBuffer()
     buffer.open(QIODevice.WriteOnly)
-    image.save(buffer, "JPEG", 92)
+    image.save(buffer, "JPEG", jpeg_quality)
     b64 = base64.b64encode(buffer.data().data()).decode("ascii")
 
     # Populate pipeline context

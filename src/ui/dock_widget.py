@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from qgis.core import QgsProject
-from qgis.PyQt.QtCore import QSize, Qt, QTimer, QUrl, pyqtSignal
-from qgis.PyQt.QtGui import QDesktopServices, QIcon, QKeySequence, QTextCursor
+from qgis.PyQt.QtCore import Qt, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtGui import QDesktopServices, QKeySequence, QTextCursor
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QDockWidget,
@@ -42,6 +42,8 @@ BRAND_GRAY = "#757575"
 BRAND_GRAY_HOVER = "#616161"
 BRAND_DISABLED = "#b0bec5"
 DISABLED_TEXT = "#666666"
+ERROR_TEXT = "#ef5350"
+SUCCESS_TEXT = "#66bb6a"
 
 TERRALAB_URL = "https://terra-lab.ai/ai-edit?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=dock_branding"
 SUPPORT_EMAIL = "yvann.barbot@terra-lab.ai"
@@ -50,38 +52,53 @@ SUPPORT_EMAIL = "yvann.barbot@terra-lab.ai"
 # Reusable QSS style constants (design system)
 # ---------------------------------------------------------------------------
 _BTN_GREEN = (
-    f"QPushButton {{ background-color: {BRAND_GREEN}; color: white;"
-    f" padding: 8px 16px; border-radius: 4px; border: none; }}"
-    f"QPushButton:hover {{ background-color: {BRAND_GREEN_HOVER}; }}"
+    f"QPushButton {{ background-color: {BRAND_GREEN}; color: #000000;"
+    f" padding: 8px 16px; }}"
+    f"QPushButton:hover {{ background-color: {BRAND_GREEN_HOVER}; color: #000000; }}"
     f"QPushButton:disabled {{ background-color: {BRAND_GREEN_DISABLED};"
     f" color: {DISABLED_TEXT}; }}"
 )
 
 _BTN_GREEN_COMPACT = (
-    f"QPushButton {{ background-color: {BRAND_GREEN}; color: white;"
-    f" padding: 6px 12px; border-radius: 4px; border: none; }}"
-    f"QPushButton:hover {{ background-color: {BRAND_GREEN_HOVER}; }}"
+    f"QPushButton {{ background-color: {BRAND_GREEN}; color: #000000;"
+    f" padding: 6px 12px; }}"
+    f"QPushButton:hover {{ background-color: {BRAND_GREEN_HOVER}; color: #000000; }}"
     f"QPushButton:disabled {{ background-color: {BRAND_GREEN_DISABLED};"
     f" color: {DISABLED_TEXT}; }}"
 )
 
+_BTN_GREEN_AUTH = (
+    f"QPushButton {{ background-color: {BRAND_GREEN}; color: white;"
+    f" font-weight: bold; }}"
+    f"QPushButton:hover {{ background-color: {BRAND_GREEN_HOVER}; }}"
+    f"QPushButton:disabled {{ background-color: {BRAND_DISABLED}; }}"
+)
+
 _BTN_BLUE = (
-    f"QPushButton {{ background-color: {BRAND_BLUE}; color: white;"
-    f" padding: 8px 16px; border-radius: 4px; border: none; }}"
-    f"QPushButton:hover {{ background-color: {BRAND_BLUE_HOVER}; }}"
+    f"QPushButton {{ background-color: {BRAND_BLUE}; color: #000000;"
+    f" padding: 6px 12px; }}"
+    f"QPushButton:hover {{ background-color: {BRAND_BLUE_HOVER}; color: #000000; }}"
     f"QPushButton:disabled {{ background-color: {BRAND_DISABLED};"
     f" color: {DISABLED_TEXT}; }}"
 )
 
+_BTN_BLUE_AUTH = (
+    f"QPushButton {{ background-color: {BRAND_BLUE}; color: white;"
+    f" font-weight: bold; }}"
+    f"QPushButton:hover {{ background-color: {BRAND_BLUE_HOVER}; }}"
+    f"QPushButton:disabled {{ background-color: {BRAND_DISABLED}; }}"
+)
+
 _BTN_GRAY = (
-    f"QPushButton {{ background-color: {BRAND_GRAY}; color: white;"
-    f" padding: 8px 16px; border-radius: 4px; border: none; }}"
-    f"QPushButton:hover {{ background-color: {BRAND_GRAY_HOVER}; }}"
+    f"QPushButton {{ background-color: {BRAND_GRAY}; color: #000000;"
+    f" padding: 4px 8px; }}"
+    f"QPushButton:hover {{ background-color: {BRAND_GRAY_HOVER}; color: #000000; }}"
+    f"QPushButton:disabled {{ background-color: {BRAND_DISABLED}; color: {DISABLED_TEXT}; }}"
 )
 
 _BTN_DISABLED = (
     f"QPushButton {{ background-color: {BRAND_DISABLED}; color: {DISABLED_TEXT};"
-    f" padding: 8px 16px; border-radius: 4px; border: none; }}"
+    f" padding: 8px 16px; }}"
 )
 
 _BTN_GHOST = (
@@ -90,6 +107,21 @@ _BTN_GHOST = (
     " border: 1px solid rgba(128, 128, 128, 0.35); }"
     "QPushButton:hover { background-color: rgba(128, 128, 128, 0.15);"
     " border: 1px solid rgba(128, 128, 128, 0.5); }"
+    f"QPushButton:disabled {{ background-color: rgba(128, 128, 128, 0.08);"
+    f" border: 1px solid rgba(128, 128, 128, 0.15); color: {DISABLED_TEXT}; }}"
+)
+
+_RES_BTN_NEUTRAL = (
+    "QPushButton { background-color: rgba(128, 128, 128, 0.12);"
+    " padding: 6px 12px; border: 1px solid rgba(128, 128, 128, 0.2);"
+    " border-radius: 4px; color: palette(text); font-size: 11px; }"
+    "QPushButton:hover { background-color: rgba(128, 128, 128, 0.2); }"
+)
+
+_RES_BTN_SELECTED = (
+    "QPushButton { background-color: rgba(66, 133, 244, 0.25);"
+    " padding: 6px 12px; border: 1px solid rgba(66, 133, 244, 0.6);"
+    " border-radius: 4px; color: palette(text); font-size: 11px; font-weight: bold; }"
 )
 
 _PROMPT_INPUT_NORMAL = (
@@ -100,7 +132,7 @@ _PROMPT_INPUT_NORMAL = (
 _PROMPT_INPUT_READONLY = (
     "QTextEdit { border: 1px solid rgba(128,128,128,0.3);"
     " border-radius: 4px; padding: 6px;"
-    " background-color: rgba(128,128,128,0.1); color: #999; }"
+    " background-color: rgba(128,128,128,0.1); color: #888888; }"
 )
 
 _INSTRUCTION_BOX = (
@@ -115,11 +147,11 @@ _INSTRUCTION_BOX = (
 )
 
 _SECTION_HEADER = (
-    "font-weight: bold; color: palette(text);"
+    "font-weight: bold; font-size: 12px; color: palette(text);"
 )
 
 _SECTION_HEADER_EXTRA_TOP = (
-    "font-weight: bold; color: palette(text); padding-top: 6px;"
+    "font-weight: bold; font-size: 12px; color: palette(text); padding-top: 6px;"
 )
 
 
@@ -179,7 +211,7 @@ class AIEditDockWidget(QDockWidget):
         self._main_widget = QWidget()
         main_layout = QVBoxLayout(self._main_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(6)
+        main_layout.setSpacing(8)
 
         # Section header
         self._edit_header = _make_section_header(tr("Get started with AI Edit:"))
@@ -258,6 +290,11 @@ class AIEditDockWidget(QDockWidget):
         )
         self._templates_btn.clicked.connect(self._on_browse_templates_clicked)
         prompt_layout.addWidget(self._templates_btn)
+
+        # Resolution selector (Pro only — hidden for free tier)
+        self._resolution_selector, self._res_btns = self._build_resolution_selector()
+        self._resolution_selector.setVisible(False)
+        prompt_layout.addWidget(self._resolution_selector)
 
         self._prompt_section.setVisible(False)
         main_layout.addWidget(self._prompt_section)
@@ -377,6 +414,24 @@ class AIEditDockWidget(QDockWidget):
         )
         result_layout.addWidget(self._result_prompt_input)
 
+        # Browse Templates in result section
+        self._result_templates_btn = QPushButton(tr("Browse Templates"))
+        self._result_templates_btn.setCursor(Qt.PointingHandCursor)
+        self._result_templates_btn.setStyleSheet(
+            "QPushButton { text-align: left; color: palette(text); "
+            "font-size: 11px; border: 1px solid rgba(128,128,128,0.25); "
+            "border-radius: 4px; padding: 4px 8px; "
+            "background-color: rgba(128,128,128,0.08); }"
+            "QPushButton:hover { background-color: rgba(128,128,128,0.15); }"
+        )
+        self._result_templates_btn.clicked.connect(self._on_browse_templates_clicked)
+        result_layout.addWidget(self._result_templates_btn)
+
+        # Resolution selector for retry (Pro only)
+        self._retry_resolution_selector, self._retry_res_btns = self._build_resolution_selector()
+        self._retry_resolution_selector.setVisible(False)
+        result_layout.addWidget(self._retry_resolution_selector)
+
         # Primary: retry with edited prompt
         self._retry_btn = QPushButton(tr("Retry on Same Area"))
         self._retry_btn.setCursor(Qt.PointingHandCursor)
@@ -413,8 +468,8 @@ class AIEditDockWidget(QDockWidget):
             "border-radius: 4px; padding: 10px; }"
         )
         trial_layout = QVBoxLayout(self._trial_info_box)
-        trial_layout.setContentsMargins(10, 8, 10, 8)
-        trial_layout.setSpacing(4)
+        trial_layout.setContentsMargins(10, 10, 10, 10)
+        trial_layout.setSpacing(6)
         self._trial_info_text = QLabel("")
         self._trial_info_text.setWordWrap(True)
         self._trial_info_text.setStyleSheet(
@@ -437,48 +492,39 @@ class AIEditDockWidget(QDockWidget):
         # Spacer to push footer to bottom
         layout.addStretch()
 
-        # Footer section
-        footer_container = QVBoxLayout()
-        footer_container.setContentsMargins(0, 0, 0, 0)
-        footer_container.setSpacing(2)
-
-        # Credits line (right-aligned, above links)
-        self._credits_label = QLabel()
-        self._credits_label.setAlignment(Qt.AlignRight)
-        self._credits_label.setStyleSheet(
-            "font-size: 10px; color: palette(text); background: transparent; border: none;"
-        )
-        self._credits_label.setVisible(False)
-        footer_container.addWidget(self._credits_label)
-
-        # Links line (right-aligned)
+        # Footer section — single row: [credits] ←stretch→ [Upgrade pill] [Settings] [Tutorial] [Contact us]
         footer_links = QWidget()
         footer_layout = QHBoxLayout(footer_links)
         footer_layout.setContentsMargins(0, 0, 0, 4)
         footer_layout.setSpacing(16)
-        footer_layout.addStretch()
 
-        self._settings_btn = QToolButton()
-        self._settings_btn.setIcon(QIcon(":/images/themes/default/mActionOptions.svg"))
-        self._settings_btn.setAutoRaise(True)
-        self._settings_btn.setToolTip(tr("Settings"))
-        self._settings_btn.setCursor(Qt.PointingHandCursor)
-        self._settings_btn.setFixedSize(20, 20)
-        self._settings_btn.setIconSize(QSize(14, 14))
-        self._settings_btn.clicked.connect(self._on_settings_btn_clicked)
-        self._settings_btn.setVisible(False)
-        footer_layout.addWidget(self._settings_btn)
+        self._credits_label = QLabel()
+        self._credits_label.setStyleSheet(
+            "font-size: 11px; color: palette(text); background: transparent; border: none;"
+        )
+        self._credits_label.setVisible(False)
+        footer_layout.addWidget(self._credits_label)
+
+        footer_layout.addStretch()
 
         self._upgrade_cta = QPushButton(tr("Upgrade to Pro"))
         self._upgrade_cta.setCursor(Qt.PointingHandCursor)
         self._upgrade_cta.setStyleSheet(
-            f"QPushButton {{ background: {BRAND_BLUE}; color: white; border: none;"
-            f" border-radius: 3px; padding: 2px 8px; font-size: 11px; font-weight: bold; }}"
-            f"QPushButton:hover {{ background: {BRAND_BLUE_HOVER}; }}"
+            f"QPushButton {{ border: 1px solid {BRAND_BLUE}; color: {BRAND_BLUE};"
+            f" border-radius: 8px; padding: 1px 8px; font-size: 11px;"
+            f" background: transparent; font-weight: normal; }}"
+            f"QPushButton:hover {{ background: rgba(25,118,210,0.12); }}"
         )
         self._upgrade_cta.clicked.connect(self._on_upgrade_clicked)
         self._upgrade_cta.setVisible(False)
         footer_layout.addWidget(self._upgrade_cta)
+
+        self._settings_btn = QLabel(f'<a href="#" style="color: {BRAND_BLUE};">{tr("Settings")}</a>')
+        self._settings_btn.setStyleSheet("font-size: 13px;")
+        self._settings_btn.setCursor(Qt.PointingHandCursor)
+        self._settings_btn.linkActivated.connect(lambda _: self._on_settings_btn_clicked())
+        self._settings_btn.setVisible(False)
+        footer_layout.addWidget(self._settings_btn)
 
         for text, url, handler in [
             (tr("Tutorial"), get_tutorial_url(), None),
@@ -493,8 +539,7 @@ class AIEditDockWidget(QDockWidget):
                 link.setOpenExternalLinks(True)
             footer_layout.addWidget(link)
 
-        footer_container.addWidget(footer_links)
-        layout.addLayout(footer_container)
+        layout.addWidget(footer_links)
 
         # Wrap in scroll area (matches AI Segmentation)
         scroll_area = QScrollArea()
@@ -508,6 +553,10 @@ class AIEditDockWidget(QDockWidget):
         self._zone_selected = False
         self._activated = False
         self._from_template = False
+        self._is_free_tier = True  # default hidden until confirmed Pro
+        self._selected_resolution = "1K"
+        # Fallback costs used until server config is loaded
+        self._resolution_credit_costs: dict[str, int] = {"1K": 20, "2K": 30, "4K": 40}
 
         # Keyboard shortcuts (G to start, Esc to stop)
         self._start_shortcut = QShortcut(QKeySequence("G"), self)
@@ -576,7 +625,7 @@ class AIEditDockWidget(QDockWidget):
     def _build_activation_section(self) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(8)
 
         # --- Login section ---
@@ -585,18 +634,24 @@ class AIEditDockWidget(QDockWidget):
         signup_layout.setContentsMargins(0, 0, 0, 0)
         signup_layout.setSpacing(8)
 
-        title = QLabel(tr("Sign in on terra-lab.ai to get your activation key"))
+        title = QLabel(tr("Sign in to get your key"))
         title.setAlignment(Qt.AlignCenter)
         title.setWordWrap(True)
         title.setStyleSheet("font-weight: bold; font-size: 13px; color: palette(text);")
         signup_layout.addWidget(title)
 
-        self._login_btn = QPushButton(tr("Login on terra-lab.ai"))
+        self._login_btn = QPushButton(tr("Login"))
         self._login_btn.setMinimumHeight(36)
         self._login_btn.setCursor(Qt.PointingHandCursor)
-        self._login_btn.setStyleSheet(_BTN_GREEN)
+        self._login_btn.setStyleSheet(_BTN_GREEN_AUTH)
         self._login_btn.clicked.connect(self._on_login_clicked)
         signup_layout.addWidget(self._login_btn)
+
+        login_hint = QLabel(tr("100 free credits — no credit card required"))
+        login_hint.setAlignment(Qt.AlignCenter)
+        login_hint.setWordWrap(True)
+        login_hint.setStyleSheet("font-size: 11px; color: palette(text);")
+        signup_layout.addWidget(login_hint)
 
         layout.addWidget(self._signup_section)
 
@@ -611,37 +666,45 @@ class AIEditDockWidget(QDockWidget):
         # CTA button displayed on activation flow when usage limit is reached
         self._activation_limit_cta_btn = QPushButton(tr("Go to AI Edit page"))
         self._activation_limit_cta_btn.setCursor(Qt.PointingHandCursor)
-        self._activation_limit_cta_btn.setStyleSheet(_BTN_BLUE)
+        self._activation_limit_cta_btn.setStyleSheet(_BTN_BLUE_AUTH)
         self._activation_limit_cta_btn.clicked.connect(self._on_activation_limit_cta_clicked)
         self._activation_limit_cta_btn.setVisible(False)
         layout.addWidget(self._activation_limit_cta_btn)
         self._activation_limit_cta_url = ""
 
-        # --- Activation key section ---
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setFrameShadow(QFrame.Sunken)
-        layout.addWidget(separator)
+        # --- Collapsible activation key section ---
+        self._key_toggle_btn = QToolButton()
+        self._key_toggle_btn.setText(tr("Paste key"))
+        self._key_toggle_btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self._key_toggle_btn.setArrowType(Qt.RightArrow)
+        self._key_toggle_btn.setCheckable(True)
+        self._key_toggle_btn.setChecked(False)
+        self._key_toggle_btn.setStyleSheet(
+            "QToolButton { border: none; font-size: 11px; color: palette(text); }"
+        )
+        self._key_toggle_btn.setCursor(Qt.PointingHandCursor)
+        self._key_toggle_btn.toggled.connect(self._on_key_toggle)
+        layout.addWidget(self._key_toggle_btn)
 
-        key_label = QLabel(tr("Paste your key from terra-lab.ai/dashboard:"))
-        key_label.setStyleSheet("font-size: 11px; color: palette(text);")
-        layout.addWidget(key_label)
-
-        code_row = QHBoxLayout()
-        code_row.setSpacing(6)
+        self._key_input_widget = QWidget()
+        key_input_layout = QHBoxLayout(self._key_input_widget)
+        key_input_layout.setContentsMargins(0, 0, 0, 0)
+        key_input_layout.setSpacing(6)
         self._code_input = QLineEdit()
         self._code_input.setPlaceholderText("tl_...")
         self._code_input.setMinimumHeight(28)
         self._code_input.returnPressed.connect(self._on_unlock_clicked)
-        code_row.addWidget(self._code_input)
+        key_input_layout.addWidget(self._code_input)
 
         unlock_btn = QPushButton(tr("Activate"))
         unlock_btn.setMinimumHeight(28)
         unlock_btn.setMinimumWidth(70)
-        unlock_btn.setStyleSheet(_BTN_BLUE)
+        unlock_btn.setStyleSheet(_BTN_BLUE_AUTH)
         unlock_btn.clicked.connect(self._on_unlock_clicked)
-        code_row.addWidget(unlock_btn)
-        layout.addLayout(code_row)
+        key_input_layout.addWidget(unlock_btn)
+
+        self._key_input_widget.setVisible(False)
+        layout.addWidget(self._key_input_widget)
 
         return widget
 
@@ -697,6 +760,7 @@ class AIEditDockWidget(QDockWidget):
             self._signup_section.setVisible(True)
             self._activation_message.setVisible(False)
             self.hide_activation_limit_cta()
+            self._key_toggle_btn.setChecked(False)
 
     def show_change_key_mode(self):
         """Show only the key input, no signup flow. For users changing their key."""
@@ -709,6 +773,8 @@ class AIEditDockWidget(QDockWidget):
         self._signup_section.setVisible(False)
         self._activation_message.setVisible(False)
         self.hide_activation_limit_cta()
+        # Auto-expand the paste key section
+        self._key_toggle_btn.setChecked(True)
         self._code_input.clear()
         self._code_input.setFocus()
 
@@ -719,7 +785,7 @@ class AIEditDockWidget(QDockWidget):
     def set_activation_message(self, text: str, is_error: bool = False):
         # Use brighter variants for dark theme readability
         self.hide_activation_limit_cta()
-        color = "#ef5350" if is_error else "#66bb6a"
+        color = ERROR_TEXT if is_error else SUCCESS_TEXT
         self._activation_message.setStyleSheet(f"font-size: 11px; color: {color};")
         self._activation_message.setText(text)
         self._activation_message.setVisible(True)
@@ -740,6 +806,7 @@ class AIEditDockWidget(QDockWidget):
         is_free_tier: bool = False,
     ):
         """Update the credits indicator near the Generate button."""
+        self._is_free_tier = is_free_tier
         if used is not None and limit is not None:
             remaining = max(0, limit - used)
             if is_free_tier:
@@ -750,6 +817,13 @@ class AIEditDockWidget(QDockWidget):
         else:
             self._credits_label.setVisible(False)
         self._upgrade_cta.setVisible(is_free_tier and self._activated)
+        # Update resolution selector visibility based on tier
+        show_res = not is_free_tier
+        if self._prompt_section.isVisible():
+            self._resolution_selector.setVisible(show_res)
+        if self._result_section.isVisible():
+            self._retry_resolution_selector.setVisible(show_res)
+        self._update_generate_button_text()
 
     def set_active_mode(self):
         """Enter active mode: drawing rectangle."""
@@ -774,11 +848,15 @@ class AIEditDockWidget(QDockWidget):
         self._instruction_box.setVisible(False)
         self._hide_status_box()
         self._prompt_section.setVisible(True)
-        # Hide "Browse Templates" if user already picked a template
-        self._templates_btn.setVisible(not self._from_template)
+        self._prompt_input.setReadOnly(False)
+        self._prompt_input.setStyleSheet(_PROMPT_INPUT_NORMAL)
+        self._templates_btn.setVisible(True)
+        self._templates_btn.setEnabled(True)
+        self._from_template = False
         self._consent_widget.setVisible(not has_consent())
         self._generate_btn.setVisible(True)
         self._stop_btn.setVisible(True)
+        self._resolution_selector.setVisible(not self._is_free_tier)
         self._start_shortcut.setEnabled(False)
         self._stop_shortcut.setEnabled(True)
 
@@ -816,6 +894,10 @@ class AIEditDockWidget(QDockWidget):
         self._templates_btn.setEnabled(True)
         self._templates_btn.setVisible(True)
         self._from_template = False
+        self._resolution_selector.setVisible(False)
+        self._retry_resolution_selector.setVisible(False)
+        self._selected_resolution = "1K"
+        self._on_resolution_selected("1K")
         self._update_layer_warning()
 
     def set_generating(self, generating: bool):
@@ -841,6 +923,7 @@ class AIEditDockWidget(QDockWidget):
             self._consent_widget.setVisible(False)
             self._generate_btn.setVisible(False)
             self._stop_btn.setVisible(False)
+            self._resolution_selector.setVisible(False)
             self._stop_shortcut.setEnabled(False)
             self._progress_label.setText(tr("Preparing..."))
         else:
@@ -850,6 +933,7 @@ class AIEditDockWidget(QDockWidget):
             self._templates_btn.setEnabled(True)
             self._consent_widget.setVisible(not has_consent() and self._zone_selected)
             self._generate_btn.setVisible(self._zone_selected)
+            self._resolution_selector.setVisible(not self._is_free_tier and self._zone_selected)
             self._stop_btn.setVisible(self._zone_selected)
             self._stop_shortcut.setEnabled(True)
             self._prompt_section.setVisible(self._zone_selected)
@@ -895,9 +979,9 @@ class AIEditDockWidget(QDockWidget):
                 QStyle.StandardPixmap.SP_DialogApplyButton,
             ),
             "warning": (
-                "QWidget { background-color: rgba(255, 152, 0, 0.2); "
+                "QWidget { background-color: rgb(255, 230, 150); "
                 "border: 1px solid rgba(255, 152, 0, 0.6); border-radius: 4px; }"
-                "QLabel { background: transparent; border: none; color: #ffa726; }",
+                "QLabel { background: transparent; border: none; color: #333333; }",
                 QStyle.StandardPixmap.SP_MessageBoxWarning,
             ),
         }
@@ -947,6 +1031,7 @@ class AIEditDockWidget(QDockWidget):
         self._result_prompt_input.moveCursor(QTextCursor.End)
         self._result_prompt_input.setReadOnly(False)
         self._result_section.setVisible(True)
+        self._retry_resolution_selector.setVisible(not self._is_free_tier)
 
         self._start_shortcut.setEnabled(False)
         self._stop_shortcut.setEnabled(True)
@@ -1031,6 +1116,10 @@ class AIEditDockWidget(QDockWidget):
     def _on_get_key_clicked(self):
         QDesktopServices.openUrl(QUrl(get_subscribe_url()))
 
+    def _on_key_toggle(self, checked: bool):
+        self._key_toggle_btn.setArrowType(Qt.DownArrow if checked else Qt.RightArrow)
+        self._key_input_widget.setVisible(checked)
+
     def _on_login_clicked(self):
         """Open terra-lab.ai login page in system browser."""
         import webbrowser
@@ -1043,21 +1132,80 @@ class AIEditDockWidget(QDockWidget):
             return
         self.activation_attempted.emit(code)
 
+    # ------------------------------------------------------------------
+    # Resolution selector helpers
+    # ------------------------------------------------------------------
+
+    def _build_resolution_selector(self) -> tuple[QWidget, dict[str, QPushButton]]:
+        """Build a labeled row of 1K / 2K / 4K toggle buttons."""
+        widget = QWidget()
+        outer = QVBoxLayout(widget)
+        outer.setContentsMargins(0, 4, 0, 0)
+        outer.setSpacing(2)
+
+        label = QLabel(tr("Output resolution"))
+        label.setStyleSheet("font-size: 11px; color: palette(text);")
+        outer.addWidget(label)
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+        btns: dict[str, QPushButton] = {}
+        for res in ("1K", "2K", "4K"):
+            btn = QPushButton(res)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setStyleSheet(_RES_BTN_SELECTED if res == "1K" else _RES_BTN_NEUTRAL)
+            btn.clicked.connect(lambda _, r=res: self._on_resolution_selected(r))
+            row.addWidget(btn)
+            btns[res] = btn
+        outer.addLayout(row)
+        return widget, btns
+
+    def _on_resolution_selected(self, label: str):
+        """Handle resolution toggle click — sync both selectors."""
+        self._selected_resolution = label
+        for res, btn in self._res_btns.items():
+            btn.setStyleSheet(_RES_BTN_SELECTED if res == label else _RES_BTN_NEUTRAL)
+        for res, btn in self._retry_res_btns.items():
+            btn.setStyleSheet(_RES_BTN_SELECTED if res == label else _RES_BTN_NEUTRAL)
+        self._update_generate_button_text()
+
+    def _update_generate_button_text(self):
+        """Update Generate / Retry button text with credit cost."""
+        cost = self._resolution_credit_costs.get(self._selected_resolution)
+        if cost is not None:
+            self._generate_btn.setText(tr("Generate") + f" ({cost} credits)")
+            self._retry_btn.setText(tr("Retry on Same Area") + f" ({cost} credits)")
+        else:
+            self._generate_btn.setText(tr("Generate"))
+            self._retry_btn.setText(tr("Retry on Same Area"))
+
+    def set_resolution_credit_costs(self, costs: dict[str, int]):
+        """Set credit costs per resolution (from server config)."""
+        if costs:
+            self._resolution_credit_costs = costs
+        self._update_generate_button_text()
+
+    def get_selected_resolution(self) -> str:
+        """Return the user-selected resolution label."""
+        return self._selected_resolution
+
     def _on_browse_templates_clicked(self):
         """Open templates dialog. Pick template -> start zone drawing directly."""
         preset = self._open_templates_dialog()
         if not preset:
             return
 
-        if self._zone_selected:
+        if self._result_section.isVisible():
+            # In result state — fill the result prompt
+            self._result_prompt_input.setPlainText(preset["prompt"])
+            self._result_prompt_input.moveCursor(QTextCursor.End)
+            self._result_prompt_input.setFocus()
+        elif self._zone_selected:
             # Already have a zone — fill the active prompt input
             self._prompt_input.setPlainText(preset["prompt"])
             self._prompt_input.moveCursor(QTextCursor.End)
             self._prompt_input.setFocus()
-        elif self._result_section.isVisible():
-            # In result state — fill the result prompt
-            self._result_prompt_input.setPlainText(preset["prompt"])
-            self._result_prompt_input.moveCursor(QTextCursor.End)
         else:
             # IDLE state — store prompt and go directly to zone drawing
             self._from_template = True

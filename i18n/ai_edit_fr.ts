@@ -164,16 +164,20 @@ En continuant, vous acceptez nos Conditions Générales de Vente et notre Politi
 
     <!-- Login & activation -->
     <message>
-        <source>Sign in on terra-lab.ai to get your activation key</source>
-        <translation>Connectez-vous sur terra-lab.ai pour obtenir votre cle d'activation</translation>
+        <source>Sign in to get your key</source>
+        <translation>Connectez-vous pour obtenir votre cle</translation>
     </message>
     <message>
-        <source>Login on terra-lab.ai</source>
-        <translation>Se connecter sur terra-lab.ai</translation>
+        <source>Login</source>
+        <translation>Connexion</translation>
     </message>
     <message>
-        <source>Paste your key from terra-lab.ai/dashboard:</source>
-        <translation>Collez votre cle depuis terra-lab.ai/dashboard :</translation>
+        <source>Paste key</source>
+        <translation>Coller la cle</translation>
+    </message>
+    <message>
+        <source>100 free credits — no credit card required</source>
+        <translation>100 credits gratuits — sans carte bancaire</translation>
     </message>
     <message>
         <source>You have used all {credits} free edits.</source>
@@ -260,6 +264,10 @@ AI-powered image editing for geospatial data</source>
     <message>
         <source>Add</source>
         <translation>Ajouter</translation>
+    </message>
+    <message>
+        <source>Output resolution</source>
+        <translation>Resolution de sortie</translation>
     </message>
 </context>
 </TS>
