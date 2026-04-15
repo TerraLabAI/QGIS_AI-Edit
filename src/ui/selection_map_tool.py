@@ -35,6 +35,10 @@ class RectangleSelectionTool(QgsMapTool):
         self._is_drawing = False
         self.setCursor(QCursor(Qt.CrossCursor))
 
+    def activate(self):
+        super().activate()
+        self.setCursor(QCursor(Qt.CrossCursor))
+
     def canvasPressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self._start_point = self.toMapCoordinates(event.pos())

@@ -104,23 +104,31 @@ class GenerationService:
             f"Submitted: request_id={request_id}, "
             f"resolution={resp.get('resolution', suggested_resolution)}, "
             f"aspect={resp.get('aspect_ratio', aspect_ratio)}, "
-            f"est={resp.get('estimated_time', '?')}s"
+            f"est={resp.get('estimated_time', '?')}s, "
+            f"max_wait={resp.get('max_wait', '?')}s, "
+            f"credits={resp.get('credit_cost', '?')}"
         )
 
         # Use server-suggested polling config if available
         poll_interval = resp.get("poll_interval", self._poll_interval)
         estimated_time = resp.get("estimated_time")
+        max_wait = resp.get("max_wait")  # Server-driven hard ceiling (seconds)
         absolute_max_polls = int(360 / poll_interval)
-        if estimated_time:
+        if max_wait:
+            max_polls = int(max_wait / poll_interval)
+        elif estimated_time:
             max_polls = max(absolute_max_polls, int(estimated_time * 3 / poll_interval))
         else:
             max_polls = absolute_max_polls
 
         if ctx is not None:
-            ctx.submitted_resolution = suggested_resolution
-            ctx.submitted_aspect_ratio = aspect_ratio
+            ctx.submitted_resolution = resp.get("resolution", suggested_resolution)
+            ctx.submitted_aspect_ratio = resp.get("aspect_ratio", aspect_ratio)
             ctx.submit_timestamp = time.time()
             ctx.request_id = request_id
+            ctx.credit_cost = resp.get("credit_cost")
+            ctx.estimated_time_seconds = estimated_time
+            ctx.max_wait_seconds = max_wait
 
         # If submit already returned the image (sync mode), skip polling
         if resp.get("status") == "completed" and resp.get("image_url"):
@@ -167,6 +175,8 @@ class GenerationService:
                     ctx.poll_count = i + 1
                     ctx.total_wait_seconds = (i + 1) * poll_interval
                     ctx.final_status = "completed"
+                    ctx.received_image_width = status_resp.get("output_width")
+                    ctx.received_image_height = status_resp.get("output_height")
                 return GenerationResult(
                     success=True,
                     image_url=status_resp.get("image_url"),

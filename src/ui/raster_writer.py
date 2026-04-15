@@ -1,89 +1,13 @@
 from __future__ import annotations
 
-import base64
-import io
 import os
 import re
 import time
 
-import numpy as np
 from osgeo import gdal, osr
 from qgis.core import QgsProject, QgsRasterLayer
 
 from ..core.logger import log_debug
-
-
-def _detect_pixel_offset(sent_b64: str, recv_ds, recv_w: int, recv_h: int) -> tuple[float, float]:
-    """Detect subpixel offset between sent and received images using phase correlation.
-
-    Returns (dy, dx) in pixels. Positive = received content shifted right/down.
-    """
-    from PIL import Image
-
-    # Decode sent image to grayscale numpy array
-    sent_bytes = base64.b64decode(sent_b64)
-    sent_img = Image.open(io.BytesIO(sent_bytes)).convert("L")
-    sent_w, sent_h = sent_img.size
-    sent_arr = np.array(sent_img, dtype=np.float32) / 255.0
-
-    # Read received as grayscale: average RGB bands
-    recv_arr = np.zeros((recv_h, recv_w), dtype=np.float32)
-    n_bands = min(recv_ds.RasterCount, 3)
-    for b in range(1, n_bands + 1):
-        recv_arr += recv_ds.GetRasterBand(b).ReadAsArray().astype(np.float32)
-    recv_arr = recv_arr / (n_bands * 255.0)
-
-    # Resize received to sent dimensions for comparison
-    recv_img = Image.fromarray((recv_arr * 255).astype(np.uint8))
-    recv_resized = np.array(
-        recv_img.resize((sent_w, sent_h), Image.LANCZOS), dtype=np.float32
-    ) / 255.0
-
-    # Apply Hanning window to reduce edge artifacts in FFT
-    win_y = np.hanning(sent_h).reshape(-1, 1)
-    win_x = np.hanning(sent_w).reshape(1, -1)
-    window = win_y * win_x
-
-    a = sent_arr * window
-    b_arr = recv_resized * window
-
-    # Phase correlation via FFT
-    fa = np.fft.rfft2(a)
-    fb = np.fft.rfft2(b_arr)
-    cross = fa * np.conj(fb)
-    cross_norm = cross / (np.abs(cross) + 1e-10)
-    corr = np.fft.irfft2(cross_norm, s=(sent_h, sent_w))
-
-    # Find integer peak
-    peak_y, peak_x = np.unravel_index(np.argmax(corr), corr.shape)
-
-    # Convert to signed offset
-    dy = peak_y if peak_y < sent_h // 2 else peak_y - sent_h
-    dx = peak_x if peak_x < sent_w // 2 else peak_x - sent_w
-
-    # Subpixel refinement via parabola fitting
-    dy_sub, dx_sub = float(dy), float(dx)
-    if 1 <= peak_y < sent_h - 1 and 1 <= peak_x < sent_w - 1:
-        # Vertical parabola
-        c_top = corr[peak_y - 1, peak_x]
-        c_mid = corr[peak_y, peak_x]
-        c_bot = corr[peak_y + 1, peak_x]
-        denom_y = c_top - 2 * c_mid + c_bot
-        if abs(denom_y) > 1e-12:
-            dy_sub = dy - (c_bot - c_top) / (2 * denom_y)
-
-        # Horizontal parabola
-        c_left = corr[peak_y, peak_x - 1]
-        c_right = corr[peak_y, peak_x + 1]
-        denom_x = c_left - 2 * c_mid + c_right
-        if abs(denom_x) > 1e-12:
-            dx_sub = dx - (c_right - c_left) / (2 * denom_x)
-
-    # Scale offset from sent dimensions to received dimensions
-    scale_x = recv_w / sent_w
-    scale_y = recv_h / sent_h
-
-    return dy_sub * scale_y, dx_sub * scale_x
 
 
 def write_geotiff(
@@ -142,20 +66,6 @@ def write_geotiff(
         ext_height = ymax - ymin
         log_debug(f"GeoTIFF extent: {ext_width:.2f}x{ext_height:.2f} map units")
 
-        # Detect spatial offset between sent and received images
-        offset_dy_px, offset_dx_px = 0.0, 0.0
-        if sent_image_b64:
-            try:
-                offset_dy_px, offset_dx_px = _detect_pixel_offset(
-                    sent_image_b64, src_ds, recv_w, recv_h
-                )
-                log_debug(
-                    f"GeoTIFF: phase correlation offset: "
-                    f"dx={offset_dx_px:.2f}px, dy={offset_dy_px:.2f}px"
-                )
-            except Exception as e:
-                log_debug(f"GeoTIFF: phase correlation failed ({e}), using no offset")
-
         if ctx is not None:
             ctx.received_image_width = recv_w
             ctx.received_image_height = recv_h
@@ -170,22 +80,11 @@ def write_geotiff(
         if dst_ds is None:
             raise RuntimeError(f"Failed to create GeoTIFF at {output_path}")
 
-        # Geotransform with offset correction.
-        # The offset is in received-image pixels. Convert to map units
-        # and shift the origin so the content aligns with the source.
+        # Geotransform: map the received image pixels to the geographic extent.
         x_res = ext_width / recv_w
         y_res = ext_height / recv_h
-        corrected_xmin = xmin - offset_dx_px * x_res
-        corrected_ymax = ymax + offset_dy_px * y_res
-        geotransform = (corrected_xmin, x_res, 0, corrected_ymax, 0, -y_res)
+        geotransform = (xmin, x_res, 0, ymax, 0, -y_res)
         dst_ds.SetGeoTransform(geotransform)
-
-        if offset_dx_px != 0.0 or offset_dy_px != 0.0:
-            log_debug(
-                f"GeoTIFF: origin corrected by "
-                f"dx={offset_dx_px * x_res:.4f}, "
-                f"dy={offset_dy_px * y_res:.4f} map units"
-            )
 
         if ctx is not None:
             ctx.output_path = output_path
@@ -227,16 +126,23 @@ def write_geotiff(
     return output_path
 
 
-def add_geotiff_to_project(geotiff_path: str, prompt: str = "") -> QgsRasterLayer:
+def add_geotiff_to_project(
+    geotiff_path: str, prompt: str = "", generation_number: int | None = None,
+) -> QgsRasterLayer:
     """Add GeoTIFF as a raster layer in the 'AI Edit' group."""
     if prompt:
-        display_name = _slugify(prompt)[:60] or "ai_edit_result"
-        if len(display_name) > 20 and len(prompt) > 60:
-            parts = display_name.rsplit("_", 1)
+        slug = _slugify(prompt)[:55] or "ai_edit_result"
+        if len(slug) > 20 and len(prompt) > 55:
+            parts = slug.rsplit("_", 1)
             if len(parts) > 1 and len(parts[0]) > 20:
-                display_name = parts[0]
+                slug = parts[0]
     else:
-        display_name = "ai_edit_result"
+        slug = "ai_edit_result"
+
+    if generation_number is not None:
+        display_name = f"#{generation_number} {slug}"
+    else:
+        display_name = slug
 
     existing_names = [lyr.name() for lyr in QgsProject.instance().mapLayers().values()]
     if display_name in existing_names:

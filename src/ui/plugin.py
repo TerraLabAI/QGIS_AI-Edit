@@ -7,7 +7,7 @@ from qgis.core import QgsPointXY, QgsRectangle, QgsWkbTypes
 from qgis.gui import QgsRubberBand
 from qgis.PyQt.QtCore import QSettings, Qt, QThread, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QIcon
-from qgis.PyQt.QtWidgets import QAction
+from qgis.PyQt.QtWidgets import QAction, QApplication
 
 from ..api.terralab_client import TerraLabClient
 from ..core import telemetry
@@ -131,6 +131,7 @@ class AIEditPlugin:
         self._terralab_toolbar = None
         self._export_config_loader = None
         self._credits_loader = None
+        self._generation_counter = 0
         # Preserved for retry (re-generate from original, not from AI result)
         self._last_image_b64 = None
         self._last_extent_dict = None
@@ -397,6 +398,7 @@ class AIEditPlugin:
         if current_tool and current_tool != self._map_tool:
             self._previous_map_tool = current_tool
         self._canvas.setMapTool(self._map_tool)
+        self._canvas.setFocus()
         self._clear_selection_rectangle()
         self._dock_widget.set_status("")
         self._selected_extent = None
@@ -416,6 +418,7 @@ class AIEditPlugin:
             duration = time.time() - getattr(self, "_generation_start_time", time.time())
             telemetry.track("generation_cancelled", {
                 "duration_seconds": round(duration, 1),
+                "resolution": getattr(self, "_last_suggested_res", ""),
             })
             telemetry.flush()
         self._canvas.unsetMapTool(self._map_tool)
@@ -598,6 +601,10 @@ class AIEditPlugin:
         else:
             suggested_res = self._dock_widget.get_selected_resolution()
 
+        # Show loading state on Generate button before blocking export
+        self._dock_widget.set_generate_loading(True)
+        QApplication.processEvents()
+
         try:
             map_settings = self._canvas.mapSettings()
             target_res = suggested_res if not self._dock_widget._is_free_tier else None
@@ -606,6 +613,7 @@ class AIEditPlugin:
                 target_resolution=target_res,
             )
         except Exception as e:
+            self._dock_widget.set_generate_loading(False)
             self._dock_widget.set_status(
                 tr("Export error: {error}").format(error=e), is_error=True
             )
@@ -699,6 +707,7 @@ class AIEditPlugin:
         telemetry.track("generation_failed", {
             "error_code": code,
             "duration_seconds": round(duration, 1),
+            "resolution": getattr(self, "_last_suggested_res", ""),
         })
         telemetry.flush()
         if normalized_code == "TRIAL_EXHAUSTED":
@@ -720,11 +729,15 @@ class AIEditPlugin:
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
 
         try:
+            self._generation_counter += 1
             layer = add_geotiff_to_project(
-                result_info["geotiff_path"], result_info.get("prompt", "")
+                result_info["geotiff_path"],
+                result_info.get("prompt", ""),
+                generation_number=self._generation_counter,
             )
             telemetry.track("generation_completed", {
                 "duration_seconds": round(duration, 1),
+                "resolution": getattr(self, "_last_suggested_res", ""),
             })
             telemetry.flush()
             self._dock_widget.set_generation_complete(layer.name())

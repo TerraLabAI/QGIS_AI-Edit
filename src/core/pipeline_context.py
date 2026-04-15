@@ -29,6 +29,9 @@ class PipelineContext:
     submitted_resolution: str | None = None
     submitted_aspect_ratio: str | None = None
     submit_timestamp: float | None = None
+    credit_cost: int | None = None
+    estimated_time_seconds: float | None = None
+    max_wait_seconds: float | None = None
 
     # Poll (populated by generation_service.py)
     poll_count: int | None = None
@@ -90,6 +93,10 @@ class PipelineContext:
             parts.append(f"request_id={self.request_id}")
         if self.submitted_resolution:
             parts.append(f"resolution={self.submitted_resolution}")
+        if self.credit_cost is not None:
+            parts.append(f"credits={self.credit_cost}")
+        if self.max_wait_seconds:
+            parts.append(f"max_wait={int(self.max_wait_seconds)}s")
         if self.received_image_width and self.received_image_height:
             parts.append(
                 f"Result: {self.received_image_width}x{self.received_image_height}px"

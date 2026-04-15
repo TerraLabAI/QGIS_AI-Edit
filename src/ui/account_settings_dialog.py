@@ -173,6 +173,7 @@ class AccountSettingsDialog(QDialog):
         self._content_layout.addWidget(manage_label)
 
         self._content_widget.setVisible(True)
+        self.adjustSize()
 
     def _on_failed(self, message: str):
         """Show error state."""
@@ -357,7 +358,7 @@ class AccountSettingsDialog(QDialog):
     @staticmethod
     def _field_label(text: str) -> QLabel:
         label = QLabel(text)
-        label.setStyleSheet("font-size: 12px; color: rgba(255,255,255,0.5);")
+        label.setStyleSheet("font-size: 11px; color: palette(text);")
         return label
 
     @staticmethod

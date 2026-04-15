@@ -4,6 +4,7 @@ from qgis.core import QgsProject
 from qgis.PyQt.QtCore import Qt, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QDesktopServices, QKeySequence, QTextCursor
 from qgis.PyQt.QtWidgets import (
+    QApplication,
     QCheckBox,
     QDockWidget,
     QFrame,
@@ -148,6 +149,7 @@ _INSTRUCTION_BOX = (
 
 _SECTION_HEADER = (
     "font-weight: bold; font-size: 12px; color: palette(text);"
+    " margin: 0px; padding: 0px 0px 2px 0px;"
 )
 
 _SECTION_HEADER_EXTRA_TOP = (
@@ -159,6 +161,7 @@ def _make_section_header(text: str, extra_top: bool = False) -> QLabel:
     """Create a section header label."""
     label = QLabel(text)
     label.setStyleSheet(_SECTION_HEADER_EXTRA_TOP if extra_top else _SECTION_HEADER)
+    label.setContentsMargins(0, 0, 0, 0)
     return label
 
 
@@ -259,11 +262,12 @@ class AIEditDockWidget(QDockWidget):
 
         # --- Prompt section (shown after zone selected) ---
         self._prompt_section = QWidget()
+        self._prompt_section.setContentsMargins(0, 0, 0, 0)
         prompt_layout = QVBoxLayout(self._prompt_section)
         prompt_layout.setContentsMargins(0, 0, 0, 0)
-        prompt_layout.setSpacing(4)
+        prompt_layout.setSpacing(0)
 
-        self._prompt_header = _make_section_header(tr("What should AI change?"), extra_top=True)
+        self._prompt_header = _make_section_header(tr("What should AI change?"))
         prompt_layout.addWidget(self._prompt_header)
 
         self._prompt_input = _SubmitTextEdit()
@@ -287,6 +291,8 @@ class AIEditDockWidget(QDockWidget):
             "border-radius: 4px; padding: 4px 8px; "
             "background-color: rgba(128,128,128,0.08); }"
             "QPushButton:hover { background-color: rgba(128,128,128,0.15); }"
+            f"QPushButton:disabled {{ background-color: rgba(128,128,128,0.1); "
+            f"border: 1px solid rgba(128,128,128,0.15); color: {DISABLED_TEXT}; }}"
         )
         self._templates_btn.clicked.connect(self._on_browse_templates_clicked)
         prompt_layout.addWidget(self._templates_btn)
@@ -492,20 +498,25 @@ class AIEditDockWidget(QDockWidget):
         # Spacer to push footer to bottom
         layout.addStretch()
 
-        # Footer section — single row: [credits] ←stretch→ [Upgrade pill] [Settings] [Tutorial] [Contact us]
-        footer_links = QWidget()
-        footer_layout = QHBoxLayout(footer_links)
-        footer_layout.setContentsMargins(0, 0, 0, 4)
-        footer_layout.setSpacing(16)
+        # Footer section — two rows: credits on top, links below
+        footer_widget = QWidget()
+        footer_vbox = QVBoxLayout(footer_widget)
+        footer_vbox.setContentsMargins(0, 0, 0, 4)
+        footer_vbox.setSpacing(2)
+
+        # Row 1: credits + upgrade pill
+        credits_row = QHBoxLayout()
+        credits_row.setContentsMargins(0, 0, 0, 0)
+        credits_row.setSpacing(8)
 
         self._credits_label = QLabel()
         self._credits_label.setStyleSheet(
             "font-size: 11px; color: palette(text); background: transparent; border: none;"
         )
         self._credits_label.setVisible(False)
-        footer_layout.addWidget(self._credits_label)
+        credits_row.addWidget(self._credits_label)
 
-        footer_layout.addStretch()
+        credits_row.addStretch()
 
         self._upgrade_cta = QPushButton(tr("Upgrade to Pro"))
         self._upgrade_cta.setCursor(Qt.PointingHandCursor)
@@ -517,14 +528,23 @@ class AIEditDockWidget(QDockWidget):
         )
         self._upgrade_cta.clicked.connect(self._on_upgrade_clicked)
         self._upgrade_cta.setVisible(False)
-        footer_layout.addWidget(self._upgrade_cta)
+        credits_row.addWidget(self._upgrade_cta)
+
+        footer_vbox.addLayout(credits_row)
+
+        # Row 2: links — [Settings] [Tutorial] [Contact us]
+        links_row = QHBoxLayout()
+        links_row.setContentsMargins(0, 0, 0, 0)
+        links_row.setSpacing(16)
+
+        links_row.addStretch()
 
         self._settings_btn = QLabel(f'<a href="#" style="color: {BRAND_BLUE};">{tr("Settings")}</a>')
         self._settings_btn.setStyleSheet("font-size: 13px;")
         self._settings_btn.setCursor(Qt.PointingHandCursor)
         self._settings_btn.linkActivated.connect(lambda _: self._on_settings_btn_clicked())
         self._settings_btn.setVisible(False)
-        footer_layout.addWidget(self._settings_btn)
+        links_row.addWidget(self._settings_btn)
 
         for text, url, handler in [
             (tr("Tutorial"), get_tutorial_url(), None),
@@ -537,9 +557,11 @@ class AIEditDockWidget(QDockWidget):
                 link.linkActivated.connect(handler)
             else:
                 link.setOpenExternalLinks(True)
-            footer_layout.addWidget(link)
+            links_row.addWidget(link)
 
-        layout.addWidget(footer_links)
+        footer_vbox.addLayout(links_row)
+
+        layout.addWidget(footer_widget)
 
         # Wrap in scroll area (matches AI Segmentation)
         scroll_area = QScrollArea()
@@ -940,6 +962,18 @@ class AIEditDockWidget(QDockWidget):
 
         self._start_shortcut.setEnabled(not generating)
 
+    def set_generate_loading(self, loading: bool):
+        """Toggle loading state on the Generate button during canvas export."""
+        if loading:
+            self._generate_btn_original_text = self._generate_btn.text()
+            self._generate_btn.setText(tr("Preparing..."))
+            self._generate_btn.setEnabled(False)
+            self._generate_btn.setStyleSheet(_BTN_DISABLED)
+        else:
+            text = getattr(self, "_generate_btn_original_text", tr("Generate"))
+            self._generate_btn.setText(text)
+            self._update_generate_style()
+
     def set_progress_message(self, message: str, percentage: int = -1):
         """Update the progress label and bar during generation with smooth animation."""
         self._progress_label.setText(message)
@@ -992,7 +1026,14 @@ class AIEditDockWidget(QDockWidget):
         self._status_label.setText(message)
         self._status_widget.setVisible(True)
 
+    def _expire_status_protection(self):
+        """Called after timeout — unprotect and hide the status box."""
+        self._status_protected = False
+        self._hide_status_box()
+
     def _hide_status_box(self):
+        if getattr(self, "_status_protected", False):
+            return
         self._status_widget.setVisible(False)
         self._status_label.setText("")
         self._hide_limit_cta()
@@ -1011,6 +1052,8 @@ class AIEditDockWidget(QDockWidget):
         self._progress_bar.setValue(100)
         self._progress_widget.setVisible(False)
         self._show_status_box(tr("Generation complete!"), "success")
+        self._status_protected = True
+        QTimer.singleShot(3000, self._expire_status_protection)
         self._active = False
         # Keep zone_selected = True so retry can use the same zone
 
@@ -1198,20 +1241,35 @@ class AIEditDockWidget(QDockWidget):
 
         if self._result_section.isVisible():
             # In result state — fill the result prompt
+            self._result_prompt_input.blockSignals(True)
             self._result_prompt_input.setPlainText(preset["prompt"])
+            self._result_prompt_input.blockSignals(False)
             self._result_prompt_input.moveCursor(QTextCursor.End)
             self._result_prompt_input.setFocus()
+            self._update_generate_enabled()
+            self._adjust_result_prompt_height()
         elif self._zone_selected:
             # Already have a zone — fill the active prompt input
+            self._prompt_input.blockSignals(True)
             self._prompt_input.setPlainText(preset["prompt"])
+            self._prompt_input.blockSignals(False)
             self._prompt_input.moveCursor(QTextCursor.End)
             self._prompt_input.setFocus()
+            self._update_generate_enabled()
+            self._adjust_prompt_height()
         else:
-            # IDLE state — store prompt and go directly to zone drawing
+            # IDLE state — store prompt and go directly to zone drawing.
+            # processEvents() lets Qt finish the modal dialog cleanup
+            # (focus restoration, cursor state) before we activate the
+            # selection tool, so the crosshair cursor applies correctly.
             self._from_template = True
+            self._prompt_input.blockSignals(True)
             self._prompt_input.setPlainText(preset["prompt"])
+            self._prompt_input.blockSignals(False)
             self._prompt_input.moveCursor(QTextCursor.End)
+            self._adjust_prompt_height()
             self.set_active_mode()
+            QApplication.processEvents()
             self.select_zone_clicked.emit()
 
     def _on_prompt_changed(self):

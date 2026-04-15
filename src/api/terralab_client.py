@@ -10,7 +10,13 @@ from ..core.logger import log_warning
 
 # Timeout defaults (milliseconds)
 _TIMEOUT_API = 30_000
-_TIMEOUT_DOWNLOAD = 60_000
+_TIMEOUT_DOWNLOAD = 180_000
+_SUBMIT_TIMEOUTS_MS = {
+    "0.5K": 45_000,
+    "1K": 45_000,
+    "2K": 60_000,
+    "4K": 90_000,
+}
 
 # Map QNetworkReply error codes to (our_code, user_message)
 _PROXY_ERRORS = {
@@ -140,7 +146,13 @@ class TerraLabClient:
                 "aspect_ratio": aspect_ratio,
             }
         ).encode("utf-8")
-        return self._request("POST", "/api/ai-edit/generate", auth=auth, body=body)
+        return self._request(
+            "POST",
+            "/api/ai-edit/generate",
+            auth=auth,
+            body=body,
+            timeout_ms=_get_submit_timeout_ms(resolution),
+        )
 
     def poll_status(self, request_id: str, auth: dict) -> dict:
         """Poll generation status."""
@@ -294,3 +306,8 @@ class TerraLabClient:
         except json.JSONDecodeError:
             log_warning(f"Invalid JSON response: {raw_body[:500]}")
             return {"error": "Invalid server response", "code": "SERVER_ERROR"}
+
+
+def _get_submit_timeout_ms(resolution: str) -> int:
+    """Client-side timeout for generation submission."""
+    return _SUBMIT_TIMEOUTS_MS.get(resolution, _TIMEOUT_API)
