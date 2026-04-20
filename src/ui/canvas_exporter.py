@@ -1,14 +1,19 @@
+from __future__ import annotations
+
 import base64
-from typing import Tuple, Optional
 
-from qgis.PyQt.QtCore import QSize, QBuffer, QIODevice
+from qgis.core import QgsMapRendererCustomPainterJob, QgsMapSettings, QgsRectangle
+from qgis.PyQt.QtCore import QBuffer, QSize
 from qgis.PyQt.QtGui import QImage, QPainter
-from qgis.core import QgsMapSettings, QgsMapRendererCustomPainterJob, QgsRectangle
 
+from ..core import qt_compat as QtC
 
 # Global server config (set by plugin.py at startup)
 # Plugin cannot export without server config
-_server_config: Optional[dict] = None
+_server_config: dict | None = None
+
+# Map user-facing resolution labels to target pixel counts (longest side)
+_RESOLUTION_TARGET_PX = {"1K": 1024, "2K": 2048, "4K": 4096}
 
 
 def set_server_config(config: dict):
@@ -22,14 +27,14 @@ def has_server_config() -> bool:
     return _server_config is not None
 
 
-def _get_max_dimension() -> Optional[int]:
+def _get_max_dimension() -> int | None:
     """Get max dimension from server config. Returns None if unavailable."""
     if _server_config:
         return _server_config.get("max_dimension")
     return None
 
 
-def _get_align() -> Optional[int]:
+def _get_align() -> int | None:
     """Get pixel alignment from server config. Returns None if unavailable."""
     if _server_config:
         return _server_config.get("align")
@@ -37,8 +42,11 @@ def _get_align() -> Optional[int]:
 
 
 def export_canvas_zone(
-    map_settings: QgsMapSettings, extent: QgsRectangle, ctx=None
-) -> Tuple[str, int, int, QgsRectangle]:
+    map_settings: QgsMapSettings,
+    extent: QgsRectangle,
+    ctx=None,
+    target_resolution: str | None = None,
+) -> tuple[str, int, int, QgsRectangle]:
     """Export a zone of the QGIS canvas as a base64-encoded PNG string.
 
     Args:
@@ -65,7 +73,10 @@ def export_canvas_zone(
         )
 
     px_w, px_h = get_zone_pixel_size(map_settings, extent)
-    longest = max(max(px_w, px_h), 1)
+    if target_resolution and target_resolution in _RESOLUTION_TARGET_PX:
+        longest = _RESOLUTION_TARGET_PX[target_resolution]
+    else:
+        longest = max(max(px_w, px_h), 1)
     longest = min(longest, max_dim)
 
     ext_ratio = extent.width() / extent.height()
@@ -122,7 +133,7 @@ def export_canvas_zone(
     actual_extent = settings.visibleExtent()
 
     # Render to QImage
-    image = QImage(QSize(out_w, out_h), QImage.Format_ARGB32)
+    image = QImage(QSize(out_w, out_h), QtC.FormatARGB32)
     image.fill(map_settings.backgroundColor())
     painter = QPainter(image)
     job = QgsMapRendererCustomPainterJob(settings, painter)
@@ -130,10 +141,18 @@ def export_canvas_zone(
     job.waitForFinished()
     painter.end()
 
-    # Convert to base64 PNG
+    # Convert to base64 JPEG (matches server's data:image/jpeg URI)
+    # Scale quality down for larger images to keep payload under server limits
+    longest_side = max(out_w, out_h)
+    if longest_side > 2048:
+        jpeg_quality = 80
+    elif longest_side > 1024:
+        jpeg_quality = 85
+    else:
+        jpeg_quality = 92
     buffer = QBuffer()
-    buffer.open(QIODevice.WriteOnly)
-    image.save(buffer, "PNG")
+    buffer.open(QtC.WriteOnly)
+    image.save(buffer, "JPEG", jpeg_quality)
     b64 = base64.b64encode(buffer.data().data()).decode("ascii")
 
     # Populate pipeline context
@@ -154,7 +173,7 @@ def export_canvas_zone(
 
 def get_zone_pixel_size(
     map_settings: QgsMapSettings, extent: QgsRectangle
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     """Get the approximate pixel dimensions of a zone based on current map scale.
 
     Returns:
@@ -173,30 +192,3 @@ def get_zone_pixel_size(
         round(abs(extent.width() * px_per_map_unit_x)),
         round(abs(extent.height() * px_per_map_unit_y)),
     )
-
-
-def calculate_suggested_resolution(
-    map_settings: QgsMapSettings, extent: QgsRectangle
-) -> str:
-    """Calculate ideal resolution based on native pixel density of visible data.
-
-    Uses server-provided thresholds. Raises RuntimeError if not available.
-    """
-    if not _server_config or "resolution_thresholds" not in _server_config:
-        raise RuntimeError(
-            "Export config not loaded from server. "
-            "Check your internet connection and restart QGIS."
-        )
-
-    px_w, px_h = get_zone_pixel_size(map_settings, extent)
-    native_px = max(px_w, px_h)
-
-    thresholds = _server_config["resolution_thresholds"]
-
-    # Find first threshold where native_px <= max_px
-    for threshold in thresholds:
-        if native_px <= threshold["max_px"]:
-            return threshold["resolution"]
-
-    # Fallback to last resolution if none matched
-    return thresholds[-1]["resolution"] if thresholds else "medium"

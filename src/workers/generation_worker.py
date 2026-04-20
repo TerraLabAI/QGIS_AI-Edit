@@ -3,6 +3,7 @@
 Runs off the main thread: auth check → generate → download → write GeoTIFF.
 Emits Qt signals for progress, errors, and completion.
 """
+from __future__ import annotations
 
 import base64
 import random
@@ -10,29 +11,56 @@ import time
 
 from qgis.PyQt.QtCore import QThread, pyqtSignal
 
-from ..core.logger import log, log_warning
+from ..core.logger import log_debug
 from ..core.pipeline_context import save_debug_artifacts
 from ..ui.raster_writer import write_geotiff
 
-PROGRESS_MESSAGES = [
-    "Summoning pixels...",
+# Messages grouped by phase: early (warming up), mid (working), late (finishing)
+_MESSAGES_EARLY = [
     "Waking up the AI...",
-    "Rearranging atoms...",
-    "Teaching geography...",
-    "Whispering to satellites...",
+    "Summoning pixels...",
+    "Booting the imagination engine...",
+    "Warming up neural networks...",
+    "Loading the good brushes...",
+    "Stretching before the sprint...",
+    "Calibrating the vibes...",
+    "Dusting off the satellite dish...",
+    "Politely knocking on the GPU...",
+    "Rolling up sleeves...",
+]
+
+_MESSAGES_MID = [
+    "Teaching geography to a robot...",
     "Convincing clouds to move...",
-    "Asking nicely...",
     "Negotiating with terrain...",
-    "Pixel diplomacy...",
+    "Pixel diplomacy in progress...",
     "Consulting the map gods...",
-    "Brewing something...",
-    "Rewriting cartography...",
-    "Crunching landscapes...",
-    "Bending reality...",
-    "Almost there...",
-    "One moment...",
-    "Patience, young cartographer...",
-    "Magic in progress...",
+    "Rearranging atoms one by one...",
+    "Whispering to satellites...",
+    "Painting with math...",
+    "Having a deep talk with the pixels...",
+    "Redrawing reality, hold on...",
+    "The AI is squinting at your map...",
+    "Crunching landscapes like cereal...",
+    "Rewriting cartography textbooks...",
+    "Arguing with the render engine...",
+    "Bending light to our will...",
+    "Making the impossible merely improbable...",
+    "Assembling tiny map elves...",
+    "Applying imagination at scale...",
+]
+
+_MESSAGES_LATE = [
+    "Almost there, just a few more pixels...",
+    "Putting the finishing touches...",
+    "Quality control in progress...",
+    "One last coat of paint...",
+    "Polishing the result...",
+    "The AI says it's happy with this one...",
+    "Just tidying up the edges...",
+    "Final pixel inspection...",
+    "Wrapping it up nicely...",
+    "Any second now...",
 ]
 
 # Fallback if server doesn't return estimated_time (should rarely happen)
@@ -93,33 +121,50 @@ class GenerationWorker(QThread):
                 self.error.emit(reason, code)
                 return
 
-        self.progress.emit("Sending to the AI...", 5)
+        self.progress.emit("Sending your image to the AI...", 5)
 
-        # Shuffle messages so each generation feels different
-        messages = list(PROGRESS_MESSAGES)
-        random.shuffle(messages)
-        self._msg_index = 0
+        # Shuffle each phase independently for variety
+        early = list(_MESSAGES_EARLY)
+        mid = list(_MESSAGES_MID)
+        late = list(_MESSAGES_LATE)
+        random.shuffle(early)
+        random.shuffle(mid)
+        random.shuffle(late)
+        self._phase_messages = (early, mid, late)
+        self._phase_indices = [0, 0, 0]
         self._poll_count = 0
         self._start_time = time.time()
-        self._last_pct = 5  # track last emitted percentage for smooth transitions
+        self._last_pct = 5
 
         def _on_progress(status, current, total, estimated_time=None, elapsed=None):
             self._poll_count += 1
             if self._poll_count % 2 == 1:
-                msg = messages[self._msg_index % len(messages)]
-                self._msg_index += 1
-
                 est = estimated_time or DEFAULT_ESTIMATED_TIME
                 t_elapsed = elapsed if elapsed is not None else (time.time() - self._start_time)
                 t = min(t_elapsed / est, 1.0) if est > 0 else 0
-                # Ease-out quadratic: fast start, slows near end
-                target_pct = min(90, int(95 * (1 - (1 - t) ** 2)))
 
-                # Smooth: never jump more than 8% at once, never go backwards
+                # Pick message from the right phase
+                if t < 0.3:
+                    phase = 0
+                elif t < 0.75:
+                    phase = 1
+                else:
+                    phase = 2
+                msgs = self._phase_messages[phase]
+                idx = self._phase_indices[phase]
+                msg = msgs[idx % len(msgs)]
+                self._phase_indices[phase] = idx + 1
+
+                # Ease-out quadratic progress, cap at 92%
+                target_pct = min(92, int(95 * (1 - (1 - t) ** 2)))
                 pct = min(target_pct, self._last_pct + 8)
-                pct = max(pct, self._last_pct + 1)  # always advance at least 1%
-                pct = min(pct, 90)
+                pct = max(pct, self._last_pct + 1)
+                pct = min(pct, 92)
                 self._last_pct = pct
+
+                # If past estimated time, show "taking longer" messages
+                if t >= 1.0:
+                    msg = "Taking a bit longer than usual..."
 
                 self.progress.emit(msg, pct)
 
@@ -139,22 +184,18 @@ class GenerationWorker(QThread):
             )
             return
 
-        self.progress.emit("Grabbing the masterpiece...", 93)
+        self.progress.emit("Grabbing your masterpiece...", 93)
 
         try:
             image_data = self._client.download_image(result.image_url)
-            log(f"Downloaded image: {len(image_data)} bytes")
+            log_debug(f"Downloaded image: {len(image_data)} bytes")
         except Exception as e:
             self.error.emit(f"Failed to download result image: {e}", "DOWNLOAD_ERROR")
             return
 
-        self.progress.emit("Placing on the map...", 97)
+        self.progress.emit("Dropping it on the map...", 97)
 
         try:
-            ext = self._extent_dict
-            log(
-                f"Writing GeoTIFF: extent=({ext['xmin']:.2f},{ext['ymin']:.2f})-({ext['xmax']:.2f},{ext['ymax']:.2f})"
-            )
             geotiff_path = write_geotiff(
                 image_data=image_data,
                 extent_dict=self._extent_dict,
@@ -167,19 +208,18 @@ class GenerationWorker(QThread):
             self.error.emit(f"Failed to write GeoTIFF: {e}", "WRITE_ERROR")
             return
 
-        # Validate after write_geotiff so received dimensions are populated
+        # Log pipeline summary to debug only
         if self._ctx is not None:
-            warnings = self._ctx.validate()
-            for w in warnings:
-                log_warning(f"Pipeline: {w}")
-            log(f"Pipeline: {self._ctx.safe_log_summary()}")
+            for w in self._ctx.validate():
+                log_debug(f"Pipeline: {w}")
+            log_debug(f"Pipeline: {self._ctx.safe_log_summary()}")
 
         self.finished.emit({"geotiff_path": geotiff_path, "prompt": self._prompt})
 
         # Save debug artifacts if dev mode
         if self._debug_mode and self._ctx is not None:
             try:
-                sent_png = base64.b64decode(self._image_b64)
-                save_debug_artifacts(self._ctx, sent_png, image_data, self._plugin_dir)
+                sent_img = base64.b64decode(self._image_b64)
+                save_debug_artifacts(self._ctx, sent_img, image_data, self._plugin_dir)
             except Exception:
                 pass

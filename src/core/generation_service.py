@@ -1,46 +1,19 @@
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable
 
-from .logger import log
-
-# Supported aspect ratios (label, width/height ratio)
-ASPECT_RATIOS = [
-    ("1:1", 1.0),
-    ("5:4", 5 / 4),
-    ("4:5", 4 / 5),
-    ("4:3", 4 / 3),
-    ("3:4", 3 / 4),
-    ("3:2", 3 / 2),
-    ("2:3", 2 / 3),
-    ("16:9", 16 / 9),
-    ("9:16", 9 / 16),
-    ("21:9", 21 / 9),
-]
-
-
-def calculate_closest_aspect_ratio(width: int, height: int) -> str:
-    """Pick the closest supported aspect ratio for the given dimensions."""
-    if height == 0:
-        return "16:9"
-    ratio = width / height
-    best_label = "1:1"
-    best_diff = float("inf")
-    for label, ar in ASPECT_RATIOS:
-        diff = abs(ratio - ar)
-        if diff < best_diff:
-            best_diff = diff
-            best_label = label
-    return best_label
+from .logger import log_debug
 
 
 @dataclass
 class GenerationResult:
     success: bool
-    image_url: Optional[str] = None
-    error: Optional[str] = None
-    error_code: Optional[str] = None
-    request_id: Optional[str] = None
+    image_url: str | None = None
+    error: str | None = None
+    error_code: str | None = None
+    request_id: str | None = None
 
 
 class GenerationService:
@@ -72,6 +45,12 @@ class GenerationService:
         if self._cancelled:
             return GenerationResult(success=False, error="Generation cancelled")
 
+        log_debug(
+            f"Submitting: resolution={suggested_resolution}, "
+            f"aspect={aspect_ratio}, prompt_len={len(prompt)}, "
+            f"image_b64_len={len(image_b64)}"
+        )
+
         # Submit (pre-prompt is applied server-side in website config)
         resp = self._client.submit_generation(
             image_b64=image_b64,
@@ -88,42 +67,35 @@ class GenerationService:
 
         request_id = resp["request_id"]
         submit_time = time.time()
-        log(
-            "Submitted: request_id={}, resolution={}, aspect={}, est={}s".format(
-                request_id,
-                resp.get("resolution", "?"),
-                resp.get("aspect_ratio", "?"),
-                resp.get("estimated_time", "?"),
-            )
+        log_debug(
+            f"Submitted: request_id={request_id}, "
+            f"resolution={resp.get('resolution', suggested_resolution)}, "
+            f"aspect={resp.get('aspect_ratio', aspect_ratio)}, "
+            f"est={resp.get('estimated_time', '?')}s, "
+            f"max_wait={resp.get('max_wait', '?')}s, "
+            f"credits={resp.get('credit_cost', '?')}"
         )
 
         # Use server-suggested polling config if available
         poll_interval = resp.get("poll_interval", self._poll_interval)
         estimated_time = resp.get("estimated_time")
-        # Absolute max wait: credits are consumed at submit, so timeout = lost credit.
-        # Be generous to handle server-side outliers (GPU queuing, slow inference).
+        max_wait = resp.get("max_wait")  # Server-driven hard ceiling (seconds)
         absolute_max_polls = int(360 / poll_interval)
-        if estimated_time:
-            # Use 3x estimated time, but never less than absolute max
+        if max_wait:
+            max_polls = int(max_wait / poll_interval)
+        elif estimated_time:
             max_polls = max(absolute_max_polls, int(estimated_time * 3 / poll_interval))
-            log(
-                "Polling: server hints poll_interval={}s, "
-                "estimated_time={}s, max_polls={}".format(
-                    poll_interval, estimated_time, max_polls
-                )
-            )
         else:
             max_polls = absolute_max_polls
-            log(
-                "Polling: using defaults poll_interval={}s, "
-                "max_polls={}".format(poll_interval, max_polls)
-            )
 
         if ctx is not None:
-            ctx.submitted_resolution = suggested_resolution
-            ctx.submitted_aspect_ratio = aspect_ratio
+            ctx.submitted_resolution = resp.get("resolution", suggested_resolution)
+            ctx.submitted_aspect_ratio = resp.get("aspect_ratio", aspect_ratio)
             ctx.submit_timestamp = time.time()
             ctx.request_id = request_id
+            ctx.credit_cost = resp.get("credit_cost")
+            ctx.estimated_time_seconds = estimated_time
+            ctx.max_wait_seconds = max_wait
 
         # If submit already returned the image (sync mode), skip polling
         if resp.get("status") == "completed" and resp.get("image_url"):
@@ -170,6 +142,8 @@ class GenerationService:
                     ctx.poll_count = i + 1
                     ctx.total_wait_seconds = (i + 1) * poll_interval
                     ctx.final_status = "completed"
+                    ctx.received_image_width = status_resp.get("output_width")
+                    ctx.received_image_height = status_resp.get("output_height")
                 return GenerationResult(
                     success=True,
                     image_url=status_resp.get("image_url"),

@@ -1,11 +1,11 @@
 """Pipeline instrumentation for debugging the generation flow."""
+from __future__ import annotations
 
 import json
 import os
 import shutil
 import time
-from dataclasses import dataclass, asdict
-from typing import Dict, List, Optional, Tuple
+from dataclasses import asdict, dataclass
 
 
 @dataclass
@@ -17,37 +17,40 @@ class PipelineContext:
     """
 
     # Canvas Export (populated by canvas_exporter.py)
-    extent: Optional[Dict] = None
-    crs_wkt: Optional[str] = None
-    export_width: Optional[int] = None
-    export_height: Optional[int] = None
-    aspect_ratio: Optional[str] = None
-    image_size_bytes: Optional[int] = None
+    extent: dict | None = None
+    crs_wkt: str | None = None
+    export_width: int | None = None
+    export_height: int | None = None
+    aspect_ratio: str | None = None
+    image_size_bytes: int | None = None
 
     # Submit (populated by generation_service.py)
-    request_id: Optional[str] = None
-    submitted_resolution: Optional[str] = None
-    submitted_aspect_ratio: Optional[str] = None
-    submit_timestamp: Optional[float] = None
+    request_id: str | None = None
+    submitted_resolution: str | None = None
+    submitted_aspect_ratio: str | None = None
+    submit_timestamp: float | None = None
+    credit_cost: int | None = None
+    estimated_time_seconds: float | None = None
+    max_wait_seconds: float | None = None
 
     # Poll (populated by generation_service.py)
-    poll_count: Optional[int] = None
-    total_wait_seconds: Optional[float] = None
-    final_status: Optional[str] = None
+    poll_count: int | None = None
+    total_wait_seconds: float | None = None
+    final_status: str | None = None
 
     # Download (populated by generation_service.py)
-    received_image_width: Optional[int] = None
-    received_image_height: Optional[int] = None
-    received_size_bytes: Optional[int] = None
+    received_image_width: int | None = None
+    received_image_height: int | None = None
+    received_size_bytes: int | None = None
 
     # Write (populated by raster_writer.py)
-    output_path: Optional[str] = None
-    geotransform: Optional[Tuple] = None
-    output_bands: Optional[int] = None
-    output_dimensions: Optional[Tuple[int, int]] = None
-    crop_offsets: Optional[Tuple[int, int, int, int]] = None  # x, y, w, h
+    output_path: str | None = None
+    geotransform: tuple | None = None
+    output_bands: int | None = None
+    output_dimensions: tuple[int, int] | None = None
+    crop_offsets: tuple[int, int, int, int] | None = None  # x, y, w, h
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         """Check boundary consistency. Returns list of warning strings."""
         warnings = []
         if (
@@ -90,6 +93,10 @@ class PipelineContext:
             parts.append(f"request_id={self.request_id}")
         if self.submitted_resolution:
             parts.append(f"resolution={self.submitted_resolution}")
+        if self.credit_cost is not None:
+            parts.append(f"credits={self.credit_cost}")
+        if self.max_wait_seconds:
+            parts.append(f"max_wait={int(self.max_wait_seconds)}s")
         if self.received_image_width and self.received_image_height:
             parts.append(
                 f"Result: {self.received_image_width}x{self.received_image_height}px"
@@ -103,11 +110,11 @@ class PipelineContext:
 
 def save_debug_artifacts(
     ctx: PipelineContext,
-    sent_png: Optional[bytes],
-    received_png: Optional[bytes],
+    sent_png: bytes | None,
+    received_png: bytes | None,
     plugin_dir: str,
     max_runs: int = 20,
-) -> Optional[str]:
+) -> str | None:
     """Save debug artifacts to .debug/{timestamp}/. Returns path or None."""
     debug_dir = os.path.join(plugin_dir, ".debug")
     run_dir = os.path.join(debug_dir, str(int(time.time())))
@@ -134,7 +141,7 @@ def save_debug_artifacts(
     for k, v in asdict(ctx).items():
         if v is not None:
             ctx_dict[k] = v
-    with open(os.path.join(run_dir, "context.json"), "w") as f:
+    with open(os.path.join(run_dir, "context.json"), "w", encoding="utf-8") as f:
         json.dump(ctx_dict, f, indent=2, default=str)
 
     _cleanup_old_runs(debug_dir, max_runs)
@@ -144,8 +151,8 @@ def save_debug_artifacts(
 def _save_debug_geotiff(
     run_dir: str,
     filename: str,
-    image_bytes: Optional[bytes],
-    extent: Dict,
+    image_bytes: bytes | None,
+    extent: dict,
     crs_wkt: str,
 ):
     """Write a debug GeoTIFF from raw PNG bytes + extent. Fails silently."""

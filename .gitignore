@@ -20,6 +20,5 @@ note
 # Internal dev docs — never publish
 docs/
 RECAP_TODO.md
-CLAUDE.md
 .claude/
 terralab-website/

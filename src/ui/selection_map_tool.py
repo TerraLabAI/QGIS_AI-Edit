@@ -1,7 +1,11 @@
-from qgis.PyQt.QtCore import pyqtSignal, Qt
-from qgis.PyQt.QtGui import QColor, QCursor
+from __future__ import annotations
+
+from qgis.core import QgsPointXY, QgsRectangle
 from qgis.gui import QgsMapTool, QgsRubberBand
-from qgis.core import QgsWkbTypes, QgsRectangle, QgsPointXY
+from qgis.PyQt.QtCore import pyqtSignal
+from qgis.PyQt.QtGui import QColor, QCursor
+
+from ..core import qt_compat as QtC
 
 SUPPORTED_RATIOS = [
     (1, 1),
@@ -21,7 +25,6 @@ class RectangleSelectionTool(QgsMapTool):
     """Map tool for selecting a rectangular zone on the canvas."""
 
     selection_made = pyqtSignal(QgsRectangle)
-    selection_cancelled = pyqtSignal()
     zone_too_small = pyqtSignal()
 
     MIN_SIZE_PX = 50
@@ -31,10 +34,14 @@ class RectangleSelectionTool(QgsMapTool):
         self._start_point = None
         self._rubber_band = None
         self._is_drawing = False
-        self.setCursor(QCursor(Qt.CrossCursor))
+        self.setCursor(QCursor(QtC.CrossCursor))
+
+    def activate(self):
+        super().activate()
+        self.setCursor(QCursor(QtC.CrossCursor))
 
     def canvasPressEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == QtC.LeftButton:
             self._start_point = self.toMapCoordinates(event.pos())
             self._is_drawing = True
             self._create_rubber_band()
@@ -52,7 +59,7 @@ class RectangleSelectionTool(QgsMapTool):
             self._update_rubber_band(self._start_point, end_point)
 
     def canvasReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton and self._is_drawing:
+        if event.button() == QtC.LeftButton and self._is_drawing:
             self._is_drawing = False
             end_point = self.toMapCoordinates(event.pos())
             rect = QgsRectangle(self._start_point, end_point)
@@ -110,10 +117,9 @@ class RectangleSelectionTool(QgsMapTool):
         return rect, best
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == QtC.Key_Escape:
             self._is_drawing = False
             self._clear_rubber_band()
-            self.selection_cancelled.emit()
 
     def deactivate(self):
         self._clear_rubber_band()
@@ -121,7 +127,7 @@ class RectangleSelectionTool(QgsMapTool):
 
     def _create_rubber_band(self):
         self._clear_rubber_band()
-        self._rubber_band = QgsRubberBand(self.canvas(), QgsWkbTypes.PolygonGeometry)
+        self._rubber_band = QgsRubberBand(self.canvas(), QtC.PolygonGeometry)
         self._rubber_band.setColor(QColor(65, 105, 225, 80))
         self._rubber_band.setStrokeColor(QColor(65, 105, 225, 200))
         self._rubber_band.setWidth(2)
@@ -129,7 +135,7 @@ class RectangleSelectionTool(QgsMapTool):
     def _update_rubber_band_from_rect(self, rect):
         if not self._rubber_band:
             return
-        self._rubber_band.reset(QgsWkbTypes.PolygonGeometry)
+        self._rubber_band.reset(QtC.PolygonGeometry)
         self._rubber_band.addPoint(QgsPointXY(rect.xMinimum(), rect.yMinimum()), False)
         self._rubber_band.addPoint(QgsPointXY(rect.xMaximum(), rect.yMinimum()), False)
         self._rubber_band.addPoint(QgsPointXY(rect.xMaximum(), rect.yMaximum()), False)
@@ -138,7 +144,7 @@ class RectangleSelectionTool(QgsMapTool):
     def _update_rubber_band(self, start, end):
         if not self._rubber_band:
             return
-        self._rubber_band.reset(QgsWkbTypes.PolygonGeometry)
+        self._rubber_band.reset(QtC.PolygonGeometry)
         self._rubber_band.addPoint(QgsPointXY(start.x(), start.y()), False)
         self._rubber_band.addPoint(QgsPointXY(end.x(), start.y()), False)
         self._rubber_band.addPoint(QgsPointXY(end.x(), end.y()), False)
