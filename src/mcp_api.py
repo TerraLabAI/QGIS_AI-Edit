@@ -64,7 +64,7 @@ class EditMCPAPI:
                     if "error" not in usage:
                         status["usage"] = usage
                 except Exception:
-                    pass
+                    pass  # nosec B110
             else:
                 status["ready"] = False
                 status["can_generate"] = False

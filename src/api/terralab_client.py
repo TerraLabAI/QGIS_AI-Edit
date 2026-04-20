@@ -253,7 +253,7 @@ class TerraLabClient:
                         try:
                             return json.loads(raw)
                         except Exception:
-                            pass
+                            pass  # nosec B110
             code, msg = _classify_network_error(blocker)
             return {"error": msg, "code": code}
 

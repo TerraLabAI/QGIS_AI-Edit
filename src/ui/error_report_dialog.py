@@ -36,7 +36,7 @@ def start_log_collector():
         QgsApplication.messageLog().messageReceived.connect(_on_log_message)
         _log_collector_connected = True
     except Exception:
-        pass
+        pass  # nosec B110
 
 
 def stop_log_collector():

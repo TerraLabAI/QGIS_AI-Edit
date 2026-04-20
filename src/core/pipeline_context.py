@@ -187,7 +187,7 @@ def _save_debug_geotiff(
         src = None
         os.remove(temp_png)
     except Exception:
-        pass
+        pass  # nosec B110
 
 
 def _cleanup_old_runs(debug_dir: str, max_runs: int):

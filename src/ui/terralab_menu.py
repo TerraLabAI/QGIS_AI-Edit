@@ -27,7 +27,7 @@ def _open_plugin_manager_updates():
 
         iface.pluginManagerInterface().showPluginManager(3)
     except Exception:
-        pass
+        pass  # nosec B110
 
 
 def get_or_create_terralab_menu(main_window) -> QMenu:

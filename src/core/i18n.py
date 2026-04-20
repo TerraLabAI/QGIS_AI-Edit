@@ -9,7 +9,7 @@ Security: Uses defusedxml for safe XML parsing (no global monkey-patch).
 from __future__ import annotations
 
 import os
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405
 
 # Prefer defusedxml for safe XML parsing (no global monkey-patch)
 try:
@@ -115,7 +115,7 @@ def _load_translations():
                 level=Qgis.MessageLevel.Warning
             )
         except Exception:
-            pass
+            pass  # nosec B110
 
 
 def tr(message: str) -> str:

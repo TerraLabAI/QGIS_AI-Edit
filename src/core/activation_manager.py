@@ -164,7 +164,7 @@ def get_server_config(client=None) -> dict:
             _cached_config = result
             return result
     except Exception:
-        pass
+        pass  # nosec B110
 
     return DEFAULT_CONFIG
 

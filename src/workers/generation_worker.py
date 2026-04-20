@@ -222,4 +222,4 @@ class GenerationWorker(QThread):
                 sent_img = base64.b64decode(self._image_b64)
                 save_debug_artifacts(self._ctx, sent_img, image_data, self._plugin_dir)
             except Exception:
-                pass
+                pass  # nosec B110

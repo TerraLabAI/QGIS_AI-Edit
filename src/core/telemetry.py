@@ -33,7 +33,7 @@ class TelemetryFlushWorker(QThread):
             self._client.send_telemetry_batch(self._events, self._auth)
         except Exception:
             # Telemetry must never break plugin functionality
-            pass
+            pass  # nosec B110
 
 
 class TelemetryCollector:
