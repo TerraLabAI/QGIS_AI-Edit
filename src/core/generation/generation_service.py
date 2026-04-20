@@ -1,0 +1,800 @@
+from __future__ import annotations
+
+import base64
+import copy
+import math
+import os
+import threading
+import time
+import weakref
+from typing import Callable
+
+from ..config_store import get_export_copy, get_export_dial, get_export_dial_list, get_export_dial_pair
+from ..errors import ErrorCode, ErrorCodeTrait, codes_with_trait
+from ..i18n import tr
+from ..logger import log_debug, log_warning
+from .generation_result import GenerationResult
+from .generation_upload import _MAX_RETRY_ATTEMPTS, GenerationUploadMixin
+
+
+
+
+
+
+
+_RETRYABLE_POLL_CODES = codes_with_trait(ErrorCodeTrait.POLL_RETRY)
+
+
+_GATEWAY_HTTP_STATUSES = frozenset({502, 503, 504})
+
+
+
+_RETRYABLE_SUBMIT_CODES = codes_with_trait(ErrorCodeTrait.SUBMIT_RETRY)
+
+
+_AMBIGUOUS_SUBMIT_CODES = codes_with_trait(ErrorCodeTrait.SUBMIT_UNCONFIRMED)
+_MAX_CONSECUTIVE_POLL_ERRORS = 5
+
+_POLL_BACKOFF_CAP_S = 12.0
+
+_RETRY_AFTER_CLAMP_S = (1.0, 15.0)
+
+
+_POLL_BUDGET_FLOOR_S = 360.0
+_POLL_BUDGET_ESTIMATE_FACTOR = 3.0
+
+
+
+
+
+_POLL_HARD_CAP = 1000
+
+
+
+
+_SUBMIT_RETRY_ATTEMPTS = 3
+_SUBMIT_RETRY_STEPS = (3, 12)
+_SUBMIT_RETRY_BACKOFF_S = 1.0
+
+_RESCUE_RETRY_ATTEMPTS = 2
+_RESCUE_RETRY_BACKOFF_S = 1.5
+
+
+def _positive_number(value, fallback):
+
+    if isinstance(value, bool):
+        return fallback
+    try:
+        number = float(value)
+        return number if math.isfinite(number) and number > 0 else fallback
+    except (TypeError, ValueError, OverflowError):
+        return fallback
+
+
+def _retry_delay(value, fallback, minimum, maximum):
+    hint = _positive_number(value, None)
+    return min(max(hint, minimum), maximum) if hint is not None else fallback
+
+
+def _image_url(response):
+    value = response.get("image_url")
+    return isinstance(value, str) and bool(value.strip())
+
+
+def normalize_context_image_notes(
+    context_images: list[str] | None, notes: list[str] | None
+) -> list[str] | None:
+
+
+
+
+
+
+    if not context_images or not notes:
+        return None
+    aligned = [note.strip() if isinstance(note, str) else "" for note in notes[: len(context_images)]]
+    aligned += [""] * (len(context_images) - len(aligned))
+    return aligned if any(aligned) else None
+
+
+_FAILURE_CODES = frozenset({"safety_block", "invalid_request", "no_image", "busy", "timeout", "unknown"})
+
+
+def _failure_code(resp: dict) -> str | None:
+
+
+    code = resp.get("failure_code") if isinstance(resp, dict) else None
+    return code if isinstance(code, str) and code in _FAILURE_CODES else None
+
+
+def _stamp_prompt_hints(ctx, resp: dict) -> None:
+
+
+
+
+
+    template_id = resp.get("template_id")
+    if not ctx.template_id and isinstance(template_id, str) and template_id:
+        ctx.template_id = template_id
+        from ..prompts.prompt_presets import template_label
+
+        ctx.template_name = template_label(template_id)
+    classes = resp.get("vector_classes")
+    ctx.vector_classes = copy.deepcopy(classes) if isinstance(classes, list) and classes else None
+    color = resp.get("vector_color")
+    if not (isinstance(color, str) and color):
+        color = resp.get("freeform_vector_intent")
+    ctx.vector_color = color if isinstance(color, str) and color else None
+    ctx.seg_intent = resp.get("seg_context") is True
+
+
+def _cancelled_message() -> str:
+    return get_export_copy("pipeline.generation_service.generation_cancelled", tr("Generation cancelled"))
+
+
+def _generation_failed_message() -> str:
+    return get_export_copy("pipeline.generation_service.generation_failed", tr("Generation failed"))
+
+
+def _status_check_failed_message() -> str:
+    return get_export_copy("pipeline.generation_service.status_check_failed", tr("Status check failed"))
+
+
+def _is_gateway_failure(resp: dict) -> bool:
+    status = resp.get("http_status")
+    return isinstance(status, int) and not isinstance(status, bool) and status in _GATEWAY_HTTP_STATUSES
+
+
+def _unconfirmed_result(request_id: str | None, code: str) -> GenerationResult:
+
+
+
+
+    log_warning(f"Run could not be followed (last code {code}); request_id={request_id}")
+    return GenerationResult(
+        success=False,
+        error=get_export_copy(
+            "pipeline.generation_service.result_unconfirmed",
+            tr(
+                "We lost contact with the server during your edit. It may still "
+                "finish: check Recent in your library in a few minutes before "
+                "trying again."
+            ),
+        ),
+        error_code=ErrorCode.RESULT_UNCONFIRMED.value,
+        request_id=request_id,
+    )
+
+
+class GenerationService(GenerationUploadMixin):
+
+
+    def __init__(self, client, poll_interval: float = 2.0, max_polls: int = 60):
+        self._client = client
+        self._poll_interval = _positive_number(poll_interval, 2.0)
+        self._max_polls = max_polls
+
+
+
+
+
+        self._cancel_epoch = 0
+        self._run = threading.local()
+
+
+
+        self._feedbacks = weakref.WeakSet()
+        self._feedback_lock = threading.Lock()
+
+    def set_feedback(self, feedback) -> None:
+        with self._feedback_lock:
+            self._feedbacks.add(feedback)
+
+    def cancel(self):
+
+
+
+
+
+
+
+        self._cancel_epoch += 1
+        with self._feedback_lock:
+            feedbacks = list(self._feedbacks)
+        for feedback in feedbacks:
+            try:
+                feedback.cancel()
+            except Exception:  # nosec B110
+                pass
+
+    def reset(self):
+        pass
+
+    def _is_cancelled(self) -> bool:
+
+
+        run_epoch = getattr(self._run, "epoch", self._cancel_epoch)
+        cb = getattr(self._run, "is_cancelled", None)
+        return run_epoch != self._cancel_epoch or bool(cb and cb())
+
+    def _sleep_or_cancelled(self, seconds: float) -> bool:
+
+
+        if seconds <= 0:
+            return self._is_cancelled()
+        deadline = time.monotonic() + seconds
+        while True:
+            if self._is_cancelled():
+                return True
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return self._is_cancelled()
+            time.sleep(min(0.2, remaining))
+
+    def _wait_with_progress(
+        self, seconds, on_progress, status, polls, max_polls, estimated_time, submit_time
+    ) -> bool:
+
+
+
+        waited = 0.0
+        while waited < seconds:
+            chunk = min(2.0, seconds - waited)
+            if self._sleep_or_cancelled(chunk):
+                return True
+            waited += chunk
+            if on_progress and waited < seconds:
+                on_progress(
+                    status, polls, max_polls, estimated_time, time.monotonic() - submit_time
+                )
+        return False
+
+    def generate(
+        self,
+        image_b64: str,
+        prompt: str,
+        auth: dict,
+        suggested_resolution: str,
+        aspect_ratio: str = "1:1",
+        on_progress: Callable = None,
+        ctx=None,
+        context_images: list[str] | None = None,
+        context_image_notes: list[str] | None = None,
+        context_image_meta: list[dict | None] | None = None,
+        guidance_image: str | None = None,
+        guidance_format: str | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> GenerationResult:
+
+        self._run.epoch = self._cancel_epoch
+        self._run.is_cancelled = is_cancelled
+        if self._is_cancelled():
+            return GenerationResult(
+                success=False,
+                error=_cancelled_message(),
+                error_code=ErrorCode.GENERATION_CANCELLED.value,
+            )
+
+
+        auth = dict(auth)
+        context_images = list(context_images) if context_images else None
+        notes = normalize_context_image_notes(context_images, context_image_notes)
+        meta = (
+            copy.deepcopy(context_image_meta)
+            if context_images and context_image_meta and len(context_image_meta) == len(context_images)
+            and any(context_image_meta)
+            else None
+        )
+
+        ctx_count = len(context_images) if context_images else 0
+        note_count = sum(1 for n in (notes or []) if n)
+        log_debug(
+            f"Submitting: resolution={suggested_resolution}, "
+            f"aspect={aspect_ratio}, prompt_len={len(prompt)}, "
+            f"image_b64_len={len(image_b64)}, context_images={ctx_count}, "
+            f"context_notes={note_count}, "
+            f"guidance={'yes' if guidance_image else 'no'}"
+        )
+
+        prepared = self._prepare_uploads(
+            image_b64, auth, ctx, context_images, guidance_image, guidance_format,
+            extra_inline_bytes=sum(len(n.encode("utf-8")) for n in (notes or []))
+            + len(prompt.encode("utf-8")),
+        )
+        if isinstance(prepared, GenerationResult):
+            return prepared
+        upload_token, guidance_upload_token, guidance_inline = prepared
+
+        submitted = self._submit(
+            prompt=prompt,
+            suggested_resolution=suggested_resolution,
+            aspect_ratio=aspect_ratio,
+            auth=auth,
+            image_b64=image_b64,
+            upload_token=upload_token,
+            context_images=context_images,
+            context_image_notes=notes,
+            context_image_meta=meta,
+            guidance_inline=guidance_inline,
+            guidance_upload_token=guidance_upload_token,
+            geo_kwargs=self._build_geo_kwargs(ctx),
+        )
+        if isinstance(submitted, GenerationResult):
+            return submitted
+        resp, request_id, submit_time = submitted
+
+        plan = self._resolve_poll_plan(resp, request_id, suggested_resolution, aspect_ratio, ctx)
+        if isinstance(plan, GenerationResult):
+            return plan
+        poll_interval, estimated_time, budget_s, max_polls, hard_cap = plan
+
+        result, polls = self._poll_until_done(
+            request_id, auth, ctx, on_progress, poll_interval,
+            estimated_time, budget_s, max_polls, submit_time, hard_cap,
+        )
+        if result is not None:
+            return result
+
+        return self._rescue_or_timeout(request_id, auth, ctx, polls, submit_time)
+
+    def _build_geo_kwargs(self, ctx) -> dict:
+
+
+
+
+        geo_kwargs: dict = {}
+        if ctx is not None:
+            if ctx.centroid_lat is not None and ctx.centroid_lon is not None:
+                geo_kwargs["centroid_lat"] = ctx.centroid_lat
+                geo_kwargs["centroid_lon"] = ctx.centroid_lon
+            if ctx.ground_resolution_m is not None:
+                geo_kwargs["ground_resolution_m"] = ctx.ground_resolution_m
+
+
+
+            if ctx.bbox_wgs84 is not None:
+                geo_kwargs["bbox_wgs84"] = ctx.bbox_wgs84
+            if ctx.extent is not None:
+                geo_kwargs["bbox"] = ctx.extent
+            if ctx.crs_authid:
+                geo_kwargs["crs_authid"] = ctx.crs_authid
+            elif ctx.crs_wkt:
+
+
+                geo_kwargs["crs_wkt"] = ctx.crs_wkt
+            if ctx.export_width and ctx.export_height:
+                geo_kwargs["export_width"] = ctx.export_width
+                geo_kwargs["export_height"] = ctx.export_height
+            if ctx.basemap:
+                geo_kwargs["basemap"] = ctx.basemap
+            if ctx.parent_request_id:
+                geo_kwargs["parent_request_id"] = ctx.parent_request_id
+            if ctx.session_id:
+                geo_kwargs["session_id"] = ctx.session_id
+            if ctx.template_id:
+                geo_kwargs["template_id"] = ctx.template_id
+            if ctx.template_name:
+                geo_kwargs["template_name"] = ctx.template_name
+        return copy.deepcopy(geo_kwargs)
+
+    def _submit(
+        self,
+        prompt: str,
+        suggested_resolution: str,
+        aspect_ratio: str,
+        auth: dict,
+        image_b64: str,
+        upload_token: str | None,
+        context_images: list[str] | None,
+        context_image_notes: list[str] | None,
+        context_image_meta: list[dict | None] | None,
+        guidance_inline: str | None,
+        guidance_upload_token: str | None,
+        geo_kwargs: dict,
+    ) -> tuple[dict, str, float] | GenerationResult:
+
+
+
+
+
+
+
+
+        idempotency_key = base64.urlsafe_b64encode(os.urandom(16)).rstrip(b"=").decode("ascii")
+        image_kwargs = (
+            {"upload_token": upload_token}
+            if upload_token is not None
+            else {"image_b64": image_b64}
+        )
+        submit_attempts = min(
+            get_export_dial("pipeline.generation_service.submit_retry_attempts", _SUBMIT_RETRY_ATTEMPTS),
+            _MAX_RETRY_ATTEMPTS,
+        )
+        submit_backoff_s = get_export_dial(
+            "pipeline.generation_service.submit_retry_backoff_s", _SUBMIT_RETRY_BACKOFF_S
+        )
+        resp: dict = {}
+        for _attempt in range(submit_attempts):
+            if self._is_cancelled():
+                return GenerationResult(
+                    success=False,
+                    error=_cancelled_message(),
+                    error_code=ErrorCode.GENERATION_CANCELLED.value,
+                )
+            resp = self._client.submit_generation(
+                prompt=prompt,
+                resolution=suggested_resolution,
+                aspect_ratio=aspect_ratio,
+                auth=auth,
+                context_images=context_images,
+                context_image_notes=context_image_notes,
+                context_image_meta=context_image_meta,
+                guidance_image=guidance_inline,
+                guidance_upload_token=guidance_upload_token,
+                idempotency_key=idempotency_key,
+                **image_kwargs,
+                **geo_kwargs,
+            )
+            if not isinstance(resp, dict):
+                resp = {"error": _generation_failed_message(), "code": ErrorCode.SERVER_ERROR.value}
+            if "error" not in resp:
+                break
+            code = resp.get("code", "")
+
+
+
+            retryable = code in _RETRYABLE_SUBMIT_CODES or _is_gateway_failure(resp)
+            if retryable and _attempt < submit_attempts - 1:
+                log_warning(f"Submit attempt {_attempt + 1} failed ({code}); retrying")
+                step = _SUBMIT_RETRY_STEPS[min(_attempt, len(_SUBMIT_RETRY_STEPS) - 1)]
+                if self._sleep_or_cancelled(submit_backoff_s * step):
+                    return GenerationResult(
+                        success=False,
+                        error=_cancelled_message(),
+                        error_code=ErrorCode.GENERATION_CANCELLED.value,
+                    )
+                continue
+
+
+            if code in _AMBIGUOUS_SUBMIT_CODES or _is_gateway_failure(resp):
+                log_warning(f"Submit ended on {code}: {resp.get('error')}")
+                return _unconfirmed_result(None, code)
+            return GenerationResult(
+                success=False, error=resp["error"], error_code=code
+            )
+
+
+
+
+
+
+        request_id = resp.get("request_id")
+        if not isinstance(request_id, str) or not request_id.strip():
+            log_warning(f"Submit returned no request_id; resp keys={list(resp.keys())}")
+            return _unconfirmed_result(None, "NO_REQUEST_ID")
+        submit_time = time.monotonic()
+        log_debug(
+            f"Submitted: request_id={request_id}, "
+            f"resolution={resp.get('resolution', suggested_resolution)}, "
+            f"aspect={resp.get('aspect_ratio', aspect_ratio)}, "
+            f"est={resp.get('estimated_time', '?')}s, "
+            f"max_wait={resp.get('max_wait', '?')}s, "
+            f"credits={resp.get('credit_cost', '?')}"
+        )
+        return resp, request_id, submit_time
+
+    def _resolve_poll_plan(
+        self,
+        resp: dict,
+        request_id: str,
+        suggested_resolution: str,
+        aspect_ratio: str,
+        ctx,
+    ) -> tuple[float, float | None, float, int, int] | GenerationResult:
+
+
+
+
+
+
+        poll_interval = _positive_number(resp.get("poll_interval"), self._poll_interval)
+        estimated_time = _positive_number(resp.get("estimated_time"), None)
+        max_wait = _positive_number(resp.get("max_wait"), None)
+        if max_wait:
+            budget_s = float(max_wait)
+        else:
+            floor_s = get_export_dial("poll.budget_floor_s", _POLL_BUDGET_FLOOR_S)
+            if estimated_time:
+                factor = get_export_dial(
+                    "poll.budget_estimate_factor", _POLL_BUDGET_ESTIMATE_FACTOR
+                )
+                budget_s = max(floor_s, float(estimated_time) * factor)
+            else:
+                budget_s = floor_s
+
+
+        hard_cap = get_export_dial("poll.hard_cap", _POLL_HARD_CAP)
+
+        max_polls = max(1, min(math.ceil(budget_s / poll_interval), hard_cap))
+
+        if ctx is not None:
+            ctx.submitted_resolution = resp.get("resolution", suggested_resolution)
+            ctx.submitted_aspect_ratio = resp.get("aspect_ratio", aspect_ratio)
+            ctx.submit_timestamp = time.time()
+            ctx.request_id = request_id
+            ctx.model_name = resp.get("model_name") or None
+            ctx.credit_cost = resp.get("credit_cost")
+            ctx.estimated_time_seconds = estimated_time
+            ctx.max_wait_seconds = max_wait
+            _stamp_prompt_hints(ctx, resp)
+
+
+        if resp.get("status") == "completed" and _image_url(resp):
+            if ctx is not None:
+                ctx.poll_count = 0
+                ctx.total_wait_seconds = 0.0
+                ctx.final_status = "completed"
+            return GenerationResult(
+                success=True,
+                image_url=resp["image_url"],
+                request_id=request_id,
+            )
+        return poll_interval, estimated_time, budget_s, max_polls, hard_cap
+
+    def _poll_until_done(
+        self,
+        request_id: str,
+        auth: dict,
+        ctx,
+        on_progress: Callable,
+        poll_interval: float,
+        estimated_time: float | None,
+        budget_s: float,
+        max_polls: int,
+        submit_time: float,
+        hard_cap: int | None = None,
+    ) -> tuple[GenerationResult | None, int]:
+
+
+
+
+
+
+
+
+
+
+        max_poll_errors = get_export_dial(
+            "poll.max_consecutive_errors", _MAX_CONSECUTIVE_POLL_ERRORS
+        )
+        backoff_cap_s = get_export_dial("poll.backoff_cap_s", _POLL_BACKOFF_CAP_S)
+        retry_lo, retry_hi = get_export_dial_pair(
+            "poll.retry_after_clamp_s", _RETRY_AFTER_CLAMP_S
+        )
+
+
+
+        retryable_codes = get_export_dial_list(
+            "poll.retryable_extra", _RETRYABLE_POLL_CODES, normalize=str.upper
+        )
+        if hard_cap is None:
+            hard_cap = get_export_dial("poll.hard_cap", _POLL_HARD_CAP)
+        consecutive_poll_errors = 0
+        polls = 0
+        while polls < hard_cap and (time.monotonic() - submit_time) < budget_s:
+            if self._is_cancelled():
+                return GenerationResult(
+                    success=False,
+                    error=_cancelled_message(),
+                    error_code=ErrorCode.GENERATION_CANCELLED.value,
+                    request_id=request_id,
+                ), polls
+
+            status_resp = self._client.poll_status(request_id, auth=auth)
+            polls += 1
+            if not isinstance(status_resp, dict):
+                status_resp = {"error": _status_check_failed_message(), "code": ErrorCode.SERVER_ERROR.value}
+            if self._is_cancelled():
+                return GenerationResult(False, error=_cancelled_message(),
+                                        error_code=ErrorCode.GENERATION_CANCELLED.value,
+                                        request_id=request_id), polls
+            if status_resp.get("status") == "completed" and not _image_url(status_resp):
+                status_resp = {"error": _status_check_failed_message(), "code": ErrorCode.EMPTY_RESPONSE.value}
+
+            if "error" in status_resp and "status" not in status_resp:
+                code = status_resp.get("code", "")
+
+
+
+
+
+                if code in retryable_codes or _is_gateway_failure(status_resp):
+                    consecutive_poll_errors += 1
+                    if consecutive_poll_errors <= max_poll_errors:
+                        backoff = min(
+                            poll_interval * (2 ** (consecutive_poll_errors - 1)),
+                            backoff_cap_s,
+                        )
+                        backoff = _retry_delay(status_resp.get("retry_after"), backoff, retry_lo, retry_hi)
+                        backoff = min(backoff, max(0.0, budget_s - (time.monotonic() - submit_time)))
+                        log_warning(
+                            f"Transient poll error {code} "
+                            f"({consecutive_poll_errors}/{max_poll_errors}), "
+                            f"retrying in {backoff:.0f}s"
+                        )
+                        if self._sleep_or_cancelled(backoff):
+                            return GenerationResult(
+                                success=False,
+                                error=_cancelled_message(),
+                                error_code=ErrorCode.GENERATION_CANCELLED.value,
+                                request_id=request_id,
+                            ), polls
+                        continue
+
+
+
+
+                    rescued = self._try_rescue(request_id, auth, ctx, polls, submit_time)
+                    if rescued is not None:
+                        return rescued, polls
+                    if self._is_cancelled():
+                        return GenerationResult(False, error=_cancelled_message(),
+                                                error_code=ErrorCode.GENERATION_CANCELLED.value,
+                                                request_id=request_id), polls
+                    if ctx is not None:
+                        ctx.poll_count = polls
+                        ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
+                        ctx.final_status = "error"
+                    return _unconfirmed_result(request_id, code), polls
+
+                if ctx is not None:
+                    ctx.poll_count = polls
+                    ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
+                    ctx.final_status = "error"
+                return GenerationResult(
+                    success=False,
+                    error=status_resp.get("error") or _status_check_failed_message(),
+                    error_code=code,
+                    request_id=request_id,
+                ), polls
+
+
+            consecutive_poll_errors = 0
+            status = status_resp.get("status", "unknown")
+
+            if on_progress:
+                elapsed = time.monotonic() - submit_time
+                on_progress(status, polls, max_polls, estimated_time, elapsed)
+
+            if status == "completed":
+                if ctx is not None:
+                    ctx.poll_count = polls
+                    ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
+                    ctx.final_status = "completed"
+                    ctx.received_image_width = status_resp.get("output_width")
+                    ctx.received_image_height = status_resp.get("output_height")
+                return GenerationResult(
+                    success=True,
+                    image_url=status_resp.get("image_url"),
+                    request_id=request_id,
+                ), polls
+
+            if status == "failed":
+                if ctx is not None:
+                    ctx.poll_count = polls
+                    ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
+                    ctx.final_status = "failed"
+                    ctx.failure_code = _failure_code(status_resp)
+                return GenerationResult(
+                    success=False,
+                    error=status_resp.get("error") or _generation_failed_message(),
+                    error_code=status_resp.get("code") or ErrorCode.GENERATION_FAILED.value,
+                    request_id=request_id,
+                ), polls
+
+            sleep_s = _retry_delay(status_resp.get("retry_after"), poll_interval, retry_lo, retry_hi)
+            sleep_s = min(sleep_s, max(0.0, budget_s - (time.monotonic() - submit_time)))
+            if self._wait_with_progress(
+                sleep_s, on_progress, status, polls, max_polls, estimated_time, submit_time
+            ):
+                return GenerationResult(
+                    success=False,
+                    error=_cancelled_message(),
+                    error_code=ErrorCode.GENERATION_CANCELLED.value,
+                    request_id=request_id,
+                ), polls
+        return None, polls
+
+    def _rescue_or_timeout(
+        self,
+        request_id: str,
+        auth: dict,
+        ctx,
+        polls: int,
+        submit_time: float,
+    ) -> GenerationResult:
+
+        rescued = self._try_rescue(request_id, auth, ctx, polls, submit_time)
+        if rescued is not None:
+            return rescued
+
+        if self._is_cancelled():
+            return GenerationResult(False, error=_cancelled_message(),
+                                    error_code=ErrorCode.GENERATION_CANCELLED.value,
+                                    request_id=request_id)
+        if ctx is not None:
+            ctx.poll_count = polls
+            ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
+            ctx.final_status = "timeout"
+
+
+
+        return GenerationResult(
+            success=False,
+            error=get_export_copy(
+                "pipeline.generation_service.generation_timed_out",
+                tr(
+                    "This edit is taking longer than expected. Your result may "
+                    "still arrive in Recent in your library in a few minutes."
+                ),
+            ),
+            error_code=ErrorCode.GENERATION_TIMED_OUT.value,
+            request_id=request_id,
+        )
+
+    def _try_rescue(
+        self,
+        request_id: str,
+        auth: dict,
+        ctx,
+        polls: int,
+        submit_time: float,
+    ) -> GenerationResult | None:
+
+
+
+
+
+
+
+
+        rescue_attempts = min(
+            get_export_dial("pipeline.generation_service.rescue_retry_attempts", _RESCUE_RETRY_ATTEMPTS),
+            _MAX_RETRY_ATTEMPTS,
+        )
+        rescue_backoff_s = get_export_dial(
+            "pipeline.generation_service.rescue_retry_backoff_s", _RESCUE_RETRY_BACKOFF_S
+        )
+        for _attempt in range(rescue_attempts):
+            if self._is_cancelled():
+                break
+            try:
+                final = self._client.poll_status(request_id, auth=auth, force_fallback=True)
+                final_status = final.get("status", "unknown")
+                if final_status == "completed" and _image_url(final):
+                    if ctx is not None:
+                        ctx.poll_count = polls
+                        ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
+                        ctx.final_status = "completed"
+                    return GenerationResult(
+                        success=True,
+                        image_url=final.get("image_url"),
+                        request_id=request_id,
+                    )
+                if final_status == "failed":
+                    if ctx is not None:
+                        ctx.poll_count = polls
+                        ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
+                        ctx.final_status = "failed"
+                        ctx.failure_code = _failure_code(final)
+                    return GenerationResult(
+                        success=False,
+                        error=final.get("error") or _generation_failed_message(),
+                        error_code=final.get("code") or ErrorCode.GENERATION_FAILED.value,
+                        request_id=request_id,
+                    )
+            except Exception:  # nosec B110
+                pass
+            if _attempt < rescue_attempts - 1 and self._sleep_or_cancelled(rescue_backoff_s):
+                break
+        return None
