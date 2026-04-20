@@ -351,8 +351,8 @@ class PromptTemplatesDialog(QDialog):
             else:
                 match = (
                     query in preset["label"].lower()
-                    or query in preset["prompt"].lower()
-                    or query in preset.get("source_category", "").lower()
+                    or query in preset["prompt"].lower()  # noqa: W503
+                    or query in preset.get("source_category", "").lower()  # noqa: W503
                 )
                 card_widget.setVisible(match)
                 if match:

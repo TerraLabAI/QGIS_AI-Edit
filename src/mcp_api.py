@@ -171,10 +171,13 @@ class EditMCPAPI:
         if not result.success:
             return {"_error": result.error or "AI Edit generation failed"}
 
-        # Download result image
+        # Download result image (only allow https)
+        image_url = result.image_url or ""
+        if not image_url.startswith("https://"):
+            return {"_error": "Invalid image URL scheme"}
         try:
-            req = urllib.request.Request(result.image_url, headers=auth)
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            req = urllib.request.Request(image_url, headers=auth)
+            with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310
                 image_data = resp.read()
         except Exception as e:
             return {"_error": f"Failed to download result: {str(e)}"}

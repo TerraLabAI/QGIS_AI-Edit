@@ -628,7 +628,7 @@ class AIEditPlugin:
                     "USAGE_LIMIT_REACHED",
                     "MONTHLY_LIMIT_REACHED",
                 }
-                or "monthly limit reached" in message_lower
+                or "monthly limit reached" in message_lower  # noqa: W503
             )
             if is_quota_error:
                 self._dock_widget.show_activation_limit_cta(SUBSCRIBE_ERROR_URL)
@@ -763,7 +763,7 @@ class AIEditPlugin:
                 "USAGE_LIMIT_REACHED",
                 "MONTHLY_LIMIT_REACHED",
             }
-            or "monthly limit reached" in message_lower
+            or "monthly limit reached" in message_lower  # noqa: W503
         )
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
         telemetry.track("generation_failed", {
@@ -836,16 +836,16 @@ class AIEditPlugin:
             )
             if (
                 isinstance(used, int)
-                and isinstance(limit, int)
-                and limit > 0
-                and used < limit
+                and isinstance(limit, int)  # noqa: W503
+                and limit > 0  # noqa: W503
+                and used < limit  # noqa: W503
             ):
                 self._dock_widget.hide_trial_info()
             if (
                 isinstance(used, int)
-                and isinstance(limit, int)
-                and limit > 0
-                and used >= limit
+                and isinstance(limit, int)  # noqa: W503
+                and limit > 0  # noqa: W503
+                and used >= limit  # noqa: W503
             ):
                 is_free = usage.get("is_free_tier", False)
                 if is_free:
