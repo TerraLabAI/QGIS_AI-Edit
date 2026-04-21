@@ -121,6 +121,12 @@ _RES_BTN_SELECTED = (
     " border-radius: 4px; color: palette(text); font-size: 11px; font-weight: bold; }"
 )
 
+_RES_BTN_LOCKED = (
+    "QPushButton { background-color: rgba(128, 128, 128, 0.06);"
+    " padding: 6px 12px; border: 1px solid rgba(128, 128, 128, 0.12);"
+    f" border-radius: 4px; color: {DISABLED_TEXT}; font-size: 11px; }}"
+)
+
 _PROMPT_INPUT_NORMAL = (
     "QTextEdit { border: 1px solid rgba(128,128,128,0.3);"
     " border-radius: 4px; padding: 6px; color: palette(text); }"
@@ -391,7 +397,7 @@ class AIEditDockWidget(QDockWidget):
         main_layout.addWidget(self._status_widget)
 
         # CTA button displayed for quota exhaustion
-        self._limit_cta_btn = QPushButton(tr("Go to AI Edit page"))
+        self._limit_cta_btn = QPushButton(tr("Subscribe"))
         self._limit_cta_btn.setCursor(QtC.PointingHandCursor)
         self._limit_cta_btn.setStyleSheet(_BTN_BLUE)
         self._limit_cta_btn.clicked.connect(self._on_limit_cta_clicked)
@@ -533,7 +539,7 @@ class AIEditDockWidget(QDockWidget):
         self._credits_label.setVisible(False)
         credits_row.addWidget(self._credits_label)
 
-        self._upgrade_cta = QPushButton(tr("Upgrade to Pro"))
+        self._upgrade_cta = QPushButton(tr("Subscribe"))
         self._upgrade_cta.setCursor(QtC.PointingHandCursor)
         self._upgrade_cta.setStyleSheet(
             f"QPushButton {{ border: 1px solid {BRAND_BLUE}; color: {BRAND_BLUE};"
@@ -666,13 +672,12 @@ class AIEditDockWidget(QDockWidget):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(8)
 
-        # --- Login section ---
+        # --- Step 1: Create account (inside _signup_section) ---
         self._signup_section = QWidget()
         signup_layout = QVBoxLayout(self._signup_section)
         signup_layout.setContentsMargins(0, 0, 0, 0)
         signup_layout.setSpacing(8)
 
-        # Step 1: Create account
         step1_label = QLabel(tr("1. Create your free account"))
         step1_label.setStyleSheet("font-weight: bold; font-size: 12px; color: palette(text);")
         signup_layout.addWidget(step1_label)
@@ -690,10 +695,12 @@ class AIEditDockWidget(QDockWidget):
         login_hint.setStyleSheet("font-size: 11px; color: palette(text);")
         signup_layout.addWidget(login_hint)
 
-        # Step 2: Paste key
-        step2_label = QLabel(tr("2. Paste your activation key"))
-        step2_label.setStyleSheet("font-weight: bold; font-size: 12px; color: palette(text);")
-        signup_layout.addWidget(step2_label)
+        layout.addWidget(self._signup_section)
+
+        # --- Step 2: Paste key (outside _signup_section for change-key mode) ---
+        self._step2_label = QLabel(tr("2. Paste your AI Edit activation key"))
+        self._step2_label.setStyleSheet("font-weight: bold; font-size: 12px; color: palette(text);")
+        layout.addWidget(self._step2_label)
 
         self._key_input_widget = QWidget()
         key_input_layout = QHBoxLayout(self._key_input_widget)
@@ -712,11 +719,17 @@ class AIEditDockWidget(QDockWidget):
         unlock_btn.clicked.connect(self._on_unlock_clicked)
         key_input_layout.addWidget(unlock_btn)
 
-        signup_layout.addWidget(self._key_input_widget)
+        layout.addWidget(self._key_input_widget)
 
-        layout.addWidget(self._signup_section)
+        # Cancel button (visible only in change-key mode)
+        self._cancel_key_btn = QPushButton(tr("Cancel"))
+        self._cancel_key_btn.setCursor(QtC.PointingHandCursor)
+        self._cancel_key_btn.setStyleSheet(_BTN_GHOST)
+        self._cancel_key_btn.clicked.connect(self._on_cancel_change_key)
+        self._cancel_key_btn.setVisible(False)
+        layout.addWidget(self._cancel_key_btn)
 
-        # Activation message (errors / success) - right below signup section
+        # Activation message (errors / success)
         self._activation_message = QLabel("")
         self._activation_message.setAlignment(QtC.AlignCenter)
         self._activation_message.setWordWrap(True)
@@ -725,7 +738,7 @@ class AIEditDockWidget(QDockWidget):
         layout.addWidget(self._activation_message)
 
         # CTA button displayed on activation flow when usage limit is reached
-        self._activation_limit_cta_btn = QPushButton(tr("Go to AI Edit page"))
+        self._activation_limit_cta_btn = QPushButton(tr("Subscribe"))
         self._activation_limit_cta_btn.setCursor(QtC.PointingHandCursor)
         self._activation_limit_cta_btn.setStyleSheet(_BTN_BLUE_AUTH)
         self._activation_limit_cta_btn.clicked.connect(self._on_activation_limit_cta_clicked)
@@ -782,12 +795,15 @@ class AIEditDockWidget(QDockWidget):
         if activated:
             self.hide_trial_info()
             self._update_layer_warning()
+            self._cancel_key_btn.setVisible(False)
         else:
             # Reset to full signup view (for new users)
             self._signup_section.setVisible(True)
+            self._step2_label.setVisible(True)
+            self._key_input_widget.setVisible(True)
+            self._cancel_key_btn.setVisible(False)
             self._activation_message.setVisible(False)
             self.hide_activation_limit_cta()
-            self._key_input_widget.setVisible(True)
 
     def show_change_key_mode(self):
         """Show only the key input, no signup flow. For users changing their key."""
@@ -796,11 +812,13 @@ class AIEditDockWidget(QDockWidget):
         self._main_widget.setVisible(False)
         self._settings_btn.setVisible(False)
         self._upgrade_cta.setVisible(False)
-        # Hide login section, show only key input
+        # Hide step 1 (create account), show only step 2 (key input)
         self._signup_section.setVisible(False)
+        self._step2_label.setVisible(True)
+        self._key_input_widget.setVisible(True)
+        self._cancel_key_btn.setVisible(True)
         self._activation_message.setVisible(False)
         self.hide_activation_limit_cta()
-        self._key_input_widget.setVisible(True)
         self._code_input.clear()
         self._code_input.setFocus()
 
@@ -818,7 +836,7 @@ class AIEditDockWidget(QDockWidget):
 
     def show_activation_limit_cta(self, subscribe_url: str):
         self._activation_limit_cta_url = subscribe_url
-        self._activation_limit_cta_btn.setText(tr("Go to AI Edit page"))
+        self._activation_limit_cta_btn.setText(tr("Subscribe"))
         self._activation_limit_cta_btn.setVisible(True)
 
     def hide_activation_limit_cta(self):
@@ -836,19 +854,14 @@ class AIEditDockWidget(QDockWidget):
         if used is not None and limit is not None:
             remaining = max(0, limit - used)
             if is_free_tier:
-                self._credits_label.setText(f"{remaining} / {limit} free credits remaining")
+                self._credits_label.setText(f"{remaining} / {limit} free trial credits remaining")
             else:
                 self._credits_label.setText(f"{remaining} / {limit} credits remaining")
             self._credits_label.setVisible(True)
         else:
             self._credits_label.setVisible(False)
         self._upgrade_cta.setVisible(is_free_tier and self._activated)
-        # Update resolution selector visibility based on tier
-        show_res = not is_free_tier
-        if self._prompt_section.isVisible():
-            self._resolution_selector.setVisible(show_res)
-        if self._result_section.isVisible():
-            self._retry_resolution_selector.setVisible(show_res)
+        self._update_resolution_lock()
         self._update_generate_button_text()
 
     def set_active_mode(self):
@@ -882,7 +895,8 @@ class AIEditDockWidget(QDockWidget):
         self._consent_widget.setVisible(not has_consent())
         self._generate_btn.setVisible(True)
         self._stop_btn.setVisible(True)
-        self._resolution_selector.setVisible(not self._is_free_tier)
+        self._resolution_selector.setVisible(True)
+        self._update_resolution_lock()
         self._start_shortcut.setEnabled(False)
         self._stop_shortcut.setEnabled(True)
 
@@ -960,7 +974,8 @@ class AIEditDockWidget(QDockWidget):
             self._templates_btn.setEnabled(True)
             self._consent_widget.setVisible(not has_consent() and self._zone_selected)
             self._generate_btn.setVisible(self._zone_selected)
-            self._resolution_selector.setVisible(not self._is_free_tier and self._zone_selected)
+            self._resolution_selector.setVisible(self._zone_selected)
+            self._update_resolution_lock()
             self._stop_btn.setVisible(self._zone_selected)
             self._stop_shortcut.setEnabled(True)
             self._prompt_section.setVisible(self._zone_selected)
@@ -1068,11 +1083,12 @@ class AIEditDockWidget(QDockWidget):
         self._result_prompt_input.moveCursor(QtC.CursorEnd)
         self._result_prompt_input.setReadOnly(False)
         self._result_section.setVisible(True)
-        self._retry_resolution_selector.setVisible(not self._is_free_tier)
+        self._retry_resolution_selector.setVisible(True)
+        self._update_resolution_lock()
 
         # Persistent layer saved info (stays until Done or New Area)
         self._layer_saved_label.setText(
-            tr('Layer saved as "{name}"').format(name=layer_name))
+            tr('Layer saved as "{name}" — visible in your Layers panel').format(name=layer_name))
         self._layer_saved_label.setVisible(True)
 
         # Restore upgrade CTA visibility for free tier
@@ -1089,7 +1105,7 @@ class AIEditDockWidget(QDockWidget):
         self._trial_info_text.setText("\n\n".join(parts))
         self._trial_info_link.setText(
             f'<a href="{subscribe_url}" style="color: {BRAND_BLUE}; '
-            f'font-weight: bold;">{tr("Subscribe at terra-lab.ai")}</a>'
+            f'font-weight: bold;">{tr("Subscribe")}</a>'
         )
         self._trial_info_box.setVisible(True)
         self._idle_section.setVisible(False)
@@ -1149,6 +1165,8 @@ class AIEditDockWidget(QDockWidget):
         self.settings_clicked.emit()
 
     def _on_upgrade_clicked(self):
+        from ..core import telemetry
+        telemetry.track("subscribe_link_clicked", {"source": "upgrade_cta"})
         QDesktopServices.openUrl(QUrl(get_subscribe_url()))
 
     def _on_stop_clicked(self):
@@ -1165,6 +1183,17 @@ class AIEditDockWidget(QDockWidget):
         """Open terra-lab.ai login page in system browser."""
         import webbrowser
         webbrowser.open("https://terra-lab.ai/login?product=ai-edit")
+
+    def _on_cancel_change_key(self):
+        """Cancel key change and restore the activated state."""
+        from ..core.activation_manager import get_activation_key
+        saved_key = get_activation_key()
+        if saved_key:
+            self._code_input.setText(saved_key)
+            self.set_activated(True)
+        else:
+            self._signup_section.setVisible(True)
+            self._cancel_key_btn.setVisible(False)
 
     def _on_unlock_clicked(self):
         code = self._code_input.text().strip()
@@ -1202,13 +1231,28 @@ class AIEditDockWidget(QDockWidget):
         outer.addLayout(row)
         return widget, btns
 
+    def _update_resolution_lock(self):
+        """Lock 2K/4K buttons for free tier users (teaser for paid)."""
+        for btns in (self._res_btns, self._retry_res_btns):
+            for res, btn in btns.items():
+                if self._is_free_tier and res != "1K":
+                    btn.setEnabled(False)
+                    btn.setToolTip(tr("Subscribe for higher resolution"))
+                    btn.setStyleSheet(_RES_BTN_LOCKED)
+                else:
+                    btn.setEnabled(True)
+                    btn.setToolTip("")
+                    if res == self._selected_resolution:
+                        btn.setStyleSheet(_RES_BTN_SELECTED)
+                    else:
+                        btn.setStyleSheet(_RES_BTN_NEUTRAL)
+
     def _on_resolution_selected(self, label: str):
         """Handle resolution toggle click — sync both selectors."""
+        if self._is_free_tier and label != "1K":
+            return
         self._selected_resolution = label
-        for res, btn in self._res_btns.items():
-            btn.setStyleSheet(_RES_BTN_SELECTED if res == label else _RES_BTN_NEUTRAL)
-        for res, btn in self._retry_res_btns.items():
-            btn.setStyleSheet(_RES_BTN_SELECTED if res == label else _RES_BTN_NEUTRAL)
+        self._update_resolution_lock()
         self._update_generate_button_text()
 
     def _update_generate_button_text(self):
@@ -1420,10 +1464,14 @@ class AIEditDockWidget(QDockWidget):
 
     def _on_limit_cta_clicked(self):
         if self._limit_cta_url:
+            from ..core import telemetry
+            telemetry.track("subscribe_link_clicked", {"source": "limit_cta"})
             QDesktopServices.openUrl(QUrl(self._limit_cta_url))
 
     def _on_activation_limit_cta_clicked(self):
         if self._activation_limit_cta_url:
+            from ..core import telemetry
+            telemetry.track("subscribe_link_clicked", {"source": "activation_limit_cta"})
             QDesktopServices.openUrl(QUrl(self._activation_limit_cta_url))
 
     def _on_consent_changed(self):

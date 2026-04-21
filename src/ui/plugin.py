@@ -99,7 +99,7 @@ def _enrich_error_message(error: str, code: str = "") -> str:
         parts = [error]
         if promo_text:
             parts.append(promo_text)
-        parts.append(f'<a href="{dashboard}">{tr("Subscribe now")}</a>')
+        parts.append(f'<a href="{dashboard}">{tr("Subscribe")}</a>')
         return ". ".join(parts)
     if code == "PROXY_ERROR":
         return f"{error} — Check QGIS proxy settings: Settings > Options > Network"
@@ -268,7 +268,13 @@ class AIEditPlugin:
         self._dock_widget = AIEditDockWidget(self._iface.mainWindow())
         from ..core import qt_compat as QtC
         self._iface.addDockWidget(QtC.RightDockWidgetArea, self._dock_widget)
-        self._dock_widget.hide()
+        _first_install_settings = QSettings()
+        if not _first_install_settings.value("AIEdit/dock_shown_once", False, type=bool):
+            _first_install_settings.setValue("AIEdit/dock_shown_once", True)
+            self._dock_widget.show()
+            self._dock_widget.raise_()
+        else:
+            self._dock_widget.hide()
         self._dock_widget.select_zone_clicked.connect(self._activate_selection_tool)
         self._dock_widget.stop_clicked.connect(self._on_stop)
         self._dock_widget.generate_clicked.connect(self._on_generate)
@@ -298,13 +304,14 @@ class AIEditPlugin:
             clear_activation(settings)
             self._dock_widget.set_activated(False)
             self._settings_action.setEnabled(False)
+            telemetry.track("activation_screen_viewed")
 
         from .error_report_dialog import start_log_collector
 
         start_log_collector()
 
         # Initialize telemetry (respects consent + auth, non-blocking)
-        telemetry.init_telemetry(self._client, self._auth_manager, "0.1.4")
+        telemetry.init_telemetry(self._client, self._auth_manager, "0.2.3")
 
         # Load export config in background (non-blocking)
         self._load_export_config()
@@ -593,12 +600,14 @@ class AIEditPlugin:
         self._dock_widget.set_status(tr("Selected zone too small (min 50x50px)"), is_error=True)
 
     def _on_change_key(self):
-        """Reset activation state so user can enter a new key."""
-        clear_activation()
-        self._auth_manager.set_activation_key("")
+        """Show change-key mode without clearing the current key yet.
+
+        The old key stays in QSettings so Cancel can restore it.
+        Actual clearing happens when the new key is successfully validated.
+        """
         self._dock_widget.show_change_key_mode()
         self._settings_action.setEnabled(False)
-        log_debug("Activation key cleared by user")
+        log_debug("Change key mode entered")
 
     def _on_activation_attempted(self, key: str):
         success, message, code = validate_key_with_server(self._client, key)
@@ -777,8 +786,10 @@ class AIEditPlugin:
             dashboard = config.get("upgrade_url", get_dashboard_url())
             promo_text = config.get("promo_text", "") if config.get("promo_active") else ""
             self._dock_widget.show_trial_exhausted_info(message, dashboard, promo_text)
+            telemetry.track("trial_exhausted_viewed")
         elif is_quota_error:
             self._dock_widget.show_usage_limit_info(message, SUBSCRIBE_ERROR_URL)
+            telemetry.track("trial_exhausted_viewed")
         else:
             enriched = _enrich_error_message(message, code)
             self._dock_widget.set_status(enriched, is_error=True)

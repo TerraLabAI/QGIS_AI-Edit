@@ -304,9 +304,8 @@ class AccountSettingsDialog(QDialog):
 
         if is_free and remaining == 0:
             cta_label = QLabel(
-                f'{tr("Subscribe to TerraLab to get more credits.")} '
                 f'<a href="{get_subscribe_url()}" style="color: {BRAND_BLUE};">'
-                f'{tr("Subscribe at terra-lab.ai")}</a>'
+                f'{tr("Subscribe")}</a>'
             )
             cta_label.setWordWrap(True)
             cta_label.setOpenExternalLinks(True)
