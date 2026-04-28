@@ -62,6 +62,25 @@ class _CreditsLoaderWorker(QThread):
             self.loaded.emit(result)
 
 
+class _KeyValidationWorker(QThread):
+    """Background worker to validate activation key with server."""
+
+    valid = pyqtSignal()
+    invalid = pyqtSignal(str, str)  # message, error_code
+
+    def __init__(self, client, key: str):
+        super().__init__()
+        self._client = client
+        self._key = key
+
+    def run(self):
+        success, message, code = validate_key_with_server(self._client, self._key)
+        if success:
+            self.valid.emit()
+        else:
+            self.invalid.emit(message, code)
+
+
 class _ExportConfigLoaderWorker(QThread):
     """Background worker to fetch export config from server without blocking QGIS."""
 
@@ -143,6 +162,7 @@ class AIEditPlugin:
         self._last_crs_wkt = None
         self._last_aspect_ratio = None
         self._last_suggested_res = None
+        self._key_validation_worker = None
 
         # Initialize tiers
         self._dev_mode = False
@@ -291,19 +311,8 @@ class AIEditPlugin:
         self._map_tool.zone_too_small.connect(self._on_zone_too_small)
 
         # Restore saved activation key
-        settings = QSettings()
-        saved_key = get_activation_key(settings)
-        if saved_key:
-            self._auth_manager.set_activation_key(saved_key)
-            self._dock_widget.set_activation_key(saved_key)
-            self._dock_widget.set_activated(True)
-            self._settings_action.setEnabled(True)
-            self._refresh_credits()
-        else:
-            # No key stored: force activation screen (clears stale dev state)
-            clear_activation(settings)
-            self._dock_widget.set_activated(False)
-            self._settings_action.setEnabled(False)
+        self._check_activation_state()
+        if not self._auth_manager.has_activation_key():
             telemetry.track("activation_screen_viewed")
 
         from .error_report_dialog import start_log_collector
@@ -311,7 +320,7 @@ class AIEditPlugin:
         start_log_collector()
 
         # Initialize telemetry (respects consent + auth, non-blocking)
-        telemetry.init_telemetry(self._client, self._auth_manager, "0.2.3")
+        telemetry.init_telemetry(self._client, self._auth_manager, "0.2.4")
 
         # Load export config in background (non-blocking)
         self._load_export_config()
@@ -340,7 +349,7 @@ class AIEditPlugin:
         self._worker = None
 
         # Stop background loader workers and disconnect signals
-        for loader in [self._export_config_loader, self._credits_loader]:
+        for loader in [self._export_config_loader, self._credits_loader, self._key_validation_worker]:
             if loader:
                 try:
                     loader.disconnect()
@@ -352,6 +361,7 @@ class AIEditPlugin:
                 loader.deleteLater()
         self._export_config_loader = None
         self._credits_loader = None
+        self._key_validation_worker = None
 
         self._clear_selection_rectangle()
 
@@ -419,9 +429,43 @@ class AIEditPlugin:
             self._dock_widget.hide()
             log_debug("Dock hidden")
         else:
+            self._check_activation_state()
             self._dock_widget.show()
             self._dock_widget.raise_()
             log_debug("Dock shown")
+
+    def _check_activation_state(self):
+        """Check activation key presence and validate with server."""
+        settings = QSettings()
+        saved_key = get_activation_key(settings)
+        if not saved_key:
+            clear_activation(settings)
+            self._auth_manager.set_activation_key("")
+            self._dock_widget.set_activated(False)
+            self._settings_action.setEnabled(False)
+            return
+
+        self._auth_manager.set_activation_key(saved_key)
+        self._dock_widget.set_activation_key(saved_key)
+
+        self._key_validation_worker = _KeyValidationWorker(self._client, saved_key)
+        self._key_validation_worker.valid.connect(self._on_key_valid)
+        self._key_validation_worker.invalid.connect(self._on_key_invalid)
+        self._key_validation_worker.start()
+
+    def _on_key_valid(self):
+        """Server confirmed the key is valid."""
+        self._dock_widget.set_activated(True)
+        self._settings_action.setEnabled(True)
+        self._refresh_credits()
+
+    def _on_key_invalid(self, message: str, code: str):
+        """Server rejected the key — show activation screen."""
+        clear_activation()
+        self._auth_manager.set_activation_key("")
+        self._dock_widget.set_activated(False)
+        self._dock_widget.set_activation_message(message, is_error=True)
+        self._settings_action.setEnabled(False)
 
     def _on_settings_clicked(self):
         """Open the Account Settings dialog."""
