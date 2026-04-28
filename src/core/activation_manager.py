@@ -22,9 +22,7 @@ DASHBOARD_URL = (
 DEFAULT_CONFIG = {
     "free_credits": 5,
     "free_tier_active": True,
-    "promo_active": True,
-    "promo_code": "EARLYBIRD",
-    "promo_text": "Launch offer: first month at 13 EUR instead of 19 EUR. Code: EARLYBIRD",
+    "promo_active": False,
     "upgrade_url": (
         "https://terra-lab.ai/dashboard/ai-edit"
         "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=upgrade"

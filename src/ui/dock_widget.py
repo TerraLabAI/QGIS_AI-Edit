@@ -394,7 +394,6 @@ class AIEditDockWidget(QDockWidget):
             "font-size: 11px; background: transparent; border: none;"
         )
         status_box_layout.addWidget(self._status_label, 1)
-        main_layout.addWidget(self._status_widget)
 
         # CTA button displayed for quota exhaustion
         self._limit_cta_btn = QPushButton(tr("Subscribe"))
@@ -402,7 +401,6 @@ class AIEditDockWidget(QDockWidget):
         self._limit_cta_btn.setStyleSheet(_BTN_BLUE)
         self._limit_cta_btn.clicked.connect(self._on_limit_cta_clicked)
         self._limit_cta_btn.setVisible(False)
-        main_layout.addWidget(self._limit_cta_btn)
         self._limit_cta_url = ""
 
         # --- Result section (shown after generation complete, iteration flow) ---
@@ -486,6 +484,10 @@ class AIEditDockWidget(QDockWidget):
 
         self._result_section.setVisible(False)
         main_layout.addWidget(self._result_section)
+
+        # Status box + CTA placed after result section so they always appear below
+        main_layout.addWidget(self._status_widget)
+        main_layout.addWidget(self._limit_cta_btn)
 
         # Trial exhausted info box
         self._trial_info_box = QFrame()
@@ -1236,11 +1238,13 @@ class AIEditDockWidget(QDockWidget):
         for btns in (self._res_btns, self._retry_res_btns):
             for res, btn in btns.items():
                 if self._is_free_tier and res != "1K":
-                    btn.setEnabled(False)
+                    btn.setEnabled(True)  # Keep enabled to catch clicks and show tooltip
+                    btn.setText(res)
                     btn.setToolTip(tr("Subscribe for higher resolution"))
                     btn.setStyleSheet(_RES_BTN_LOCKED)
                 else:
                     btn.setEnabled(True)
+                    btn.setText(res)
                     btn.setToolTip("")
                     if res == self._selected_resolution:
                         btn.setStyleSheet(_RES_BTN_SELECTED)
@@ -1250,7 +1254,17 @@ class AIEditDockWidget(QDockWidget):
     def _on_resolution_selected(self, label: str):
         """Handle resolution toggle click — sync both selectors."""
         if self._is_free_tier and label != "1K":
+            self._show_status_box(
+                tr("The {} resolution is an advanced feature reserved for subscribed users.").format(label),
+                "warning"
+            )
+            # Auto-hide the warning after 4 seconds so it doesn't stay permanently
+            QTimer.singleShot(4000, self._hide_status_box)
             return
+        
+        # Clear any existing status message if switching resolutions
+        self._hide_status_box()
+        
         self._selected_resolution = label
         self._update_resolution_lock()
         self._update_generate_button_text()

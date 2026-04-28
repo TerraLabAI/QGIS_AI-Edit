@@ -8,8 +8,12 @@ from __future__ import annotations
 import os
 import urllib.request
 
-TERRALAB_SIGNUP_URL = "https://terra-lab.ai/signup?utm_source=qgis&utm_medium=mcp&utm_campaign=ai-agent"
-TERRALAB_PRICING_URL = "https://terra-lab.ai/ai-edit?utm_source=qgis&utm_medium=mcp&utm_campaign=ai-agent"
+TERRALAB_SIGNUP_URL = (
+    "https://terra-lab.ai/register"
+    "?product=ai-edit"
+    "&utm_source=qgis&utm_medium=mcp&utm_campaign=ai-edit&utm_content=signup"
+)
+TERRALAB_PRICING_URL = "https://terra-lab.ai/ai-edit?utm_source=qgis&utm_medium=mcp&utm_campaign=ai-edit"
 
 
 class EditMCPAPI:
