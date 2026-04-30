@@ -45,12 +45,13 @@ def write_geotiff(
     xmax = extent_dict["xmax"]
     ymax = extent_dict["ymax"]
 
-    temp_png = os.path.join(output_dir, f"_temp_{timestamp}.png")
+    # Use GDAL's in-memory VFS to avoid writing a temp file to disk.
+    # On Windows, writing then deleting a temp file causes WinError 32 because
+    # the GDAL PNG driver keeps the file handle open until GC runs.
+    vsimem_path = f"/vsimem/_temp_{timestamp}.png"
     try:
-        with open(temp_png, "wb") as f:
-            f.write(image_data)
-
-        src_ds = gdal.Open(temp_png)
+        gdal.FileFromMemBuffer(vsimem_path, bytes(image_data))
+        src_ds = gdal.Open(vsimem_path)
         if src_ds is None:
             raise RuntimeError("Failed to open downloaded image with GDAL")
 
@@ -118,8 +119,7 @@ def write_geotiff(
         dst_ds = None
         src_ds = None
     finally:
-        if os.path.exists(temp_png):
-            os.remove(temp_png)
+        gdal.Unlink(vsimem_path)
 
     return output_path
 

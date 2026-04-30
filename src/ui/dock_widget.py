@@ -798,6 +798,7 @@ class AIEditDockWidget(QDockWidget):
             self.hide_trial_info()
             self._update_layer_warning()
             self._cancel_key_btn.setVisible(False)
+            self._upgrade_cta.setVisible(self._is_free_tier)
         else:
             # Reset to full signup view (for new users)
             self._signup_section.setVisible(True)
@@ -1254,17 +1255,19 @@ class AIEditDockWidget(QDockWidget):
     def _on_resolution_selected(self, label: str):
         """Handle resolution toggle click — sync both selectors."""
         if self._is_free_tier and label != "1K":
+            subscribe_url = get_subscribe_url()
             self._show_status_box(
-                tr("The {} resolution is an advanced feature reserved for subscribed users.").format(label),
+                tr("The {} resolution is an advanced feature reserved for subscribed users.").format(label)
+                + f' <a href="{subscribe_url}" style="color: {BRAND_BLUE}; font-weight: bold;">'
+                + tr("Subscribe") + "</a>",
                 "warning"
             )
-            # Auto-hide the warning after 4 seconds so it doesn't stay permanently
-            QTimer.singleShot(4000, self._hide_status_box)
+            QTimer.singleShot(5000, self._hide_status_box)
             return
-        
+
         # Clear any existing status message if switching resolutions
         self._hide_status_box()
-        
+
         self._selected_resolution = label
         self._update_resolution_lock()
         self._update_generate_button_text()

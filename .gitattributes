@@ -1,9 +1,0 @@
-.github/         export-ignore
-.claude/         export-ignore
-docs/            export-ignore
-CLAUDE.md        export-ignore
-RECAP_TODO.md    export-ignore
-setup.cfg        export-ignore
-ruff.toml        export-ignore
-.gitignore       export-ignore
-.gitattributes   export-ignore
