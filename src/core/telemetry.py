@@ -19,6 +19,29 @@ from typing import Optional
 from qgis.PyQt.QtCore import QThread
 
 
+# Events whose payload carries no user-generated content (no prompts, no
+# image bytes, no paths, no coords). These ship as soon as the plugin is
+# activated. Properties limited to: plugin_version, OS, QGIS version, durations,
+# error_codes, resolution string, prompt_length (a count, not the text).
+#
+# Only `plugin_error` stays gated by ToS acceptance because its error_message
+# field carries raw exception text that can include paths or fragments.
+_NO_CONSENT_EVENTS = frozenset({
+    "plugin_opened",
+    "plugin_activated",
+    "activation_screen_viewed",
+    "activation_attempted",
+    "subscribe_link_clicked",
+    "trial_exhausted_viewed",
+    "template_selected",
+    "generation_started",
+    "generation_completed",
+    "generation_failed",
+    "generation_cancelled",
+    "first_generation_milestone",
+})
+
+
 class TelemetryFlushWorker(QThread):
     """Sends one telemetry batch without blocking the QGIS UI thread."""
 
@@ -66,13 +89,13 @@ class TelemetryCollector:
             "qgis_version": qgis_version,
         }
 
-    def _can_send(self) -> bool:
-        """Check consent + auth before sending."""
-        from .activation_manager import has_consent
-        if not has_consent():
-            return False
+    def _has_auth(self) -> bool:
         auth = self._auth_manager.get_auth_header()
         return bool(auth and auth.get("Authorization"))
+
+    def _has_consent(self) -> bool:
+        from .activation_manager import has_consent
+        return has_consent()
 
     def track(self, event: str, properties: Optional[dict] = None):
         """Add an event to the batch. Will be sent on next flush()."""
@@ -87,15 +110,26 @@ class TelemetryCollector:
         self._batch.append(evt)
 
     def flush(self):
-        """Send all batched events to the server. Non-blocking on failure."""
+        """Send all batched events to the server. Non-blocking on failure.
+
+        Lifecycle events (`_NO_CONSENT_EVENTS`) ship as long as the plugin is
+        activated; everything else additionally requires telemetry consent.
+        """
         if not self._batch:
             return
-        if not self._can_send():
+        if not self._has_auth():
             self._batch.clear()
             return
 
-        events_to_send = list(self._batch)
+        consented = self._has_consent()
+        events_to_send = [
+            e for e in self._batch
+            if consented or e["event"] in _NO_CONSENT_EVENTS
+        ]
         self._batch.clear()
+
+        if not events_to_send:
+            return
 
         auth = self._auth_manager.get_auth_header()
         worker = TelemetryFlushWorker(self._client, events_to_send, auth)
