@@ -51,6 +51,7 @@ class _CreditsLoaderWorker(QThread):
     """Background worker to fetch usage/credits without blocking QGIS."""
 
     loaded = pyqtSignal(dict)
+    failed = pyqtSignal()
 
     def __init__(self, auth_manager):
         super().__init__()
@@ -60,6 +61,8 @@ class _CreditsLoaderWorker(QThread):
         result = self._auth_manager.get_usage_info()
         if "error" not in result:
             self.loaded.emit(result)
+        else:
+            self.failed.emit()
 
 
 class _KeyValidationWorker(QThread):
@@ -114,12 +117,7 @@ def _enrich_error_message(error: str, code: str = "") -> str:
     if code == "TRIAL_EXHAUSTED":
         config = get_server_config()
         dashboard = config.get("upgrade_url", get_dashboard_url())
-        promo_text = config.get("promo_text", "") if config.get("promo_active") else ""
-        parts = [error]
-        if promo_text:
-            parts.append(promo_text)
-        parts.append(f'<a href="{dashboard}">{tr("Subscribe")}</a>')
-        return ". ".join(parts)
+        return f'{error}. <a href="{dashboard}">{tr("Subscribe")}</a>'
     if code == "PROXY_ERROR":
         return f"{error} — Check QGIS proxy settings: Settings > Options > Network"
     if code == "SSL_ERROR":
@@ -163,6 +161,15 @@ class AIEditPlugin:
         self._last_aspect_ratio = None
         self._last_suggested_res = None
         self._key_validation_worker = None
+        # Last successful server-side key revalidation (unix seconds). Used to
+        # skip /api/plugin/usage round-trips when the user toggles the dock
+        # rapidly; rate limit is 10/60s per key, so no cache => silent failures.
+        self._last_key_validation_unix: float = 0.0
+        # Fires once per QGIS session, on the first dock-open. Lifecycle event,
+        # ships without explicit consent (no PII).
+        self._plugin_opened_emitted = False
+        # Cached cohort props enriched onto every generation event.
+        self._first_generation_milestone_emitted = False
 
         # Initialize tiers
         self._dev_mode = False
@@ -212,6 +219,21 @@ class AIEditPlugin:
                     key, _, value = line.partition("=")
                     env[key.strip()] = value.strip().strip('"').strip("'")
         return env
+
+    @staticmethod
+    def _read_plugin_version() -> str:
+        """Read plugin version from metadata.txt."""
+        plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        metadata_path = os.path.join(plugin_dir, "metadata.txt")
+        try:
+            with open(metadata_path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("version="):
+                        return line.split("=", 1)[1].strip()
+        except OSError:
+            pass
+        return "unknown"
 
     def initGui(self):
         """Called by QGIS when plugin is loaded."""
@@ -320,7 +342,9 @@ class AIEditPlugin:
         start_log_collector()
 
         # Initialize telemetry (respects consent + auth, non-blocking)
-        telemetry.init_telemetry(self._client, self._auth_manager, "0.2.4")
+        telemetry.init_telemetry(
+            self._client, self._auth_manager, self._read_plugin_version()
+        )
 
         # Load export config in background (non-blocking)
         self._load_export_config()
@@ -424,6 +448,46 @@ class AIEditPlugin:
         clear_config_cache()
         log("AI Edit plugin unloaded")
 
+    @staticmethod
+    def _days_since_activation() -> int | None:
+        """Cohort prop. None for legacy users without a stored timestamp."""
+        raw = QSettings().value("AIEdit/activation_timestamp_unix", "", type=str)
+        if not raw:
+            return None
+        try:
+            ts = int(raw)
+        except (TypeError, ValueError):
+            return None
+        delta = int((time.time() - ts) // 86400)
+        return max(delta, 0)
+
+    def _enrich_generation_props(self, base: dict) -> dict:
+        days = self._days_since_activation()
+        if days is not None:
+            return {**base, "days_since_activation": days}
+        return base
+
+    def _maybe_emit_first_generation_milestone(self):
+        """One-shot event when the user completes their first successful generation.
+
+        Persisted via QSettings so it never re-fires across QGIS sessions.
+        """
+        if self._first_generation_milestone_emitted:
+            return
+        settings = QSettings()
+        already = settings.value("AIEdit/first_generation_milestone_fired", False, type=bool)
+        if already:
+            self._first_generation_milestone_emitted = True
+            return
+        days = self._days_since_activation()
+        props = {}
+        if days is not None:
+            props["days_since_activation"] = days
+        telemetry.track("first_generation_milestone", props)
+        telemetry.flush()
+        settings.setValue("AIEdit/first_generation_milestone_fired", True)
+        self._first_generation_milestone_emitted = True
+
     def _toggle_dock(self):
         if self._dock_widget.isVisible():
             self._dock_widget.hide()
@@ -432,6 +496,10 @@ class AIEditPlugin:
             self._check_activation_state()
             self._dock_widget.show()
             self._dock_widget.raise_()
+            if not self._plugin_opened_emitted:
+                self._plugin_opened_emitted = True
+                telemetry.track("plugin_opened")
+                telemetry.flush()
             log_debug("Dock shown")
 
     def _check_activation_state(self):
@@ -443,10 +511,16 @@ class AIEditPlugin:
             self._auth_manager.set_activation_key("")
             self._dock_widget.set_activated(False)
             self._settings_action.setEnabled(False)
+            self._last_key_validation_unix = 0.0
             return
 
         self._auth_manager.set_activation_key(saved_key)
         self._dock_widget.set_activation_key(saved_key)
+
+        if (time.time() - self._last_key_validation_unix) < 30:
+            self._dock_widget.set_activated(True)
+            self._settings_action.setEnabled(True)
+            return
 
         self._key_validation_worker = _KeyValidationWorker(self._client, saved_key)
         self._key_validation_worker.valid.connect(self._on_key_valid)
@@ -455,12 +529,15 @@ class AIEditPlugin:
 
     def _on_key_valid(self):
         """Server confirmed the key is valid."""
+        self._last_key_validation_unix = time.time()
         self._dock_widget.set_activated(True)
         self._settings_action.setEnabled(True)
+        self._dock_widget.set_checking_credits(True)
         self._refresh_credits()
 
     def _on_key_invalid(self, message: str, code: str):
         """Server rejected the key — show activation screen."""
+        self._last_key_validation_unix = 0.0
         clear_activation()
         self._auth_manager.set_activation_key("")
         self._dock_widget.set_activated(False)
@@ -529,10 +606,10 @@ class AIEditPlugin:
         """Stop button: reset everything."""
         if self._worker and self._worker.isRunning():
             duration = time.time() - getattr(self, "_generation_start_time", time.time())
-            telemetry.track("generation_cancelled", {
+            telemetry.track("generation_cancelled", self._enrich_generation_props({
                 "duration_seconds": round(duration, 1),
                 "resolution": getattr(self, "_last_suggested_res", ""),
-            })
+            }))
             telemetry.flush()
         self._canvas.unsetMapTool(self._map_tool)
         self._restore_previous_map_tool()
@@ -557,9 +634,12 @@ class AIEditPlugin:
         self._dock_widget.set_active_mode()
         self._activate_selection_tool()
 
-    def _on_template_selected(self, template_id: str):
+    def _on_template_selected(self, template_id: str, template_name: str = ""):
         """Track template selection for analytics."""
-        telemetry.track("template_selected", {"template_id": template_id})
+        props = {"template_id": template_id}
+        if template_name:
+            props["template_name"] = template_name
+        telemetry.track("template_selected", props)
 
     def _run_generation_from_stored(self, prompt: str):
         """Run generation using previously stored zone data (for retry)."""
@@ -596,12 +676,12 @@ class AIEditPlugin:
         self._dock_widget.set_status("")
         self._generation_service.reset()
         self._generation_start_time = time.time()
-        telemetry.track("generation_started", {
+        telemetry.track("generation_started", self._enrich_generation_props({
             "prompt_length": len(prompt),
             "aspect_ratio": self._last_aspect_ratio or "",
             "resolution": self._last_suggested_res or "",
             "is_retry": True,
-        })
+        }))
         log_debug(f"Retry generation: prompt_len={len(prompt)}")
 
         plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -655,6 +735,7 @@ class AIEditPlugin:
 
     def _on_activation_attempted(self, key: str):
         success, message, code = validate_key_with_server(self._client, key)
+        normalized_code = (code or "").strip().upper()
         if success:
             save_activation(key)
             self._auth_manager.set_activation_key(key)
@@ -662,13 +743,23 @@ class AIEditPlugin:
             self._dock_widget.set_activation_message(tr("Activation key verified!"), is_error=False)
             self._dock_widget.hide_activation_limit_cta()
             self._settings_action.setEnabled(True)
+            self._dock_widget.set_checking_credits(True)
             self._refresh_credits()
+            # Persist activation timestamp once for cohort analysis.
+            settings = QSettings()
+            if not settings.value("AIEdit/activation_timestamp_unix", "", type=str):
+                settings.setValue("AIEdit/activation_timestamp_unix", str(int(time.time())))
+            telemetry.track("activation_attempted", {"success": True})
             telemetry.track("plugin_activated")
             telemetry.flush()
             log("Activation successful")
         else:
             self._dock_widget.set_activation_message(message, is_error=True)
-            normalized_code = (code or "").strip().upper()
+            telemetry.track("activation_attempted", {
+                "success": False,
+                "error_code": normalized_code or "UNKNOWN",
+            })
+            telemetry.flush()
             message_lower = (message or "").lower()
             if normalized_code == "TRIAL_EXHAUSTED":
                 config = get_server_config(self._client)
@@ -766,13 +857,13 @@ class AIEditPlugin:
         self._dock_widget.set_status("")
         self._generation_service.reset()
         self._generation_start_time = time.time()
-        telemetry.track("generation_started", {
+        telemetry.track("generation_started", self._enrich_generation_props({
             "prompt_length": len(prompt),
             "aspect_ratio": aspect_ratio,
             "resolution": suggested_res,
             "zone_width_px": img_w,
             "zone_height_px": img_h,
-        })
+        }))
         log(f"Generation started: prompt_len={len(prompt)}, resolution={suggested_res}, zone={img_w}x{img_h}px")
 
         plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -819,17 +910,16 @@ class AIEditPlugin:
             or "monthly limit reached" in message_lower  # noqa: W503
         )
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
-        telemetry.track("generation_failed", {
+        telemetry.track("generation_failed", self._enrich_generation_props({
             "error_code": code,
             "duration_seconds": round(duration, 1),
             "resolution": getattr(self, "_last_suggested_res", ""),
-        })
+        }))
         telemetry.flush()
         if normalized_code == "TRIAL_EXHAUSTED":
             config = get_server_config(self._client)
             dashboard = config.get("upgrade_url", get_dashboard_url())
-            promo_text = config.get("promo_text", "") if config.get("promo_active") else ""
-            self._dock_widget.show_trial_exhausted_info(message, dashboard, promo_text)
+            self._dock_widget.show_trial_exhausted_info(message, dashboard)
             telemetry.track("trial_exhausted_viewed")
         elif is_quota_error:
             self._dock_widget.show_usage_limit_info(message, SUBSCRIBE_ERROR_URL)
@@ -852,17 +942,20 @@ class AIEditPlugin:
                 result_info.get("prompt", ""),
                 generation_number=self._generation_counter,
             )
-            telemetry.track("generation_completed", {
+            telemetry.track("generation_completed", self._enrich_generation_props({
                 "duration_seconds": round(duration, 1),
                 "resolution": getattr(self, "_last_suggested_res", ""),
-            })
+            }))
             telemetry.flush()
+            self._maybe_emit_first_generation_milestone()
             self._dock_widget.set_generation_complete(layer.name())
             self._refresh_credits()
             log(f"Generation complete ({round(duration, 1)}s): {result_info['geotiff_path']}")
         except Exception as e:
             telemetry.track("plugin_error", {
                 "error_type": "layer_add_failed",
+                # Truncated to 200 chars: raw exception text can include file
+                # paths or fragments of user data; cap caps PII spillover.
                 "error_message": str(e)[:200],
             })
             telemetry.flush()
@@ -877,11 +970,18 @@ class AIEditPlugin:
         """Fetch and display current credits in background (non-blocking)."""
         self._credits_loader = _CreditsLoaderWorker(self._auth_manager)
         self._credits_loader.loaded.connect(self._on_credits_loaded)
+        self._credits_loader.failed.connect(self._on_credits_failed)
         self._credits_loader.start()
+
+    def _on_credits_failed(self):
+        """Credits fetch failed — clear loading state so the UI is usable."""
+        if self._dock_widget:
+            self._dock_widget.set_checking_credits(False)
 
     def _on_credits_loaded(self, usage: dict):
         """Update dock widget with credits from background fetch."""
         if self._dock_widget:
+            self._dock_widget.set_checking_credits(False)
             used = usage.get("images_used")
             limit = usage.get("images_limit")
             self._dock_widget.set_credits(
@@ -906,11 +1006,9 @@ class AIEditPlugin:
                 if is_free:
                     config = get_server_config(self._client)
                     dashboard = config.get("upgrade_url", get_dashboard_url())
-                    promo_text = config.get("promo_text", "") if config.get("promo_active") else ""
                     self._dock_widget.show_trial_exhausted_info(
                         f"All {limit} free credits used. Subscribe to continue.",
                         dashboard,
-                        promo_text,
                     )
                 else:
                     self._dock_widget.show_usage_limit_info(

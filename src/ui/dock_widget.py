@@ -47,6 +47,8 @@ DISABLED_TEXT = "#666666"
 ERROR_TEXT = "#ef5350"
 SUCCESS_TEXT = "#66bb6a"
 
+MAX_PROMPT_CHARS = 2000
+
 TERRALAB_URL = (
     "https://terra-lab.ai/ai-edit"
     "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=dock_branding"
@@ -144,7 +146,7 @@ _INSTRUCTION_BOX = (
     "  border: 1px solid rgba(128, 128, 128, 0.25);"
     "  border-radius: 4px;"
     "  padding: 8px;"
-    "  font-size: 12px;"
+    "  font-size: 10px;"
     "  color: palette(text);"
     "}"
 )
@@ -193,7 +195,8 @@ class AIEditDockWidget(QDockWidget):
     activation_attempted = pyqtSignal(str)
     change_key_clicked = pyqtSignal()
     settings_clicked = pyqtSignal()
-    template_selected = pyqtSignal(str)   # template preset ID (for analytics)
+    # (template_id, template_name) for analytics — id is stable, name is human-readable.
+    template_selected = pyqtSignal(str, str)
 
     def __init__(self, parent=None):
         super().__init__(tr("AI Edit by TerraLab"), parent)
@@ -309,7 +312,18 @@ class AIEditDockWidget(QDockWidget):
 
         # Consent checkbox (shown only until first generation)
         self._consent_check = QCheckBox()
-        self._consent_check.setStyleSheet("font-size: 11px; color: palette(text);")
+        self._consent_check.setStyleSheet(
+            "QCheckBox::indicator {"
+            "  width: 16px; height: 16px;"
+            "  border: 1px solid palette(text);"
+            "  border-radius: 3px;"
+            "  background-color: palette(base);"
+            "}"
+            f"QCheckBox::indicator:checked {{"
+            f"  background-color: {BRAND_BLUE};"
+            f"  border-color: {BRAND_BLUE};"
+            f"}}"
+        )
         self._consent_check.setText("")  # text set via label below
         consent_layout = QHBoxLayout()
         consent_layout.setContentsMargins(0, 0, 0, 0)
@@ -423,6 +437,7 @@ class AIEditDockWidget(QDockWidget):
         self._result_prompt_input.setMaximumHeight(50)
         self._result_prompt_input.setStyleSheet(_PROMPT_INPUT_NORMAL)
         self._result_prompt_input.submitted.connect(self._on_retry_clicked)
+        self._result_prompt_input.textChanged.connect(self._on_result_prompt_changed)
         self._result_prompt_input.document().documentLayout().documentSizeChanged.connect(
             self._adjust_result_prompt_height
         )
@@ -598,6 +613,7 @@ class AIEditDockWidget(QDockWidget):
         self._active = False
         self._zone_selected = False
         self._activated = False
+        self._checking_credits = False
         self._from_template = False
         self._is_free_tier = True  # default hidden until confirmed Pro
         self._selected_resolution = "1K"
@@ -674,17 +690,35 @@ class AIEditDockWidget(QDockWidget):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(8)
 
+        # --- How to set up AI Edit ---
+        self._setup_header = QLabel(tr("Two steps to start using AI Edit"))
+        self._setup_header.setStyleSheet(
+            "font-weight: bold; font-size: 13px; color: palette(text);"
+        )
+        layout.addWidget(self._setup_header)
+
+        self._setup_desc = QLabel(
+            tr("1. Sign up or sign in on terra-lab.ai to get your key")
+            + "\n"
+            + tr("2. Paste your key below to activate")
+        )
+        self._setup_desc.setWordWrap(True)
+        self._setup_desc.setStyleSheet(_INSTRUCTION_BOX)
+        layout.addWidget(self._setup_desc)
+
+        layout.addSpacing(12)
+
         # --- Step 1: Create account (inside _signup_section) ---
         self._signup_section = QWidget()
         signup_layout = QVBoxLayout(self._signup_section)
         signup_layout.setContentsMargins(0, 0, 0, 0)
         signup_layout.setSpacing(8)
 
-        step1_label = QLabel(tr("1. Create your free account"))
+        step1_label = QLabel(tr("1. Sign up / Sign in"))
         step1_label.setStyleSheet("font-weight: bold; font-size: 12px; color: palette(text);")
         signup_layout.addWidget(step1_label)
 
-        self._login_btn = QPushButton(tr("Create account (free)"))
+        self._login_btn = QPushButton(tr("Get Your Key"))
         self._login_btn.setMinimumHeight(36)
         self._login_btn.setCursor(QtC.PointingHandCursor)
         self._login_btn.setStyleSheet(_BTN_GREEN_AUTH)
@@ -699,8 +733,10 @@ class AIEditDockWidget(QDockWidget):
 
         layout.addWidget(self._signup_section)
 
+        layout.addSpacing(8)
+
         # --- Step 2: Paste key (outside _signup_section for change-key mode) ---
-        self._step2_label = QLabel(tr("2. Paste your AI Edit activation key"))
+        self._step2_label = QLabel(tr("2. Paste your activation key"))
         self._step2_label.setStyleSheet("font-weight: bold; font-size: 12px; color: palette(text);")
         layout.addWidget(self._step2_label)
 
@@ -783,7 +819,10 @@ class AIEditDockWidget(QDockWidget):
         if dlg.exec():
             preset = dlg.get_selected_preset()
             if preset:
-                self.template_selected.emit(preset["id"])
+                self.template_selected.emit(
+                    str(preset.get("id") or ""),
+                    str(preset.get("label") or ""),
+                )
             return preset
         return None
 
@@ -800,7 +839,8 @@ class AIEditDockWidget(QDockWidget):
             self._cancel_key_btn.setVisible(False)
             self._upgrade_cta.setVisible(self._is_free_tier)
         else:
-            # Reset to full signup view (for new users)
+            self._setup_header.setVisible(True)
+            self._setup_desc.setVisible(True)
             self._signup_section.setVisible(True)
             self._step2_label.setVisible(True)
             self._key_input_widget.setVisible(True)
@@ -815,7 +855,8 @@ class AIEditDockWidget(QDockWidget):
         self._main_widget.setVisible(False)
         self._settings_btn.setVisible(False)
         self._upgrade_cta.setVisible(False)
-        # Hide step 1 (create account), show only step 2 (key input)
+        self._setup_header.setVisible(False)
+        self._setup_desc.setVisible(False)
         self._signup_section.setVisible(False)
         self._step2_label.setVisible(True)
         self._key_input_widget.setVisible(True)
@@ -1041,6 +1082,12 @@ class AIEditDockWidget(QDockWidget):
                 "QLabel { background: transparent; border: none; color: #333333; }",
                 QStyle.StandardPixmap.SP_MessageBoxWarning,
             ),
+            "info": (
+                "QWidget { background-color: rgba(25, 118, 210, 0.08); "
+                "border: 1px solid rgba(25, 118, 210, 0.2); border-radius: 4px; }"
+                "QLabel { background: transparent; border: none; }",
+                QStyle.StandardPixmap.SP_MessageBoxInformation,
+            ),
         }
         style_str, icon_enum = styles.get(box_type, styles["error"])
         self._status_widget.setStyleSheet(style_str)
@@ -1100,12 +1147,9 @@ class AIEditDockWidget(QDockWidget):
         self._start_shortcut.setEnabled(False)
         self._stop_shortcut.setEnabled(True)
 
-    def show_trial_exhausted_info(self, message: str, subscribe_url: str, promo_text: str = ""):
+    def show_trial_exhausted_info(self, message: str, subscribe_url: str):
         self._hide_limit_cta()
-        parts = [message]
-        if promo_text:
-            parts.append(promo_text)
-        self._trial_info_text.setText("\n\n".join(parts))
+        self._trial_info_text.setText(message)
         self._trial_info_link.setText(
             f'<a href="{subscribe_url}" style="color: {BRAND_BLUE}; '
             f'font-weight: bold;">{tr("Subscribe")}</a>'
@@ -1123,13 +1167,33 @@ class AIEditDockWidget(QDockWidget):
         self._idle_section.setVisible(False)
         self._edit_header.setVisible(False)
 
+    def set_checking_credits(self, checking: bool):
+        """Show/hide a loading state while credits are being fetched.
+
+        Prevents interaction with the idle section during the async gap
+        between key activation and credit response.
+        """
+        self._checking_credits = checking
+        if checking:
+            self._idle_section.setVisible(False)
+            self._edit_header.setVisible(False)
+            self._trial_info_box.setVisible(False)
+            self._show_status_box(tr("Checking credits..."), "info")
+        else:
+            self._hide_status_box()
+
     def hide_trial_info(self):
         self._trial_info_box.setVisible(False)
         self._hide_status_box()
         self._hide_limit_cta()
         # Only restore idle UI if we're actually in idle state
-        # (not during result, generating, etc.)
-        if not self._zone_selected and not self._active and not self._result_section.isVisible():
+        # (not during result, generating, checking credits, etc.)
+        if (
+            not self._zone_selected
+            and not self._active  # noqa: W503
+            and not self._checking_credits  # noqa: W503
+            and not self._result_section.isVisible()  # noqa: W503
+        ):
             self._idle_section.setVisible(True)
             self._edit_header.setVisible(True)
 
@@ -1332,7 +1396,27 @@ class AIEditDockWidget(QDockWidget):
             self.select_zone_clicked.emit()
 
     def _on_prompt_changed(self):
+        self._enforce_prompt_max_length(self._prompt_input)
         self._update_generate_enabled()
+
+    def _on_result_prompt_changed(self):
+        self._enforce_prompt_max_length(self._result_prompt_input)
+
+    @staticmethod
+    def _enforce_prompt_max_length(text_edit: QTextEdit) -> None:
+        """Truncate the prompt to MAX_PROMPT_CHARS."""
+        plain = text_edit.toPlainText()
+        if len(plain) <= MAX_PROMPT_CHARS:
+            return
+        cursor_pos = text_edit.textCursor().position()
+        text_edit.blockSignals(True)
+        try:
+            text_edit.setPlainText(plain[:MAX_PROMPT_CHARS])
+            cursor = text_edit.textCursor()
+            cursor.setPosition(min(cursor_pos, MAX_PROMPT_CHARS))
+            text_edit.setTextCursor(cursor)
+        finally:
+            text_edit.blockSignals(False)
 
     def _adjust_prompt_height(self):
         """Auto-expand prompt input to fit content (60px min, 140px max)."""

@@ -4,9 +4,13 @@ Validates activation keys against the TerraLab backend.
 """
 from __future__ import annotations
 
+import re
+
 from qgis.core import QgsSettings
 
 from .i18n import tr
+
+_KEY_RE = re.compile(r"^tl_[0-9a-f]{32}$")
 
 SETTINGS_PREFIX = "AIEdit/"
 SUBSCRIBE_URL = (
@@ -22,7 +26,6 @@ DASHBOARD_URL = (
 DEFAULT_CONFIG = {
     "free_credits": 5,
     "free_tier_active": True,
-    "promo_active": False,
     "upgrade_url": (
         "https://terra-lab.ai/dashboard/ai-edit"
         "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=upgrade"
@@ -68,8 +71,8 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
     if not key:
         return False, tr("Please enter your activation key."), "NO_KEY"
 
-    if not key.startswith("tl_"):
-        return False, tr("Invalid key format. Keys start with tl_"), "INVALID_FORMAT"
+    if not _KEY_RE.match(key):
+        return False, tr("Invalid key format. Keys look like tl_ followed by 32 characters."), "INVALID_FORMAT"
 
     # Call /api/plugin/usage with the key as Bearer token
     auth = {

@@ -164,12 +164,24 @@ Al continuar, acepta nuestros Términos de Venta y Política de Privacidad.</tra
 
     <!-- Login & activation -->
     <message>
-        <source>1. Create your free account</source>
-        <translation>1. Crea tu cuenta gratuita</translation>
+        <source>1. Sign up / Sign in</source>
+        <translation>1. Regístrate / Inicia sesión</translation>
     </message>
     <message>
-        <source>Create account (free)</source>
-        <translation>Crear cuenta (gratis)</translation>
+        <source>Get Your Key</source>
+        <translation>Obtener tu clave</translation>
+    </message>
+    <message>
+        <source>Two steps to start using AI Edit</source>
+        <translation>Dos pasos para empezar a usar AI Edit</translation>
+    </message>
+    <message>
+        <source>1. Sign up or sign in on terra-lab.ai to get your key</source>
+        <translation>1. Regístrate o inicia sesión en terra-lab.ai para obtener tu clave</translation>
+    </message>
+    <message>
+        <source>2. Paste your key below to activate</source>
+        <translation>2. Pega tu clave abajo para activar</translation>
     </message>
     <message>
         <source>2. Paste your activation key</source>
