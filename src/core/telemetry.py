@@ -18,7 +18,6 @@ from typing import Optional
 
 from qgis.PyQt.QtCore import QThread
 
-
 # Events whose payload carries no user-generated content (no prompts, no
 # image bytes, no paths, no coords). These ship as soon as the plugin is
 # activated. Properties limited to: plugin_version, OS, QGIS version, durations,
