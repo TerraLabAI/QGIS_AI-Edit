@@ -40,15 +40,17 @@ class GenerationService:
         aspect_ratio: str = "1:1",
         on_progress: Callable = None,
         ctx=None,
+        context_images: list[str] | None = None,
     ) -> GenerationResult:
         """Submit image for generation and poll until complete."""
         if self._cancelled:
             return GenerationResult(success=False, error="Generation cancelled")
 
+        ctx_count = len(context_images) if context_images else 0
         log_debug(
             f"Submitting: resolution={suggested_resolution}, "
             f"aspect={aspect_ratio}, prompt_len={len(prompt)}, "
-            f"image_b64_len={len(image_b64)}"
+            f"image_b64_len={len(image_b64)}, context_images={ctx_count}"
         )
 
         # Submit (pre-prompt is applied server-side in website config)
@@ -58,6 +60,7 @@ class GenerationService:
             resolution=suggested_resolution,
             aspect_ratio=aspect_ratio,
             auth=auth,
+            context_images=context_images,
         )
 
         if "error" in resp:

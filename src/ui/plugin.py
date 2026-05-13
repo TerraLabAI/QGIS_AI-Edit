@@ -27,6 +27,7 @@ from ..core.generation_service import GenerationService
 from ..core.i18n import tr
 from ..core.logger import log, log_debug, log_warning
 from ..core.pipeline_context import PipelineContext
+from ..core.reference_image_store import ReferenceImageStore
 from ..workers.generation_worker import GenerationWorker
 from .canvas_exporter import (
     export_canvas_zone,
@@ -113,26 +114,26 @@ class _ExportConfigLoaderWorker(QThread):
 def _enrich_error_message(error: str, code: str = "") -> str:
     """Add actionable guidance to error messages based on error code."""
     if code in ("INVALID_KEY", "SUBSCRIPTION_INACTIVE", "FREE_TIER_EXPIRED"):
-        return f'{error} — <a href="{DASHBOARD_ERROR_URL}">Check your dashboard</a>'
+        return f'{error}. <a href="{DASHBOARD_ERROR_URL}">Check your dashboard</a>'
     if code == "TRIAL_EXHAUSTED":
         config = get_server_config()
         dashboard = config.get("upgrade_url", get_dashboard_url())
         return f'{error}. <a href="{dashboard}">{tr("Subscribe")}</a>'
     if code == "PROXY_ERROR":
-        return f"{error} — Check QGIS proxy settings: Settings > Options > Network"
+        return f"{error}. Check QGIS proxy settings: Settings > Options > Network"
     if code == "SSL_ERROR":
         return (
-            f"{error} — If you are on a corporate network, "
+            f"{error}. If you are on a corporate network, "
             f"ask your IT team about SSL inspection settings"
         )
     if code in ("DNS_ERROR", "NO_INTERNET"):
-        return f"{error} — Check your internet connection"
+        return f"{error}. Check your internet connection"
     if code == "TIMEOUT":
-        return f"{error} — Try again, or check your internet speed"
+        return f"{error}. Try again, or check your internet speed"
     if code == "CONNECTION_REFUSED":
-        return f"{error} — The service may be temporarily unavailable"
+        return f"{error}. The service may be temporarily unavailable"
     if code == "AUTH_ERROR":
-        return f'{error} — <a href="{DASHBOARD_ERROR_URL}">Check your dashboard</a>'
+        return f'{error}. <a href="{DASHBOARD_ERROR_URL}">Check your dashboard</a>'
     return error
 
 
@@ -177,6 +178,7 @@ class AIEditPlugin:
         self._client = self._create_client()
         self._auth_manager = AuthManager(self._client)
         self._generation_service = GenerationService(self._client)
+        self._reference_store = ReferenceImageStore()
 
         # MCP programmatic API
         from ..mcp_api import EditMCPAPI
@@ -307,7 +309,9 @@ class AIEditPlugin:
             self._terralab_menu.addAction(self._settings_action)
 
         # Create dock widget and register it with QGIS (hidden by default)
-        self._dock_widget = AIEditDockWidget(self._iface.mainWindow())
+        self._dock_widget = AIEditDockWidget(
+            self._iface.mainWindow(), reference_store=self._reference_store
+        )
         from ..core import qt_compat as QtC
         self._iface.addDockWidget(QtC.RightDockWidgetArea, self._dock_widget)
         _first_install_settings = QSettings()
@@ -321,7 +325,6 @@ class AIEditPlugin:
         self._dock_widget.stop_clicked.connect(self._on_stop)
         self._dock_widget.generate_clicked.connect(self._on_generate)
         self._dock_widget.retry_clicked.connect(self._on_retry)
-        self._dock_widget.new_zone_clicked.connect(self._on_new_zone)
         self._dock_widget.template_selected.connect(self._on_template_selected)
         self._dock_widget.activation_attempted.connect(self._on_activation_attempted)
         self._dock_widget.change_key_clicked.connect(self._on_change_key)
@@ -394,6 +397,12 @@ class AIEditPlugin:
             self._dock_widget.deleteLater()
             self._dock_widget = None
 
+        # Wipe session-scoped reference images from disk.
+        try:
+            self._reference_store.cleanup()
+        except Exception as err:  # nosec B110
+            log_warning(f"Reference store cleanup failed: {err}")
+
         from .error_report_dialog import stop_log_collector
 
         stop_log_collector()
@@ -462,10 +471,15 @@ class AIEditPlugin:
         return max(delta, 0)
 
     def _enrich_generation_props(self, base: dict) -> dict:
+        enriched = {
+            **base,
+            "context_image_count": self._reference_store.count(),
+            "context_total_size_bytes": self._reference_store.total_size_bytes(),
+        }
         days = self._days_since_activation()
         if days is not None:
-            return {**base, "days_since_activation": days}
-        return base
+            enriched["days_since_activation"] = days
+        return enriched
 
     def _maybe_emit_first_generation_milestone(self):
         """One-shot event when the user completes their first successful generation.
@@ -603,7 +617,7 @@ class AIEditPlugin:
         self._previous_map_tool = None
 
     def _on_stop(self):
-        """Stop button: reset everything."""
+        """Stop button: reset everything and cancel any in-flight generation."""
         if self._worker and self._worker.isRunning():
             duration = time.time() - getattr(self, "_generation_start_time", time.time())
             telemetry.track("generation_cancelled", self._enrich_generation_props({
@@ -611,6 +625,8 @@ class AIEditPlugin:
                 "resolution": getattr(self, "_last_suggested_res", ""),
             }))
             telemetry.flush()
+            # Abort the running request so the worker thread can return.
+            self._generation_service.cancel()
         self._canvas.unsetMapTool(self._map_tool)
         self._restore_previous_map_tool()
         self._clear_selection_rectangle()
@@ -625,14 +641,6 @@ class AIEditPlugin:
             )
             return
         self._run_generation_from_stored(prompt)
-
-    def _on_new_zone(self, prompt: str):
-        """Keep prompt, start new zone selection."""
-        self._clear_selection_rectangle()
-        self._selected_extent = None
-        self._last_image_b64 = None  # Will be re-captured from new zone
-        self._dock_widget.set_active_mode()
-        self._activate_selection_tool()
 
     def _on_template_selected(self, template_id: str, template_name: str = ""):
         """Track template selection for analytics."""
@@ -701,6 +709,7 @@ class AIEditPlugin:
             plugin_dir=plugin_dir,
             skip_trial_check=self._skip_trial_check,
             suggested_resolution=self._last_suggested_res or "1K",
+            context_images=self._reference_store.get_all_b64(),
         )
         self._worker.finished.connect(self._on_generation_finished)
         self._worker.progress.connect(self._on_generation_progress)
@@ -883,6 +892,7 @@ class AIEditPlugin:
             plugin_dir=plugin_dir,
             skip_trial_check=self._skip_trial_check,
             suggested_resolution=suggested_res,
+            context_images=self._reference_store.get_all_b64(),
         )
         self._worker.finished.connect(self._on_generation_finished)
         self._worker.progress.connect(self._on_generation_progress)

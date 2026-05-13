@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import os
+import tempfile
+
 from qgis.core import QgsProject
-from qgis.PyQt.QtCore import QTimer, QUrl, pyqtSignal
-from qgis.PyQt.QtGui import QDesktopServices, QKeySequence
+from qgis.PyQt.QtCore import QPoint, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtGui import QColor, QDesktopServices, QImage, QKeySequence
 from qgis.PyQt.QtWidgets import (
     QApplication,
     QCheckBox,
     QDockWidget,
     QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -20,6 +25,7 @@ from qgis.PyQt.QtWidgets import (
     QToolButton,
     QVBoxLayout,
     QWidget,
+    QWidgetAction,
 )
 
 from ..core import qt_compat as QtC
@@ -29,6 +35,9 @@ from ..core.activation_manager import (
     has_consent,
 )
 from ..core.i18n import tr
+from ..core.reference_image_store import ReferenceImageStore
+from .credit_ring import CreditRing
+from .reference_images_widget import ReferenceImagesWidget
 
 # ---------------------------------------------------------------------------
 # Brand colors (Material Design 2 — shared with AI Segmentation)
@@ -67,8 +76,7 @@ _BTN_GREEN = (
 )
 
 _BTN_GREEN_AUTH = (
-    f"QPushButton {{ background-color: {BRAND_GREEN}; color: white;"
-    f" font-weight: bold; }}"
+    f"QPushButton {{ background-color: {BRAND_GREEN}; color: #000000; }}"
     f"QPushButton:hover {{ background-color: {BRAND_GREEN_HOVER}; }}"
     f"QPushButton:disabled {{ background-color: {BRAND_DISABLED}; }}"
 )
@@ -82,8 +90,7 @@ _BTN_BLUE = (
 )
 
 _BTN_BLUE_AUTH = (
-    f"QPushButton {{ background-color: {BRAND_BLUE}; color: white;"
-    f" font-weight: bold; }}"
+    f"QPushButton {{ background-color: {BRAND_BLUE}; color: #000000; }}"
     f"QPushButton:hover {{ background-color: {BRAND_BLUE_HOVER}; }}"
     f"QPushButton:disabled {{ background-color: {BRAND_DISABLED}; }}"
 )
@@ -110,34 +117,27 @@ _BTN_GHOST = (
     f" border: 1px solid rgba(128, 128, 128, 0.15); color: {DISABLED_TEXT}; }}"
 )
 
-_RES_BTN_NEUTRAL = (
-    "QPushButton { background-color: rgba(128, 128, 128, 0.12);"
-    " padding: 6px 12px; border: 1px solid rgba(128, 128, 128, 0.2);"
-    " border-radius: 4px; color: palette(text); font-size: 11px; }"
-    "QPushButton:hover { background-color: rgba(128, 128, 128, 0.2); }"
+# Footer icon buttons (gear / question mark) — slim toolbuttons.
+# Hover/pressed states are gated by the dynamic ``hover`` property
+# rather than Qt's :hover pseudo-state. With InstantPopup menus, Qt
+# fails to clear :hover once the menu closes (the synthetic Leave
+# event is eaten by the popup), so the button stays tinted. The
+# property-driven approach lets us force-reset the visual via
+# ``_FooterIconButton.set_hovered(False)``.
+_FOOTER_ICON_BTN_STYLE = (
+    "QToolButton { background: transparent; border: none; padding: 6px 10px;"
+    " font-size: 22px; font-weight: 600;"
+    " color: palette(text); border-radius: 4px; }"
+    'QToolButton[hover="true"] { background: rgba(128,128,128,0.15); }'
+    "QToolButton::menu-indicator { image: none; width: 0; }"
 )
 
-_RES_BTN_SELECTED = (
-    "QPushButton { background-color: rgba(66, 133, 244, 0.25);"
-    " padding: 6px 12px; border: 1px solid rgba(66, 133, 244, 0.6);"
-    " border-radius: 4px; color: palette(text); font-size: 11px; font-weight: bold; }"
-)
-
-_RES_BTN_LOCKED = (
-    "QPushButton { background-color: rgba(128, 128, 128, 0.06);"
-    " padding: 6px 12px; border: 1px solid rgba(128, 128, 128, 0.12);"
-    f" border-radius: 4px; color: {DISABLED_TEXT}; font-size: 11px; }}"
-)
-
-_PROMPT_INPUT_NORMAL = (
-    "QTextEdit { border: 1px solid rgba(128,128,128,0.3);"
-    " border-radius: 4px; padding: 6px; color: palette(text); }"
-)
-
-_PROMPT_INPUT_READONLY = (
-    "QTextEdit { border: 1px solid rgba(128,128,128,0.3);"
-    " border-radius: 4px; padding: 6px;"
-    " background-color: rgba(128,128,128,0.1); color: #888888; }"
+_FOOTER_MENU_STYLE = (
+    "QMenu { background: palette(base); border: 1px solid rgba(128,128,128,0.35);"
+    " border-radius: 6px; padding: 4px; }"
+    "QMenu::item { background: transparent; padding: 6px 14px; border-radius: 4px;"
+    " color: palette(text); }"
+    "QMenu::item:selected { background: rgba(128,128,128,0.18); }"
 )
 
 _INSTRUCTION_BOX = (
@@ -169,10 +169,100 @@ def _make_section_header(text: str, extra_top: bool = False) -> QLabel:
     return label
 
 
+_IMAGE_DROP_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"}
+
+
+def _image_paths_from_mime(mime) -> list[str]:
+    if not mime.hasUrls():
+        return []
+    out: list[str] = []
+    for url in mime.urls():
+        if not url.isLocalFile():
+            continue
+        path = url.toLocalFile()
+        ext = os.path.splitext(path)[1].lower()
+        if ext in _IMAGE_DROP_EXTS:
+            out.append(path)
+    return out
+
+
+class _FooterIconButton(QToolButton):
+    """QToolButton whose hover tint is driven by an explicit ``hover``
+    dynamic property rather than Qt's :hover pseudo-state.
+
+    With InstantPopup menus, Qt fails to fire the synthetic Leave event
+    after the menu closes, so the button stays visually pressed/hovered
+    until the next real mouse move. Tracking hover ourselves lets us
+    force-reset it on ``menu.aboutToHide``.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setProperty("hover", False)
+
+    def set_hovered(self, hovered: bool) -> None:
+        if bool(self.property("hover")) == hovered:
+            return
+        self.setProperty("hover", hovered)
+        # Re-polish so the [hover="true"] selector takes effect.
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
+
+    def enterEvent(self, event):  # noqa: N802
+        self.set_hovered(True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):  # noqa: N802
+        self.set_hovered(False)
+        super().leaveEvent(event)
+
+
 class _SubmitTextEdit(QTextEdit):
-    """QTextEdit where Enter submits and Shift+Enter inserts a newline."""
+    """Borderless QTextEdit used inside _PromptContainer.
+
+    - Enter submits, Shift+Enter inserts newline.
+    - Image file paths in the clipboard or raw image data (e.g. a screenshot
+      copied from Preview) are routed to the references store via
+      ``images_pasted`` instead of being inserted as an emoji-doc icon.
+    - Drag-drop is delegated to the parent container by disabling
+      ``acceptDrops``, so the whole bordered area lights up rather than just
+      the text area.
+    - No QSS is applied here on purpose: a stylesheet on QTextEdit forces Qt
+      into its own renderer, which loses the native (e.g. macOS accent-blue)
+      caret. The frame and transparent background are set programmatically.
+    """
 
     submitted = pyqtSignal()
+    images_pasted = pyqtSignal(list)
+
+    _INNER_STYLE = (
+        "QTextEdit { background: transparent; padding: 4px; }"
+        # Some Qt styles still reserve a thin strip for the horizontal
+        # scrollbar even with ScrollBarAlwaysOff; force its height to 0.
+        "QTextEdit QScrollBar:horizontal { height: 0px; margin: 0px; }"
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setAcceptDrops(False)
+        # Remove the native frame — the surrounding _PromptContainer paints it.
+        self.setFrameShape(QtC.FrameNoFrame)
+        # Transparent background only; keep palette untouched so the QTextEdit
+        # keeps its native caret (the accent-blue insertion bar on macOS).
+        # Setting QPalette.Base ourselves silently disables the caret on some
+        # Qt builds, hence the QSS-only path here.
+        self.setStyleSheet(self._INNER_STYLE)
+        # Wrap long tokens (URLs, glued words) mid-character so the line never
+        # exceeds the box width, and kill the horizontal scrollbar — Qt
+        # otherwise reserves space for it (the "invisible bar" at the bottom).
+        self.setLineWrapMode(QtC.LineWrapWidgetWidth)
+        self.setWordWrapMode(QtC.WrapAtWordBoundaryOrAnywhere)
+        self.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
+        # Force plain text on paste: rich-text from a browser or markdown
+        # source can carry <pre> / white-space:nowrap that defeats wrapping,
+        # leaving the line wider than the viewport even with wrap modes set.
+        self.setAcceptRichText(False)
 
     def keyPressEvent(self, event):  # noqa: N802
         if (
@@ -183,6 +273,375 @@ class _SubmitTextEdit(QTextEdit):
             return
         super().keyPressEvent(event)
 
+    def canInsertFromMimeData(self, source):  # noqa: N802
+        if source.hasImage() or _image_paths_from_mime(source):
+            return False
+        return super().canInsertFromMimeData(source)
+
+    def insertFromMimeData(self, source):  # noqa: N802
+        paths = _image_paths_from_mime(source)
+        if paths:
+            self.images_pasted.emit(paths)
+            return
+        if source.hasImage():
+            self._emit_clipboard_image(source)
+            return
+        super().insertFromMimeData(source)
+
+    def _emit_clipboard_image(self, source) -> None:
+        """Save raw clipboard image data to a temp PNG and forward as a path."""
+        image = source.imageData()
+        if image is None:
+            return
+        if not isinstance(image, QImage):
+            image = QImage(image)
+        if image.isNull():
+            return
+        fd, tmp_path = tempfile.mkstemp(prefix="ai-edit-paste-", suffix=".png")
+        os.close(fd)
+        saved = False
+        try:
+            saved = bool(image.save(tmp_path, "PNG"))
+            if saved:
+                self.images_pasted.emit([tmp_path])
+        finally:
+            # Listener processed the path synchronously (direct connection);
+            # the refs store has its own compressed copy by now.
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+
+class _ResolutionMenuItem(QWidget):
+    """Custom widget for one resolution row inside the resolution QMenu.
+
+    Layout:   [ ✓ ]  Label                          N credits
+
+    The leading checkmark column is fixed-width so all three rows align.
+    Locked rows (free-tier 2K / 4K) render in a muted color but stay
+    clickable — the click still fires so the dock widget can show the
+    "Subscribe for higher resolution" banner.
+
+    QMenu does not paint its selection highlight under QWidgetAction items,
+    so the hover background is drawn by the widget itself via a :hover
+    stylesheet. Child labels are marked transparent-for-mouse so the
+    parent receives all hover/click events even when the cursor is over
+    a QLabel.
+    """
+
+    clicked = pyqtSignal()
+
+    _ITEM_STYLE = (
+        "QWidget#resolutionMenuItem { background: transparent; border-radius: 4px; }"
+        "QWidget#resolutionMenuItem:hover { background: rgba(128,128,128,0.20); }"
+    )
+
+    def __init__(
+        self,
+        label: str,
+        credits: int,
+        selected: bool,
+        locked: bool,
+        parent: QWidget | None = None,
+    ):
+        super().__init__(parent)
+        self.setObjectName("resolutionMenuItem")
+        self.setAttribute(QtC.WA_StyledBackground, True)
+        self.setStyleSheet(self._ITEM_STYLE)
+        self.setCursor(QtC.PointingHandCursor)
+        self.setMinimumHeight(26)
+        if locked:
+            self.setToolTip(tr("Subscribe for higher resolution"))
+
+        row = QHBoxLayout(self)
+        row.setContentsMargins(8, 4, 16, 4)
+        row.setSpacing(8)
+
+        check = QLabel("✓" if selected else "", self)
+        check.setFixedWidth(12)
+        check.setStyleSheet(
+            "font-size: 12px; color: palette(text); background: transparent;"
+        )
+        check.setAttribute(QtC.WA_TransparentForMouseEvents, True)
+        row.addWidget(check)
+
+        muted = f"color: {DISABLED_TEXT};" if locked else "color: palette(text);"
+        name = QLabel(label, self)
+        name.setStyleSheet(f"font-size: 12px; background: transparent; {muted}")
+        name.setAttribute(QtC.WA_TransparentForMouseEvents, True)
+        row.addWidget(name)
+
+        row.addStretch()
+
+        cost_color = (
+            f"color: {DISABLED_TEXT};"
+            if locked
+            else "color: rgba(128,128,128,0.85);"
+        )
+        cost = QLabel(tr("{n} credits").format(n=credits), self)
+        cost.setStyleSheet(f"font-size: 11px; background: transparent; {cost_color}")
+        cost.setAttribute(QtC.WA_TransparentForMouseEvents, True)
+        row.addWidget(cost)
+
+    def mouseReleaseEvent(self, event):  # noqa: N802
+        if event.button() == QtC.LeftButton:
+            self.clicked.emit()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+
+class _PromptContainer(QFrame):
+    """Bordered frame wrapping prompt textbox + refs strip + footer row.
+
+    Footer layout (bottom row):
+
+        [Templates]                              [ 2K  ⌄ ]   [ + ]
+
+    The whole frame is the drop target so dragging anywhere over it lights up
+    a single coherent area, matching the ChatGPT-style attachment flow.
+    """
+
+    files_dropped = pyqtSignal(list)
+    attach_clicked = pyqtSignal()
+    templates_clicked = pyqtSignal()
+    resolution_changed = pyqtSignal(str)
+
+    _NORMAL_STYLE = (
+        "QFrame#promptContainer { border: 1px solid rgba(128,128,128,0.3);"
+        " border-radius: 4px; background-color: rgba(128,128,128,0.06); }"
+    )
+    _READONLY_STYLE = (
+        "QFrame#promptContainer { border: 1px solid rgba(128,128,128,0.3);"
+        " border-radius: 4px; background-color: rgba(128,128,128,0.10); }"
+    )
+    _ATTACH_BTN_STYLE = (
+        "QToolButton { background: transparent; border: none; padding: 1px 8px;"
+        " font-size: 14px; font-weight: normal;"
+        " color: rgba(128,128,128,0.75); }"
+        "QToolButton:hover { color: palette(text);"
+        " background: rgba(128,128,128,0.15); border-radius: 4px; }"
+        "QToolButton:disabled { color: rgba(128,128,128,0.35); background: transparent; }"
+    )
+    _FOOTER_TEXT_BTN_STYLE = (
+        "QToolButton { background: transparent; border: none; padding: 2px 6px;"
+        " font-size: 11px; color: palette(text); }"
+        "QToolButton:hover { color: palette(text);"
+        " background: rgba(128,128,128,0.15); border-radius: 4px; }"
+        "QToolButton:disabled { color: rgba(128,128,128,0.45); background: transparent; }"
+        "QToolButton::menu-indicator { image: none; width: 0; }"
+    )
+    # Property-driven hover variant for buttons that pop a QMenu — see
+    # _FooterIconButton for the rationale (Qt eats the synthetic Leave
+    # event when a popup closes, leaving Qt's :hover stuck on).
+    _FOOTER_TEXT_BTN_HOVERPROP_STYLE = (
+        "QToolButton { background: transparent; border: none; padding: 2px 6px;"
+        " font-size: 11px; color: palette(text); border-radius: 4px; }"
+        'QToolButton[hover="true"] { background: rgba(128,128,128,0.15); }'
+        "QToolButton:disabled { color: rgba(128,128,128,0.45); background: transparent; }"
+        "QToolButton::menu-indicator { image: none; width: 0; }"
+    )
+    _MENU_STYLE = (
+        "QMenu { background: palette(base); border: 1px solid rgba(128,128,128,0.35);"
+        " border-radius: 6px; padding: 4px; }"
+        "QMenu::item { background: transparent; padding: 0; }"
+        "QMenu::item:selected { background: rgba(128,128,128,0.18); border-radius: 4px; }"
+    )
+
+    def __init__(self, text_edit: _SubmitTextEdit, parent=None):
+        super().__init__(parent)
+        self.setObjectName("promptContainer")
+        self.setAttribute(QtC.WA_StyledBackground, True)
+        self.setAcceptDrops(True)
+
+        self._text_edit = text_edit
+        self._base_style = self._NORMAL_STYLE
+        self._readonly = False
+
+        # Resolution state mirrored from the dock widget so the popup can be
+        # rebuilt locally without re-reaching into the parent.
+        self._selected_resolution = "2K"
+        self._resolution_costs: dict[str, int] = {"1K": 20, "2K": 30, "4K": 40}
+        self._free_tier = False
+
+        # No graphics effect attached at init: applying QGraphicsDropShadowEffect
+        # to a parent of a QTextEdit silently breaks the text-insertion caret
+        # (the effect pipeline intercepts the QTextEdit's blink timer paint).
+        # The drag-over glow is attached on dragEnterEvent and detached on
+        # dragLeave / drop — see _set_glow.
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(6, 6, 6, 4)
+        layout.setSpacing(4)
+
+        # Slot index 0 is reserved for the refs strip when injected.
+        layout.addWidget(text_edit)
+
+        footer_row = QHBoxLayout()
+        footer_row.setContentsMargins(0, 0, 0, 0)
+        footer_row.setSpacing(0)
+
+        self._templates_btn = QToolButton(self)
+        self._templates_btn.setText(tr("Templates"))
+        self._templates_btn.setToolTip(tr("Browse prompt templates"))
+        self._templates_btn.setCursor(QtC.PointingHandCursor)
+        self._templates_btn.setStyleSheet(self._FOOTER_TEXT_BTN_STYLE)
+        self._templates_btn.clicked.connect(self.templates_clicked.emit)
+        footer_row.addWidget(self._templates_btn)
+
+        footer_row.addStretch()
+
+        self._resolution_menu = QMenu(self)
+        self._resolution_menu.setStyleSheet(self._MENU_STYLE)
+        # Allow per-action tooltips (Qt swallows them by default in QMenu).
+        self._resolution_menu.setToolTipsVisible(True)
+        self._resolution_btn = _FooterIconButton(self)
+        self._resolution_btn.setToolTip(tr("Output resolution"))
+        self._resolution_btn.setCursor(QtC.PointingHandCursor)
+        self._resolution_btn.setStyleSheet(self._FOOTER_TEXT_BTN_HOVERPROP_STYLE)
+        self._resolution_btn.clicked.connect(self._show_resolution_menu)
+        # Force the hover tint off when the popup closes — Qt does not
+        # synthesise a Leave event in this case (same fix as the help menu).
+        self._resolution_menu.aboutToHide.connect(
+            lambda btn=self._resolution_btn: (btn.setDown(False), btn.set_hovered(False))
+        )
+        footer_row.addWidget(self._resolution_btn)
+        self._rebuild_resolution_menu()
+        self._update_resolution_label()
+
+        self._attach_btn = QToolButton(self)
+        # Plain ASCII "+" with a typographic weight (not the heavy/emoji ➕).
+        self._attach_btn.setText("+")
+        self._attach_btn.setToolTip(tr("Add reference image"))
+        self._attach_btn.setCursor(QtC.PointingHandCursor)
+        self._attach_btn.setStyleSheet(self._ATTACH_BTN_STYLE)
+        self._attach_btn.clicked.connect(self.attach_clicked.emit)
+        footer_row.addWidget(self._attach_btn)
+
+        layout.addLayout(footer_row)
+        self.setStyleSheet(self._base_style)
+
+    # -- public API --------------------------------------------------------
+
+    def insert_refs_widget(self, widget: QWidget) -> None:
+        """Move a shared refs widget into this container at the top slot."""
+        old_parent = widget.parentWidget()
+        if old_parent is not None and old_parent is not self:
+            old_layout = old_parent.layout()
+            if old_layout is not None:
+                old_layout.removeWidget(widget)
+        widget.setParent(self)
+        self.layout().insertWidget(0, widget)
+
+    def set_readonly(self, readonly: bool) -> None:
+        self._readonly = readonly
+        self._base_style = self._READONLY_STYLE if readonly else self._NORMAL_STYLE
+        self.setStyleSheet(self._base_style)
+        self._text_edit.setReadOnly(readonly)
+        # Visible-but-disabled while a generation runs — matches the Claude
+        # chat input pattern of leaving the footer chrome in place.
+        self._templates_btn.setEnabled(not readonly)
+        self._resolution_btn.setEnabled(not readonly)
+        self._attach_btn.setEnabled(not readonly)
+
+    def set_attach_enabled(self, enabled: bool) -> None:
+        """Hide the + button when the refs store is at capacity.
+
+        Readonly state is handled by set_readonly, which keeps the button
+        visible-but-disabled — do not gate visibility on readonly here.
+        """
+        self._attach_btn.setVisible(enabled)
+
+    def set_resolution_state(
+        self,
+        selected: str,
+        costs: dict[str, int] | None,
+        free_tier: bool,
+    ) -> None:
+        """Refresh the trigger label, the menu items and their lock state."""
+        self._selected_resolution = selected
+        if costs:
+            self._resolution_costs = costs
+        self._free_tier = free_tier
+        self._rebuild_resolution_menu()
+        self._update_resolution_label()
+
+    # -- resolution menu internals ----------------------------------------
+
+    def _update_resolution_label(self) -> None:
+        # ▾ (U+25BE) sits on the text baseline; ⌄ (U+2304) renders too low
+        # in most system fonts and breaks the visual alignment.
+        self._resolution_btn.setText(f"{self._selected_resolution}  ▾")
+
+    def _rebuild_resolution_menu(self) -> None:
+        self._resolution_menu.clear()
+        for res in ("1K", "2K", "4K"):
+            locked = self._free_tier and res != "1K"
+            selected = res == self._selected_resolution
+            credits = self._resolution_costs.get(res, 0)
+            widget = _ResolutionMenuItem(
+                res, credits, selected, locked, self._resolution_menu
+            )
+            widget.clicked.connect(lambda r=res: self._on_menu_item_clicked(r))
+            action = QWidgetAction(self._resolution_menu)
+            action.setDefaultWidget(widget)
+            if locked:
+                action.setToolTip(tr("Subscribe for higher resolution"))
+            self._resolution_menu.addAction(action)
+
+    def _on_menu_item_clicked(self, label: str) -> None:
+        self._resolution_menu.close()
+        self.resolution_changed.emit(label)
+
+    def _show_resolution_menu(self) -> None:
+        if not self._resolution_btn.isEnabled():
+            return
+        anchor = self._resolution_btn.mapToGlobal(QPoint(0, 0))
+        menu_height = self._resolution_menu.sizeHint().height()
+        anchor.setY(anchor.y() - menu_height)
+        self._resolution_menu.popup(anchor)
+
+    # -- drag and drop -----------------------------------------------------
+
+    def _set_glow(self, active: bool) -> None:
+        if active:
+            effect = QGraphicsDropShadowEffect(self)
+            effect.setBlurRadius(14)
+            effect.setOffset(0, 0)
+            effect.setColor(QColor(25, 118, 210, 200))
+            self.setGraphicsEffect(effect)
+        else:
+            # Detaching the effect restores native QTextEdit rendering and the
+            # accent-blue caret blink.
+            self.setGraphicsEffect(None)
+
+    def dragEnterEvent(self, event):  # noqa: N802
+        if self._readonly:
+            return
+        if _image_paths_from_mime(event.mimeData()):
+            event.acceptProposedAction()
+            self._set_glow(True)
+
+    def dragMoveEvent(self, event):  # noqa: N802
+        if self._readonly:
+            return
+        if _image_paths_from_mime(event.mimeData()):
+            event.acceptProposedAction()
+
+    def dragLeaveEvent(self, event):  # noqa: N802
+        self._set_glow(False)
+        event.accept()
+
+    def dropEvent(self, event):  # noqa: N802
+        paths = _image_paths_from_mime(event.mimeData())
+        self._set_glow(False)
+        if paths and not self._readonly:
+            self.files_dropped.emit(paths)
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
 
 class AIEditDockWidget(QDockWidget):
     """Dock widget with dynamic flow matching AI Segmentation pattern."""
@@ -191,17 +650,17 @@ class AIEditDockWidget(QDockWidget):
     stop_clicked = pyqtSignal()
     generate_clicked = pyqtSignal(str)
     retry_clicked = pyqtSignal(str)       # retry on same zone with (possibly edited) prompt
-    new_zone_clicked = pyqtSignal(str)    # keep prompt, select new zone
     activation_attempted = pyqtSignal(str)
     change_key_clicked = pyqtSignal()
     settings_clicked = pyqtSignal()
     # (template_id, template_name) for analytics — id is stable, name is human-readable.
     template_selected = pyqtSignal(str, str)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, reference_store: ReferenceImageStore | None = None):
         super().__init__(tr("AI Edit by TerraLab"), parent)
         self.setAllowedAreas(QtC.LeftDockWidgetArea | QtC.RightDockWidgetArea)
         self.setMinimumWidth(260)
+        self._reference_store = reference_store
 
         self._setup_title_bar()
 
@@ -238,6 +697,7 @@ class AIEditDockWidget(QDockWidget):
 
         # Primary: browse templates (recommended path)
         self._browse_btn = QPushButton(tr("Browse AI Prompts"))
+        self._browse_btn.setToolTip(tr("Open the prompt template library"))
         self._browse_btn.setCursor(QtC.PointingHandCursor)
         self._browse_btn.setStyleSheet(_BTN_GREEN)
         self._browse_btn.clicked.connect(self._on_browse_templates_clicked)
@@ -251,6 +711,7 @@ class AIEditDockWidget(QDockWidget):
 
         # Secondary: write own prompt (free edit)
         self._start_btn = QPushButton(tr("Write Your Own Prompt"))
+        self._start_btn.setToolTip(tr("Select a zone and write a custom prompt (shortcut: G)"))
         self._start_btn.setCursor(QtC.PointingHandCursor)
         self._start_btn.setStyleSheet(_BTN_BLUE)
         self._start_btn.clicked.connect(self._on_start_clicked)
@@ -268,47 +729,55 @@ class AIEditDockWidget(QDockWidget):
         # --- Prompt section (shown after zone selected) ---
         self._prompt_section = QWidget()
         self._prompt_section.setContentsMargins(0, 0, 0, 0)
-        prompt_layout = QVBoxLayout(self._prompt_section)
-        prompt_layout.setContentsMargins(0, 0, 0, 0)
-        prompt_layout.setSpacing(0)
+        self._prompt_layout = QVBoxLayout(self._prompt_section)
+        self._prompt_layout.setContentsMargins(0, 0, 0, 0)
+        self._prompt_layout.setSpacing(6)
 
         self._prompt_header = _make_section_header(tr("What should AI change?"))
-        prompt_layout.addWidget(self._prompt_header)
+        self._prompt_layout.addWidget(self._prompt_header)
 
         self._prompt_input = _SubmitTextEdit()
-        self._prompt_input.setPlaceholderText(tr("Type your prompt or use a template..."))
+        self._prompt_input.setPlaceholderText(
+            tr("type your prompt or use a template...")
+        )
         self._prompt_input.document().setDocumentMargin(0)
         self._prompt_input.setMinimumHeight(60)
         self._prompt_input.setMaximumHeight(60)
-        self._prompt_input.setStyleSheet(_PROMPT_INPUT_NORMAL)
         self._prompt_input.textChanged.connect(self._on_prompt_changed)
         self._prompt_input.submitted.connect(self._on_generate_clicked)
         self._prompt_input.document().documentLayout().documentSizeChanged.connect(
             self._adjust_prompt_height
         )
-        prompt_layout.addWidget(self._prompt_input)
-
-        self._templates_btn = QPushButton(tr("Browse Templates"))
-        self._templates_btn.setCursor(QtC.PointingHandCursor)
-        self._templates_btn.setStyleSheet(
-            "QPushButton { text-align: left; color: palette(text); "
-            "font-size: 11px; border: 1px solid rgba(128,128,128,0.25); "
-            "border-radius: 4px; padding: 4px 8px; "
-            "background-color: rgba(128,128,128,0.08); }"
-            "QPushButton:hover { background-color: rgba(128,128,128,0.15); }"
-            f"QPushButton:disabled {{ background-color: rgba(128,128,128,0.1); "
-            f"border: 1px solid rgba(128,128,128,0.15); color: {DISABLED_TEXT}; }}"
-        )
-        self._templates_btn.clicked.connect(self._on_browse_templates_clicked)
-        prompt_layout.addWidget(self._templates_btn)
-
-        # Resolution selector (Pro only — hidden for free tier)
-        self._resolution_selector, self._res_btns = self._build_resolution_selector()
-        self._resolution_selector.setVisible(False)
-        prompt_layout.addWidget(self._resolution_selector)
+        self._prompt_container = _PromptContainer(self._prompt_input, self._prompt_section)
+        self._prompt_container.templates_clicked.connect(self._on_browse_templates_clicked)
+        self._prompt_container.resolution_changed.connect(self._on_resolution_selected)
+        self._prompt_layout.addWidget(self._prompt_container)
 
         self._prompt_section.setVisible(False)
         main_layout.addWidget(self._prompt_section)
+
+        # Reference images widget — created once, moved between the prompt
+        # container and the result container as state changes.
+        if self._reference_store is not None:
+            self._reference_widget = ReferenceImagesWidget(
+                self._reference_store, self
+            )
+            self._reference_widget.error_occurred.connect(
+                lambda msg: self._show_status_box(msg, "error")
+            )
+            self._reference_widget.error_cleared.connect(self._hide_status_box)
+            self._reference_widget.images_changed.connect(self._sync_attach_buttons)
+            # Forward container actions: drop on container + paste in textbox +
+            # paperclip click all funnel into the reference widget.
+            self._prompt_container.files_dropped.connect(self._reference_widget.add_paths)
+            self._prompt_container.attach_clicked.connect(
+                self._reference_widget.open_file_picker
+            )
+            self._prompt_input.images_pasted.connect(self._reference_widget.add_paths)
+            # Idle: keep the widget out of the title bar by hiding it until placed.
+            self._reference_widget.setVisible(False)
+        else:
+            self._reference_widget = None
 
         # Consent checkbox (shown only until first generation)
         self._consent_check = QCheckBox()
@@ -355,6 +824,7 @@ class AIEditDockWidget(QDockWidget):
 
         # Generate button
         self._generate_btn = QPushButton(tr("Generate"))
+        self._generate_btn.setToolTip(tr("Run the AI edit on your selected zone"))
         self._generate_btn.setCursor(QtC.PointingHandCursor)
         self._generate_btn.setEnabled(False)
         self._update_generate_style()
@@ -362,8 +832,9 @@ class AIEditDockWidget(QDockWidget):
         self._generate_btn.setVisible(False)
         main_layout.addWidget(self._generate_btn)
 
-        # Stop button
-        self._stop_btn = QPushButton(tr("Stop"))
+        # Exit button (cancels in-flight generation or returns to idle)
+        self._stop_btn = QPushButton(tr("Exit"))
+        self._stop_btn.setToolTip(tr("Cancel and return to idle (shortcut: Esc)"))
         self._stop_btn.setCursor(QtC.PointingHandCursor)
         self._stop_btn.setStyleSheet(_BTN_GRAY)
         self._stop_btn.clicked.connect(self._on_stop_clicked)
@@ -383,6 +854,7 @@ class AIEditDockWidget(QDockWidget):
         self._progress_bar.setValue(0)
         self._progress_bar.setTextVisible(False)
         progress_layout.addWidget(self._progress_bar)
+
         self._progress_widget.setVisible(False)
         main_layout.addWidget(self._progress_widget)
 
@@ -411,6 +883,7 @@ class AIEditDockWidget(QDockWidget):
 
         # CTA button displayed for quota exhaustion
         self._limit_cta_btn = QPushButton(tr("Subscribe"))
+        self._limit_cta_btn.setToolTip(tr("Open the subscription page in your browser"))
         self._limit_cta_btn.setCursor(QtC.PointingHandCursor)
         self._limit_cta_btn.setStyleSheet(_BTN_BLUE)
         self._limit_cta_btn.clicked.connect(self._on_limit_cta_clicked)
@@ -419,13 +892,13 @@ class AIEditDockWidget(QDockWidget):
 
         # --- Result section (shown after generation complete, iteration flow) ---
         self._result_section = QWidget()
-        result_layout = QVBoxLayout(self._result_section)
-        result_layout.setContentsMargins(0, 0, 0, 0)
-        result_layout.setSpacing(6)
+        self._result_layout = QVBoxLayout(self._result_section)
+        self._result_layout.setContentsMargins(0, 0, 0, 0)
+        self._result_layout.setSpacing(6)
 
         # "What's next?" header
         result_header = _make_section_header(tr("What's next?"))
-        result_layout.addWidget(result_header)
+        self._result_layout.addWidget(result_header)
 
         # Editable prompt (edit and retry)
         self._result_prompt_input = _SubmitTextEdit()
@@ -435,67 +908,69 @@ class AIEditDockWidget(QDockWidget):
         self._result_prompt_input.document().setDocumentMargin(0)
         self._result_prompt_input.setMinimumHeight(50)
         self._result_prompt_input.setMaximumHeight(50)
-        self._result_prompt_input.setStyleSheet(_PROMPT_INPUT_NORMAL)
         self._result_prompt_input.submitted.connect(self._on_retry_clicked)
         self._result_prompt_input.textChanged.connect(self._on_result_prompt_changed)
         self._result_prompt_input.document().documentLayout().documentSizeChanged.connect(
             self._adjust_result_prompt_height
         )
-        result_layout.addWidget(self._result_prompt_input)
-
-        # Browse Templates in result section
-        self._result_templates_btn = QPushButton(tr("Browse Templates"))
-        self._result_templates_btn.setCursor(QtC.PointingHandCursor)
-        self._result_templates_btn.setStyleSheet(
-            "QPushButton { text-align: left; color: palette(text); "
-            "font-size: 11px; border: 1px solid rgba(128,128,128,0.25); "
-            "border-radius: 4px; padding: 4px 8px; "
-            "background-color: rgba(128,128,128,0.08); }"
-            "QPushButton:hover { background-color: rgba(128,128,128,0.15); }"
+        self._result_prompt_container = _PromptContainer(
+            self._result_prompt_input, self._result_section
         )
-        self._result_templates_btn.clicked.connect(self._on_browse_templates_clicked)
-        result_layout.addWidget(self._result_templates_btn)
+        self._result_prompt_container.templates_clicked.connect(
+            self._on_browse_templates_clicked
+        )
+        self._result_prompt_container.resolution_changed.connect(
+            self._on_resolution_selected
+        )
+        if self._reference_widget is not None:
+            self._result_prompt_container.files_dropped.connect(
+                self._reference_widget.add_paths
+            )
+            self._result_prompt_container.attach_clicked.connect(
+                self._reference_widget.open_file_picker
+            )
+            self._result_prompt_input.images_pasted.connect(
+                self._reference_widget.add_paths
+            )
+        self._result_layout.addWidget(self._result_prompt_container)
 
-        # Resolution selector for retry (Pro only)
-        self._retry_resolution_selector, self._retry_res_btns = self._build_resolution_selector()
-        self._retry_resolution_selector.setVisible(False)
-        result_layout.addWidget(self._retry_resolution_selector)
+        # Action row: Regenerate (primary, flex) + Exit (ghost, fixed).
+        result_actions_row = QHBoxLayout()
+        result_actions_row.setContentsMargins(0, 4, 0, 0)
+        result_actions_row.setSpacing(6)
 
-        # Primary: retry with edited prompt
-        self._retry_btn = QPushButton(tr("Retry on Same Area"))
-        self._retry_btn.setCursor(QtC.PointingHandCursor)
-        self._retry_btn.setStyleSheet(_BTN_GREEN)
-        self._retry_btn.clicked.connect(self._on_retry_clicked)
-        result_layout.addWidget(self._retry_btn)
+        self._result_regenerate_btn = QPushButton(tr("Regenerate"))
+        self._result_regenerate_btn.setToolTip(
+            tr(
+                "Same zone, current prompt. Always restarts from the original "
+                "satellite imagery; previous results never stack."
+            )
+        )
+        self._result_regenerate_btn.setCursor(QtC.PointingHandCursor)
+        self._result_regenerate_btn.setStyleSheet(_BTN_GREEN)
+        self._result_regenerate_btn.clicked.connect(self._on_retry_clicked)
+        result_actions_row.addWidget(self._result_regenerate_btn, 1)
 
-        # Secondary row: new area + done
-        secondary_row = QHBoxLayout()
-        secondary_row.setSpacing(6)
+        self._result_exit_btn = QPushButton(tr("Exit"))
+        self._result_exit_btn.setToolTip(tr("Return to the start screen"))
+        self._result_exit_btn.setCursor(QtC.PointingHandCursor)
+        self._result_exit_btn.setStyleSheet(_BTN_GHOST)
+        self._result_exit_btn.clicked.connect(self._on_result_exit_clicked)
+        result_actions_row.addWidget(self._result_exit_btn, 0)
 
-        self._new_zone_btn = QPushButton(tr("New Area"))
-        self._new_zone_btn.setCursor(QtC.PointingHandCursor)
-        self._new_zone_btn.setStyleSheet(_BTN_BLUE)
-        self._new_zone_btn.clicked.connect(self._on_new_zone_clicked)
-        secondary_row.addWidget(self._new_zone_btn)
+        self._result_layout.addLayout(result_actions_row)
 
-        self._done_btn = QPushButton(tr("Done"))
-        self._done_btn.setCursor(QtC.PointingHandCursor)
-        self._done_btn.setStyleSheet(_BTN_GHOST)
-        self._done_btn.clicked.connect(self._on_done_clicked)
-        secondary_row.addWidget(self._done_btn)
-
-        result_layout.addLayout(secondary_row)
-
-        # Layer saved info (shown until user clicks Done or New Area)
+        # Minimal status line — shown under the action row after generation.
+        # Submitting the prompt (Enter key) and the Regenerate button both
+        # trigger a regen on the same zone.
         self._layer_saved_label = QLabel()
         self._layer_saved_label.setWordWrap(True)
         self._layer_saved_label.setStyleSheet(
-            "font-size: 11px; color: palette(text); background: rgba(102,187,106,0.10);"
-            " border: 1px solid rgba(102,187,106,0.3); border-radius: 4px;"
-            " padding: 6px 8px;"
+            "font-size: 11px; color: palette(text); background: transparent;"
+            " border: none; padding: 4px 0 0 0;"
         )
         self._layer_saved_label.setVisible(False)
-        result_layout.addWidget(self._layer_saved_label)
+        self._result_layout.addWidget(self._layer_saved_label)
 
         self._result_section.setVisible(False)
         main_layout.addWidget(self._result_section)
@@ -536,27 +1011,26 @@ class AIEditDockWidget(QDockWidget):
         # Spacer to push footer to bottom
         layout.addStretch()
 
-        # Footer section — two rows: credits on top, links below
+        # Footer section — single row: ring + count + Subscribe pill on the
+        # left, gear/help menus on the right.
         footer_widget = QWidget()
-        footer_vbox = QVBoxLayout(footer_widget)
-        footer_vbox.setContentsMargins(0, 0, 0, 4)
-        footer_vbox.setSpacing(2)
+        footer_row = QHBoxLayout(footer_widget)
+        footer_row.setContentsMargins(0, 4, 0, 4)
+        footer_row.setSpacing(6)
 
-        # Row 1: credits + upgrade pill
-        credits_row = QHBoxLayout()
-        credits_row.setContentsMargins(0, 0, 0, 0)
-        credits_row.setSpacing(8)
-
-        credits_row.addStretch()
+        self._credit_ring = CreditRing(diameter=16, parent=footer_widget)
+        self._credit_ring.setVisible(False)
+        footer_row.addWidget(self._credit_ring)
 
         self._credits_label = QLabel()
         self._credits_label.setStyleSheet(
             "font-size: 11px; color: palette(text); background: transparent; border: none;"
         )
         self._credits_label.setVisible(False)
-        credits_row.addWidget(self._credits_label)
+        footer_row.addWidget(self._credits_label)
 
         self._upgrade_cta = QPushButton(tr("Subscribe"))
+        self._upgrade_cta.setToolTip(tr("Open the subscription page in your browser"))
         self._upgrade_cta.setCursor(QtC.PointingHandCursor)
         self._upgrade_cta.setStyleSheet(
             f"QPushButton {{ border: 1px solid {BRAND_BLUE}; color: {BRAND_BLUE};"
@@ -566,39 +1040,42 @@ class AIEditDockWidget(QDockWidget):
         )
         self._upgrade_cta.clicked.connect(self._on_upgrade_clicked)
         self._upgrade_cta.setVisible(False)
-        credits_row.addWidget(self._upgrade_cta)
+        footer_row.addWidget(self._upgrade_cta)
 
-        footer_vbox.addLayout(credits_row)
+        footer_row.addStretch()
 
-        # Row 2: links — [Settings] [Tutorial] [Contact us]
-        links_row = QHBoxLayout()
-        links_row.setContentsMargins(0, 0, 0, 0)
-        links_row.setSpacing(16)
-
-        links_row.addStretch()
-
-        self._settings_btn = QLabel(f'<a href="#" style="color: {BRAND_BLUE};">{tr("Settings")}</a>')
-        self._settings_btn.setStyleSheet("font-size: 13px;")
+        # Settings button — gear icon, opens the Account Settings dialog
+        # directly. Shortcuts have moved inside that dialog.
+        self._settings_btn = _FooterIconButton(footer_widget)
+        self._settings_btn.setText("⚙")  # ⚙ U+2699 GEAR
+        self._settings_btn.setToolTip(tr("Settings"))
         self._settings_btn.setCursor(QtC.PointingHandCursor)
-        self._settings_btn.linkActivated.connect(lambda _: self._on_settings_btn_clicked())
-        self._settings_btn.setVisible(False)
-        links_row.addWidget(self._settings_btn)
+        self._settings_btn.setFocusPolicy(QtC.NoFocus)
+        self._settings_btn.setStyleSheet(_FOOTER_ICON_BTN_STYLE)
+        self._settings_btn.clicked.connect(self._on_settings_btn_clicked)
+        self._settings_btn.setVisible(False)  # shown when activated
+        footer_row.addWidget(self._settings_btn)
 
-        for text, url, handler in [
-            (tr("Contact us"), "#", self._on_contact_us),
-            (tr("Tutorial"), get_tutorial_url(), None),
-            (tr("Shortcuts"), "#", self._on_show_shortcuts),
-        ]:
-            link = QLabel(f'<a href="{url}" style="color: {BRAND_BLUE};">{text}</a>')
-            link.setStyleSheet("font-size: 13px;")
-            link.setCursor(QtC.PointingHandCursor)
-            if handler:
-                link.linkActivated.connect(handler)
-            else:
-                link.setOpenExternalLinks(True)
-            links_row.addWidget(link)
-
-        footer_vbox.addLayout(links_row)
+        # Help menu — question mark icon, always visible.
+        self._help_btn = _FooterIconButton(footer_widget)
+        self._help_btn.setText("?")
+        self._help_btn.setToolTip(tr("Help"))
+        self._help_btn.setCursor(QtC.PointingHandCursor)
+        self._help_btn.setFocusPolicy(QtC.NoFocus)
+        self._help_btn.setStyleSheet(_FOOTER_ICON_BTN_STYLE)
+        self._help_btn.setPopupMode(QToolButton.InstantPopup)
+        help_menu = QMenu(self._help_btn)
+        help_menu.setStyleSheet(_FOOTER_MENU_STYLE)
+        help_menu.addAction(tr("Tutorial"), self._on_open_tutorial)
+        help_menu.addAction(tr("Shortcuts"), self._on_show_shortcuts)
+        help_menu.addAction(tr("Contact us"), self._on_contact_us)
+        self._help_btn.setMenu(help_menu)
+        # Force the hover tint off when the popup closes — Qt does not
+        # synthesise a Leave event in this case.
+        help_menu.aboutToHide.connect(
+            lambda btn=self._help_btn: (btn.setDown(False), btn.set_hovered(False))
+        )
+        footer_row.addWidget(self._help_btn)
 
         layout.addWidget(footer_widget)
 
@@ -616,8 +1093,13 @@ class AIEditDockWidget(QDockWidget):
         self._checking_credits = False
         self._from_template = False
         self._is_free_tier = True  # default hidden until confirmed Pro
-        self._selected_resolution = "1K"
-        # Fallback costs used until server config is loaded
+        # Seeded paid-tier default. `set_credits` downgrades to "1K" the first
+        # time a free-tier user is confirmed, so the dock never lands on a
+        # locked resolution.
+        self._selected_resolution = "2K"
+        # Credit cost per resolution. Used to suffix the Generate/Regenerate
+        # button text ("Generate (30 credits)"). Overwritten by
+        # set_resolution_credit_costs once the server config loads.
         self._resolution_credit_costs: dict[str, int] = {"1K": 20, "2K": 30, "4K": 40}
 
         # Keyboard shortcuts (G to start, Esc to stop)
@@ -660,6 +1142,7 @@ class AIEditDockWidget(QDockWidget):
         float_btn.setIcon(
             self.style().standardIcon(QStyle.StandardPixmap.SP_TitleBarNormalButton)
         )
+        float_btn.setToolTip(tr("Dock or undock this panel"))
         float_btn.setFixedSize(icon_size + 4, icon_size + 4)
         float_btn.setAutoRaise(True)
         float_btn.clicked.connect(lambda: self.setFloating(not self.isFloating()))
@@ -669,6 +1152,7 @@ class AIEditDockWidget(QDockWidget):
         close_btn.setIcon(
             self.style().standardIcon(QStyle.StandardPixmap.SP_TitleBarCloseButton)
         )
+        close_btn.setToolTip(tr("Close this panel"))
         close_btn.setFixedSize(icon_size + 4, icon_size + 4)
         close_btn.setAutoRaise(True)
         close_btn.clicked.connect(self.close)
@@ -719,13 +1203,14 @@ class AIEditDockWidget(QDockWidget):
         signup_layout.addWidget(step1_label)
 
         self._login_btn = QPushButton(tr("Get Your Key"))
+        self._login_btn.setToolTip(tr("Sign up or sign in to receive your activation key"))
         self._login_btn.setMinimumHeight(36)
         self._login_btn.setCursor(QtC.PointingHandCursor)
         self._login_btn.setStyleSheet(_BTN_GREEN_AUTH)
         self._login_btn.clicked.connect(self._on_login_clicked)
         signup_layout.addWidget(self._login_btn)
 
-        login_hint = QLabel(tr("5 free generations — no credit card required"))
+        login_hint = QLabel(tr("5 free generations, no credit card required"))
         login_hint.setAlignment(QtC.AlignCenter)
         login_hint.setWordWrap(True)
         login_hint.setStyleSheet("font-size: 11px; color: palette(text);")
@@ -751,6 +1236,7 @@ class AIEditDockWidget(QDockWidget):
         key_input_layout.addWidget(self._code_input)
 
         unlock_btn = QPushButton(tr("Activate"))
+        unlock_btn.setToolTip(tr("Validate the activation key you pasted"))
         unlock_btn.setMinimumHeight(28)
         unlock_btn.setMinimumWidth(70)
         unlock_btn.setStyleSheet(_BTN_BLUE_AUTH)
@@ -761,6 +1247,7 @@ class AIEditDockWidget(QDockWidget):
 
         # Cancel button (visible only in change-key mode)
         self._cancel_key_btn = QPushButton(tr("Cancel"))
+        self._cancel_key_btn.setToolTip(tr("Discard changes and keep the current key"))
         self._cancel_key_btn.setCursor(QtC.PointingHandCursor)
         self._cancel_key_btn.setStyleSheet(_BTN_GHOST)
         self._cancel_key_btn.clicked.connect(self._on_cancel_change_key)
@@ -777,6 +1264,7 @@ class AIEditDockWidget(QDockWidget):
 
         # CTA button displayed on activation flow when usage limit is reached
         self._activation_limit_cta_btn = QPushButton(tr("Subscribe"))
+        self._activation_limit_cta_btn.setToolTip(tr("Open the subscription page in your browser"))
         self._activation_limit_cta_btn.setCursor(QtC.PointingHandCursor)
         self._activation_limit_cta_btn.setStyleSheet(_BTN_BLUE_AUTH)
         self._activation_limit_cta_btn.clicked.connect(self._on_activation_limit_cta_clicked)
@@ -810,6 +1298,37 @@ class AIEditDockWidget(QDockWidget):
         warning_layout.addWidget(self._warning_text, 1)
 
         return widget
+
+    def _place_reference_widget(self, target: str) -> None:
+        """Inject the shared refs strip into the active prompt container.
+
+        ``target`` is "prompt" or "result". The strip lives above the textbox
+        inside the bordered container, so the whole input area reads as a
+        single ChatGPT-style attachment block.
+        """
+        if self._reference_widget is None:
+            return
+        container = (
+            self._prompt_container if target == "prompt" else self._result_prompt_container
+        )
+        container.insert_refs_widget(self._reference_widget)
+        # Visibility tracks the store: hidden when 0 refs, shown when ≥1.
+        self._reference_widget.setVisible(self._reference_widget.count() > 0)
+        self._reference_widget.setEnabled(True)
+        # `set_generating(True)` flips this flag on every run, but the
+        # generation-done path (set_generation_complete / set_idle) never
+        # calls set_generating(False), so without this reset the flag stays
+        # True and silently blocks +/paste/drop on every subsequent attempt.
+        self._reference_widget.set_readonly(False)
+        self._sync_attach_buttons()
+
+    def _sync_attach_buttons(self) -> None:
+        """Hide paperclips when the refs store is at capacity."""
+        if self._reference_widget is None:
+            return
+        enabled = not self._reference_widget.at_capacity()
+        self._prompt_container.set_attach_enabled(enabled)
+        self._result_prompt_container.set_attach_enabled(enabled)
 
     def _open_templates_dialog(self) -> dict | None:
         """Open the prompt templates dialog. Returns selected preset or None."""
@@ -893,19 +1412,19 @@ class AIEditDockWidget(QDockWidget):
         limit: int | None = None,
         is_free_tier: bool = False,
     ):
-        """Update the credits indicator near the Generate button."""
+        """Update the credits ring + compact count in the footer."""
         self._is_free_tier = is_free_tier
         if used is not None and limit is not None:
             remaining = max(0, limit - used)
-            if is_free_tier:
-                self._credits_label.setText(f"{remaining} / {limit} free trial credits remaining")
-            else:
-                self._credits_label.setText(f"{remaining} / {limit} credits remaining")
+            self._credits_label.setText(f"{remaining} / {limit}")
             self._credits_label.setVisible(True)
+            self._credit_ring.set_credits(used, limit, free_tier=is_free_tier)
+            self._credit_ring.setVisible(True)
         else:
             self._credits_label.setVisible(False)
+            self._credit_ring.setVisible(False)
         self._upgrade_cta.setVisible(is_free_tier and self._activated)
-        self._update_resolution_lock()
+        self._refresh_resolution_triggers()
         self._update_generate_button_text()
 
     def set_active_mode(self):
@@ -919,6 +1438,8 @@ class AIEditDockWidget(QDockWidget):
         self._instruction_box.setVisible(True)
         self._hide_status_box()
         self._layer_saved_label.setVisible(False)
+        if self._reference_widget is not None:
+            self._reference_widget.setVisible(False)
 
     def set_zone_selected(self):
         """Zone drawn: show prompt flow (no Start button)."""
@@ -931,16 +1452,13 @@ class AIEditDockWidget(QDockWidget):
         self._hide_status_box()
         self._layer_saved_label.setVisible(False)
         self._prompt_section.setVisible(True)
-        self._prompt_input.setReadOnly(False)
-        self._prompt_input.setStyleSheet(_PROMPT_INPUT_NORMAL)
-        self._templates_btn.setVisible(True)
-        self._templates_btn.setEnabled(True)
+        self._prompt_container.set_readonly(False)
         self._from_template = False
+        self._place_reference_widget("prompt")
         self._consent_widget.setVisible(not has_consent())
         self._generate_btn.setVisible(True)
         self._stop_btn.setVisible(True)
-        self._resolution_selector.setVisible(True)
-        self._update_resolution_lock()
+        self._refresh_resolution_triggers()
         self._start_shortcut.setEnabled(False)
         self._stop_shortcut.setEnabled(True)
 
@@ -961,6 +1479,11 @@ class AIEditDockWidget(QDockWidget):
         self._edit_header.setVisible(True)
         self._idle_section.setVisible(True)
 
+        # Reset reference images on Done/Stop (per product decision).
+        if self._reference_widget is not None:
+            self._reference_widget.clear()
+            self._reference_widget.setVisible(False)
+
         self._stop_btn.setVisible(False)
         self._instruction_box.setVisible(False)
         self._prompt_section.setVisible(False)
@@ -973,16 +1496,14 @@ class AIEditDockWidget(QDockWidget):
         self._stop_shortcut.setEnabled(True)
         self._prompt_input.clear()
         self._prompt_input.setFixedHeight(60)
-        self._prompt_input.setReadOnly(False)
-        self._prompt_input.setStyleSheet(_PROMPT_INPUT_NORMAL)
+        self._prompt_container.set_readonly(False)
         self._result_prompt_input.clear()
-        self._templates_btn.setEnabled(True)
-        self._templates_btn.setVisible(True)
         self._from_template = False
-        self._resolution_selector.setVisible(False)
-        self._retry_resolution_selector.setVisible(False)
-        self._selected_resolution = "1K"
-        self._on_resolution_selected("1K")
+        # Reset selection to the tier default (no persistence across sessions
+        # or generations — Done sends us back to a clean slate).
+        self._selected_resolution = "1K" if self._is_free_tier else "2K"
+        self._refresh_resolution_triggers()
+        self._update_generate_button_text()
         self._update_layer_warning()
 
     def set_generating(self, generating: bool):
@@ -1000,26 +1521,26 @@ class AIEditDockWidget(QDockWidget):
             self._progress_bar.setRange(0, 100)
             self._progress_bar.setValue(0)
             self._hide_status_box()
-            # Keep prompt section visible but disable interaction
+            # Keep prompt section visible but disable interaction.
+            # set_readonly grays the Templates / resolution / + footer trio.
             self._prompt_section.setVisible(True)
-            self._prompt_input.setReadOnly(True)
-            self._prompt_input.setStyleSheet(_PROMPT_INPUT_READONLY)
-            self._templates_btn.setEnabled(False)
+            self._prompt_container.set_readonly(True)
+            if self._reference_widget is not None:
+                # Lock add/remove but keep thumbnails clickable for preview.
+                self._reference_widget.set_readonly(True)
             self._consent_widget.setVisible(False)
             self._generate_btn.setVisible(False)
             self._stop_btn.setVisible(False)
-            self._resolution_selector.setVisible(False)
             self._stop_shortcut.setEnabled(False)
             self._progress_label.setText(tr("Preparing..."))
         else:
             # Restore prompt interaction
-            self._prompt_input.setReadOnly(False)
-            self._prompt_input.setStyleSheet(_PROMPT_INPUT_NORMAL)
-            self._templates_btn.setEnabled(True)
+            self._prompt_container.set_readonly(False)
+            if self._reference_widget is not None:
+                self._reference_widget.set_readonly(False)
             self._consent_widget.setVisible(not has_consent() and self._zone_selected)
             self._generate_btn.setVisible(self._zone_selected)
-            self._resolution_selector.setVisible(self._zone_selected)
-            self._update_resolution_lock()
+            self._refresh_resolution_triggers()
             self._stop_btn.setVisible(self._zone_selected)
             self._stop_shortcut.setEnabled(True)
             self._prompt_section.setVisible(self._zone_selected)
@@ -1131,14 +1652,16 @@ class AIEditDockWidget(QDockWidget):
         last_prompt = self._prompt_input.toPlainText().strip()
         self._result_prompt_input.setPlainText(last_prompt)
         self._result_prompt_input.moveCursor(QtC.CursorEnd)
-        self._result_prompt_input.setReadOnly(False)
+        self._result_prompt_container.set_readonly(False)
         self._result_section.setVisible(True)
-        self._retry_resolution_selector.setVisible(True)
-        self._update_resolution_lock()
+        self._refresh_resolution_triggers()
 
-        # Persistent layer saved info (stays until Done or New Area)
+        # Reparent reference images into result section for retry/new-area flow
+        self._place_reference_widget("result")
+
+        # Persistent layer saved info (one-line minimal status).
         self._layer_saved_label.setText(
-            tr('Layer saved as "{name}" — visible in your Layers panel').format(name=layer_name))
+            tr('✓ Saved as "{name}"').format(name=layer_name))
         self._layer_saved_label.setVisible(True)
 
         # Restore upgrade CTA visibility for free tier
@@ -1243,6 +1766,12 @@ class AIEditDockWidget(QDockWidget):
         self.set_idle()
         self.stop_clicked.emit()
 
+    def _on_result_exit_clicked(self):
+        """Exit from the result section -- always returns to idle, even
+        though ``_active`` is False once a generation has completed."""
+        self.set_idle()
+        self.stop_clicked.emit()
+
     def _on_key_toggle(self, checked: bool):
         pass
 
@@ -1270,54 +1799,27 @@ class AIEditDockWidget(QDockWidget):
         self.activation_attempted.emit(code)
 
     # ------------------------------------------------------------------
-    # Resolution selector helpers
+    # Resolution helpers
     # ------------------------------------------------------------------
 
-    def _build_resolution_selector(self) -> tuple[QWidget, dict[str, QPushButton]]:
-        """Build a labeled row of 1K / 2K / 4K toggle buttons."""
-        widget = QWidget()
-        outer = QVBoxLayout(widget)
-        outer.setContentsMargins(0, 4, 0, 0)
-        outer.setSpacing(2)
+    def _refresh_resolution_triggers(self):
+        """Push the current selection / costs / tier into both prompt containers.
 
-        label = QLabel(tr("Output resolution"))
-        label.setStyleSheet("font-size: 11px; color: palette(text);")
-        outer.addWidget(label)
-
-        row = QHBoxLayout()
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(4)
-        btns: dict[str, QPushButton] = {}
-        for res in ("1K", "2K", "4K"):
-            btn = QPushButton(res)
-            btn.setCursor(QtC.PointingHandCursor)
-            btn.setStyleSheet(_RES_BTN_SELECTED if res == "1K" else _RES_BTN_NEUTRAL)
-            btn.clicked.connect(lambda _, r=res: self._on_resolution_selected(r))
-            row.addWidget(btn)
-            btns[res] = btn
-        outer.addLayout(row)
-        return widget, btns
-
-    def _update_resolution_lock(self):
-        """Lock 2K/4K buttons for free tier users (teaser for paid)."""
-        for btns in (self._res_btns, self._retry_res_btns):
-            for res, btn in btns.items():
-                if self._is_free_tier and res != "1K":
-                    btn.setEnabled(True)  # Keep enabled to catch clicks and show tooltip
-                    btn.setText(res)
-                    btn.setToolTip(tr("Subscribe for higher resolution"))
-                    btn.setStyleSheet(_RES_BTN_LOCKED)
-                else:
-                    btn.setEnabled(True)
-                    btn.setText(res)
-                    btn.setToolTip("")
-                    if res == self._selected_resolution:
-                        btn.setStyleSheet(_RES_BTN_SELECTED)
-                    else:
-                        btn.setStyleSheet(_RES_BTN_NEUTRAL)
+        Also coerces the selection to "1K" when a free-tier user is ever
+        confirmed (downgrades from the seeded "2K" paid default), so the
+        Generate button never quotes a price the user can't actually pay.
+        """
+        if self._is_free_tier and self._selected_resolution != "1K":
+            self._selected_resolution = "1K"
+        for container in (self._prompt_container, self._result_prompt_container):
+            container.set_resolution_state(
+                self._selected_resolution,
+                self._resolution_credit_costs,
+                self._is_free_tier,
+            )
 
     def _on_resolution_selected(self, label: str):
-        """Handle resolution toggle click — sync both selectors."""
+        """Handle a click inside the resolution dropdown of either container."""
         if self._is_free_tier and label != "1K":
             subscribe_url = get_subscribe_url()
             self._show_status_box(
@@ -1333,24 +1835,24 @@ class AIEditDockWidget(QDockWidget):
         self._hide_status_box()
 
         self._selected_resolution = label
-        self._update_resolution_lock()
+        self._refresh_resolution_triggers()
         self._update_generate_button_text()
 
     def _update_generate_button_text(self):
-        """Update Generate / Retry button text with credit cost."""
-        cost = self._resolution_credit_costs.get(self._selected_resolution)
-        if cost is not None:
-            self._generate_btn.setText(tr("Generate") + f" ({cost} credits)")
-            self._retry_btn.setText(tr("Retry on Same Area") + f" ({cost} credits)")
-        else:
-            self._generate_btn.setText(tr("Generate"))
-            self._retry_btn.setText(tr("Retry on Same Area"))
+        """Reset Generate / Regenerate button labels.
+
+        The credit cost is shown in the resolution dropdown instead of the
+        button, so the button text stays minimal.
+        """
+        self._generate_btn.setText(tr("Generate"))
+        self._result_regenerate_btn.setText(tr("Regenerate"))
 
     def set_resolution_credit_costs(self, costs: dict[str, int]):
-        """Set credit costs per resolution (from server config)."""
+        """Update per-resolution credit costs (server config). Costs are
+        displayed inside the resolution dropdown via the prompt containers."""
         if costs:
             self._resolution_credit_costs = costs
-        self._update_generate_button_text()
+        self._refresh_resolution_triggers()
 
     def get_selected_resolution(self) -> str:
         """Return the user-selected resolution label."""
@@ -1418,23 +1920,38 @@ class AIEditDockWidget(QDockWidget):
         finally:
             text_edit.blockSignals(False)
 
+    _PROMPT_MAX_HEIGHT = 400
+
     def _adjust_prompt_height(self):
-        """Auto-expand prompt input to fit content (60px min, 140px max)."""
-        doc_height = int(self._prompt_input.document().size().height())
-        padding = 12  # 6px top + 6px bottom from QSS padding
-        frame = 2 * self._prompt_input.frameWidth()
-        target = doc_height + padding + frame
-        clamped = max(60, min(140, target))
-        self._prompt_input.setFixedHeight(clamped)
+        """Auto-expand prompt input (60px min, 200px max). When the cap
+        kicks in, snap height to a whole number of text lines so the last
+        visible line isn't half-cut at the viewport bottom."""
+        self._prompt_input.setFixedHeight(
+            self._snapped_prompt_height(self._prompt_input, min_h=60)
+        )
 
     def _adjust_result_prompt_height(self):
-        """Auto-expand result prompt input (50px min, 140px max)."""
-        doc_height = int(self._result_prompt_input.document().size().height())
-        padding = 12  # 6px top + 6px bottom from QSS padding
-        frame = 2 * self._result_prompt_input.frameWidth()
-        target = doc_height + padding + frame
-        clamped = max(50, min(140, target))
-        self._result_prompt_input.setFixedHeight(clamped)
+        """Auto-expand result prompt input (50px min, 200px max, line-snapped)."""
+        self._result_prompt_input.setFixedHeight(
+            self._snapped_prompt_height(self._result_prompt_input, min_h=50)
+        )
+
+    @classmethod
+    def _snapped_prompt_height(cls, text_edit: QTextEdit, min_h: int) -> int:
+        # QSS sets `padding: 4px` on QTextEdit, so the viewport is inset 4px
+        # top and 4px bottom from the widget edge — 8 total. The previous
+        # value of 12 was a stale comment ("6+6") and overshot the cut by 4px.
+        padding = 8
+        frame = 2 * text_edit.frameWidth()
+        target = int(text_edit.document().size().height()) + padding + frame
+        if target > cls._PROMPT_MAX_HEIGHT:
+            line_h = text_edit.fontMetrics().lineSpacing()
+            if line_h > 0:
+                n_lines = max(1, (cls._PROMPT_MAX_HEIGHT - padding) // line_h)
+                target = n_lines * line_h + padding
+            else:
+                target = cls._PROMPT_MAX_HEIGHT
+        return max(min_h, target)
 
     def _on_retry_clicked(self):
         """Retry on same zone with the (possibly edited) prompt from result section."""
@@ -1453,21 +1970,6 @@ class AIEditDockWidget(QDockWidget):
         self._hide_status_box()
         self.retry_clicked.emit(prompt)
 
-    def _on_new_zone_clicked(self):
-        """Keep prompt, start new zone selection."""
-        prompt = self._result_prompt_input.toPlainText().strip()
-        if prompt:
-            self._prompt_input.setPlainText(prompt)
-        self._result_section.setVisible(False)
-        self._layer_saved_label.setVisible(False)
-        self._hide_status_box()
-        self.new_zone_clicked.emit(prompt)
-
-    def _on_done_clicked(self):
-        """Done — back to idle."""
-        self.set_idle()
-        self.stop_clicked.emit()
-
     def _on_generate_clicked(self):
         prompt = self.get_prompt()
         if not prompt:
@@ -1478,6 +1980,10 @@ class AIEditDockWidget(QDockWidget):
             return
         self._hide_status_box()
         self.generate_clicked.emit(prompt)
+
+    def _on_open_tutorial(self):
+        """Open the tutorial URL in the user's default browser."""
+        QDesktopServices.openUrl(QUrl(get_tutorial_url()))
 
     def _on_contact_us(self, _link=None):
         """Show a dialog with email + Calendly options."""

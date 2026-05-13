@@ -90,6 +90,7 @@ class GenerationWorker(QThread):
         debug_mode=False,
         plugin_dir="",
         skip_trial_check=False,
+        context_images=None,
     ):
         super().__init__()
         self._client = client
@@ -106,6 +107,7 @@ class GenerationWorker(QThread):
         self._plugin_dir = plugin_dir
         self._skip_trial_check = skip_trial_check
         self._suggested_resolution = suggested_resolution
+        self._context_images = context_images or []
 
     def run(self):
         self.progress.emit("Preparing...", 0)
@@ -176,6 +178,7 @@ class GenerationWorker(QThread):
             on_progress=_on_progress,
             ctx=self._ctx,
             suggested_resolution=self._suggested_resolution,
+            context_images=self._context_images,
         )
 
         if not result.success:
@@ -220,6 +223,13 @@ class GenerationWorker(QThread):
         if self._debug_mode and self._ctx is not None:
             try:
                 sent_img = base64.b64decode(self._image_b64)
-                save_debug_artifacts(self._ctx, sent_img, image_data, self._plugin_dir)
+                ctx_bytes = [base64.b64decode(b) for b in self._context_images]
+                save_debug_artifacts(
+                    self._ctx,
+                    sent_img,
+                    image_data,
+                    self._plugin_dir,
+                    context_images=ctx_bytes,
+                )
             except Exception:
                 pass  # nosec B110

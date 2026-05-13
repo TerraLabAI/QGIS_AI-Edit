@@ -3,9 +3,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from qgis.PyQt.QtCore import QThread, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import QThread, pyqtSignal
 from qgis.PyQt.QtWidgets import (
-    QApplication,
     QDialog,
     QFrame,
     QGridLayout,
@@ -198,13 +197,6 @@ class AccountSettingsDialog(QDialog):
         email_val.setTextInteractionFlags(QtC.TextSelectableByMouse)
         email_val.setStyleSheet("font-size: 12px; color: palette(text);")
         email_row.addWidget(email_val)
-        email_copy = QPushButton(tr("Copy"))
-        email_copy.setStyleSheet(_LINK_BTN)
-        email_copy.setCursor(QtC.PointingHandCursor)
-        email_copy.clicked.connect(
-            lambda: self._copy_text(data.get("email", ""), email_copy)
-        )
-        email_row.addWidget(email_copy)
         layout.addLayout(email_row)
 
         sep = QFrame()
@@ -230,13 +222,6 @@ class AccountSettingsDialog(QDialog):
         self._toggle_btn.setCursor(QtC.PointingHandCursor)
         self._toggle_btn.clicked.connect(self._toggle_key_visibility)
         key_row.addWidget(self._toggle_btn)
-        self._copy_key_btn = QPushButton(tr("Copy"))
-        self._copy_key_btn.setStyleSheet(_LINK_BTN)
-        self._copy_key_btn.setCursor(QtC.PointingHandCursor)
-        self._copy_key_btn.clicked.connect(
-            lambda: self._copy_text(self._activation_key, self._copy_key_btn)
-        )
-        key_row.addWidget(self._copy_key_btn)
         layout.addLayout(key_row)
 
         change_row = QHBoxLayout()
@@ -372,12 +357,6 @@ class AccountSettingsDialog(QDialog):
     def _on_change_key(self):
         self.change_key_requested.emit()
         self.accept()
-
-    def _copy_text(self, text: str, btn: QPushButton):
-        QApplication.clipboard().setText(text)
-        original = btn.text()
-        btn.setText(tr("Copied!"))
-        QTimer.singleShot(1500, lambda: btn.setText(original))
 
     def closeEvent(self, event):
         if self._worker and self._worker.isRunning():

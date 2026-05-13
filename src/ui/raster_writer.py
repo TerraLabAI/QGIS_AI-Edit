@@ -129,11 +129,12 @@ def add_geotiff_to_project(
 ) -> QgsRasterLayer:
     """Add GeoTIFF as a raster layer in the 'AI Edit' group."""
     if prompt:
-        slug = _slugify(prompt)[:55] or "ai_edit_result"
-        if len(slug) > 20 and len(prompt) > 55:
-            parts = slug.rsplit("_", 1)
-            if len(parts) > 1 and len(parts[0]) > 20:
-                slug = parts[0]
+        # Cap the layer name slug at ~25 chars (about half the old 55)
+        # so the legend stays scannable. Trim on an underscore boundary
+        # when possible so we don't cut mid-word.
+        slug = _slugify(prompt)[:25] or "ai_edit_result"
+        if len(prompt) > 25 and "_" in slug[:25]:
+            slug = slug.rsplit("_", 1)[0]
     else:
         slug = "ai_edit_result"
 

@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from qgis.core import QgsBlockingNetworkRequest
 from qgis.PyQt.QtCore import QIODevice, Qt
-from qgis.PyQt.QtGui import QImage, QTextCursor
+from qgis.PyQt.QtGui import QImage, QPalette, QTextCursor, QTextOption
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
-from qgis.PyQt.QtWidgets import QFrame, QSizePolicy
+from qgis.PyQt.QtWidgets import QFrame, QSizePolicy, QTextEdit
 
 
 def _resolve(parent, scope: str | None, name: str):
@@ -44,6 +44,9 @@ ShiftModifier = _resolve(Qt, "KeyboardModifier", "ShiftModifier")
 # Qt.MouseButton
 LeftButton = _resolve(Qt, "MouseButton", "LeftButton")
 
+# Qt.FocusPolicy
+NoFocus = _resolve(Qt, "FocusPolicy", "NoFocus")
+
 # Qt.ToolButtonStyle
 ToolButtonTextBesideIcon = _resolve(Qt, "ToolButtonStyle", "ToolButtonTextBesideIcon")
 
@@ -57,9 +60,25 @@ PlainText = _resolve(Qt, "TextFormat", "PlainText")
 
 # Qt.WidgetAttribute
 WA_TransparentForMouseEvents = _resolve(Qt, "WidgetAttribute", "WA_TransparentForMouseEvents")
+WA_StyledBackground = _resolve(Qt, "WidgetAttribute", "WA_StyledBackground")
 
 # Qt.ScrollBarPolicy
 ScrollBarAlwaysOff = _resolve(Qt, "ScrollBarPolicy", "ScrollBarAlwaysOff")
+ScrollBarAsNeeded = _resolve(Qt, "ScrollBarPolicy", "ScrollBarAsNeeded")
+
+# QTextOption.WrapMode — wrap mid-token so a long URL or unbreakable string
+# still flows to the next line instead of triggering horizontal scroll.
+WrapAtWordBoundaryOrAnywhere = _resolve(
+    QTextOption, "WrapMode", "WrapAtWordBoundaryOrAnywhere"
+)
+
+# QTextEdit.LineWrapMode — pinned to widget width so wrapping always engages
+# even when QSS or a rich-text paste would otherwise leave it implicit.
+LineWrapWidgetWidth = _resolve(QTextEdit, "LineWrapMode", "WidgetWidth")
+
+# Qt.AspectRatioMode / Qt.TransformationMode
+KeepAspectRatio = _resolve(Qt, "AspectRatioMode", "KeepAspectRatio")
+SmoothTransformation = _resolve(Qt, "TransformationMode", "SmoothTransformation")
 
 # Qt.TextInteractionFlag
 TextSelectableByMouse = _resolve(Qt, "TextInteractionFlag", "TextSelectableByMouse")
@@ -77,6 +96,9 @@ CursorEnd = _resolve(QTextCursor, "MoveOperation", "End")
 # QSizePolicy.Policy
 SizePolicyExpanding = _resolve(QSizePolicy, "Policy", "Expanding")
 SizePolicyFixed = _resolve(QSizePolicy, "Policy", "Fixed")
+
+# QPalette.ColorRole
+PaletteBase = _resolve(QPalette, "ColorRole", "Base")
 
 # QFrame.Shape / QFrame.Shadow
 FrameNoFrame = _resolve(QFrame, "Shape", "NoFrame")

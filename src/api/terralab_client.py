@@ -130,16 +130,22 @@ class TerraLabClient:
         resolution: str,
         aspect_ratio: str,
         auth: dict,
+        context_images: list[str] | None = None,
     ) -> dict:
-        """Submit an image + prompt for generation."""
-        body = json.dumps(
-            {
-                "image": image_b64,
-                "prompt": prompt,
-                "resolution": resolution,
-                "aspect_ratio": aspect_ratio,
-            }
-        ).encode("utf-8")
+        """Submit an image + prompt for generation.
+
+        ``context_images`` is an optional list of base64-encoded reference
+        images. Sent only when non-empty so older backends ignore the field.
+        """
+        payload: dict = {
+            "image": image_b64,
+            "prompt": prompt,
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+        }
+        if context_images:
+            payload["context_images"] = context_images
+        body = json.dumps(payload).encode("utf-8")
         return self._request(
             "POST",
             "/api/ai-edit/generate",

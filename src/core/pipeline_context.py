@@ -114,6 +114,7 @@ def save_debug_artifacts(
     received_png: bytes | None,
     plugin_dir: str,
     max_runs: int = 20,
+    context_images: list[bytes] | None = None,
 ) -> str | None:
     """Save debug artifacts to .debug/{timestamp}/. Returns path or None."""
     debug_dir = os.path.join(plugin_dir, ".debug")
@@ -126,6 +127,11 @@ def save_debug_artifacts(
     if received_png:
         with open(os.path.join(run_dir, "received.png"), "wb") as f:
             f.write(received_png)
+
+    if context_images:
+        for idx, data in enumerate(context_images, start=1):
+            with open(os.path.join(run_dir, f"context_{idx}.jpg"), "wb") as f:
+                f.write(data)
 
     # Save both sent and received as GeoTIFFs for visual alignment check.
     # Load sent.tif + received.tif in QGIS to see which one is offset.

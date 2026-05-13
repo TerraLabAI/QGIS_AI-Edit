@@ -98,8 +98,8 @@ En continuant, vous acceptez nos Conditions Générales de Vente et notre Politi
         <translation>Générer</translation>
     </message>
     <message>
-        <source>Stop</source>
-        <translation>Arrêter</translation>
+        <source>Exit</source>
+        <translation>Quitter</translation>
     </message>
     <message>
         <source>Please describe what you want to change (at least 10 characters, 2 words).</source>
@@ -281,6 +281,10 @@ AI-powered image editing for geospatial data</source>
         <source>Output resolution</source>
         <translation>Resolution de sortie</translation>
     </message>
+    <message>
+        <source>Output quality</source>
+        <translation>Qualité de sortie</translation>
+    </message>
 
     <!-- Cross-plugin discovery -->
     <message>
@@ -296,6 +300,72 @@ AI-powered image editing for geospatial data</source>
     <message>
         <source>Layer saved as "{name}"</source>
         <translation>Layer sauvegardé sous "{name}"</translation>
+    </message>
+
+    <!-- Reference images -->
+    <message>
+        <source>Reference images (optional)</source>
+        <translation>Images de référence (optionnel)</translation>
+    </message>
+    <message>
+        <source>Attach images</source>
+        <translation>Joindre des images</translation>
+    </message>
+    <message>
+        <source>Click to preview — {name}</source>
+        <translation>Cliquer pour agrandir — {name}</translation>
+    </message>
+    <message>
+        <source>Reference image preview</source>
+        <translation>Aperçu de l'image de référence</translation>
+    </message>
+    <message>
+        <source>Reference images</source>
+        <translation>Images de référence</translation>
+    </message>
+    <message>
+        <source>Drag and drop images here, or click +</source>
+        <translation>Glissez-déposez des images ici, ou cliquez sur +</translation>
+    </message>
+    <message>
+        <source>Add reference images</source>
+        <translation>Ajouter des images de référence</translation>
+    </message>
+    <message>
+        <source>Add reference image</source>
+        <translation>Ajouter une image de référence</translation>
+    </message>
+    <message>
+        <source>Select reference images</source>
+        <translation>Sélectionner des images de référence</translation>
+    </message>
+    <message>
+        <source>Maximum {n} reference images reached</source>
+        <translation>Maximum {n} images de référence atteint</translation>
+    </message>
+    <message>
+        <source>File does not exist</source>
+        <translation>Le fichier n'existe pas</translation>
+    </message>
+    <message>
+        <source>Unsupported format. Use PNG, JPG, WEBP, BMP or TIFF.</source>
+        <translation>Format non supporté. Utilisez PNG, JPG, WEBP, BMP ou TIFF.</translation>
+    </message>
+    <message>
+        <source>Cannot read file: {err}</source>
+        <translation>Impossible de lire le fichier : {err}</translation>
+    </message>
+    <message>
+        <source>Image too large (max 50 MB)</source>
+        <translation>Image trop volumineuse (max 50 Mo)</translation>
+    </message>
+    <message>
+        <source>Failed to decode image</source>
+        <translation>Impossible de décoder l'image</translation>
+    </message>
+    <message>
+        <source>Failed to write compressed image</source>
+        <translation>Impossible d'écrire l'image compressée</translation>
     </message>
 </context>
 </TS>
