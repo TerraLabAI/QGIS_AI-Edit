@@ -367,5 +367,15 @@ Edição de imagens geoespaciais com IA</translation>
         <source>Failed to write compressed image</source>
         <translation>Falha ao gravar imagem comprimida</translation>
     </message>
+
+    <!-- Result + footer -->
+    <message>
+        <source>✓ Saved as {name}</source>
+        <translation>✓ Salvo como {name}</translation>
+    </message>
+    <message>
+        <source>Credits remaining this month: {remaining} / {total}</source>
+        <translation>Créditos restantes este mês: {remaining} / {total}</translation>
+    </message>
 </context>
 </TS>

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import html
 import os
+import re
 import tempfile
 
 from qgis.core import QgsProject
@@ -57,6 +59,15 @@ ERROR_TEXT = "#ef5350"
 SUCCESS_TEXT = "#66bb6a"
 
 MAX_PROMPT_CHARS = 2000
+
+
+def _format_template_prompt(prompt: str) -> str:
+    """One sentence per paragraph + colon-before-list also splits."""
+    if not prompt:
+        return prompt
+    with_colon = re.sub(r":\s+(?=[a-zA-Z][^.:\n]*,)", ":\n\n", prompt, count=1)
+    return re.sub(r"\.\s+([A-Z])", r".\n\n\1", with_colon)
+
 
 TERRALAB_URL = (
     "https://terra-lab.ai/ai-edit"
@@ -965,11 +976,15 @@ class AIEditDockWidget(QDockWidget):
         # trigger a regen on the same zone.
         self._layer_saved_label = QLabel()
         self._layer_saved_label.setWordWrap(True)
+        self._layer_saved_label.setTextFormat(QtC.RichText)
         self._layer_saved_label.setStyleSheet(
             "font-size: 11px; color: palette(text); background: transparent;"
             " border: none; padding: 4px 0 0 0;"
         )
+        self._layer_saved_label.setCursor(QtC.PointingHandCursor)
+        self._layer_saved_label.linkActivated.connect(self._on_layer_saved_link_clicked)
         self._layer_saved_label.setVisible(False)
+        self._saved_layer_id: str | None = None
         self._result_layout.addWidget(self._layer_saved_label)
 
         self._result_section.setVisible(False)
@@ -1024,7 +1039,8 @@ class AIEditDockWidget(QDockWidget):
 
         self._credits_label = QLabel()
         self._credits_label.setStyleSheet(
-            "font-size: 11px; color: palette(text); background: transparent; border: none;"
+            "QLabel { font-size: 11px; color: palette(text);"
+            " background: transparent; border: none; }"
         )
         self._credits_label.setVisible(False)
         footer_row.addWidget(self._credits_label)
@@ -1063,7 +1079,7 @@ class AIEditDockWidget(QDockWidget):
         self._help_btn.setCursor(QtC.PointingHandCursor)
         self._help_btn.setFocusPolicy(QtC.NoFocus)
         self._help_btn.setStyleSheet(_FOOTER_ICON_BTN_STYLE)
-        self._help_btn.setPopupMode(QToolButton.InstantPopup)
+        self._help_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         help_menu = QMenu(self._help_btn)
         help_menu.setStyleSheet(_FOOTER_MENU_STYLE)
         help_menu.addAction(tr("Tutorial"), self._on_open_tutorial)
@@ -1413,13 +1429,22 @@ class AIEditDockWidget(QDockWidget):
         is_free_tier: bool = False,
     ):
         """Update the credits ring + compact count in the footer."""
+        was_free = self._is_free_tier
         self._is_free_tier = is_free_tier
+        # Restore paid default on free→paid transition (overrides auto-downgrade).
+        if was_free and not is_free_tier and self._selected_resolution == "1K":
+            self._selected_resolution = "2K"
         if used is not None and limit is not None:
             remaining = max(0, limit - used)
             self._credits_label.setText(f"{remaining} / {limit}")
             self._credits_label.setVisible(True)
             self._credit_ring.set_credits(used, limit, free_tier=is_free_tier)
             self._credit_ring.setVisible(True)
+            tooltip = tr("Credits remaining this month: {remaining} / {total}").format(
+                remaining=remaining, total=limit
+            )
+            self._credit_ring.setToolTip(tooltip)
+            self._credits_label.setToolTip(tooltip)
         else:
             self._credits_label.setVisible(False)
             self._credit_ring.setVisible(False)
@@ -1630,7 +1655,7 @@ class AIEditDockWidget(QDockWidget):
             self._show_status_box(message, "error")
         self._trial_info_box.setVisible(False)
 
-    def set_generation_complete(self, layer_name: str):
+    def set_generation_complete(self, layer_name: str, layer_id: str | None = None):
         """Show RESULT state with iteration options (retry / new zone / done)."""
         self._stop_progress_animation()
         self._progress_bar.setValue(100)
@@ -1659,9 +1684,18 @@ class AIEditDockWidget(QDockWidget):
         # Reparent reference images into result section for retry/new-area flow
         self._place_reference_widget("result")
 
-        # Persistent layer saved info (one-line minimal status).
+        self._saved_layer_id = layer_id
+        escaped_name = html.escape(layer_name)
+        if layer_id:
+            link_html = (
+                f'<a href="terralab:focus-layer" '
+                f'style="color: {SUCCESS_TEXT}; text-decoration: underline;">'
+                f'{escaped_name}</a>'
+            )
+        else:
+            link_html = escaped_name
         self._layer_saved_label.setText(
-            tr('✓ Saved as "{name}"').format(name=layer_name))
+            tr("✓ Saved as {name}").format(name=link_html))
         self._layer_saved_label.setVisible(True)
 
         # Restore upgrade CTA visibility for free tier
@@ -1867,7 +1901,7 @@ class AIEditDockWidget(QDockWidget):
         if self._result_section.isVisible():
             # In result state — fill the result prompt
             self._result_prompt_input.blockSignals(True)
-            self._result_prompt_input.setPlainText(preset["prompt"])
+            self._result_prompt_input.setPlainText(_format_template_prompt(preset["prompt"]))
             self._result_prompt_input.blockSignals(False)
             self._result_prompt_input.moveCursor(QtC.CursorEnd)
             self._result_prompt_input.setFocus()
@@ -1876,7 +1910,7 @@ class AIEditDockWidget(QDockWidget):
         elif self._zone_selected:
             # Already have a zone — fill the active prompt input
             self._prompt_input.blockSignals(True)
-            self._prompt_input.setPlainText(preset["prompt"])
+            self._prompt_input.setPlainText(_format_template_prompt(preset["prompt"]))
             self._prompt_input.blockSignals(False)
             self._prompt_input.moveCursor(QtC.CursorEnd)
             self._prompt_input.setFocus()
@@ -1889,7 +1923,7 @@ class AIEditDockWidget(QDockWidget):
             # selection tool, so the crosshair cursor applies correctly.
             self._from_template = True
             self._prompt_input.blockSignals(True)
-            self._prompt_input.setPlainText(preset["prompt"])
+            self._prompt_input.setPlainText(_format_template_prompt(preset["prompt"]))
             self._prompt_input.blockSignals(False)
             self._prompt_input.moveCursor(QtC.CursorEnd)
             self._adjust_prompt_height()
@@ -1984,6 +2018,35 @@ class AIEditDockWidget(QDockWidget):
     def _on_open_tutorial(self):
         """Open the tutorial URL in the user's default browser."""
         QDesktopServices.openUrl(QUrl(get_tutorial_url()))
+
+    def _on_layer_saved_link_clicked(self, _link: str) -> None:
+        """Focus the saved layer in the QGIS Layers panel."""
+        layer_id = self._saved_layer_id
+        if not layer_id:
+            return
+        layer = QgsProject.instance().mapLayer(layer_id)
+        if layer is None:
+            return
+        try:
+            from qgis.utils import iface
+        except ImportError:
+            return
+        if iface is None:
+            return
+        iface.setActiveLayer(layer)
+        tree_view = iface.layerTreeView()
+        if tree_view is None:
+            return
+        root = QgsProject.instance().layerTreeRoot()
+        node = root.findLayer(layer_id) if root is not None else None
+        if node is None:
+            return
+        model = tree_view.layerTreeModel()
+        if model is None:
+            return
+        index = model.node2index(node)
+        tree_view.setCurrentIndex(index)
+        tree_view.scrollTo(index)
 
     def _on_contact_us(self, _link=None):
         """Show a dialog with email + Calendly options."""

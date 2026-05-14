@@ -367,5 +367,15 @@ AI-powered image editing for geospatial data</source>
         <source>Failed to write compressed image</source>
         <translation>Impossible d'écrire l'image compressée</translation>
     </message>
+
+    <!-- Result + footer -->
+    <message>
+        <source>✓ Saved as {name}</source>
+        <translation>✓ Enregistré sous {name}</translation>
+    </message>
+    <message>
+        <source>Credits remaining this month: {remaining} / {total}</source>
+        <translation>Crédits restants ce mois : {remaining} / {total}</translation>
+    </message>
 </context>
 </TS>

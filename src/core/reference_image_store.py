@@ -20,7 +20,7 @@ from . import qt_compat as QtC
 from .i18n import tr
 from .logger import log_debug, log_warning
 
-MAX_REFERENCES = 9
+MAX_REFERENCES = 12
 MAX_SOURCE_BYTES = 50 * 1024 * 1024  # 50 MB on disk before compression
 TARGET_LONGEST_SIDE_PX = 1024
 JPEG_QUALITY = 70

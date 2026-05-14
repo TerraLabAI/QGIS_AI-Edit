@@ -142,7 +142,7 @@ def get_dashboard_url() -> str:
 def get_tutorial_url(client=None) -> str:
     """Get tutorial URL from server config, falling back to product page."""
     config = get_server_config(client)
-    return config.get("tutorial_url", "https://youtu.be/d8D_GmaX9NM?si=UpLtVl3biKIB2HuY")
+    return config.get("tutorial_url", "https://youtu.be/8qiNQVCGlsQ?si=Ps0XjBT8LW_1svkg")
 
 
 # -- Server config --

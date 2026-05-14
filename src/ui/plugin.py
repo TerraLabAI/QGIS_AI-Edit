@@ -958,7 +958,7 @@ class AIEditPlugin:
             }))
             telemetry.flush()
             self._maybe_emit_first_generation_milestone()
-            self._dock_widget.set_generation_complete(layer.name())
+            self._dock_widget.set_generation_complete(layer.name(), layer.id())
             self._refresh_credits()
             log(f"Generation complete ({round(duration, 1)}s): {result_info['geotiff_path']}")
         except Exception as e:

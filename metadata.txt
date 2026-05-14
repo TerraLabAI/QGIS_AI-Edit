@@ -3,7 +3,7 @@ name=AI Edit by TerraLab
 description=AI-powered image editing for geospatial (Nano Banana 2). Select a zone, describe the change, get a georeferenced result.
 qgisMinimumVersion=3.0
 qgisMaximumVersion=4.99
-version=0.3.0
+version=0.3.1
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
@@ -23,7 +23,11 @@ about=
     • Universal: Windows, macOS, Linux
 
 changelog=
-    0.2.6 - Tighter activation key validation, prompt length cap, accurate plugin version in telemetry.
+    0.3.1
+    • Reference images: drag and drop up to 12 to guide style and composition
+    • Major UI polish across the dock
+    • Click the saved layer name in the result panel to jump straight to it in QGIS Layers
+    • Templates render with clean paragraph breaks for easier reading
 
 tracker=https://github.com/TerraLabAI/QGIS_AI-Edit/issues
 repository=https://github.com/TerraLabAI/QGIS_AI-Edit

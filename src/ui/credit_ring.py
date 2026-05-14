@@ -82,7 +82,7 @@ class CreditRing(QWidget):
 
     def paintEvent(self, _event):  # noqa: N802
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
         # Inset by half the stroke so the arc stays fully inside the widget
         # rect — Qt strokes are centred on the geometric path.
