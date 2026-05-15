@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from qgis.core import QgsPointXY, QgsRectangle
-from qgis.gui import QgsMapTool, QgsRubberBand
-from qgis.PyQt.QtCore import pyqtSignal
-from qgis.PyQt.QtGui import QColor, QCursor
+from qgis.gui import QgsMapCanvasItem, QgsMapTool, QgsRubberBand
+from qgis.PyQt.QtCore import QPointF, QRectF, Qt, pyqtSignal
+from qgis.PyQt.QtGui import QColor, QCursor, QPainter, QPen
+from qgis.PyQt.QtWidgets import QMenu
 
 from ..core import qt_compat as QtC
+from ..core.i18n import tr
 
 SUPPORTED_RATIOS = [
     (1, 1),
@@ -21,11 +23,84 @@ SUPPORTED_RATIOS = [
 ]
 
 
+class _ZoneDeleteBadge(QgsMapCanvasItem):
+    """Floating × badge anchored to a map point.
+
+    Lives in the canvas's QGraphicsScene so it follows the canvas during
+    pan/zoom (the scene gets pixel-shifted during pan, so anything in it
+    stays aligned with the rubber band — a plain widget parented to the
+    viewport would not). Click handling is done by the parent map tool's
+    canvasPressEvent via :meth:`hit_test`, because an active map tool eats
+    mouse events before the scene items see them.
+    """
+
+    RADIUS = 12
+    _BRAND_BLUE = QColor("#1976d2")
+    _DISABLED_BG = QColor(25, 118, 210, 115)
+
+    def __init__(self, canvas):
+        super().__init__(canvas)
+        self._anchor: QgsPointXY | None = None
+        self._enabled = True
+        self.setZValue(10000)
+
+    def set_anchor(self, point: QgsPointXY) -> None:
+        self._anchor = point
+        self.updatePosition()
+        self.update()
+
+    def set_enabled(self, enabled: bool) -> None:
+        if self._enabled == enabled:
+            return
+        self._enabled = enabled
+        self.update()
+
+    def hit_test(self, canvas_pt) -> bool:
+        """True when a canvas-pixel point lands inside the badge circle."""
+        if self._anchor is None or not self.isVisible():
+            return False
+        center = self.toCanvasCoordinates(self._anchor)
+        dx = canvas_pt.x() - center.x()
+        dy = canvas_pt.y() - center.y()
+        return (dx * dx + dy * dy) <= (self.RADIUS * self.RADIUS)
+
+    def updatePosition(self) -> None:  # noqa: N802 (Qt API)
+        if self._anchor is None:
+            return
+        self.setPos(self.toCanvasCoordinates(self._anchor))
+
+    def boundingRect(self):  # noqa: N802 (Qt API)
+        r = self.RADIUS + 2
+        return QRectF(-r, -r, 2 * r, 2 * r)
+
+    def paint(self, painter, option, widget):
+        if self._anchor is None:
+            return
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setBrush(self._BRAND_BLUE if self._enabled else self._DISABLED_BG)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(QPointF(0, 0), self.RADIUS, self.RADIUS)
+        line_color = (
+            QColor(255, 255, 255) if self._enabled else QColor(255, 255, 255, 153)
+        )
+        pen = QPen(line_color, 2)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        d = self.RADIUS * 0.45
+        painter.drawLine(QPointF(-d, -d), QPointF(d, d))
+        painter.drawLine(QPointF(-d, d), QPointF(d, -d))
+
+
 class RectangleSelectionTool(QgsMapTool):
-    """Map tool for selecting a rectangular zone on the canvas."""
+    """Map tool for selecting a rectangular zone on the canvas.
+
+    Stays active after selection so the user can right-click the zone
+    to delete it, or draw a new one to replace it.
+    """
 
     selection_made = pyqtSignal(QgsRectangle)
     zone_too_small = pyqtSignal()
+    zone_delete_requested = pyqtSignal()
 
     MIN_SIZE_PX = 50
 
@@ -34,14 +109,48 @@ class RectangleSelectionTool(QgsMapTool):
         self._start_point = None
         self._rubber_band = None
         self._is_drawing = False
-        self.setCursor(QCursor(QtC.CrossCursor))
+        self._has_zone = False
+        self._zone_rect = None
+        self._locked = False
+        self._pending_context_menu = False
+        self._refresh_cursor()
+
+        # Badge anchored to the rubber band's top-right corner. Lives in the
+        # canvas scene so it follows the rectangle during pan/zoom. Click is
+        # forwarded by canvasPressEvent because the active map tool gets the
+        # event before scene items would.
+        self._delete_badge: _ZoneDeleteBadge | None = None
 
     def activate(self):
         super().activate()
-        self.setCursor(QCursor(QtC.CrossCursor))
+        self._refresh_cursor()
+
+    def _refresh_cursor(self) -> None:
+        """Crosshair while no zone is selected (draw mode), open hand once
+        a zone exists so the user feels they can move around again. The
+        actual pan happens via QGIS's built-in Space-drag — the cursor is
+        the visual cue that drawing mode is done.
+        """
+        shape = Qt.CursorShape.OpenHandCursor if self._has_zone else QtC.CrossCursor
+        self.setCursor(QCursor(shape))
 
     def canvasPressEvent(self, event):
+        if self._locked:
+            return
+        if (
+            event.button() == QtC.LeftButton
+            and self._has_zone  # noqa: W503
+            and self._delete_badge is not None  # noqa: W503
+            and self._delete_badge.hit_test(event.pos())  # noqa: W503
+        ):
+            self._on_delete_zone()
+            return
+        if event.button() == QtC.RightButton and self._has_zone:
+            self._pending_context_menu = True
+            return
         if event.button() == QtC.LeftButton:
+            if self._has_zone:
+                return
             self._start_point = self.toMapCoordinates(event.pos())
             self._is_drawing = True
             self._create_rubber_band()
@@ -59,6 +168,10 @@ class RectangleSelectionTool(QgsMapTool):
             self._update_rubber_band(self._start_point, end_point)
 
     def canvasReleaseEvent(self, event):
+        if event.button() == QtC.RightButton and getattr(self, "_pending_context_menu", False):
+            self._pending_context_menu = False
+            self._show_zone_context_menu(event)
+            return
         if event.button() == QtC.LeftButton and self._is_drawing:
             self._is_drawing = False
             end_point = self.toMapCoordinates(event.pos())
@@ -66,7 +179,6 @@ class RectangleSelectionTool(QgsMapTool):
             rect.normalize()
             rect, ratio = self._snap_to_ratio(rect)
 
-            # Check minimum size in pixels
             p1 = self.toCanvasCoordinates(QgsPointXY(rect.xMinimum(), rect.yMinimum()))
             p2 = self.toCanvasCoordinates(QgsPointXY(rect.xMaximum(), rect.yMaximum()))
             width_px = abs(p2.x() - p1.x())
@@ -77,7 +189,42 @@ class RectangleSelectionTool(QgsMapTool):
                 self.zone_too_small.emit()
                 return
 
+            self._clear_rubber_band()
+            self._has_zone = True
+            self._zone_rect = rect
             self.selection_made.emit(rect)
+            self._show_delete_badge()
+            self._refresh_cursor()
+
+    def set_has_zone(self, has_zone: bool) -> None:
+        """Called by the plugin when the zone state changes externally."""
+        self._has_zone = has_zone
+        if not has_zone:
+            self._zone_rect = None
+            self._hide_delete_badge()
+        elif self._zone_rect is not None:
+            self._show_delete_badge()
+        self._refresh_cursor()
+
+    def set_locked(self, locked: bool) -> None:
+        """Lock drawing/deletion during generation."""
+        self._locked = locked
+        if self._delete_badge is not None:
+            self._delete_badge.set_enabled(not locked)
+
+    def _show_zone_context_menu(self, event) -> None:
+        pos = event.globalPos() if hasattr(event, "globalPos") else event.globalPosition().toPoint()
+        menu = QMenu()
+        menu.addAction(tr("Clear zone"), self._on_delete_zone)
+        menu.exec(pos)
+
+    def _on_delete_zone(self) -> None:
+        self._clear_rubber_band()
+        self._has_zone = False
+        self._zone_rect = None
+        self._hide_delete_badge()
+        self._refresh_cursor()
+        self.zone_delete_requested.emit()
 
     def _snap_to_ratio(self, rect):
         """Snap rectangle to nearest supported aspect ratio."""
@@ -118,12 +265,49 @@ class RectangleSelectionTool(QgsMapTool):
 
     def keyPressEvent(self, event):
         if event.key() == QtC.Key_Escape:
-            self._is_drawing = False
-            self._clear_rubber_band()
+            if self._is_drawing:
+                self._is_drawing = False
+                self._clear_rubber_band()
+            elif self._has_zone and not self._locked:
+                self._on_delete_zone()
+            return
+        super().keyPressEvent(event)
 
     def deactivate(self):
         self._clear_rubber_band()
+        self._has_zone = False
+        self._zone_rect = None
+        self._hide_delete_badge()
         super().deactivate()
+
+    def cleanup(self) -> None:
+        """Detach from the canvas before the plugin unloads."""
+        if self._delete_badge is not None:
+            scene = self._delete_badge.scene()
+            if scene is not None:
+                try:
+                    scene.removeItem(self._delete_badge)
+                except RuntimeError:
+                    pass
+            self._delete_badge = None
+
+    # -- delete-badge overlay --------------------------------------------------
+
+    def _show_delete_badge(self) -> None:
+        if self._zone_rect is None:
+            return
+        if self._delete_badge is None:
+            self._delete_badge = _ZoneDeleteBadge(self.canvas())
+        top_right = QgsPointXY(
+            self._zone_rect.xMaximum(), self._zone_rect.yMaximum()
+        )
+        self._delete_badge.set_anchor(top_right)
+        self._delete_badge.set_enabled(not self._locked)
+        self._delete_badge.show()
+
+    def _hide_delete_badge(self) -> None:
+        if self._delete_badge is not None:
+            self._delete_badge.hide()
 
     def _create_rubber_band(self):
         self._clear_rubber_band()

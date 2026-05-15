@@ -43,6 +43,7 @@ ShiftModifier = _resolve(Qt, "KeyboardModifier", "ShiftModifier")
 
 # Qt.MouseButton
 LeftButton = _resolve(Qt, "MouseButton", "LeftButton")
+RightButton = _resolve(Qt, "MouseButton", "RightButton")
 
 # Qt.FocusPolicy
 NoFocus = _resolve(Qt, "FocusPolicy", "NoFocus")

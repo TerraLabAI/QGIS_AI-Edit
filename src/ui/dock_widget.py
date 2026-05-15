@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import html
 import os
@@ -6,10 +6,14 @@ import re
 import tempfile
 
 from qgis.core import QgsProject
-from qgis.PyQt.QtCore import QPoint, QTimer, QUrl, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QDesktopServices, QImage, QKeySequence
+from qgis.PyQt.QtCore import QPoint, QSize, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtGui import (
+    QColor,
+    QDesktopServices,
+    QIcon,
+    QImage,
+)
 from qgis.PyQt.QtWidgets import (
-    QApplication,
     QCheckBox,
     QDockWidget,
     QFrame,
@@ -21,7 +25,6 @@ from qgis.PyQt.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QShortcut,
     QStyle,
     QTextEdit,
     QToolButton,
@@ -170,6 +173,17 @@ _SECTION_HEADER = (
 _SECTION_HEADER_EXTRA_TOP = (
     "font-weight: bold; font-size: 12px; color: palette(text); padding-top: 6px;"
 )
+
+
+def _picture_icon() -> QIcon:
+    """Return the 'attach reference image' glyph as a vector icon.
+
+    Loads the bundled SVG (resources/icons/image.svg) so QIcon's built-in
+    SVG renderer re-rasterises it crisply at whatever size the QToolButton
+    requests — matching the visual weight of the ⚙ / ? footer glyphs.
+    """
+    plugin_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    return QIcon(os.path.join(plugin_root, "resources", "icons", "image.svg"))
 
 
 def _make_section_header(text: str, extra_top: bool = False) -> QLabel:
@@ -522,8 +536,8 @@ class _PromptContainer(QFrame):
         self._update_resolution_label()
 
         self._attach_btn = QToolButton(self)
-        # Plain ASCII "+" with a typographic weight (not the heavy/emoji ➕).
-        self._attach_btn.setText("+")
+        self._attach_btn.setIcon(_picture_icon())
+        self._attach_btn.setIconSize(QSize(20, 20))
         self._attach_btn.setToolTip(tr("Add reference image"))
         self._attach_btn.setCursor(QtC.PointingHandCursor)
         self._attach_btn.setStyleSheet(self._ATTACH_BTN_STYLE)
@@ -655,15 +669,21 @@ class _PromptContainer(QFrame):
 
 
 class AIEditDockWidget(QDockWidget):
-    """Dock widget with dynamic flow matching AI Segmentation pattern."""
+    """Dock widget with prompt-first flow.
 
-    select_zone_clicked = pyqtSignal()
+    The prompt view is always visible after activation. The selection tool
+    stays active so the user can draw a zone at any time. The Generate
+    button is disabled (shows "Select your zone") until a zone is drawn.
+    """
+
     stop_clicked = pyqtSignal()
     generate_clicked = pyqtSignal(str)
     retry_clicked = pyqtSignal(str)       # retry on same zone with (possibly edited) prompt
     activation_attempted = pyqtSignal(str)
     change_key_clicked = pyqtSignal()
     settings_clicked = pyqtSignal()
+    launch_clicked = pyqtSignal()          # user clicked "Launch AI Edit" on entry screen
+    exit_clicked = pyqtSignal()            # user clicked the always-visible Exit button
     # (template_id, template_name) for analytics — id is stable, name is human-readable.
     template_selected = pyqtSignal(str, str)
 
@@ -691,51 +711,46 @@ class AIEditDockWidget(QDockWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(8)
 
-        # Section header
-        self._edit_header = _make_section_header(tr("Get started with AI Edit:"))
-        main_layout.addWidget(self._edit_header)
-
-        # Warning widget (no visible layer) — above start button
+        # Warning widget (no visible layer) — above prompt
         self._warning_widget = self._build_warning_widget()
         self._warning_widget.setVisible(False)
         main_layout.addWidget(self._warning_widget)
 
-        # --- IDLE entry points ---
-        self._idle_section = QWidget()
-        idle_layout = QVBoxLayout(self._idle_section)
-        idle_layout.setContentsMargins(0, 0, 0, 0)
-        idle_layout.setSpacing(6)
+        # --- Launch section (entry screen, matches AI Segmentation pattern) ---
+        self._launch_section = QWidget()
+        launch_layout = QVBoxLayout(self._launch_section)
+        launch_layout.setContentsMargins(0, 0, 0, 0)
+        launch_layout.setSpacing(8)
 
-        # Primary: browse templates (recommended path)
-        self._browse_btn = QPushButton(tr("Browse AI Prompts"))
-        self._browse_btn.setToolTip(tr("Open the prompt template library"))
-        self._browse_btn.setCursor(QtC.PointingHandCursor)
-        self._browse_btn.setStyleSheet(_BTN_GREEN)
-        self._browse_btn.clicked.connect(self._on_browse_templates_clicked)
-        idle_layout.addWidget(self._browse_btn)
+        self._launch_btn = QPushButton(tr("Launch AI Edit"))
+        self._launch_btn.setToolTip(tr("Start a new AI edit session"))
+        self._launch_btn.setCursor(QtC.PointingHandCursor)
+        self._launch_btn.setMinimumHeight(40)
+        self._launch_btn.setStyleSheet(_BTN_GREEN_AUTH)
+        self._launch_btn.clicked.connect(self.launch_clicked.emit)
+        launch_layout.addWidget(self._launch_btn)
 
-        # Separator "or"
-        or_label = QLabel(tr("or"))
-        or_label.setAlignment(QtC.AlignCenter)
-        or_label.setStyleSheet("font-size: 11px; color: palette(text); padding: 0px;")
-        idle_layout.addWidget(or_label)
+        self._launch_section.setVisible(False)
+        main_layout.addWidget(self._launch_section)
 
-        # Secondary: write own prompt (free edit)
-        self._start_btn = QPushButton(tr("Write Your Own Prompt"))
-        self._start_btn.setToolTip(tr("Select a zone and write a custom prompt (shortcut: G)"))
-        self._start_btn.setCursor(QtC.PointingHandCursor)
-        self._start_btn.setStyleSheet(_BTN_BLUE)
-        self._start_btn.clicked.connect(self._on_start_clicked)
-        idle_layout.addWidget(self._start_btn)
+        # --- Select-zone section (in-between state: invites user to draw on canvas) ---
+        self._select_zone_section = QWidget()
+        sz_layout = QVBoxLayout(self._select_zone_section)
+        sz_layout.setContentsMargins(0, 0, 0, 0)
+        sz_layout.setSpacing(6)
 
-        main_layout.addWidget(self._idle_section)
+        self._select_zone_header = _make_section_header(tr("Select your zone"))
+        sz_layout.addWidget(self._select_zone_header)
 
-        # Instruction info box (shown during drawing)
-        self._instruction_box = QLabel()
-        self._instruction_box.setWordWrap(True)
-        self._instruction_box.setStyleSheet(_INSTRUCTION_BOX)
-        self._instruction_box.setVisible(False)
-        main_layout.addWidget(self._instruction_box)
+        self._select_zone_hint = QLabel(
+            tr("Click and drag on the map to draw a rectangular zone.")
+        )
+        self._select_zone_hint.setWordWrap(True)
+        self._select_zone_hint.setStyleSheet(_INSTRUCTION_BOX)
+        sz_layout.addWidget(self._select_zone_hint)
+
+        self._select_zone_section.setVisible(False)
+        main_layout.addWidget(self._select_zone_section)
 
         # --- Prompt section (shown after zone selected) ---
         self._prompt_section = QWidget()
@@ -745,6 +760,7 @@ class AIEditDockWidget(QDockWidget):
         self._prompt_layout.setSpacing(6)
 
         self._prompt_header = _make_section_header(tr("What should AI change?"))
+        self._prompt_header.setVisible(True)
         self._prompt_layout.addWidget(self._prompt_header)
 
         self._prompt_input = _SubmitTextEdit()
@@ -764,6 +780,9 @@ class AIEditDockWidget(QDockWidget):
         self._prompt_container.resolution_changed.connect(self._on_resolution_selected)
         self._prompt_layout.addWidget(self._prompt_container)
 
+        # Hidden by default: revealed by set_zone_selected() once the user
+        # draws a rectangle. Initial dock state only shows the "Select your
+        # zone" button.
         self._prompt_section.setVisible(False)
         main_layout.addWidget(self._prompt_section)
 
@@ -833,7 +852,14 @@ class AIEditDockWidget(QDockWidget):
         self._consent_check.stateChanged.connect(self._on_consent_changed)
         main_layout.addWidget(self._consent_widget)
 
-        # Generate button
+        # Generate + Exit row. Exit is shown in the PROMPT state (zone
+        # selected) so the user always has a one-click way back to LAUNCH,
+        # but is hidden while generation is in flight to avoid a "cancel mid-
+        # run" footgun.
+        generate_row = QHBoxLayout()
+        generate_row.setContentsMargins(0, 0, 0, 0)
+        generate_row.setSpacing(6)
+
         self._generate_btn = QPushButton(tr("Generate"))
         self._generate_btn.setToolTip(tr("Run the AI edit on your selected zone"))
         self._generate_btn.setCursor(QtC.PointingHandCursor)
@@ -841,16 +867,19 @@ class AIEditDockWidget(QDockWidget):
         self._update_generate_style()
         self._generate_btn.clicked.connect(self._on_generate_clicked)
         self._generate_btn.setVisible(False)
-        main_layout.addWidget(self._generate_btn)
+        generate_row.addWidget(self._generate_btn, 1)
 
-        # Exit button (cancels in-flight generation or returns to idle)
-        self._stop_btn = QPushButton(tr("Exit"))
-        self._stop_btn.setToolTip(tr("Cancel and return to idle (shortcut: Esc)"))
-        self._stop_btn.setCursor(QtC.PointingHandCursor)
-        self._stop_btn.setStyleSheet(_BTN_GRAY)
-        self._stop_btn.clicked.connect(self._on_stop_clicked)
-        self._stop_btn.setVisible(False)
-        main_layout.addWidget(self._stop_btn)
+        self._exit_btn = QPushButton(tr("Exit"))
+        self._exit_btn.setToolTip(tr("Exit and return to the start"))
+        self._exit_btn.setCursor(QtC.PointingHandCursor)
+        self._exit_btn.setFixedWidth(72)
+        self._exit_btn.setMinimumHeight(34)
+        self._exit_btn.setStyleSheet(_BTN_GHOST)
+        self._exit_btn.clicked.connect(self._on_exit_clicked)
+        self._exit_btn.setVisible(False)
+        generate_row.addWidget(self._exit_btn, 0)
+
+        main_layout.addLayout(generate_row)
 
         # Progress section
         self._progress_widget = QWidget()
@@ -952,10 +981,7 @@ class AIEditDockWidget(QDockWidget):
 
         self._result_regenerate_btn = QPushButton(tr("Regenerate"))
         self._result_regenerate_btn.setToolTip(
-            tr(
-                "Same zone, current prompt. Always restarts from the original "
-                "satellite imagery; previous results never stack."
-            )
+            tr("Regenerate on the same zone using the current map view")
         )
         self._result_regenerate_btn.setCursor(QtC.PointingHandCursor)
         self._result_regenerate_btn.setStyleSheet(_BTN_GREEN)
@@ -963,10 +989,12 @@ class AIEditDockWidget(QDockWidget):
         result_actions_row.addWidget(self._result_regenerate_btn, 1)
 
         self._result_exit_btn = QPushButton(tr("Exit"))
-        self._result_exit_btn.setToolTip(tr("Return to the start screen"))
+        self._result_exit_btn.setToolTip(tr("Exit and return to the start"))
         self._result_exit_btn.setCursor(QtC.PointingHandCursor)
+        self._result_exit_btn.setFixedWidth(72)
+        self._result_exit_btn.setMinimumHeight(34)
         self._result_exit_btn.setStyleSheet(_BTN_GHOST)
-        self._result_exit_btn.clicked.connect(self._on_result_exit_clicked)
+        self._result_exit_btn.clicked.connect(self._on_exit_clicked)
         result_actions_row.addWidget(self._result_exit_btn, 0)
 
         self._result_layout.addLayout(result_actions_row)
@@ -1103,11 +1131,9 @@ class AIEditDockWidget(QDockWidget):
         self.setWidget(scroll_area)
 
         # State
-        self._active = False
         self._zone_selected = False
         self._activated = False
         self._checking_credits = False
-        self._from_template = False
         self._is_free_tier = True  # default hidden until confirmed Pro
         # Seeded paid-tier default. `set_credits` downgrades to "1K" the first
         # time a free-tier user is confirmed, so the dock never lands on a
@@ -1117,14 +1143,6 @@ class AIEditDockWidget(QDockWidget):
         # button text ("Generate (30 credits)"). Overwritten by
         # set_resolution_credit_costs once the server config loads.
         self._resolution_credit_costs: dict[str, int] = {"1K": 20, "2K": 30, "4K": 40}
-
-        # Keyboard shortcuts (G to start, Esc to stop)
-        self._start_shortcut = QShortcut(QKeySequence("G"), self)
-        self._start_shortcut.activated.connect(self._on_start_clicked)
-        self._stop_shortcut = QShortcut(QKeySequence("Escape"), self)
-        self._stop_shortcut.activated.connect(self._on_stop_clicked)
-
-        self._instruction_box.setText(tr("Click and drag to select your edit area"))
 
         # Layer monitoring
         QgsProject.instance().layersAdded.connect(self._update_layer_warning)
@@ -1332,9 +1350,10 @@ class AIEditDockWidget(QDockWidget):
         self._reference_widget.setVisible(self._reference_widget.count() > 0)
         self._reference_widget.setEnabled(True)
         # `set_generating(True)` flips this flag on every run, but the
-        # generation-done path (set_generation_complete / set_idle) never
-        # calls set_generating(False), so without this reset the flag stays
-        # True and silently blocks +/paste/drop on every subsequent attempt.
+        # generation-done path (set_generation_complete / set_initial_state)
+        # never calls set_generating(False), so without this reset the flag
+        # stays True and silently blocks +/paste/drop on every subsequent
+        # attempt.
         self._reference_widget.set_readonly(False)
         self._sync_attach_buttons()
 
@@ -1373,6 +1392,7 @@ class AIEditDockWidget(QDockWidget):
             self._update_layer_warning()
             self._cancel_key_btn.setVisible(False)
             self._upgrade_cta.setVisible(self._is_free_tier)
+            self.set_launch_state()
         else:
             self._setup_header.setVisible(True)
             self._setup_desc.setVisible(True)
@@ -1452,125 +1472,138 @@ class AIEditDockWidget(QDockWidget):
         self._refresh_resolution_triggers()
         self._update_generate_button_text()
 
-    def set_active_mode(self):
-        """Enter active mode: drawing rectangle."""
-        self._active = True
-        self._edit_header.setVisible(False)
-        self._idle_section.setVisible(False)
-
-        self._result_section.setVisible(False)
-        self._warning_widget.setVisible(False)
-        self._instruction_box.setVisible(True)
-        self._hide_status_box()
-        self._layer_saved_label.setVisible(False)
-        if self._reference_widget is not None:
-            self._reference_widget.setVisible(False)
-
     def set_zone_selected(self):
-        """Zone drawn: show prompt flow (no Start button)."""
+        """Zone drawn: show the prompt section and the Generate/Exit row."""
         self._zone_selected = True
-        self._edit_header.setVisible(False)
-        self._idle_section.setVisible(False)
-
-        self._result_section.setVisible(False)
-        self._instruction_box.setVisible(False)
         self._hide_status_box()
         self._layer_saved_label.setVisible(False)
+        self._launch_section.setVisible(False)
+        self._select_zone_section.setVisible(False)
+        self._result_section.setVisible(False)
         self._prompt_section.setVisible(True)
         self._prompt_container.set_readonly(False)
-        self._from_template = False
         self._place_reference_widget("prompt")
         self._consent_widget.setVisible(not has_consent())
         self._generate_btn.setVisible(True)
-        self._stop_btn.setVisible(True)
+        self._exit_btn.setVisible(True)
         self._refresh_resolution_triggers()
-        self._start_shortcut.setEnabled(False)
-        self._stop_shortcut.setEnabled(True)
-
         self._update_generate_enabled()
-        QTimer.singleShot(0, self._prompt_input.setFocus)
+        self._update_generate_button_text()
+        self._prompt_input.setFocus()
+
+    def set_zone_cleared(self):
+        """Zone removed: return to the SELECTING_ZONE state.
+
+        Called when the user right-clicks → Delete zone, presses Esc on the
+        canvas, or clicks the × overlay on the rubber band. We go back to
+        the 'Select your zone' invitation rather than all the way to
+        LAUNCH — the user is mid-flow, just redrawing.
+        """
+        self.set_selecting_zone_state()
 
     def _stop_progress_animation(self):
         """Stop the smooth progress animation timer if running."""
         if hasattr(self, "_progress_timer") and self._progress_timer is not None:
             self._progress_timer.stop()
 
-    def set_idle(self):
-        """Reset everything to initial state."""
+    def set_launch_state(self):
+        """LAUNCH: show the entry screen with the 'Launch AI Edit' button.
+
+        Used after activation and whenever the user clicks Exit. The selection
+        tool is expected to be inactive in this state (managed by the plugin).
+        """
         self._stop_progress_animation()
         self._hide_status_box()
-        self._active = False
         self._zone_selected = False
-        self._edit_header.setVisible(True)
-        self._idle_section.setVisible(True)
 
-        # Reset reference images on Done/Stop (per product decision).
         if self._reference_widget is not None:
             self._reference_widget.clear()
             self._reference_widget.setVisible(False)
 
-        self._stop_btn.setVisible(False)
-        self._instruction_box.setVisible(False)
+        self._launch_section.setVisible(True)
+        self._select_zone_section.setVisible(False)
         self._prompt_section.setVisible(False)
-        self._consent_widget.setVisible(False)
-        self._generate_btn.setVisible(False)
         self._progress_widget.setVisible(False)
         self._result_section.setVisible(False)
         self._layer_saved_label.setVisible(False)
-        self._start_shortcut.setEnabled(True)
-        self._stop_shortcut.setEnabled(True)
+        self._consent_widget.setVisible(False)
+        self._generate_btn.setVisible(False)
+        self._exit_btn.setVisible(False)
+
+        self._prompt_container.set_readonly(False)
         self._prompt_input.clear()
         self._prompt_input.setFixedHeight(60)
-        self._prompt_container.set_readonly(False)
         self._result_prompt_input.clear()
-        self._from_template = False
-        # Reset selection to the tier default (no persistence across sessions
-        # or generations — Done sends us back to a clean slate).
         self._selected_resolution = "1K" if self._is_free_tier else "2K"
         self._refresh_resolution_triggers()
-        self._update_generate_button_text()
         self._update_layer_warning()
+
+    def set_selecting_zone_state(self):
+        """SELECTING_ZONE: invite the user to draw a zone on the canvas.
+
+        Entered after Launch is clicked, or after the user clears their zone.
+        The selection tool should be active (managed by the plugin).
+        """
+        self._stop_progress_animation()
+        self._hide_status_box()
+        self._zone_selected = False
+
+        if self._reference_widget is not None:
+            self._reference_widget.setVisible(False)
+
+        self._launch_section.setVisible(False)
+        self._select_zone_section.setVisible(True)
+        self._prompt_section.setVisible(False)
+        self._progress_widget.setVisible(False)
+        self._result_section.setVisible(False)
+        self._layer_saved_label.setVisible(False)
+        self._consent_widget.setVisible(False)
+        self._generate_btn.setVisible(False)
+        # No Exit in this state — the screen is just the draw invitation.
+        self._exit_btn.setVisible(False)
+        self._update_layer_warning()
+
+    # Backwards-compat alias for callers that still use the old name.
+    def set_prompt_state(self):
+        self.set_launch_state()
 
     def set_generating(self, generating: bool):
         """Toggle generation state -- keep prompt visible but grayed out."""
         self._progress_widget.setVisible(generating)
-        self._edit_header.setVisible(False)
-        self._idle_section.setVisible(False)
-
         self._result_section.setVisible(False)
         self._warning_widget.setVisible(False)
         self._upgrade_cta.setVisible(False)
 
         if generating:
-            # Reset progress bar to determinate 0%
             self._progress_bar.setRange(0, 100)
             self._progress_bar.setValue(0)
             self._hide_status_box()
-            # Keep prompt section visible but disable interaction.
-            # set_readonly grays the Templates / resolution / + footer trio.
+            self._launch_section.setVisible(False)
+            self._select_zone_section.setVisible(False)
             self._prompt_section.setVisible(True)
             self._prompt_container.set_readonly(True)
+            # On regenerate the refs widget lives in the result container, so
+            # hiding result_section above would also hide the thumbnails.
+            # Move it back into the visible prompt container before locking.
+            self._place_reference_widget("prompt")
             if self._reference_widget is not None:
-                # Lock add/remove but keep thumbnails clickable for preview.
                 self._reference_widget.set_readonly(True)
             self._consent_widget.setVisible(False)
             self._generate_btn.setVisible(False)
-            self._stop_btn.setVisible(False)
-            self._stop_shortcut.setEnabled(False)
+            # Hide Exit during generation: the user shouldn't be tempted to
+            # cancel mid-run from this row. The title-bar X still works as
+            # an escape hatch.
+            self._exit_btn.setVisible(False)
             self._progress_label.setText(tr("Preparing..."))
         else:
-            # Restore prompt interaction
             self._prompt_container.set_readonly(False)
             if self._reference_widget is not None:
                 self._reference_widget.set_readonly(False)
             self._consent_widget.setVisible(not has_consent() and self._zone_selected)
-            self._generate_btn.setVisible(self._zone_selected)
+            self._generate_btn.setVisible(True)
+            self._exit_btn.setVisible(True)
             self._refresh_resolution_triggers()
-            self._stop_btn.setVisible(self._zone_selected)
-            self._stop_shortcut.setEnabled(True)
-            self._prompt_section.setVisible(self._zone_selected)
-
-        self._start_shortcut.setEnabled(not generating)
+            self._prompt_section.setVisible(True)
 
     def set_generate_loading(self, loading: bool):
         """Toggle loading state on the Generate button during canvas export."""
@@ -1656,24 +1689,21 @@ class AIEditDockWidget(QDockWidget):
         self._trial_info_box.setVisible(False)
 
     def set_generation_complete(self, layer_name: str, layer_id: str | None = None):
-        """Show RESULT state with iteration options (retry / new zone / done)."""
+        """Show RESULT state with iteration options (retry / done)."""
         self._stop_progress_animation()
         self._progress_bar.setValue(100)
         self._progress_widget.setVisible(False)
         self._hide_status_box()
-        self._active = False
 
-        # Hide all non-result UI
-        self._edit_header.setVisible(False)
-        self._idle_section.setVisible(False)
-
-        self._instruction_box.setVisible(False)
+        self._launch_section.setVisible(False)
+        self._select_zone_section.setVisible(False)
         self._prompt_section.setVisible(False)
         self._generate_btn.setVisible(False)
-        self._stop_btn.setVisible(False)
+        # The result section has its own Exit button, so suppress the prompt
+        # row's Exit to avoid duplication.
+        self._exit_btn.setVisible(False)
         self._consent_widget.setVisible(False)
 
-        # Show result section with prompt pre-filled for editing
         last_prompt = self._prompt_input.toPlainText().strip()
         self._result_prompt_input.setPlainText(last_prompt)
         self._result_prompt_input.moveCursor(QtC.CursorEnd)
@@ -1681,7 +1711,6 @@ class AIEditDockWidget(QDockWidget):
         self._result_section.setVisible(True)
         self._refresh_resolution_triggers()
 
-        # Reparent reference images into result section for retry/new-area flow
         self._place_reference_widget("result")
 
         self._saved_layer_id = layer_id
@@ -1698,11 +1727,7 @@ class AIEditDockWidget(QDockWidget):
             tr("✓ Saved as {name}").format(name=link_html))
         self._layer_saved_label.setVisible(True)
 
-        # Restore upgrade CTA visibility for free tier
         self._upgrade_cta.setVisible(self._is_free_tier and self._activated)
-
-        self._start_shortcut.setEnabled(False)
-        self._stop_shortcut.setEnabled(True)
 
     def show_trial_exhausted_info(self, message: str, subscribe_url: str):
         self._hide_limit_cta()
@@ -1712,8 +1737,6 @@ class AIEditDockWidget(QDockWidget):
             f'font-weight: bold;">{tr("Subscribe")}</a>'
         )
         self._trial_info_box.setVisible(True)
-        self._idle_section.setVisible(False)
-        self._edit_header.setVisible(False)
         self._hide_status_box()
 
     def show_usage_limit_info(self, message: str, subscribe_url: str):
@@ -1721,19 +1744,11 @@ class AIEditDockWidget(QDockWidget):
         self._trial_info_box.setVisible(False)
         self._limit_cta_url = subscribe_url
         self._limit_cta_btn.setVisible(True)
-        self._idle_section.setVisible(False)
-        self._edit_header.setVisible(False)
 
     def set_checking_credits(self, checking: bool):
-        """Show/hide a loading state while credits are being fetched.
-
-        Prevents interaction with the idle section during the async gap
-        between key activation and credit response.
-        """
+        """Show/hide a loading state while credits are being fetched."""
         self._checking_credits = checking
         if checking:
-            self._idle_section.setVisible(False)
-            self._edit_header.setVisible(False)
             self._trial_info_box.setVisible(False)
             self._show_status_box(tr("Checking credits..."), "info")
         else:
@@ -1743,16 +1758,6 @@ class AIEditDockWidget(QDockWidget):
         self._trial_info_box.setVisible(False)
         self._hide_status_box()
         self._hide_limit_cta()
-        # Only restore idle UI if we're actually in idle state
-        # (not during result, generating, checking credits, etc.)
-        if (
-            not self._zone_selected
-            and not self._active  # noqa: W503
-            and not self._checking_credits  # noqa: W503
-            and not self._result_section.isVisible()  # noqa: W503
-        ):
-            self._idle_section.setVisible(True)
-            self._edit_header.setVisible(True)
 
     def get_activation_key(self) -> str:
         return self._code_input.text().strip()
@@ -1767,23 +1772,11 @@ class AIEditDockWidget(QDockWidget):
 
     def _update_layer_warning(self, *_args):
         """Show/hide warning based on layer availability."""
-        if self._active or self._zone_selected:
+        if self._zone_selected:
             self._warning_widget.setVisible(False)
             return
         has_layers = bool(QgsProject.instance().mapLayers())
         self._warning_widget.setVisible(not has_layers)
-        self._browse_btn.setEnabled(has_layers)
-        self._start_btn.setEnabled(has_layers)
-
-    def _on_start_clicked(self):
-        """Start selection -- enter active mode (free edit path)."""
-        if self._active:
-            return
-        if not self._start_btn.isEnabled():
-            return
-        self._from_template = False
-        self.set_active_mode()
-        self.select_zone_clicked.emit()
 
     def _on_settings_btn_clicked(self):
         self.settings_clicked.emit()
@@ -1793,18 +1786,9 @@ class AIEditDockWidget(QDockWidget):
         telemetry.track("subscribe_link_clicked", {"source": "upgrade_cta"})
         QDesktopServices.openUrl(QUrl(get_subscribe_url()))
 
-    def _on_stop_clicked(self):
-        """Stop -- reset to idle."""
-        if not self._active:
-            return
-        self.set_idle()
-        self.stop_clicked.emit()
-
-    def _on_result_exit_clicked(self):
-        """Exit from the result section -- always returns to idle, even
-        though ``_active`` is False once a generation has completed."""
-        self.set_idle()
-        self.stop_clicked.emit()
+    def _on_exit_clicked(self):
+        """Exit: ask the plugin to cancel + return to LAUNCH state."""
+        self.exit_clicked.emit()
 
     def _on_key_toggle(self, checked: bool):
         pass
@@ -1873,12 +1857,11 @@ class AIEditDockWidget(QDockWidget):
         self._update_generate_button_text()
 
     def _update_generate_button_text(self):
-        """Reset Generate / Regenerate button labels.
-
-        The credit cost is shown in the resolution dropdown instead of the
-        button, so the button text stays minimal.
+        """Keep Generate label stable. The 'Select your zone' hint now lives
+        in the SELECTING_ZONE section, so the button always reads 'Generate'.
         """
         self._generate_btn.setText(tr("Generate"))
+        self._generate_btn.setToolTip(tr("Run the AI edit on your selected zone"))
         self._result_regenerate_btn.setText(tr("Regenerate"))
 
     def set_resolution_credit_costs(self, costs: dict[str, int]):
@@ -1893,13 +1876,12 @@ class AIEditDockWidget(QDockWidget):
         return self._selected_resolution
 
     def _on_browse_templates_clicked(self):
-        """Open templates dialog. Pick template -> start zone drawing directly."""
+        """Open templates dialog. Fill whichever prompt input is active."""
         preset = self._open_templates_dialog()
         if not preset:
             return
 
         if self._result_section.isVisible():
-            # In result state — fill the result prompt
             self._result_prompt_input.blockSignals(True)
             self._result_prompt_input.setPlainText(_format_template_prompt(preset["prompt"]))
             self._result_prompt_input.blockSignals(False)
@@ -1907,8 +1889,7 @@ class AIEditDockWidget(QDockWidget):
             self._result_prompt_input.setFocus()
             self._update_generate_enabled()
             self._adjust_result_prompt_height()
-        elif self._zone_selected:
-            # Already have a zone — fill the active prompt input
+        else:
             self._prompt_input.blockSignals(True)
             self._prompt_input.setPlainText(_format_template_prompt(preset["prompt"]))
             self._prompt_input.blockSignals(False)
@@ -1916,20 +1897,6 @@ class AIEditDockWidget(QDockWidget):
             self._prompt_input.setFocus()
             self._update_generate_enabled()
             self._adjust_prompt_height()
-        else:
-            # IDLE state — store prompt and go directly to zone drawing.
-            # processEvents() lets Qt finish the modal dialog cleanup
-            # (focus restoration, cursor state) before we activate the
-            # selection tool, so the crosshair cursor applies correctly.
-            self._from_template = True
-            self._prompt_input.blockSignals(True)
-            self._prompt_input.setPlainText(_format_template_prompt(preset["prompt"]))
-            self._prompt_input.blockSignals(False)
-            self._prompt_input.moveCursor(QtC.CursorEnd)
-            self._adjust_prompt_height()
-            self.set_active_mode()
-            QApplication.processEvents()
-            self.select_zone_clicked.emit()
 
     def _on_prompt_changed(self):
         self._enforce_prompt_max_length(self._prompt_input)
@@ -2113,7 +2080,6 @@ class AIEditDockWidget(QDockWidget):
         shortcuts_html = (
             "<table cellspacing='4' cellpadding='2'>"
             f"<tr><td colspan='2' style='padding-bottom:2px;'><b>{tr('Editing')}</b></td></tr>"
-            f"<tr><td>{k.format('G')}</td><td>{tr('Select a zone')}</td></tr>"
             f"<tr><td>{k.format('Esc')}</td><td>{tr('Cancel selection')}</td></tr>"
             f"<tr><td>{k.format(undo_key)}</td><td>{tr('Undo')}</td></tr>"
             "</table>"
@@ -2154,6 +2120,7 @@ class AIEditDockWidget(QDockWidget):
         enabled = self._zone_selected and has_prompt and consent_ok
         self._generate_btn.setEnabled(enabled)
         self._update_generate_style()
+        self._update_generate_button_text()
 
     def _hide_limit_cta(self):
         self._limit_cta_btn.setVisible(False)

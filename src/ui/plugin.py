@@ -35,7 +35,10 @@ from .canvas_exporter import (
     set_server_config,
 )
 from .dock_widget import AIEditDockWidget
-from .raster_writer import add_geotiff_to_project, get_output_dir
+from .raster_writer import (
+    add_geotiff_to_project,
+    get_output_dir,
+)
 from .selection_map_tool import RectangleSelectionTool
 
 DASHBOARD_ERROR_URL = (
@@ -154,6 +157,9 @@ class AIEditPlugin:
         self._terralab_toolbar = None
         self._export_config_loader = None
         self._credits_loader = None
+        # Per-session counter used to prefix output layer names ("#N"). Reset
+        # whenever the user exits / closes the dock so a fresh session starts
+        # back at #1.
         self._generation_counter = 0
         # Preserved for retry (re-generate from original, not from AI result)
         self._last_image_b64 = None
@@ -321,7 +327,6 @@ class AIEditPlugin:
             self._dock_widget.raise_()
         else:
             self._dock_widget.hide()
-        self._dock_widget.select_zone_clicked.connect(self._activate_selection_tool)
         self._dock_widget.stop_clicked.connect(self._on_stop)
         self._dock_widget.generate_clicked.connect(self._on_generate)
         self._dock_widget.retry_clicked.connect(self._on_retry)
@@ -329,11 +334,17 @@ class AIEditPlugin:
         self._dock_widget.activation_attempted.connect(self._on_activation_attempted)
         self._dock_widget.change_key_clicked.connect(self._on_change_key)
         self._dock_widget.settings_clicked.connect(self._on_settings_clicked)
+        self._dock_widget.launch_clicked.connect(self._on_launch_clicked)
+        self._dock_widget.exit_clicked.connect(self._on_exit_clicked)
+        # Title-bar X close doesn't go through _toggle_dock, so listen for the
+        # underlying visibility change to keep the map tool / cursor in sync.
+        self._dock_widget.visibilityChanged.connect(self._on_dock_visibility_changed)
 
         # Create map tool
         self._map_tool = RectangleSelectionTool(self._canvas)
         self._map_tool.selection_made.connect(self._on_zone_selected)
         self._map_tool.zone_too_small.connect(self._on_zone_too_small)
+        self._map_tool.zone_delete_requested.connect(self._on_zone_delete_requested)
 
         # Restore saved activation key
         self._check_activation_state()
@@ -453,6 +464,11 @@ class AIEditPlugin:
             self._ai_seg_action = None
             self._terralab_menu = None
 
+        if self._map_tool is not None:
+            try:
+                self._map_tool.cleanup()
+            except Exception as err:  # nosec B110
+                log_warning(f"Map tool cleanup failed: {err}")
         self._map_tool = None
         clear_config_cache()
         log("AI Edit plugin unloaded")
@@ -505,11 +521,23 @@ class AIEditPlugin:
     def _toggle_dock(self):
         if self._dock_widget.isVisible():
             self._dock_widget.hide()
+            self._deactivate_selection_tool()
+            self._clear_selection_rectangle()
+            self._selected_extent = None
+            if self._map_tool:
+                self._map_tool.set_has_zone(False)
             log_debug("Dock hidden")
         else:
+            # Clean up any orphan rubber band left by a previous session
+            # (e.g. dock closed via the title-bar X instead of toggle).
+            self._clear_selection_rectangle()
+            self._selected_extent = None
+            if self._map_tool:
+                self._map_tool.set_has_zone(False)
             self._check_activation_state()
             self._dock_widget.show()
             self._dock_widget.raise_()
+            # Selection tool stays off until the user clicks "Launch AI Edit".
             if not self._plugin_opened_emitted:
                 self._plugin_opened_emitted = True
                 telemetry.track("plugin_opened")
@@ -534,6 +562,7 @@ class AIEditPlugin:
         if (time.time() - self._last_key_validation_unix) < 30:
             self._dock_widget.set_activated(True)
             self._settings_action.setEnabled(True)
+            # Stay on LAUNCH state; tool is activated on user click.
             return
 
         self._key_validation_worker = _KeyValidationWorker(self._client, saved_key)
@@ -546,6 +575,7 @@ class AIEditPlugin:
         self._last_key_validation_unix = time.time()
         self._dock_widget.set_activated(True)
         self._settings_action.setEnabled(True)
+        # Stay on LAUNCH state; tool is activated on user click.
         self._dock_widget.set_checking_credits(True)
         self._refresh_credits()
 
@@ -598,16 +628,15 @@ class AIEditPlugin:
             )
 
     def _activate_selection_tool(self):
-        current_tool = self._canvas.mapTool()
-        if current_tool and current_tool != self._map_tool:
-            self._previous_map_tool = current_tool
-        self._canvas.setMapTool(self._map_tool)
-        self._canvas.setFocus()
-        self._clear_selection_rectangle()
+        """Activate selection tool. Preserves any existing zone."""
+        if self._canvas.mapTool() != self._map_tool:
+            current_tool = self._canvas.mapTool()
+            if current_tool:
+                self._previous_map_tool = current_tool
+            self._canvas.setMapTool(self._map_tool)
         self._dock_widget.set_status("")
-        self._selected_extent = None
 
-    def _restore_previous_map_tool(self):
+    def _deactivate_selection_tool(self):
         """Restore the map tool that was active before selection started."""
         if self._previous_map_tool:
             try:
@@ -617,7 +646,12 @@ class AIEditPlugin:
         self._previous_map_tool = None
 
     def _on_stop(self):
-        """Stop button: reset everything and cancel any in-flight generation."""
+        """Dock closing mid-generation: cancel work and clear zone state.
+
+        Triggered by the dock's closeEvent (title-bar X). The Exit button has
+        its own handler that also returns the dock to LAUNCH — see
+        _on_exit_clicked.
+        """
         if self._worker and self._worker.isRunning():
             duration = time.time() - getattr(self, "_generation_start_time", time.time())
             telemetry.track("generation_cancelled", self._enrich_generation_props({
@@ -625,22 +659,64 @@ class AIEditPlugin:
                 "resolution": getattr(self, "_last_suggested_res", ""),
             }))
             telemetry.flush()
-            # Abort the running request so the worker thread can return.
             self._generation_service.cancel()
-        self._canvas.unsetMapTool(self._map_tool)
-        self._restore_previous_map_tool()
         self._clear_selection_rectangle()
         self._selected_extent = None
         self._last_image_b64 = None
+        if self._map_tool:
+            self._map_tool.set_has_zone(False)
+        self._generation_counter = 0
+        self._deactivate_selection_tool()
+
+    def _on_launch_clicked(self):
+        """User clicked 'Launch AI Edit' on the entry screen."""
+        telemetry.track("launch_clicked")
+        self._generation_counter = 0
+        self._activate_selection_tool()
+        self._dock_widget.set_selecting_zone_state()
+
+    def _on_dock_visibility_changed(self, visible: bool):
+        """Restore the canvas state when the dock is hidden by any path.
+
+        Covers the title-bar X close, the QGIS Panels menu toggle, and
+        anything else that hides the dock outside our _toggle_dock action.
+        """
+        if visible:
+            return
+        self._deactivate_selection_tool()
+        self._clear_selection_rectangle()
+        self._selected_extent = None
+        if self._map_tool:
+            self._map_tool.set_has_zone(False)
+        self._generation_counter = 0
+
+    def _on_exit_clicked(self):
+        """User clicked Exit / Done: cancel work and return to LAUNCH."""
+        if self._worker and self._worker.isRunning():
+            duration = time.time() - getattr(self, "_generation_start_time", time.time())
+            telemetry.track("generation_cancelled", self._enrich_generation_props({
+                "duration_seconds": round(duration, 1),
+                "resolution": getattr(self, "_last_suggested_res", ""),
+            }))
+            telemetry.flush()
+            self._generation_service.cancel()
+        self._clear_selection_rectangle()
+        self._selected_extent = None
+        self._last_image_b64 = None
+        if self._map_tool:
+            self._map_tool.set_has_zone(False)
+        self._generation_counter = 0
+        self._deactivate_selection_tool()
+        self._dock_widget.set_launch_state()
 
     def _on_retry(self, prompt: str):
-        """Retry on same zone: re-generate from the ORIGINAL canvas export."""
-        if not self._last_image_b64 or not self._last_extent_dict:
+        """Retry on same zone: re-export the current canvas view (includes generated layers)."""
+        if not self._selected_extent:
             self._dock_widget.set_status(
-                tr("Cannot retry: original zone data not available."), is_error=True
+                tr("Cannot retry: no zone selected."), is_error=True
             )
             return
-        self._run_generation_from_stored(prompt)
+        self._on_generate(prompt)
 
     def _on_template_selected(self, template_id: str, template_name: str = ""):
         """Track template selection for analytics."""
@@ -680,6 +756,8 @@ class AIEditPlugin:
         if self._selected_extent:
             self._show_selection_rectangle(self._selected_extent)
 
+        if self._map_tool:
+            self._map_tool.set_locked(True)
         self._dock_widget.set_generating(True)
         self._dock_widget.set_status("")
         self._generation_service.reset()
@@ -718,19 +796,23 @@ class AIEditPlugin:
 
     def _on_zone_selected(self, extent: QgsRectangle):
         self._selected_extent = extent
-        # Show rectangle and deactivate tool BEFORE setting focus on prompt
         self._show_selection_rectangle(extent)
-        self._canvas.unsetMapTool(self._map_tool)
-        self._restore_previous_map_tool()
-        # Focus set LAST — after map tool ops that steal focus
         self._dock_widget.set_zone_selected()
         log_debug("Zone selected")
 
     def _on_zone_too_small(self):
-        self._canvas.unsetMapTool(self._map_tool)
-        self._restore_previous_map_tool()
-        self._dock_widget.set_idle()
         self._dock_widget.set_status(tr("Selected zone too small (min 50x50px)"), is_error=True)
+
+    def _on_zone_delete_requested(self):
+        """Right-click 'Clear zone' on the canvas map tool.
+
+        Keeps the current edit group open and the typed prompt preserved so
+        the user can redraw a zone and continue iterating in the same group.
+        """
+        self._clear_selection_rectangle()
+        self._selected_extent = None
+        self._dock_widget.set_zone_cleared()
+        log_debug("Zone cleared via context menu")
 
     def _on_change_key(self):
         """Show change-key mode without clearing the current key yet.
@@ -752,6 +834,7 @@ class AIEditPlugin:
             self._dock_widget.set_activation_message(tr("Activation key verified!"), is_error=False)
             self._dock_widget.hide_activation_limit_cta()
             self._settings_action.setEnabled(True)
+            # Stay on LAUNCH state; tool is activated on user click.
             self._dock_widget.set_checking_credits(True)
             self._refresh_credits()
             # Persist activation timestamp once for cohort analysis.
@@ -862,6 +945,8 @@ class AIEditPlugin:
         self._last_aspect_ratio = aspect_ratio
         self._last_suggested_res = suggested_res
 
+        if self._map_tool:
+            self._map_tool.set_locked(True)
         self._dock_widget.set_generating(True)
         self._dock_widget.set_status("")
         self._generation_service.reset()
@@ -903,10 +988,9 @@ class AIEditPlugin:
         self._dock_widget.set_progress_message(status, percentage)
 
     def _on_generation_error(self, message: str, code: str):
-        self._selected_extent = None
-        self._dock_widget.set_idle()
-        self._clear_selection_rectangle()
-        self._restore_previous_map_tool()
+        if self._map_tool:
+            self._map_tool.set_locked(False)
+        self._dock_widget.set_generating(False)
         self._cleanup_worker()
         normalized_code = (code or "").strip().upper()
         message_lower = (message or "").lower()
@@ -940,9 +1024,9 @@ class AIEditPlugin:
         log_warning(f"Generation failed: {message} (code={code})")
 
     def _on_generation_finished(self, result_info: dict):
+        if self._map_tool:
+            self._map_tool.set_locked(False)
         self._cleanup_worker()
-        # Keep selection rectangle visible for retry/new zone flow
-        self._restore_previous_map_tool()
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
 
         try:
@@ -964,13 +1048,10 @@ class AIEditPlugin:
         except Exception as e:
             telemetry.track("plugin_error", {
                 "error_type": "layer_add_failed",
-                # Truncated to 200 chars: raw exception text can include file
-                # paths or fragments of user data; cap caps PII spillover.
                 "error_message": str(e)[:200],
             })
             telemetry.flush()
-            self._dock_widget.set_idle()
-            self._clear_selection_rectangle()
+            self._dock_widget.set_generating(False)
             self._dock_widget.set_status(
                 tr("Error adding layer: {error}").format(error=e), is_error=True
             )
@@ -1049,7 +1130,7 @@ class AIEditPlugin:
         self._clear_selection_rectangle()
         from ..core import qt_compat as QtC
         rb = QgsRubberBand(self._canvas, QtC.PolygonGeometry)
-        rb.setColor(QColor(65, 105, 225, 15))
+        rb.setColor(QColor(0, 0, 0, 0))
         rb.setStrokeColor(QColor(65, 105, 225, 180))
         rb.setWidth(3)
         rb.addPoint(QgsPointXY(extent.xMinimum(), extent.yMinimum()), False)

@@ -194,6 +194,7 @@ class ReferenceImagesWidget(QWidget):
         # overflow by widening the dock and pushing a horizontal scrollbar
         # onto the whole QGIS layout.
         self._thumbs_host = QWidget(self)
+        self._thumbs_host.setStyleSheet("background: transparent;")
         self._thumbs_row = QHBoxLayout(self._thumbs_host)
         self._thumbs_row.setContentsMargins(0, 0, 0, 0)
         self._thumbs_row.setSpacing(6)
@@ -202,6 +203,14 @@ class ReferenceImagesWidget(QWidget):
         self._thumbs_scroll.setWidget(self._thumbs_host)
         self._thumbs_scroll.setWidgetResizable(True)
         self._thumbs_scroll.setFrameShape(QtC.FrameNoFrame)
+        # Let the surrounding _PromptContainer background show through —
+        # without this the QScrollArea viewport paints palette(base), which
+        # reads as a darker grey band sitting on top of the container fill.
+        self._thumbs_scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            "QScrollArea > QWidget > QWidget { background: transparent; }"
+        )
+        self._thumbs_scroll.viewport().setAutoFillBackground(False)
         # Hide both scrollbars — trackpad / mouse wheel still scroll the
         # viewport horizontally. Cleaner than ScrollBarAsNeeded which
         # paints a visible bar under the thumbnails.

@@ -7,7 +7,7 @@ from qgis.PyQt.QtCore import QByteArray, QUrl
 from qgis.PyQt.QtNetwork import QNetworkRequest
 
 from ..core import qt_compat as QtC
-from ..core.logger import log_warning
+from ..core.logger import log_debug, log_warning
 
 # Timeout defaults (milliseconds)
 _TIMEOUT_API = 30_000
@@ -207,7 +207,14 @@ class TerraLabClient:
         if http_status and _safe_int(http_status) >= 400:
             raise RuntimeError(f"Download failed: HTTP {http_status}")
 
-        return bytes(reply.content())
+        data = bytes(reply.content())
+        content_type = reply.rawHeader(b"Content-Type")
+        ct_str = bytes(content_type).decode("ascii", errors="replace") if content_type else "?"
+        head_hex = data[:16].hex() if data else ""
+        log_debug(
+            f"Downloaded {len(data)} bytes, content-type={ct_str}, head={head_hex}"
+        )
+        return data
 
     # -- internal ----------------------------------------------------------
 
