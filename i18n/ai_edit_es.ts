@@ -40,12 +40,16 @@
         <translation>Términos y Privacidad</translation>
     </message>
     <message>
-        <source>By using AI Edit, your raster images will be sent to our secure cloud processing servers for AI analysis. Images are processed in real-time and immediately discarded after processing.
-
-By continuing, you agree to our Terms of Sale and Privacy Policy.</source>
-        <translation>Al usar AI Edit, sus imágenes ráster serán enviadas a nuestros servidores cloud seguros para análisis por IA. Las imágenes se procesan en tiempo real y se eliminan inmediatamente después del procesamiento.
-
-Al continuar, acepta nuestros Términos de Venta y Política de Privacidad.</translation>
+        <source>By generating, you upload your selection to TerraLab for AI processing and EU storage. {terms} · {privacy}</source>
+        <translation>Al generar, envías tu selección a TerraLab para procesamiento por IA y almacenamiento en la UE. {terms} · {privacy}</translation>
+    </message>
+    <message>
+        <source>Terms</source>
+        <translation>Términos</translation>
+    </message>
+    <message>
+        <source>Privacy</source>
+        <translation>Privacidad</translation>
     </message>
     <message>
         <source>Terms of Sale</source>

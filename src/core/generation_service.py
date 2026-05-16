@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import base64
 import time
 from dataclasses import dataclass
 from typing import Callable
 
-from .logger import log_debug
+from .logger import log_debug, log_warning
 
 
 @dataclass
@@ -31,6 +32,59 @@ class GenerationService:
     def reset(self):
         self._cancelled = False
 
+    # Below this base64 size we send the image inline in the submit body —
+    # a single round-trip looks cleaner from outside and avoids an extra API
+    # call for the common-case small generations (1 K resolution typically
+    # encodes to <2 MB of PNG). Above it, we'd risk the serverless body cap,
+    # so we switch to the presigned-upload path.
+    _INLINE_BASE64_THRESHOLD = 4 * 1024 * 1024  # 4 MB of base64 ≈ 3 MB raw
+
+    def _try_upload_token_flow(self, image_b64: str, auth: dict) -> str | None:
+        """Attempt the presigned-upload path. Returns the upload token on
+        success, or None to signal the caller to fall back to inline base64.
+
+        Skipped entirely when the image is small enough to inline so we don't
+        burn an extra round-trip on small generations.
+
+        Failures here are silent (logged but not surfaced) — we'd rather pay
+        the inline body cost than show a network error for a path we control
+        entirely and can retry as inline.
+        """
+        if len(image_b64) <= self._INLINE_BASE64_THRESHOLD:
+            return None
+
+        try:
+            resp = self._client.request_upload_url(auth)
+        except Exception as e:
+            log_warning(f"Upload URL request raised: {e}")
+            return None
+        if not isinstance(resp, dict) or "error" in resp:
+            log_warning(f"Upload URL request returned error: {resp}")
+            return None
+        upload_url = resp.get("upload_url")
+        token = resp.get("upload_token")
+        headers = resp.get("required_headers") or {}
+        max_bytes = resp.get("max_bytes")
+        if not upload_url or not token:
+            return None
+
+        try:
+            data = base64.b64decode(image_b64)
+        except Exception as e:
+            log_warning(f"Could not decode image_b64 for upload: {e}")
+            return None
+        if max_bytes is not None and len(data) > max_bytes:
+            log_warning(
+                f"Image too large for upload ({len(data)} > {max_bytes}), falling back to inline"
+            )
+            return None
+
+        ok, err = self._client.upload_to_signed_url(upload_url, data, headers)
+        if not ok:
+            log_warning(f"Presigned upload failed: {err}; falling back to inline")
+            return None
+        return token
+
     def generate(
         self,
         image_b64: str,
@@ -53,15 +107,31 @@ class GenerationService:
             f"image_b64_len={len(image_b64)}, context_images={ctx_count}"
         )
 
-        # Submit (pre-prompt is applied server-side in website config)
-        resp = self._client.submit_generation(
-            image_b64=image_b64,
-            prompt=prompt,
-            resolution=suggested_resolution,
-            aspect_ratio=aspect_ratio,
-            auth=auth,
-            context_images=context_images,
-        )
+        # Preferred path: upload the image straight to remote storage via a
+        # short-lived presigned URL, then submit only a tiny token. Skips the
+        # serverless body-size cap entirely so multi-MB lossless PNG inputs
+        # go through without truncation. Falls back to inline base64 if any
+        # step fails so an outage on the storage path doesn't break edits.
+        upload_token = self._try_upload_token_flow(image_b64, auth)
+
+        if upload_token is not None:
+            resp = self._client.submit_generation(
+                upload_token=upload_token,
+                prompt=prompt,
+                resolution=suggested_resolution,
+                aspect_ratio=aspect_ratio,
+                auth=auth,
+                context_images=context_images,
+            )
+        else:
+            resp = self._client.submit_generation(
+                image_b64=image_b64,
+                prompt=prompt,
+                resolution=suggested_resolution,
+                aspect_ratio=aspect_ratio,
+                auth=auth,
+                context_images=context_images,
+            )
 
         if "error" in resp:
             return GenerationResult(

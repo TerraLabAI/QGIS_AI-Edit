@@ -125,24 +125,37 @@ class TerraLabClient:
 
     def submit_generation(
         self,
-        image_b64: str,
         prompt: str,
         resolution: str,
         aspect_ratio: str,
         auth: dict,
+        image_b64: str | None = None,
+        upload_token: str | None = None,
         context_images: list[str] | None = None,
     ) -> dict:
-        """Submit an image + prompt for generation.
+        """Submit a prompt for generation. Exactly one of ``image_b64`` or
+        ``upload_token`` must be provided.
+
+        ``upload_token`` is the preferred path: the image bytes were already
+        PUT to the server-provided signed URL, so the submit body is tiny.
+        ``image_b64`` remains as a fallback when the upload path fails.
 
         ``context_images`` is an optional list of base64-encoded reference
         images. Sent only when non-empty so older backends ignore the field.
         """
+        if (image_b64 is None) == (upload_token is None):
+            raise ValueError(
+                "submit_generation requires exactly one of image_b64 or upload_token"
+            )
         payload: dict = {
-            "image": image_b64,
             "prompt": prompt,
             "resolution": resolution,
             "aspect_ratio": aspect_ratio,
         }
+        if upload_token is not None:
+            payload["upload_token"] = upload_token
+        else:
+            payload["image"] = image_b64
         if context_images:
             payload["context_images"] = context_images
         body = json.dumps(payload).encode("utf-8")
@@ -153,6 +166,52 @@ class TerraLabClient:
             body=body,
             timeout_ms=_get_submit_timeout_ms(resolution),
         )
+
+    def request_upload_url(self, auth: dict) -> dict:
+        """Ask the server for a presigned PUT URL to upload the input image.
+
+        Response shape on success:
+            {"upload_token": str, "upload_url": str, "expires_at": int,
+             "max_bytes": int, "required_headers": {"Content-Type": str, ...}}
+        """
+        body = json.dumps({}).encode("utf-8")
+        return self._request(
+            "POST",
+            "/api/ai-edit/upload-url",
+            auth=auth,
+            body=body,
+            timeout_ms=10_000,
+        )
+
+    def upload_to_signed_url(
+        self,
+        url: str,
+        data: bytes,
+        headers: dict,
+        timeout_ms: int = 60_000,
+    ) -> tuple[bool, str | None]:
+        """PUT raw bytes to a presigned upload URL. Returns (ok, error_message)."""
+        req = QNetworkRequest(QUrl(url))
+        for k, v in headers.items():
+            req.setRawHeader(k.encode("utf-8"), v.encode("utf-8"))
+        req.setTransferTimeout(timeout_ms)
+        blocker = QgsBlockingNetworkRequest()
+        payload = QByteArray(data)
+        try:
+            err = blocker.put(req, payload)
+        except AttributeError:
+            return (False, "QgsBlockingNetworkRequest.put not available")
+        if err != QtC.BlockingNoError:
+            code, msg = _classify_network_error(blocker)
+            return (False, f"{code}: {msg}")
+        reply = blocker.reply()
+        http_status = reply.attribute(QtC.HttpStatusCodeAttribute) if reply else None
+        status_int = _safe_int(http_status) if http_status is not None else None
+        if status_int is not None and status_int >= 400:
+            raw = bytes(reply.content()).decode("utf-8", errors="replace") if reply else ""
+            log_warning(f"Upload PUT failed: HTTP {status_int} {raw[:200]}")
+            return (False, f"HTTP {status_int}")
+        return (True, None)
 
     def poll_status(self, request_id: str, auth: dict) -> dict:
         """Poll generation status."""

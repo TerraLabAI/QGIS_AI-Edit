@@ -21,6 +21,23 @@ DASHBOARD_URL = (
     "https://terra-lab.ai/dashboard/ai-edit"
     "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=dashboard"
 )
+TERMS_URL = (
+    "https://terra-lab.ai/terms-of-sale"
+    "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=settings_terms"
+)
+PRIVACY_URL = (
+    "https://terra-lab.ai/privacy-policy"
+    "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=settings_privacy"
+)
+
+
+def get_terms_url() -> str:
+    return TERMS_URL
+
+
+def get_privacy_url() -> str:
+    return PRIVACY_URL
+
 
 # Hardcoded fallback config (used when server is unreachable)
 DEFAULT_CONFIG = {

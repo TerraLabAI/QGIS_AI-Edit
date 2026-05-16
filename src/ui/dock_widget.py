@@ -12,6 +12,7 @@ from qgis.PyQt.QtGui import (
     QDesktopServices,
     QIcon,
     QImage,
+    QKeySequence,
 )
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
@@ -25,6 +26,7 @@ from qgis.PyQt.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QShortcut,
     QStyle,
     QTextEdit,
     QToolButton,
@@ -693,6 +695,14 @@ class AIEditDockWidget(QDockWidget):
         self.setMinimumWidth(260)
         self._reference_store = reference_store
 
+        # Global Escape: exit the flow no matter where focus is (canvas while
+        # drawing a zone, prompt textarea, progress bar, etc.). WindowShortcut
+        # context lets the shortcut fire on the parent main window's key events
+        # via ShortcutOverride, which beats the map tool's local Escape handler.
+        self._escape_shortcut = QShortcut(QKeySequence(QtC.Key_Escape), self)
+        self._escape_shortcut.setContext(QtC.WindowShortcut)
+        self._escape_shortcut.activated.connect(self._on_escape_pressed)
+
         self._setup_title_bar()
 
         # Main content
@@ -743,7 +753,7 @@ class AIEditDockWidget(QDockWidget):
         sz_layout.addWidget(self._select_zone_header)
 
         self._select_zone_hint = QLabel(
-            tr("Click and drag on the map to draw a rectangular zone.")
+            tr("Hold Shift and drag on the map to draw a rectangular zone. Plain drag pans the map.")
         )
         self._select_zone_hint.setWordWrap(True)
         self._select_zone_hint.setStyleSheet(_INSTRUCTION_BOX)
@@ -836,11 +846,23 @@ class AIEditDockWidget(QDockWidget):
             "https://terra-lab.ai/privacy-policy"
             "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=consent_privacy"
         )
+        # Plain-language disclosure of what the plugin actually does with the
+        # image, so installing it on the QGIS marketplace doesn't surprise the
+        # user. Mentions both upload and retention since neither is obvious from
+        # the UI alone. {terms} and {privacy} are placeholders so the linked
+        # words can be reordered in translations.
+        _consent_template = tr(
+            "By generating, you upload your selection to TerraLab for AI processing "
+            "and EU storage. {terms} · {privacy}"
+        )
+        _terms_link = (
+            f'<a href="{_terms_url}" style="color: {BRAND_BLUE};">{tr("Terms")}</a>'
+        )
+        _privacy_link = (
+            f'<a href="{_privacy_url}" style="color: {BRAND_BLUE};">{tr("Privacy")}</a>'
+        )
         consent_text = QLabel(
-            f'I agree to the <a href="{_terms_url}" '
-            f'style="color: {BRAND_BLUE};">Terms</a> and '
-            f'<a href="{_privacy_url}" '
-            f'style="color: {BRAND_BLUE};">Privacy Policy</a>'
+            _consent_template.format(terms=_terms_link, privacy=_privacy_link)
         )
         consent_text.setOpenExternalLinks(True)
         consent_text.setWordWrap(True)
@@ -2131,6 +2153,25 @@ class AIEditDockWidget(QDockWidget):
             self._generate_btn.setStyleSheet(_BTN_GREEN)
         else:
             self._generate_btn.setStyleSheet(_BTN_DISABLED)
+
+    def _on_escape_pressed(self):
+        """Single Escape exit for every step of the AI Edit flow.
+
+        Fires from any focus context (canvas while drawing, prompt textarea,
+        post-gen result) because the shortcut sits at the dock with
+        WindowShortcut. We only act when the main flow is actually on
+        screen so Escape elsewhere in QGIS keeps its default behavior.
+
+        Explicit exception: a generation in progress should NOT be cancelable
+        by an accidental Escape. The user paid credits and we already booked
+        the work upstream — a stray keystroke shouldn't throw that away. The
+        on-screen Stop button is the deliberate way to cancel.
+        """
+        if not self.isVisible() or not self._main_widget.isVisible():
+            return
+        if self._progress_widget.isVisible():
+            return
+        self.exit_clicked.emit()
 
     def closeEvent(self, event):
         """Cancel generation and disconnect signals on close."""

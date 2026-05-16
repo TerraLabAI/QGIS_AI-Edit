@@ -141,18 +141,12 @@ def export_canvas_zone(
     job.waitForFinished()
     painter.end()
 
-    # Convert to base64 JPEG (matches server's data:image/jpeg URI)
-    # Scale quality down for larger images to keep payload under server limits
-    longest_side = max(out_w, out_h)
-    if longest_side > 2048:
-        jpeg_quality = 80
-    elif longest_side > 1024:
-        jpeg_quality = 85
-    else:
-        jpeg_quality = 92
+    # Serialize as lossless PNG. Iterative edits on the same zone re-eat the
+    # previous output, so any encoding loss compounds — PNG keeps the canvas
+    # bit-exact through the round-trip to the model and back.
     buffer = QBuffer()
     buffer.open(QtC.WriteOnly)
-    image.save(buffer, "JPEG", jpeg_quality)
+    image.save(buffer, "PNG")
     b64 = base64.b64encode(buffer.data().data()).decode("ascii")
 
     # Populate pipeline context

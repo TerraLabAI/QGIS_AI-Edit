@@ -38,6 +38,9 @@ Key_Return = _resolve(Qt, "Key", "Key_Return")
 Key_Enter = _resolve(Qt, "Key", "Key_Enter")
 Key_Escape = _resolve(Qt, "Key", "Key_Escape")
 
+# Qt.ShortcutContext
+WindowShortcut = _resolve(Qt, "ShortcutContext", "WindowShortcut")
+
 # Qt.KeyboardModifier
 ShiftModifier = _resolve(Qt, "KeyboardModifier", "ShiftModifier")
 

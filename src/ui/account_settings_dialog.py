@@ -17,7 +17,12 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..core import qt_compat as QtC
-from ..core.activation_manager import get_dashboard_url, get_subscribe_url
+from ..core.activation_manager import (
+    get_dashboard_url,
+    get_privacy_url,
+    get_subscribe_url,
+    get_terms_url,
+)
 from ..core.i18n import tr
 from .dock_widget import BRAND_BLUE, BRAND_GREEN, BRAND_RED
 
@@ -162,6 +167,19 @@ class AccountSettingsDialog(QDialog):
         manage_label.setAlignment(QtC.AlignCenter)
         manage_label.setStyleSheet("font-size: 11px; padding-top: 2px;")
         self._content_layout.addWidget(manage_label)
+
+        # Permanent access to legal docs — the consent checkbox only shows once
+        # at first generation, so users need a way back to Terms and Privacy
+        # from inside the plugin afterwards.
+        legal_label = QLabel(
+            f'<a href="{get_terms_url()}" style="color: {BRAND_BLUE};">{tr("Terms")}</a>'
+            f' · '
+            f'<a href="{get_privacy_url()}" style="color: {BRAND_BLUE};">{tr("Privacy")}</a>'
+        )
+        legal_label.setOpenExternalLinks(True)
+        legal_label.setAlignment(QtC.AlignCenter)
+        legal_label.setStyleSheet("font-size: 11px; color: palette(text); padding-top: 2px;")
+        self._content_layout.addWidget(legal_label)
 
         self._content_widget.setVisible(True)
         self.adjustSize()
