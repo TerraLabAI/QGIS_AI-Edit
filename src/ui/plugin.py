@@ -167,6 +167,11 @@ class AIEditPlugin:
         self._last_crs_wkt = None
         self._last_aspect_ratio = None
         self._last_suggested_res = None
+        # request_id of the most recent completed generation on the current
+        # selection. Sent to the server on the next submit so it can attach
+        # the original input as a hidden reference image, anchoring style
+        # coherence across iterations. Cleared on fresh zone selection.
+        self._last_completed_request_id: str | None = None
         self._key_validation_worker = None
         # Last successful server-side key revalidation (unix seconds). Used to
         # skip /api/plugin/usage round-trips when the user toggles the dock
@@ -749,6 +754,9 @@ class AIEditPlugin:
 
         ctx = PipelineContext()
         ctx.aspect_ratio = self._last_aspect_ratio
+        # Retry on the same zone = iteration. Anchor on the previous result's
+        # original input so the model keeps style coherence.
+        ctx.parent_request_id = self._last_completed_request_id
 
         output_dir = get_output_dir()
 
@@ -796,6 +804,10 @@ class AIEditPlugin:
 
     def _on_zone_selected(self, extent: QgsRectangle):
         self._selected_extent = extent
+        # Fresh zone breaks the iteration chain — the new submission isn't
+        # editing the same area as the prior one, so the original-input
+        # anchor would mislead the model.
+        self._last_completed_request_id = None
         self._show_selection_rectangle(extent)
         self._dock_widget.set_zone_selected()
         log_debug("Zone selected")
@@ -811,6 +823,8 @@ class AIEditPlugin:
         """
         self._clear_selection_rectangle()
         self._selected_extent = None
+        # Clearing the zone breaks the iteration chain.
+        self._last_completed_request_id = None
         self._dock_widget.set_zone_cleared()
         log_debug("Zone cleared via context menu")
 
@@ -893,6 +907,10 @@ class AIEditPlugin:
             return
 
         ctx = PipelineContext()
+        # If the user generates twice in a row without reselecting a zone,
+        # treat the second submission as an iteration so the server attaches
+        # the original input as a silent reference.
+        ctx.parent_request_id = self._last_completed_request_id
 
         if self._dock_widget._is_free_tier:
             suggested_res = "1K"
@@ -1026,6 +1044,10 @@ class AIEditPlugin:
     def _on_generation_finished(self, result_info: dict):
         if self._map_tool:
             self._map_tool.set_locked(False)
+        # Pull the request_id off the worker's ctx BEFORE cleanup so we can
+        # send it as parent_request_id on the next submit (iteration anchor).
+        if self._worker is not None and self._worker._ctx is not None:
+            self._last_completed_request_id = self._worker._ctx.request_id
         self._cleanup_worker()
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
 

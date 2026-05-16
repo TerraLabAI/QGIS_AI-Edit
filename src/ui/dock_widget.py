@@ -94,7 +94,8 @@ _BTN_GREEN = (
 _BTN_GREEN_AUTH = (
     f"QPushButton {{ background-color: {BRAND_GREEN}; color: #000000; }}"
     f"QPushButton:hover {{ background-color: {BRAND_GREEN_HOVER}; }}"
-    f"QPushButton:disabled {{ background-color: {BRAND_DISABLED}; }}"
+    f"QPushButton:disabled {{ background-color: {BRAND_DISABLED};"
+    f" color: {DISABLED_TEXT}; }}"
 )
 
 _BTN_BLUE = (
@@ -753,7 +754,7 @@ class AIEditDockWidget(QDockWidget):
         sz_layout.addWidget(self._select_zone_header)
 
         self._select_zone_hint = QLabel(
-            tr("Hold Shift and drag on the map to draw a rectangular zone. Plain drag pans the map.")
+            tr("Click and drag on the map to draw a rectangular zone.")
         )
         self._select_zone_hint.setWordWrap(True)
         self._select_zone_hint.setStyleSheet(_INSTRUCTION_BOX)
@@ -1166,9 +1167,15 @@ class AIEditDockWidget(QDockWidget):
         # set_resolution_credit_costs once the server config loads.
         self._resolution_credit_costs: dict[str, int] = {"1K": 20, "2K": 30, "4K": 40}
 
-        # Layer monitoring
+        # Layer monitoring. We listen to both add/remove AND the layer-tree
+        # visibility-changed signal so toggling a layer's checkbox in the
+        # legend immediately re-evaluates the Launch button state — adding a
+        # layer is one path, hiding the only visible one is the other.
         QgsProject.instance().layersAdded.connect(self._update_layer_warning)
         QgsProject.instance().layersRemoved.connect(self._update_layer_warning)
+        QgsProject.instance().layerTreeRoot().visibilityChanged.connect(
+            self._update_layer_warning
+        )
         self._update_layer_warning()
 
     def _setup_title_bar(self):
@@ -1793,12 +1800,25 @@ class AIEditDockWidget(QDockWidget):
     # --- Private methods ---
 
     def _update_layer_warning(self, *_args):
-        """Show/hide warning based on layer availability."""
+        """Show/hide the 'no visible layer' notice and lock the Launch button
+        until at least one layer is actually checked in the legend.
+
+        We check ``isVisible()`` on the layer tree, not just registered layers
+        in the project — a layer that exists but is unchecked produces no
+        canvas pixels for AI Edit to capture, so launching from that state
+        would just send an empty rectangle to the model.
+        """
         if self._zone_selected:
             self._warning_widget.setVisible(False)
+            self._launch_btn.setEnabled(True)
             return
-        has_layers = bool(QgsProject.instance().mapLayers())
-        self._warning_widget.setVisible(not has_layers)
+        root = QgsProject.instance().layerTreeRoot()
+        has_visible = any(
+            node.isVisible() for node in root.findLayers()
+            if node.layer() is not None
+        )
+        self._warning_widget.setVisible(not has_visible)
+        self._launch_btn.setEnabled(has_visible)
 
     def _on_settings_btn_clicked(self):
         self.settings_clicked.emit()
@@ -2181,6 +2201,9 @@ class AIEditDockWidget(QDockWidget):
         try:
             QgsProject.instance().layersAdded.disconnect(self._update_layer_warning)
             QgsProject.instance().layersRemoved.disconnect(self._update_layer_warning)
+            QgsProject.instance().layerTreeRoot().visibilityChanged.disconnect(
+                self._update_layer_warning
+            )
         except (TypeError, RuntimeError):
             pass
         super().closeEvent(event)

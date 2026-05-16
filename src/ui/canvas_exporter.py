@@ -2,7 +2,15 @@ from __future__ import annotations
 
 import base64
 
-from qgis.core import QgsMapRendererCustomPainterJob, QgsMapSettings, QgsRectangle
+from qgis.core import (
+    QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform,
+    QgsMapRendererCustomPainterJob,
+    QgsMapSettings,
+    QgsPointXY,
+    QgsProject,
+    QgsRectangle,
+)
 from qgis.PyQt.QtCore import QBuffer, QSize
 from qgis.PyQt.QtGui import QImage, QPainter
 
@@ -157,12 +165,63 @@ def export_canvas_zone(
             "xmax": actual_extent.xMaximum(),
             "ymax": actual_extent.yMaximum(),
         }
-        ctx.crs_wkt = map_settings.destinationCrs().toWkt()
+        dest_crs = map_settings.destinationCrs()
+        ctx.crs_wkt = dest_crs.toWkt()
+        ctx.crs_authid = dest_crs.authid() or None
+        # Compute centroid in WGS84 client-side so the server doesn't need
+        # proj4 — QGIS already has every CRS definition loaded.
+        ctx.centroid_lat, ctx.centroid_lon = _centroid_wgs84(actual_extent, dest_crs)
+        ctx.ground_resolution_m = _compute_ground_resolution_m(
+            actual_extent, out_w, out_h, dest_crs
+        )
         ctx.export_width = out_w
         ctx.export_height = out_h
         ctx.image_size_bytes = len(buffer.data().data())
 
     return b64, out_w, out_h, actual_extent
+
+
+def _centroid_wgs84(extent: QgsRectangle, src_crs) -> tuple[float | None, float | None]:
+    """Centroid of the rendered extent, projected to WGS84 (EPSG:4326).
+
+    Returns (lat, lon) or (None, None) if the transform fails (unknown CRS,
+    out-of-bounds projection, etc.). Server sees None and skips the geo
+    enrichment cleanly.
+    """
+    try:
+        cx = (extent.xMinimum() + extent.xMaximum()) / 2
+        cy = (extent.yMinimum() + extent.yMaximum()) / 2
+        wgs84 = QgsCoordinateReferenceSystem("EPSG:4326")
+        if src_crs == wgs84:
+            return cy, cx  # already lat/lon
+        transform = QgsCoordinateTransform(src_crs, wgs84, QgsProject.instance())
+        pt = transform.transform(QgsPointXY(cx, cy))
+        return pt.y(), pt.x()  # QGIS returns (x=lon, y=lat) for WGS84
+    except Exception:
+        return None, None
+
+
+def _compute_ground_resolution_m(extent, out_w: int, out_h: int, crs) -> float | None:
+    """Meters per pixel at the centroid of the rendered zone.
+
+    Returns None if the CRS is not projected and we cannot reliably convert
+    map units to meters (geographic CRS like EPSG:4326 need a transform that
+    we'd rather do server-side).
+    """
+    try:
+        from qgis.core import QgsUnitTypes
+        map_units = crs.mapUnits()
+        # mean pixel size in map units
+        px_size_x = extent.width() / max(out_w, 1)
+        px_size_y = extent.height() / max(out_h, 1)
+        avg_px_size = (px_size_x + px_size_y) / 2
+        factor = QgsUnitTypes.fromUnitToUnitFactor(map_units, QgsUnitTypes.DistanceMeters)
+        result = avg_px_size * factor
+        if result > 0 and result < 1_000_000:
+            return float(result)
+    except Exception:
+        pass  # nosec B110
+    return None
 
 
 def get_zone_pixel_size(

@@ -114,6 +114,21 @@ class GenerationService:
         # step fails so an outage on the storage path doesn't break edits.
         upload_token = self._try_upload_token_flow(image_b64, auth)
 
+        # Pull geospatial + iteration context off the pipeline ctx so the
+        # server can enrich the PREPROMPT with location and silently attach
+        # the original input as a reference on iterations. All fields are
+        # optional — old servers ignore them, no plugin re-release needed
+        # for backwards compat.
+        geo_kwargs: dict = {}
+        if ctx is not None:
+            if ctx.centroid_lat is not None and ctx.centroid_lon is not None:
+                geo_kwargs["centroid_lat"] = ctx.centroid_lat
+                geo_kwargs["centroid_lon"] = ctx.centroid_lon
+            if ctx.ground_resolution_m is not None:
+                geo_kwargs["ground_resolution_m"] = ctx.ground_resolution_m
+            if ctx.parent_request_id:
+                geo_kwargs["parent_request_id"] = ctx.parent_request_id
+
         if upload_token is not None:
             resp = self._client.submit_generation(
                 upload_token=upload_token,
@@ -122,6 +137,7 @@ class GenerationService:
                 aspect_ratio=aspect_ratio,
                 auth=auth,
                 context_images=context_images,
+                **geo_kwargs,
             )
         else:
             resp = self._client.submit_generation(
@@ -131,6 +147,7 @@ class GenerationService:
                 aspect_ratio=aspect_ratio,
                 auth=auth,
                 context_images=context_images,
+                **geo_kwargs,
             )
 
         if "error" in resp:

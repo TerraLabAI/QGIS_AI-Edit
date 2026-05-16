@@ -19,10 +19,23 @@ class PipelineContext:
     # Canvas Export (populated by canvas_exporter.py)
     extent: dict | None = None
     crs_wkt: str | None = None
+    crs_authid: str | None = None
+    # Centroid of the rendered zone in WGS84, computed client-side via QGIS
+    # so the server doesn't need its own reprojection library.
+    centroid_lat: float | None = None
+    centroid_lon: float | None = None
+    # Meters per pixel at the centroid, used to enrich the PREPROMPT with
+    # ground resolution context.
+    ground_resolution_m: float | None = None
     export_width: int | None = None
     export_height: int | None = None
     aspect_ratio: str | None = None
     image_size_bytes: int | None = None
+
+    # Iteration chain: set by plugin.py when the user iterates on a previous
+    # result, so the server can silently attach the original input as a
+    # reference image to anchor coherence across edits.
+    parent_request_id: str | None = None
 
     # Submit (populated by generation_service.py)
     request_id: str | None = None

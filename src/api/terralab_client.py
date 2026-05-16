@@ -132,6 +132,10 @@ class TerraLabClient:
         image_b64: str | None = None,
         upload_token: str | None = None,
         context_images: list[str] | None = None,
+        centroid_lat: float | None = None,
+        centroid_lon: float | None = None,
+        ground_resolution_m: float | None = None,
+        parent_request_id: str | None = None,
     ) -> dict:
         """Submit a prompt for generation. Exactly one of ``image_b64`` or
         ``upload_token`` must be provided.
@@ -142,6 +146,10 @@ class TerraLabClient:
 
         ``context_images`` is an optional list of base64-encoded reference
         images. Sent only when non-empty so older backends ignore the field.
+
+        Geospatial context (``bbox``, ``crs_code``, ``ground_resolution_m``)
+        and iteration tracking (``parent_request_id``) are sent only when
+        present, so older backends silently ignore them.
         """
         if (image_b64 is None) == (upload_token is None):
             raise ValueError(
@@ -158,6 +166,13 @@ class TerraLabClient:
             payload["image"] = image_b64
         if context_images:
             payload["context_images"] = context_images
+        if centroid_lat is not None and centroid_lon is not None:
+            payload["centroid_lat"] = centroid_lat
+            payload["centroid_lon"] = centroid_lon
+        if ground_resolution_m is not None:
+            payload["ground_resolution_m"] = ground_resolution_m
+        if parent_request_id:
+            payload["parent_request_id"] = parent_request_id
         body = json.dumps(payload).encode("utf-8")
         return self._request(
             "POST",
