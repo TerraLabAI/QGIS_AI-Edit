@@ -24,13 +24,6 @@ about=
 
     Requires an internet connection. Selected zones are sent to TerraLab's EU infrastructure for AI processing. See https://terra-lab.ai/privacy-policy for details.
 
-changelog=
-    0.3.1
-    • Reference images: drag and drop up to 12 to guide style and composition
-    • Major UI polish across the dock
-    • Click the saved layer name in the result panel to jump straight to it in QGIS Layers
-    • Templates render with clean paragraph breaks for easier reading
-
 tracker=https://github.com/TerraLabAI/QGIS_AI-Edit/issues
 repository=https://github.com/TerraLabAI/QGIS_AI-Edit
 homepage=https://terra-lab.ai/ai-edit
