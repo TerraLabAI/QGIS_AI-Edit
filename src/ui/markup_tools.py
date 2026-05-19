@@ -411,9 +411,9 @@ class CircleMapTool(_MarkupBaseMapTool):
 
     def canvasReleaseEvent(self, event):  # noqa: N802
         if (
-            not self._active
-            or self._anchor is None
-            or event.button() != QtC.LeftButton
+            not self._active or
+            self._anchor is None or
+            event.button() != QtC.LeftButton
         ):
             return
         self._active = False

@@ -1189,10 +1189,10 @@ class AIEditDockWidget(QDockWidget):
         )
         trial_layout.addWidget(self._trial_info_text)
         self._trial_info_benefits = QLabel(
-            tr("Subscribe to unlock:") + "<br>"
-            + "&nbsp;&nbsp;✓&nbsp; " + tr("150 edits every month") + "<br>"
-            + "&nbsp;&nbsp;✓&nbsp; " + tr("2K and 4K outputs") + "<br>"
-            + "&nbsp;&nbsp;✓&nbsp; " + tr("Cancel anytime")
+            tr("Subscribe to unlock:") + "<br>" +
+            "&nbsp;&nbsp;✓&nbsp; " + tr("150 edits every month") + "<br>" +
+            "&nbsp;&nbsp;✓&nbsp; " + tr("2K and 4K outputs") + "<br>" +
+            "&nbsp;&nbsp;✓&nbsp; " + tr("Cancel anytime")
         )
         self._trial_info_benefits.setWordWrap(True)
         self._trial_info_benefits.setTextFormat(QtC.RichText)
@@ -1464,9 +1464,9 @@ class AIEditDockWidget(QDockWidget):
         layout.addWidget(self._setup_header)
 
         self._setup_desc = QLabel(
-            tr("1. Sign up or sign in on terra-lab.ai to get your key")
-            + "\n"
-            + tr("2. Paste your key below to activate")
+            tr("1. Sign up or sign in on terra-lab.ai to get your key") +
+            "\n" +
+            tr("2. Paste your key below to activate")
         )
         self._setup_desc.setWordWrap(True)
         self._setup_desc.setStyleSheet(_INSTRUCTION_BOX)
@@ -2022,11 +2022,11 @@ class AIEditDockWidget(QDockWidget):
 
     def _is_free_tier_exhausted(self) -> bool:
         return bool(
-            self._is_free_tier
-            and self._cached_used is not None
-            and self._cached_limit is not None
-            and self._cached_limit > 0
-            and self._cached_used >= self._cached_limit
+            self._is_free_tier and
+            self._cached_used is not None and
+            self._cached_limit is not None and
+            self._cached_limit > 0 and
+            self._cached_used >= self._cached_limit
         )
 
     def set_generation_complete(self, layer_name: str, layer_id: str | None = None):
@@ -2077,10 +2077,10 @@ class AIEditDockWidget(QDockWidget):
         show_nudge = self._is_free_tier and self._activated
         if show_nudge:
             self._result_upgrade_nudge.setText(
-                tr("Like it?") + " "
-                + f'<a href="terralab:subscribe" style="color: {BRAND_BLUE};'
-                + ' text-decoration: none; font-weight: bold;">'
-                + tr("Render this in 2K or 4K") + " &rarr;</a>"
+                tr("Like it?") + " " +
+                f'<a href="terralab:subscribe" style="color: {BRAND_BLUE};' +
+                ' text-decoration: none; font-weight: bold;">' +
+                tr("Render this in 2K or 4K") + " &rarr;</a>"
             )
         self._result_upgrade_nudge.setVisible(show_nudge)
 
@@ -2263,9 +2263,9 @@ class AIEditDockWidget(QDockWidget):
         if self._is_free_tier and label != "1K":
             subscribe_url = get_subscribe_url()
             self._show_status_box(
-                tr("{} outputs are unlocked with a subscription.").format(label)
-                + f' <a href="{subscribe_url}" style="color: {BRAND_BLUE}; font-weight: bold;">'
-                + tr("Subscribe") + "</a>",
+                tr("{} outputs are unlocked with a subscription.").format(label) +
+                f' <a href="{subscribe_url}" style="color: {BRAND_BLUE}; font-weight: bold;">' +
+                tr("Subscribe") + "</a>",
                 "warning"
             )
             # 12 s gives users enough time to read the banner and click the
