@@ -6,11 +6,11 @@ import time
 from qgis.core import QgsPointXY, QgsRectangle
 from qgis.gui import QgsRubberBand
 from qgis.PyQt.QtCore import QSettings, QThread, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QIcon
-from qgis.PyQt.QtWidgets import QAction, QApplication
+from qgis.PyQt.QtGui import QColor, QIcon, QKeySequence
+from qgis.PyQt.QtWidgets import QAction, QApplication, QShortcut
 
 from ..api.terralab_client import TerraLabClient
-from ..core import telemetry
+from ..core import prompt_history, telemetry
 from ..core.activation_manager import (
     clear_activation,
     clear_config_cache,
@@ -27,6 +27,7 @@ from ..core.generation_service import GenerationService
 from ..core.i18n import tr
 from ..core.logger import log, log_debug, log_warning
 from ..core.pipeline_context import PipelineContext
+from ..core.prompt_presets import get_vector_hints, lookup_template_by_prompt
 from ..core.reference_image_store import ReferenceImageStore
 from ..workers.generation_worker import GenerationWorker
 from .canvas_exporter import (
@@ -35,6 +36,12 @@ from .canvas_exporter import (
     set_server_config,
 )
 from .dock_widget import AIEditDockWidget
+from .markup_tools import (
+    ArrowMapTool,
+    CircleMapTool,
+    MarkupLayerManager,
+    PencilMapTool,
+)
 from .raster_writer import (
     add_geotiff_to_project,
     get_output_dir,
@@ -114,30 +121,98 @@ class _ExportConfigLoaderWorker(QThread):
             self.failed.emit(f"Connection error: {e}")
 
 
+class _ServerCatalogLoaderWorker(QThread):
+    """Background fetch of /api/ai-edit/presets so QGIS startup never blocks."""
+
+    loaded = pyqtSignal(dict)
+    failed = pyqtSignal()
+
+    def __init__(self, client, force_refresh: bool = False):
+        super().__init__()
+        self._client = client
+        self._force_refresh = force_refresh
+
+    def run(self):
+        try:
+            from ..core.prompt_presets_client import fetch_server_catalog
+
+            catalog = fetch_server_catalog(self._client, force_refresh=self._force_refresh)
+        except Exception as err:  # noqa: BLE001
+            log_warning(f"Server catalog worker raised: {err}")
+            self.failed.emit()
+            return
+        if catalog is None:
+            self.failed.emit()
+        else:
+            self.loaded.emit(catalog)
+
+
+def _localize_server_error(error: str, code: str) -> str:
+    """Replace an English server error string with its localized equivalent
+    when the server's `code` is one we know about. Keeps the original English
+    text for unknown codes so users still see something actionable.
+
+    The server stays i18n-agnostic: it sends stable codes; the plugin owns the
+    user-facing copy. Adding a new server error code = add one branch here and
+    one tr() string in the .ts files.
+    """
+    if not code:
+        return error
+    mapping = {
+        "RATE_LIMITED": tr("Too many requests, please wait a moment."),
+        "RATE_LIMITER_DOWN": tr("Service temporarily unavailable, please retry shortly."),
+        "STORAGE_UNAVAILABLE": tr("Storage temporarily unavailable, please retry shortly."),
+        "SIGN_FAILED": tr("Could not prepare upload, please retry shortly."),
+        "UPLOAD_TOKEN_INVALID": tr("Upload session expired, please retry."),
+        "UPLOAD_TOKEN_MISMATCH": tr("Upload session does not match your account."),
+        "WRONG_PRODUCT": tr("This activation key is for a different product."),
+        "WRONG_REQUEST": tr("Unknown or unauthorized request."),
+        "AUTH_MIGRATION_REQUIRED": tr("Account migration required, please re-login from the website."),
+        "NOT_READY": tr("Result not ready yet."),
+        "NOT_AVAILABLE": tr("Result not available."),
+        "UPSTREAM_UNAVAILABLE": tr("Result temporarily unavailable, please retry shortly."),
+        "UPSTREAM_EMPTY": tr("Result temporarily unavailable, please retry shortly."),
+        "FAL_BAD_RESPONSE": tr("The generation service returned an unexpected response, please retry."),
+        "FAL_ERROR": tr("Generation failed, please try again."),
+        "MISCONFIGURED": tr("Service not configured. Please contact support."),
+        "SERVER_ERROR": tr("Service temporarily unavailable, please retry shortly."),
+        "DB_ERROR": tr("Database error, please retry shortly."),
+        "BAD_REQUEST": tr("Invalid request."),
+        "BAD_INPUT": tr("Invalid input."),
+        "INVALID_INPUT": tr("Invalid input."),
+        "PAYLOAD_TOO_LARGE": tr("Image too large for the service."),
+        "RESOLUTION_NOT_ALLOWED": tr("Free plan is limited to 1K resolution. Upgrade for higher resolutions."),
+        "NOT_FOUND": tr("Resource not found."),
+        "NOT_SEEDED": tr("Catalog not yet available, please retry shortly."),
+        "DEMO_FETCH_FAILED": tr("Could not load the demo preview."),
+        "UNKNOWN_TEMPLATE": tr("Unknown template."),
+    }
+    return mapping.get(code, error)
+
+
 def _enrich_error_message(error: str, code: str = "") -> str:
-    """Add actionable guidance to error messages based on error code."""
+    """Translate the server-supplied error (via code), then append actionable
+    guidance (deep links, network hints) based on the same code."""
+    localized = _localize_server_error(error, code)
     if code in ("INVALID_KEY", "SUBSCRIPTION_INACTIVE", "FREE_TIER_EXPIRED"):
-        return f'{error}. <a href="{DASHBOARD_ERROR_URL}">Check your dashboard</a>'
+        return f'{localized}. <a href="{DASHBOARD_ERROR_URL}">{tr("Check your dashboard")}</a>'
     if code == "TRIAL_EXHAUSTED":
         config = get_server_config()
         dashboard = config.get("upgrade_url", get_dashboard_url())
-        return f'{error}. <a href="{dashboard}">{tr("Subscribe")}</a>'
+        return f'{localized}. <a href="{dashboard}">{tr("Subscribe")}</a>'
     if code == "PROXY_ERROR":
-        return f"{error}. Check QGIS proxy settings: Settings > Options > Network"
+        return f"{localized}. {tr('Check QGIS proxy settings: Settings > Options > Network')}"
     if code == "SSL_ERROR":
-        return (
-            f"{error}. If you are on a corporate network, "
-            f"ask your IT team about SSL inspection settings"
-        )
+        return f"{localized}. {tr('If you are on a corporate network, ask your IT team about SSL inspection settings')}"
     if code in ("DNS_ERROR", "NO_INTERNET"):
-        return f"{error}. Check your internet connection"
+        return f"{localized}. {tr('Check your internet connection')}"
     if code == "TIMEOUT":
-        return f"{error}. Try again, or check your internet speed"
+        return f"{localized}. {tr('Try again, or check your internet speed')}"
     if code == "CONNECTION_REFUSED":
-        return f"{error}. The service may be temporarily unavailable"
+        return f"{localized}. {tr('The service may be temporarily unavailable')}"
     if code == "AUTH_ERROR":
-        return f'{error}. <a href="{DASHBOARD_ERROR_URL}">Check your dashboard</a>'
-    return error
+        return f'{localized}. <a href="{DASHBOARD_ERROR_URL}">{tr("Check your dashboard")}</a>'
+    return localized
 
 
 class AIEditPlugin:
@@ -157,10 +232,7 @@ class AIEditPlugin:
         self._terralab_toolbar = None
         self._export_config_loader = None
         self._credits_loader = None
-        # Per-session counter used to prefix output layer names ("#N"). Reset
-        # whenever the user exits / closes the dock so a fresh session starts
-        # back at #1.
-        self._generation_counter = 0
+        self._catalog_loader = None
         # Preserved for retry (re-generate from original, not from AI result)
         self._last_image_b64 = None
         self._last_extent_dict = None
@@ -177,6 +249,12 @@ class AIEditPlugin:
         # skip /api/plugin/usage round-trips when the user toggles the dock
         # rapidly; rate limit is 10/60s per key, so no cache => silent failures.
         self._last_key_validation_unix: float = 0.0
+        # Mark up state. Lazy: manager is created on first entry.
+        self._markup_manager: MarkupLayerManager | None = None
+        self._markup_tool_objs: dict[str, object] = {}
+        self._pre_markup_map_tool = None
+        self._markup_undo_shortcut: QShortcut | None = None
+        self._in_tool_panel: str | None = None
         # Fires once per QGIS session, on the first dock-open. Lifecycle event,
         # ships without explicit consent (no PII).
         self._plugin_opened_emitted = False
@@ -323,6 +401,21 @@ class AIEditPlugin:
         self._dock_widget = AIEditDockWidget(
             self._iface.mainWindow(), reference_store=self._reference_store
         )
+        # Hand the dock the client + auth manager so it can pass them to the
+        # Prompt library dialog for server-side history/favorites sync.
+        self._dock_widget.set_library_dependencies(self._client, self._auth_manager)
+        # Server catalog (v2): hand the stale cache (if any) to the dock
+        # synchronously so opening the library is instant, then revalidate on
+        # a worker thread. First-time installs offline see empty themed tabs
+        # until the worker succeeds.
+        try:
+            from ..core.prompt_presets_client import read_cached_catalog_stale_ok
+
+            self._dock_widget.set_server_catalog(read_cached_catalog_stale_ok())
+        except Exception as err:  # noqa: BLE001
+            log_warning(f"Server catalog stale read failed: {err}")
+            self._dock_widget.set_server_catalog(None)
+        self._load_server_catalog()
         from ..core import qt_compat as QtC
         self._iface.addDockWidget(QtC.RightDockWidgetArea, self._dock_widget)
         _first_install_settings = QSettings()
@@ -341,6 +434,17 @@ class AIEditPlugin:
         self._dock_widget.settings_clicked.connect(self._on_settings_clicked)
         self._dock_widget.launch_clicked.connect(self._on_launch_clicked)
         self._dock_widget.exit_clicked.connect(self._on_exit_clicked)
+        self._dock_widget.zone_clear_requested.connect(self._on_zone_delete_requested)
+        self._dock_widget.markup_clicked.connect(self._on_markup_clicked)
+        self._dock_widget.markup_done_clicked.connect(self._on_markup_done_clicked)
+        self._dock_widget.markup_clear_clicked.connect(self._on_markup_clear_clicked)
+        self._dock_widget.markup_tool_changed.connect(self._on_markup_tool_changed)
+        self._dock_widget.markup_color_changed.connect(self._on_markup_color_changed)
+        self._dock_widget.vectorize_clicked.connect(self._on_vectorize_clicked)
+        self._dock_widget.vectorize_done_clicked.connect(self._on_vectorize_done_clicked)
+        self._dock_widget.vectorize_suggestion_clicked.connect(
+            self._on_vectorize_suggestion_clicked
+        )
         # Title-bar X close doesn't go through _toggle_dock, so listen for the
         # underlying visibility change to keep the map tool / cursor in sync.
         self._dock_widget.visibilityChanged.connect(self._on_dock_visibility_changed)
@@ -373,11 +477,14 @@ class AIEditPlugin:
         else:
             log("AI Edit plugin loaded")
         if self._skip_trial_check:
-            log_warning("DEV MODE: SKIP_TRIAL_CHECK is active — auth checks bypassed")
+            log_warning("DEV MODE: SKIP_TRIAL_CHECK is active - auth checks bypassed")
 
     def unload(self):
         """Called by QGIS when plugin is unloaded."""
-        # Stop generation worker with fallback to terminate
+        # Stop generation worker. `quit()` is a no-op on workers without an
+        # event loop, so cooperative cancel is the primary stop signal and
+        # terminate() is reserved for last-resort cleanup that would otherwise
+        # leak a running QThread when the plugin object is destroyed.
         if self._worker and self._worker.isRunning():
             self._generation_service.cancel()
             for sig in [self._worker.finished, self._worker.progress, self._worker.error]:
@@ -385,28 +492,52 @@ class AIEditPlugin:
                     sig.disconnect()
                 except (RuntimeError, TypeError):
                     pass
-            self._worker.quit()
-            if not self._worker.wait(3000):
+            if not self._worker.wait(5000):
                 self._worker.terminate()
                 self._worker.wait(1000)
         self._worker = None
 
-        # Stop background loader workers and disconnect signals
-        for loader in [self._export_config_loader, self._credits_loader, self._key_validation_worker]:
+        # Stop background loader workers and disconnect signals. Their run()
+        # methods are blocking network calls with built-in timeouts, so a
+        # 5s wait is enough for the common case; we only fall through to
+        # terminate when the network stack itself is wedged.
+        for loader in [
+            self._export_config_loader,
+            self._credits_loader,
+            self._key_validation_worker,
+            self._catalog_loader,
+        ]:
             if loader:
                 try:
                     loader.disconnect()
                 except (RuntimeError, TypeError):
                     pass
                 if loader.isRunning():
-                    loader.quit()
-                    loader.wait(1000)
+                    if not loader.wait(5000):
+                        loader.terminate()
+                        loader.wait(1000)
                 loader.deleteLater()
         self._export_config_loader = None
         self._credits_loader = None
         self._key_validation_worker = None
+        self._catalog_loader = None
 
         self._clear_selection_rectangle()
+
+        # Detach any Mark up tool we set on the canvas before our objects vanish.
+        if self._markup_tool_objs:
+            current = self._canvas.mapTool() if self._canvas else None
+            if current in self._markup_tool_objs.values():
+                self._canvas.unsetMapTool(current)
+            self._markup_tool_objs.clear()
+        self._clear_markup_layer()
+        if self._markup_manager is not None:
+            self._markup_manager.disconnect_signals()
+        self._markup_manager = None
+        self._pre_markup_map_tool = None
+        if self._markup_undo_shortcut is not None:
+            self._markup_undo_shortcut.setEnabled(False)
+            self._markup_undo_shortcut = None
 
         if self._dock_widget:
             self._iface.removeDockWidget(self._dock_widget)
@@ -585,7 +716,7 @@ class AIEditPlugin:
         self._refresh_credits()
 
     def _on_key_invalid(self, message: str, code: str):
-        """Server rejected the key — show activation screen."""
+        """Server rejected the key - show activation screen."""
         self._last_key_validation_unix = 0.0
         clear_activation()
         self._auth_manager.set_activation_key("")
@@ -615,6 +746,22 @@ class AIEditPlugin:
         self._export_config_loader.failed.connect(self._on_export_config_failed)
         self._export_config_loader.start()
 
+    def _load_server_catalog(self):
+        """Fetch the AI Edit preset catalog in the background and hand it to
+        the dock when ready. Failures are silent - the stale cache or the
+        local fallback covers the dialog in the meantime."""
+        self._catalog_loader = _ServerCatalogLoaderWorker(self._client)
+        self._catalog_loader.loaded.connect(self._on_server_catalog_loaded)
+        self._catalog_loader.failed.connect(self._on_server_catalog_failed)
+        self._catalog_loader.start()
+
+    def _on_server_catalog_loaded(self, catalog: dict):
+        if self._dock_widget is not None:
+            self._dock_widget.set_server_catalog(catalog)
+
+    def _on_server_catalog_failed(self):
+        log_debug("Server catalog: background fetch failed (stale or local fallback in effect)")
+
     def _on_export_config_loaded(self, config):
         """Set global export config from server response."""
         set_server_config(config)
@@ -627,8 +774,10 @@ class AIEditPlugin:
         log_warning(f"Export config failed to load: {error_message}")
         if self._dock_widget:
             self._dock_widget.set_status(
-                f"Warning: Cannot connect to server ({error_message}). "
-                "Plugin requires internet connection to function.",
+                tr(
+                    "Warning: Cannot connect to server ({error}). "
+                    "Plugin requires internet connection to function."
+                ).format(error=error_message),
                 is_error=True
             )
 
@@ -654,7 +803,7 @@ class AIEditPlugin:
         """Dock closing mid-generation: cancel work and clear zone state.
 
         Triggered by the dock's closeEvent (title-bar X). The Exit button has
-        its own handler that also returns the dock to LAUNCH — see
+        its own handler that also returns the dock to LAUNCH - see
         _on_exit_clicked.
         """
         if self._worker and self._worker.isRunning():
@@ -670,13 +819,11 @@ class AIEditPlugin:
         self._last_image_b64 = None
         if self._map_tool:
             self._map_tool.set_has_zone(False)
-        self._generation_counter = 0
         self._deactivate_selection_tool()
 
     def _on_launch_clicked(self):
         """User clicked 'Launch AI Edit' on the entry screen."""
         telemetry.track("launch_clicked")
-        self._generation_counter = 0
         self._activate_selection_tool()
         self._dock_widget.set_selecting_zone_state()
 
@@ -693,7 +840,6 @@ class AIEditPlugin:
         self._selected_extent = None
         if self._map_tool:
             self._map_tool.set_has_zone(False)
-        self._generation_counter = 0
 
     def _on_exit_clicked(self):
         """User clicked Exit / Done: cancel work and return to LAUNCH."""
@@ -710,8 +856,9 @@ class AIEditPlugin:
         self._last_image_b64 = None
         if self._map_tool:
             self._map_tool.set_has_zone(False)
-        self._generation_counter = 0
         self._deactivate_selection_tool()
+        # Drop any Mark up annotations so they don't bleed into the next session.
+        self._clear_markup_layer()
         self._dock_widget.set_launch_state()
 
     def _on_retry(self, prompt: str):
@@ -733,7 +880,7 @@ class AIEditPlugin:
     def _run_generation_from_stored(self, prompt: str):
         """Run generation using previously stored zone data (for retry)."""
         if self._worker and self._worker.isRunning():
-            self._dock_widget.set_status("Generation already in progress", is_error=True)
+            self._dock_widget.set_status(tr("Generation already in progress"), is_error=True)
             return
 
         if not has_consent():
@@ -742,8 +889,10 @@ class AIEditPlugin:
 
         if not has_server_config():
             self._dock_widget.set_status(
-                "Cannot generate: export config not loaded from server. "
-                "Check your internet connection and restart QGIS.",
+                tr(
+                    "Cannot generate: export config not loaded from server. "
+                    "Check your internet connection and restart QGIS."
+                ),
                 is_error=True,
             )
             return
@@ -757,6 +906,11 @@ class AIEditPlugin:
         # Retry on the same zone = iteration. Anchor on the previous result's
         # original input so the model keeps style coherence.
         ctx.parent_request_id = self._last_completed_request_id
+
+        match = lookup_template_by_prompt(prompt)
+        if match:
+            ctx.template_id, ctx.template_name = match
+            ctx.vector_color, ctx.vector_classes = get_vector_hints(ctx.template_id)
 
         output_dir = get_output_dir()
 
@@ -775,6 +929,9 @@ class AIEditPlugin:
             "aspect_ratio": self._last_aspect_ratio or "",
             "resolution": self._last_suggested_res or "",
             "is_retry": True,
+            "template_id": ctx.template_id,
+            "template_name": ctx.template_name,
+            "used_template": bool(ctx.template_id),
         }))
         log_debug(f"Retry generation: prompt_len={len(prompt)}")
 
@@ -804,7 +961,7 @@ class AIEditPlugin:
 
     def _on_zone_selected(self, extent: QgsRectangle):
         self._selected_extent = extent
-        # Fresh zone breaks the iteration chain — the new submission isn't
+        # Fresh zone breaks the iteration chain - the new submission isn't
         # editing the same area as the prior one, so the original-input
         # anchor would mislead the model.
         self._last_completed_request_id = None
@@ -816,17 +973,165 @@ class AIEditPlugin:
         self._dock_widget.set_status(tr("Selected zone too small (min 50x50px)"), is_error=True)
 
     def _on_zone_delete_requested(self):
-        """Right-click 'Clear zone' on the canvas map tool.
+        """Clear the current zone and return to the SELECTING_ZONE step.
 
-        Keeps the current edit group open and the typed prompt preserved so
-        the user can redraw a zone and continue iterating in the same group.
+        Triggered by right-click 'Clear zone', the badge button, or Escape
+        from the prompt step. We keep the typed prompt and edit group so the
+        user can redraw and continue iterating.
         """
         self._clear_selection_rectangle()
         self._selected_extent = None
         # Clearing the zone breaks the iteration chain.
         self._last_completed_request_id = None
+        if self._map_tool is not None:
+            self._map_tool.set_has_zone(False)
         self._dock_widget.set_zone_cleared()
-        log_debug("Zone cleared via context menu")
+        log_debug("Zone cleared")
+
+    # --- Mark up / Vectorize tool panels -------------------------------
+
+    def _on_markup_clicked(self):
+        """User picked Tools → Mark up. Swap the dock view and arm the canvas.
+
+        Toggles: a second click on the footer Mark up icon while the panel is
+        already open closes it (same as the in-panel Finish button).
+        """
+        from ..core import qt_compat as QtC
+
+        if self._in_tool_panel == "markup":
+            self._exit_tool_panel()
+            return
+        if self._markup_manager is None:
+            self._markup_manager = MarkupLayerManager(self._canvas, self._dock_widget)
+            self._markup_manager.annotation_count_changed.connect(
+                self._dock_widget.set_markup_annotation_count
+            )
+        # Capture the current map tool so Done can restore it.
+        current = self._canvas.mapTool()
+        if current is not None and current not in self._markup_tool_objs.values():
+            self._pre_markup_map_tool = current
+        self._in_tool_panel = "markup"
+        self._dock_widget.set_markup_state()
+        self._dock_widget.set_markup_zone_present(self._selected_extent is not None)
+        self._dock_widget.set_markup_annotation_count(
+            self._markup_manager.annotation_count()
+        )
+        # Cmd/Ctrl+Z undoes the last annotation while in Mark up. Parented to
+        # the QGIS main window with WindowShortcut scope so it fires whether
+        # focus is on the dock OR the canvas (the user clicks the canvas to
+        # draw, so dock-only scope misses the common path). Toggled via
+        # setEnabled() on enter/exit so we never steal QGIS's own undo
+        # outside Mark up mode.
+        if self._markup_undo_shortcut is None:
+            self._markup_undo_shortcut = QShortcut(
+                QKeySequence(QKeySequence.StandardKey.Undo),
+                self._iface.mainWindow(),
+            )
+            self._markup_undo_shortcut.setContext(QtC.WindowShortcut)
+            self._markup_undo_shortcut.activated.connect(self._on_markup_undo)
+        self._markup_undo_shortcut.setEnabled(True)
+        telemetry.track("markup_opened")
+
+    def _on_markup_tool_changed(self, tool_key: str):
+        """User picked Pencil / Arrow / Circle in the Mark up panel."""
+        if self._markup_manager is None:
+            return
+        existing = self._markup_tool_objs.get(tool_key)
+        if existing is None:
+            if tool_key == "pencil":
+                existing = PencilMapTool(self._canvas, self._markup_manager)
+            elif tool_key == "arrow":
+                existing = ArrowMapTool(self._canvas, self._markup_manager)
+            elif tool_key == "circle":
+                existing = CircleMapTool(self._canvas, self._markup_manager)
+            else:
+                return
+            self._markup_tool_objs[tool_key] = existing
+        existing.set_color(self._dock_widget.get_markup_color())
+        # Tell the selection tool to keep its zone state across this switch
+        # so the rectangle outline + delete badge stay visible while the
+        # user annotates. Without this hint deactivate() wipes them.
+        if self._map_tool is not None and self._canvas.mapTool() is self._map_tool:
+            self._map_tool.preserve_state_on_next_deactivate()
+        self._canvas.setMapTool(existing)
+
+    def _on_markup_color_changed(self, color: QColor):
+        """User changed the annotation color - propagate to the active tool."""
+        for tool in self._markup_tool_objs.values():
+            tool.set_color(color)
+
+    def _on_markup_clear_clicked(self):
+        if self._markup_manager is not None:
+            self._markup_manager.clear_all()
+
+    def _on_markup_undo(self):
+        if self._in_tool_panel == "markup" and self._markup_manager is not None:
+            self._markup_manager.undo_last()
+
+    def _on_markup_done_clicked(self):
+        """Leave the Mark up panel - restore the previous map tool, keep annotations."""
+        self._exit_tool_panel()
+
+    def _on_vectorize_clicked(self):
+        """User picked Tools → Vectorize.
+
+        Toggles: a second click on the footer Vectorize icon while the panel
+        is open closes it (same as the in-panel Done button).
+        """
+        if self._in_tool_panel == "vectorize":
+            self._exit_tool_panel()
+            return
+        current = self._canvas.mapTool()
+        if current is not None and current not in self._markup_tool_objs.values():
+            self._pre_markup_map_tool = current
+        self._in_tool_panel = "vectorize"
+        self._dock_widget.set_vectorize_state()
+        telemetry.track("vectorize_panel_opened")
+
+    def _on_vectorize_suggestion_clicked(self, layer_id: str, color_hex: str):
+        """User clicked the post-generation \"Vectorize this result\" CTA.
+        Open the panel with the source raster + color pre-filled.
+
+        Bypasses the toggle in `_on_vectorize_clicked` so a second click on
+        the CTA never closes an already-open panel.
+        """
+        if self._in_tool_panel != "vectorize":
+            current = self._canvas.mapTool()
+            if current is not None and current not in self._markup_tool_objs.values():
+                self._pre_markup_map_tool = current
+            self._in_tool_panel = "vectorize"
+            self._dock_widget.set_vectorize_state()
+            telemetry.track("vectorize_panel_opened")
+        # activate() runs first via set_vectorize_state; preconfigure overrides
+        # the just-reset state with the template's values.
+        self._dock_widget._vectorize_panel.preconfigure(
+            layer_id=layer_id, color_hex=color_hex
+        )
+        telemetry.track(
+            "vectorize_suggestion_clicked", {"color": color_hex}
+        )
+
+    def _on_vectorize_done_clicked(self):
+        self._exit_tool_panel()
+
+    def _exit_tool_panel(self):
+        """Common path for Done from either tool panel."""
+        # Restore the canvas tool that was active before opening the panel.
+        if self._pre_markup_map_tool is not None:
+            try:
+                self._canvas.setMapTool(self._pre_markup_map_tool)
+            except RuntimeError:
+                pass
+        self._pre_markup_map_tool = None
+        if self._markup_undo_shortcut is not None:
+            self._markup_undo_shortcut.setEnabled(False)
+        self._in_tool_panel = None
+        self._dock_widget.exit_tool_panel()
+
+    def _clear_markup_layer(self):
+        """Drop the in-memory annotation layer (no-op if absent)."""
+        if self._markup_manager is not None:
+            self._markup_manager.remove_layer()
 
     def _on_change_key(self):
         """Show change-key mode without clearing the current key yet.
@@ -886,7 +1191,7 @@ class AIEditPlugin:
 
     def _on_generate(self, prompt: str):
         if self._worker and self._worker.isRunning():
-            self._dock_widget.set_status("Generation already in progress", is_error=True)
+            self._dock_widget.set_status(tr("Generation already in progress"), is_error=True)
             return
         if not self._selected_extent:
             self._dock_widget.set_status(tr("No zone selected"), is_error=True)
@@ -900,8 +1205,10 @@ class AIEditPlugin:
         # Ensure server config is loaded before generation
         if not has_server_config():
             self._dock_widget.set_status(
-                "Cannot generate: export config not loaded from server. "
-                "Check your internet connection and restart QGIS.",
+                tr(
+                    "Cannot generate: export config not loaded from server. "
+                    "Check your internet connection and restart QGIS."
+                ),
                 is_error=True
             )
             return
@@ -911,6 +1218,14 @@ class AIEditPlugin:
         # treat the second submission as an iteration so the server attaches
         # the original input as a silent reference.
         ctx.parent_request_id = self._last_completed_request_id
+
+        # Tag the job with template_id when the submitted prompt matches a
+        # curated preset verbatim (after whitespace normalization). Any edit
+        # breaks the match → no tag → counted as custom.
+        match = lookup_template_by_prompt(prompt)
+        if match:
+            ctx.template_id, ctx.template_name = match
+            ctx.vector_color, ctx.vector_classes = get_vector_hints(ctx.template_id)
 
         if self._dock_widget._is_free_tier:
             suggested_res = "1K"
@@ -975,6 +1290,10 @@ class AIEditPlugin:
             "resolution": suggested_res,
             "zone_width_px": img_w,
             "zone_height_px": img_h,
+            "is_retry": False,
+            "template_id": ctx.template_id,
+            "template_name": ctx.template_name,
+            "used_template": bool(ctx.template_id),
         }))
         log(f"Generation started: prompt_len={len(prompt)}, resolution={suggested_res}, zone={img_w}x{img_h}px")
 
@@ -1032,10 +1351,10 @@ class AIEditPlugin:
             config = get_server_config(self._client)
             dashboard = config.get("upgrade_url", get_dashboard_url())
             self._dock_widget.show_trial_exhausted_info(message, dashboard)
-            telemetry.track("trial_exhausted_viewed")
+            telemetry.track("trial_exhausted_viewed", {"error_type": "TRIAL_EXHAUSTED"})
         elif is_quota_error:
             self._dock_widget.show_usage_limit_info(message, SUBSCRIBE_ERROR_URL)
-            telemetry.track("trial_exhausted_viewed")
+            telemetry.track("trial_exhausted_viewed", {"error_type": code or "QUOTA_EXCEEDED"})
         else:
             enriched = _enrich_error_message(message, code)
             self._dock_widget.set_status(enriched, is_error=True)
@@ -1044,20 +1363,23 @@ class AIEditPlugin:
     def _on_generation_finished(self, result_info: dict):
         if self._map_tool:
             self._map_tool.set_locked(False)
-        # Pull the request_id off the worker's ctx BEFORE cleanup so we can
-        # send it as parent_request_id on the next submit (iteration anchor).
+        # Pull the request_id + vectorize hints off the worker's ctx BEFORE
+        # cleanup so we can send the request_id as parent_request_id on the
+        # next submit (iteration anchor) and re-arm the Vectorize CTA with
+        # the template's pre-filled color.
+        vector_color: str | None = None
         if self._worker is not None and self._worker._ctx is not None:
             self._last_completed_request_id = self._worker._ctx.request_id
+            vector_color = self._worker._ctx.vector_color
         self._cleanup_worker()
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
 
         try:
-            self._generation_counter += 1
             layer = add_geotiff_to_project(
                 result_info["geotiff_path"],
                 result_info.get("prompt", ""),
-                generation_number=self._generation_counter,
             )
+            prompt_history.add_recent(result_info.get("prompt", ""))
             telemetry.track("generation_completed", self._enrich_generation_props({
                 "duration_seconds": round(duration, 1),
                 "resolution": getattr(self, "_last_suggested_res", ""),
@@ -1065,6 +1387,10 @@ class AIEditPlugin:
             telemetry.flush()
             self._maybe_emit_first_generation_milestone()
             self._dock_widget.set_generation_complete(layer.name(), layer.id())
+            # If the template carried a vector_color, suggest Vectorize next.
+            # Skipped silently when the catalog cache is unavailable or the
+            # template wasn't tagged (A1 from the eng review).
+            self._dock_widget.set_vectorize_suggestion(layer.id(), vector_color)
             self._refresh_credits()
             log(f"Generation complete ({round(duration, 1)}s): {result_info['geotiff_path']}")
         except Exception as e:
@@ -1087,7 +1413,7 @@ class AIEditPlugin:
         self._credits_loader.start()
 
     def _on_credits_failed(self):
-        """Credits fetch failed — clear loading state so the UI is usable."""
+        """Credits fetch failed - clear loading state so the UI is usable."""
         if self._dock_widget:
             self._dock_widget.set_checking_credits(False)
 
@@ -1097,37 +1423,31 @@ class AIEditPlugin:
             self._dock_widget.set_checking_credits(False)
             used = usage.get("images_used")
             limit = usage.get("images_limit")
+            is_free = usage.get("is_free_tier", False)
+            # Prime the subscribe URL BEFORE set_credits so the dock's
+            # auto-surface logic can show the upsell banner inline.
+            if is_free:
+                config = get_server_config(self._client)
+                dashboard = config.get("upgrade_url", get_dashboard_url())
+                self._dock_widget.set_subscribe_url(dashboard)
             self._dock_widget.set_credits(
                 used=used,
                 limit=limit,
-                is_free_tier=usage.get("is_free_tier", False),
+                is_free_tier=is_free,
             )
-            if (
-                isinstance(used, int)
-                and isinstance(limit, int)  # noqa: W503
-                and limit > 0  # noqa: W503
-                and used < limit  # noqa: W503
-            ):
-                self._dock_widget.hide_trial_info()
+            # Paid-tier monthly limit still needs the dedicated CTA (different
+            # message + different URL than the free-tier upsell).
             if (
                 isinstance(used, int)
                 and isinstance(limit, int)  # noqa: W503
                 and limit > 0  # noqa: W503
                 and used >= limit  # noqa: W503
+                and not is_free  # noqa: W503
             ):
-                is_free = usage.get("is_free_tier", False)
-                if is_free:
-                    config = get_server_config(self._client)
-                    dashboard = config.get("upgrade_url", get_dashboard_url())
-                    self._dock_widget.show_trial_exhausted_info(
-                        f"All {limit} free credits used. Subscribe to continue.",
-                        dashboard,
-                    )
-                else:
-                    self._dock_widget.show_usage_limit_info(
-                        f"Monthly limit reached ({used}/{limit}).",
-                        SUBSCRIBE_ERROR_URL,
-                    )
+                self._dock_widget.show_usage_limit_info(
+                    f"Monthly limit reached ({used}/{limit}).",
+                    SUBSCRIBE_ERROR_URL,
+                )
 
     def _cleanup_worker(self):
         """Safely clean up the worker thread without crashing QGIS."""

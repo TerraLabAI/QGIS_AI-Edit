@@ -9,7 +9,7 @@ import os
 import urllib.request
 
 TERRALAB_SIGNUP_URL = (
-    "https://terra-lab.ai/register"
+    "https://terra-lab.ai/signup"
     "?product=ai-edit"
     "&utm_source=qgis&utm_medium=mcp&utm_campaign=ai-edit&utm_content=signup"
 )

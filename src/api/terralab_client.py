@@ -136,6 +136,8 @@ class TerraLabClient:
         centroid_lon: float | None = None,
         ground_resolution_m: float | None = None,
         parent_request_id: str | None = None,
+        template_id: str | None = None,
+        template_name: str | None = None,
     ) -> dict:
         """Submit a prompt for generation. Exactly one of ``image_b64`` or
         ``upload_token`` must be provided.
@@ -173,6 +175,10 @@ class TerraLabClient:
             payload["ground_resolution_m"] = ground_resolution_m
         if parent_request_id:
             payload["parent_request_id"] = parent_request_id
+        if template_id:
+            payload["template_id"] = template_id
+        if template_name:
+            payload["template_name"] = template_name
         body = json.dumps(payload).encode("utf-8")
         return self._request(
             "POST",
@@ -240,6 +246,36 @@ class TerraLabClient:
         """Get usage info."""
         return self._request("GET", "/api/plugin/usage", auth=auth)
 
+    def get_history(self, auth: dict) -> dict:
+        """Get the user's past prompts (deduped server-side, newest first)."""
+        return self._request("GET", "/api/plugin/history", auth=auth)
+
+    def get_favorites(self, auth: dict) -> dict:
+        """Get the user's starred prompts."""
+        return self._request("GET", "/api/plugin/favorites", auth=auth)
+
+    def add_favorite(
+        self,
+        auth: dict,
+        prompt: str,
+        label: str | None = None,
+        source_category: str | None = None,
+    ) -> dict:
+        """Star a prompt server-side. Idempotent."""
+        body = json.dumps({
+            "prompt": prompt,
+            "label": label,
+            "source_category": source_category,
+        }).encode("utf-8")
+        return self._request("POST", "/api/plugin/favorites", auth=auth, body=body)
+
+    def remove_favorite(self, auth: dict, prompt: str) -> dict:
+        """Unstar a prompt server-side. Idempotent."""
+        body = json.dumps({"prompt": prompt}).encode("utf-8")
+        return self._request(
+            "POST", "/api/plugin/favorites/delete", auth=auth, body=body
+        )
+
     def get_account(self, auth: dict) -> dict:
         """Get account info (email, subscriptions, usage)."""
         return self._request("GET", "/api/plugin/account", auth=auth)
@@ -302,7 +338,7 @@ class TerraLabClient:
     ) -> dict:
         """Execute an HTTP request via QGIS network stack.
 
-        Returns a dict — either the parsed JSON response or
+        Returns a dict - either the parsed JSON response or
         {"error": "...", "code": "..."} on failure.
         """
         url = f"{self.base_url}{path}"
@@ -335,7 +371,9 @@ class TerraLabClient:
             if reply:
                 http_attr = reply.attribute(QtC.HttpStatusCodeAttribute)
                 if http_attr and _safe_int(http_attr) >= 400:
-                    raw = bytes(reply.content()).decode("utf-8")
+                    # `errors='replace'` so a non-UTF8 proxy/CDN error page
+                    # never crashes the client with UnicodeDecodeError.
+                    raw = bytes(reply.content()).decode("utf-8", errors="replace")
                     if raw:
                         try:
                             return json.loads(raw)
@@ -347,10 +385,10 @@ class TerraLabClient:
         # -- HTTP-level handling -------------------------------------------
         reply = blocker.reply()
         http_status = reply.attribute(QtC.HttpStatusCodeAttribute)
-        raw_body = bytes(reply.content()).decode("utf-8")
+        raw_body = bytes(reply.content()).decode("utf-8", errors="replace")
 
         if http_status and _safe_int(http_status) >= 400:
-            # Server returned an error — try to parse JSON body
+            # Server returned an error - try to parse JSON body
             log_warning(f"HTTP {http_status}: {raw_body[:500]}")
             try:
                 error_body = json.loads(raw_body)

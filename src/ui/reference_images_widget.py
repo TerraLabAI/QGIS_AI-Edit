@@ -91,7 +91,7 @@ class _ThumbWidget(QFrame):
         self._badge.setFont(font)
         self._badge.move(1, 1)
 
-        # Remove button (top-right) — hidden by default, revealed on hover so
+        # Remove button (top-right) - hidden by default, revealed on hover so
         # the thumbnail looks clean while still letting the user delete it.
         self._remove_btn = QToolButton(self)
         self._remove_btn.setText("×")
@@ -122,11 +122,12 @@ class _ThumbWidget(QFrame):
 
     def mousePressEvent(self, event):  # noqa: N802
         # Only swallow the click for the remove button when it is actually
-        # visible — otherwise the top-right corner would silently eat preview
+        # visible - otherwise the top-right corner would silently eat preview
         # clicks even though there is no button there.
+        pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
         if (
             self._remove_btn.isVisible()
-            and self._remove_btn.geometry().contains(event.pos())  # noqa: W503
+            and self._remove_btn.geometry().contains(pos)  # noqa: W503
         ):
             super().mousePressEvent(event)
             return
@@ -203,7 +204,7 @@ class ReferenceImagesWidget(QWidget):
         self._thumbs_scroll.setWidget(self._thumbs_host)
         self._thumbs_scroll.setWidgetResizable(True)
         self._thumbs_scroll.setFrameShape(QtC.FrameNoFrame)
-        # Let the surrounding _PromptContainer background show through —
+        # Let the surrounding _PromptContainer background show through -
         # without this the QScrollArea viewport paints palette(base), which
         # reads as a darker grey band sitting on top of the container fill.
         self._thumbs_scroll.setStyleSheet(
@@ -211,7 +212,7 @@ class ReferenceImagesWidget(QWidget):
             "QScrollArea > QWidget > QWidget { background: transparent; }"
         )
         self._thumbs_scroll.viewport().setAutoFillBackground(False)
-        # Hide both scrollbars — trackpad / mouse wheel still scroll the
+        # Hide both scrollbars - trackpad / mouse wheel still scroll the
         # viewport horizontally. Cleaner than ScrollBarAsNeeded which
         # paints a visible bar under the thumbnails.
         self._thumbs_scroll.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)

@@ -1,8 +1,8 @@
 """Session-only store for user-supplied reference images.
 
-Each image is compressed to 1K JPEG q70 at insertion time and persisted in a
+Each image is compressed to 1K JPEG q98 at insertion time and persisted in a
 per-session temp directory under the system temp folder. Cleared on plugin
-unload — no persistence across QGIS restarts.
+unload - no persistence across QGIS restarts.
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from .logger import log_debug, log_warning
 MAX_REFERENCES = 12
 MAX_SOURCE_BYTES = 50 * 1024 * 1024  # 50 MB on disk before compression
 TARGET_LONGEST_SIDE_PX = 1024
-JPEG_QUALITY = 70
+JPEG_QUALITY = 98
 _TMP_PREFIX = "qgis-ai-edit-refs-"
 _SUPPORTED_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"}
 
@@ -44,7 +44,7 @@ class ReferenceImageStore:
     """Session-only ordered store of compressed reference images."""
 
     def __init__(self) -> None:
-        # Per-session temp dir under the system temp folder — guaranteed
+        # Per-session temp dir under the system temp folder - guaranteed
         # user-writable (the plugin install dir may be read-only on Windows).
         self._tmp_dir = tempfile.mkdtemp(prefix=_TMP_PREFIX)
         # Insertion order matters (Python 3.7+ dict preserves it).

@@ -10,7 +10,7 @@ from qgis.PyQt.QtCore import QRectF, QSize, Qt
 from qgis.PyQt.QtGui import QColor, QPainter, QPen
 from qgis.PyQt.QtWidgets import QWidget
 
-# Brand palette — mirrors dock_widget constants. Duplicated here so the
+# Brand palette - mirrors dock_widget constants. Duplicated here so the
 # widget remains importable without circular dependency.
 _BRAND_BLUE = "#1976d2"
 _BRAND_GREEN = "#2e7d32"
@@ -85,7 +85,7 @@ class CreditRing(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
         # Inset by half the stroke so the arc stays fully inside the widget
-        # rect — Qt strokes are centred on the geometric path.
+        # rect - Qt strokes are centred on the geometric path.
         inset = self._stroke / 2.0
         rect = QRectF(
             inset, inset,
@@ -101,7 +101,7 @@ class CreditRing(QWidget):
         painter.drawArc(rect, 0, 360 * 16)
 
         # Progress arc: starts at 12 o'clock, sweeps clockwise.
-        # Qt angle units: 1/16 degree, 0° at 3 o'clock, positive = CCW —
+        # Qt angle units: 1/16 degree, 0° at 3 o'clock, positive = CCW -
         # so a clockwise sweep needs a negative span.
         ratio = self._ratio_remaining()
         if ratio > 0:

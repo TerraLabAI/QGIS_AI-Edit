@@ -168,7 +168,7 @@ class AccountSettingsDialog(QDialog):
         manage_label.setStyleSheet("font-size: 11px; padding-top: 2px;")
         self._content_layout.addWidget(manage_label)
 
-        # Permanent access to legal docs — the consent checkbox only shows once
+        # Permanent access to legal docs - the consent checkbox only shows once
         # at first generation, so users need a way back to Terms and Privacy
         # from inside the plugin afterwards.
         legal_label = QLabel(
@@ -211,7 +211,7 @@ class AccountSettingsDialog(QDialog):
         email_lbl.setStyleSheet("font-size: 12px; color: palette(text);")
         email_row.addWidget(email_lbl)
         email_row.addStretch()
-        email_val = QLabel(data.get("email", "—"))
+        email_val = QLabel(data.get("email", "-"))
         email_val.setTextInteractionFlags(QtC.TextSelectableByMouse)
         email_val.setStyleSheet("font-size: 12px; color: palette(text);")
         email_row.addWidget(email_val)
@@ -377,7 +377,12 @@ class AccountSettingsDialog(QDialog):
         self.accept()
 
     def closeEvent(self, event):
+        # The account loader thread has no event loop, so quit() is a no-op.
+        # Wait gives the in-flight network call (built-in 5s timeout) room to
+        # return; terminate is the last-resort exit when the network stack
+        # itself is wedged, otherwise QThread destruction would crash QGIS.
         if self._worker and self._worker.isRunning():
-            self._worker.quit()
-            self._worker.wait(2000)
+            if not self._worker.wait(6000):
+                self._worker.terminate()
+                self._worker.wait(1000)
         super().closeEvent(event)

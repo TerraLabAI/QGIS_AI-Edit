@@ -1,40 +1,91 @@
-"""Prompt Templates Dialog, sidebar + scrollable list with search.
+"""Prompt Library dialog.
 
-Opens as a modal dialog. User picks a template, dialog closes and returns
-the selected preset (id + prompt text) to the caller.
+Tab-style navigation: clicking a sidebar entry swaps the right pane.
+Tabs in order: Menu → Top Picks → Clean → Add → Style → Detect → Simulate
+→ (separator) → Favorites → Recent.
+
+Recent and Favorites sync with the server: on open the dialog renders local
+cache instantly, then fetches /api/plugin/history + /api/plugin/favorites in
+the background and re-renders. Star toggles are optimistic (instant local
+write) and posted to the server in a fire-and-forget worker.
+
+Recent renders the full deduped history as plain text cards in pages of
+_RECENT_PAGE_SIZE, growing with a "Load more" button so a power user with
+thousands of generations never blocks the dialog open. Only Top Picks use
+the rich before/after slider; Recent + Favorites stay text-only.
 """
 from __future__ import annotations
 
+import os
+import re
+
+try:  # SIP comes packaged with both PyQt5 and PyQt6 - used to detect dead C++ objects.
+    from qgis.PyQt import sip as _sip
+except ImportError:  # pragma: no cover - defensive only
+    _sip = None
+
+from qgis.PyQt.QtCore import QSize, QThread, QUrl, pyqtSignal
+from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QStackedWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
+from ..core import prompt_history, telemetry
 from ..core import qt_compat as QtC
+from ..core.date_format import format_smart_date
 from ..core.i18n import tr
-from ..core.prompt_presets import get_all_categories
+from ..core.logger import log_debug, log_warning
+from ..core.prompt_presets import format_template_prompt, get_all_categories
+
+
+def _is_alive(obj) -> bool:
+    """True when the underlying Qt C++ object is still alive."""
+    if obj is None:
+        return False
+    if _sip is None:
+        return True
+    try:
+        return not _sip.isdeleted(obj)
+    except (TypeError, RuntimeError):
+        return False
+
+
+# Page size for Recent's "Load more" pagination.
+_RECENT_PAGE_SIZE = 50
+
+_PLUGIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+_ICONS_DIR = os.path.join(_PLUGIN_DIR, "resources", "icons")
+_HISTORY_SVG = os.path.join(_ICONS_DIR, "history.svg")
+_STAR_OUTLINE_SVG = os.path.join(_ICONS_DIR, "star.svg")
+_STAR_FILLED_SVG = os.path.join(_ICONS_DIR, "star-filled.svg")
+_TROPHY_SVG = os.path.join(_ICONS_DIR, "trophy.svg")
+
 
 # ---------------------------------------------------------------------------
 # QSS
 # ---------------------------------------------------------------------------
 _SIDEBAR_ITEM = (
-    "QPushButton {{ text-align: left; border: none; border-radius: 4px; "
-    "padding: 6px 10px; font-size: 13px; color: palette(text); "
-    "background: transparent; }}"
-    "QPushButton:hover {{ background: rgba(128,128,128,0.12); }}"
+    "QPushButton { text-align: left; border: none; border-radius: 4px; "
+    "padding: 10px 10px; font-size: 13px; color: palette(text); "
+    "background: transparent; }"
+    "QPushButton:hover { background: rgba(128,128,128,0.12); }"
 )
 
 _SIDEBAR_ITEM_ACTIVE = (
-    "QPushButton {{ text-align: left; border: none; border-radius: 4px; "
-    "padding: 6px 10px; font-size: 13px; font-weight: bold; "
-    "color: {color}; background: rgba(128,128,128,0.15); }}"
+    "QPushButton { text-align: left; border: none; border-radius: 4px; "
+    "padding: 10px 10px; font-size: 13px; font-weight: bold; "
+    "color: palette(text); background: rgba(128,128,128,0.18); }"
 )
 
 _SEARCH_BOX = (
@@ -44,60 +95,331 @@ _SEARCH_BOX = (
 )
 
 _CARD_NORMAL = (
-    "QFrame { border: 1px solid rgba(128,128,128,0.15); "
+    "QFrame#card { border: 1px solid rgba(128,128,128,0.15); "
     "border-radius: 4px; background: rgba(128,128,128,0.03); }"
 )
 
 _CARD_HOVER = (
-    "QFrame { border: 1px solid rgba(128,128,128,0.35); "
+    "QFrame#card { border: 1px solid rgba(128,128,128,0.35); "
     "border-radius: 4px; background: rgba(128,128,128,0.08); }"
 )
 
-_SECTION_HEADER = (
-    "QLabel {{ font-size: 13px; font-weight: bold; "
-    "color: {color}; padding: 4px 0px; }}"
+_STAR_BTN = (
+    "QToolButton { background: transparent; border: none; padding: 4px; "
+    "border-radius: 4px; }"
+    "QToolButton:hover { background: rgba(128,128,128,0.18); }"
 )
 
-# Muted color per category — sidebar icons only
-_SIDEBAR_COLORS = {
-    "favorites": "#b89868",
-    "clean": "#b07878",
-    "add": "#68a868",
-    "style": "#9880b0",
-    "detect": "#b08858",
-    "simulate": "#a0a058",
+_DISCLOSURE_BTN = (
+    "QToolButton { background: transparent; border: none; padding: 2px 6px; "
+    "border-radius: 4px; color: palette(text); font-size: 16px; }"
+    "QToolButton:hover { background: rgba(128,128,128,0.18); }"
+)
+
+_PROMPT_BODY = (
+    "QLabel { color: palette(text); font-size: 12px; font-weight: 400; "
+    "background: rgba(128,128,128,0.05); border: 1px solid rgba(128,128,128,0.15); "
+    "border-radius: 4px; padding: 8px 10px; }"
+)
+
+_EMPTY_MSG = (
+    "QLabel { color: palette(text); font-size: 12px; "
+    "background: transparent; border: none; }"
+)
+
+_LOAD_MORE_BTN = (
+    "QPushButton { background: transparent; "
+    "border: 1px solid rgba(128,128,128,0.3); border-radius: 4px; "
+    "padding: 8px 14px; font-size: 12px; color: palette(text); }"
+    "QPushButton:hover { background: rgba(128,128,128,0.12); "
+    "border-color: rgba(128,128,128,0.5); }"
+)
+
+# Sidebar tab order. "__separator__" inserts a visual divider in the sidebar.
+# Default landing is "favorites" (Top Picks) - first-time users see curated
+# content, not their empty Recent/Favorites lists. The 8 themed tabs match
+# the server-side PRESET_CATEGORIES taxonomy (cartography / landcover /
+# segment / climate / urban / energy / cleanup / presentation).
+_TAB_ORDER = [
+    "favorites",      # Top Picks (curated)
+    "cartography",
+    "landcover",
+    "segment",
+    "climate",
+    "urban",
+    "energy",
+    "cleanup",
+    "presentation",
+    "__separator__",
+    "user_favorites",
+    "recent",
+]
+
+# Tabs whose count is shown as "(N)" next to the label.
+_TABS_WITH_COUNT = {"recent", "user_favorites"}
+
+# Sidebar glyph: Recent + Top Picks use an SVG image, others use Unicode with a tint.
+_SIDEBAR_GLYPHS = {
+    "user_favorites": ("☆", "#e57373"),
+    "cartography": ("❖", "#9880b0"),
+    "landcover": ("◉", "#68a868"),
+    "segment": ("▣", "#b07878"),
+    "climate": ("⛅", "#5ca0c0"),
+    "urban": ("⌂", "#b08858"),
+    "energy": ("☀", "#d4a548"),
+    "cleanup": ("⌫", "#a0a058"),
+    "presentation": ("❀", "#c08fa0"),
 }
 
-# Colored HTML icons for sidebar (rendered as rich text for color support)
-_SIDEBAR_LABELS = {
-    "favorites": ('<span style="color:#b89868; font-size:15px;">\u2605</span>', "Top Picks"),
-    "clean": ('<span style="color:#b07878; font-size:15px;">\u232b</span>', "Clean"),
-    "add": ('<span style="color:#68a868; font-size:15px;">+</span>', "Add"),
-    "style": ('<span style="color:#9880b0; font-size:15px;">\u2726</span>', "Style"),
-    "detect": ('<span style="color:#b08858; font-size:15px;">\u25c9</span>', "Detect"),
-    "simulate": ('<span style="color:#a0a058; font-size:15px;">\u21bb</span>', "Simulate"),
-}
+_MAX_TITLE_CHARS = 80
 
-# Plain icons for section headers
-_SECTION_ICONS = {
-    "favorites": "\u2605",
-    "clean": "\u232b",
-    "add": "+",
-    "style": "\u2726",
-    "detect": "\u25c9",
-    "simulate": "\u21bb",
-}
+_SENTENCE_END = re.compile(r"\.(?=\s|$)|\n")
+
+
+def _truncate(text: str, n: int = _MAX_TITLE_CHARS) -> str:
+    text = (text or "").strip()
+    if len(text) <= n:
+        return text
+    return text[: n - 1].rstrip() + "…"
+
+
+def _first_sentence(text: str) -> str:
+    """First sentence (cut at the first '. ' or newline), used as Recent title."""
+    text = (text or "").strip()
+    m = _SENTENCE_END.search(text)
+    if not m:
+        return text
+    end = m.start() + 1 if text[m.start()] == "." else m.start()
+    return text[:end].rstrip()
+
+
+def _preset_matches(preset: dict, query: str) -> bool:
+    """Case-insensitive substring match across label, prompt, and category."""
+    haystack = (
+        f'{preset.get("label", "")} {preset.get("prompt", "")} '
+        f'{preset.get("source_category", "") or ""}'
+    ).lower()
+    return query in haystack
+
+
+def _svg_url(path: str) -> str:
+    return QUrl.fromLocalFile(path).toString()
+
+
+def _sidebar_icon_html(cat_key: str) -> str:
+    if cat_key == "recent":
+        return (
+            f'<img src="{_svg_url(_HISTORY_SVG)}" width="14" height="14" '
+            'style="vertical-align: middle;" />'
+        )
+    if cat_key == "favorites":
+        # Trophy SVG sets Top Picks apart from the ☆ Favorites tab.
+        return (
+            f'<img src="{_svg_url(_TROPHY_SVG)}" width="15" height="15" '
+            'style="vertical-align: middle;" />'
+        )
+    glyph, color = _SIDEBAR_GLYPHS.get(cat_key, ("", "palette(text)"))
+    return f'<span style="color:{color}; font-size:15px;">{glyph}</span>'
+
+
+def _tab_label(cat_key: str, label: str, count: int | None = None) -> str:
+    """Sidebar label HTML - name with optional muted count badge."""
+    if count is not None and count > 0:
+        count_html = (
+            f' <span style="color:rgba(128,128,128,0.8); font-size:11px;">'
+            f'({count})</span>'
+        )
+    else:
+        count_html = ""
+    return (
+        f'<span style="font-size:13px; color:palette(text);">{label}</span>'
+        f'{count_html}'
+    )
+
+
+# ---------------------------------------------------------------------------
+# Widgets
+# ---------------------------------------------------------------------------
+
+class _StarButton(QToolButton):
+    """Favorite toggle button. Owns its prompt + meta."""
+
+    toggled_state = pyqtSignal(str, bool, str, str)
+    # prompt, now_favorited, label_or_empty, source_category_or_empty
+
+    def __init__(
+        self,
+        prompt: str,
+        label: str | None,
+        source_category: str | None,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self._prompt = prompt
+        self._label = label
+        self._source_category = source_category
+        self.setCursor(QtC.PointingHandCursor)
+        self.setIconSize(QSize(16, 16))
+        self.setFixedSize(28, 28)
+        self.setStyleSheet(_STAR_BTN)
+        self.setAutoRaise(True)
+        self.clicked.connect(self._on_clicked)
+        self.refresh()
+
+    def prompt(self) -> str:
+        return self._prompt
+
+    def refresh(self):
+        is_fav = prompt_history.is_favorite(self._prompt)
+        if is_fav:
+            self.setIcon(QIcon(_STAR_FILLED_SVG))
+            self.setAccessibleName(tr("Remove from favorites"))
+            self.setToolTip(tr("Remove from favorites"))
+        else:
+            self.setIcon(QIcon(_STAR_OUTLINE_SVG))
+            self.setAccessibleName(tr("Add to favorites"))
+            self.setToolTip(tr("Add to favorites"))
+
+    def _on_clicked(self):
+        now_fav = prompt_history.toggle_favorite(
+            self._prompt, self._label, self._source_category
+        )
+        telemetry.track("favorite_toggled", {"now_favorited": now_fav})
+        telemetry.flush()
+        self.refresh()
+        self.toggled_state.emit(
+            self._prompt,
+            now_fav,
+            self._label or "",
+            self._source_category or "",
+        )
+
+
+def _build_prompt_disclosure(parent, prompt_text: str) -> tuple[QToolButton, QLabel]:
+    """Small chevron button + hidden wrapped QLabel revealing the full prompt.
+    Returned widgets are added to the card by the caller; the button toggles
+    the label's visibility (collapsed by default).
+    """
+    btn = QToolButton(parent)
+    btn.setText("▸")
+    btn.setCheckable(True)
+    btn.setFixedSize(26, 26)
+    btn.setCursor(QtC.PointingHandCursor)
+    btn.setStyleSheet(_DISCLOSURE_BTN)
+    btn.setToolTip(tr("Show prompt"))
+    btn.setAccessibleName(tr("Show full prompt"))
+
+    # Same paragraph-break formatter the main prompt textarea uses - keeps the
+    # disclosed text readable instead of one wall of run-on sentences.
+    body = QLabel(format_template_prompt(prompt_text or ""))
+    body.setWordWrap(True)
+    body.setTextFormat(QtC.PlainText)
+    body.setStyleSheet(_PROMPT_BODY)
+    body.setVisible(False)
+
+    def _on_toggled(checked: bool):
+        body.setVisible(checked)
+        btn.setText("▾" if checked else "▸")
+        btn.setToolTip(tr("Hide prompt") if checked else tr("Show prompt"))
+
+    btn.toggled.connect(_on_toggled)
+    return btn, body
 
 
 class _ClickableCard(QFrame):
-    """A QFrame that acts as a clickable card."""
+    """One preset card: title + star + optional prompt disclosure + optional date."""
 
     def __init__(self, preset: dict, on_click, parent=None):
         super().__init__(parent)
+        self.setObjectName("card")
         self._preset = preset
         self._on_click = on_click
         self.setCursor(QtC.PointingHandCursor)
         self.setStyleSheet(_CARD_NORMAL)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(12, 10, 8, 10)
+        outer.setSpacing(6)
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+
+        # Three rendering modes:
+        # - Named template (curated, themed, or a Favorite saved from one):
+        #   short bold label + chevron to reveal the full formatted prompt.
+        # - Recent entry: first sentence as the title + chevron for the rest -
+        #   keeps the list scannable instead of stacking walls of text.
+        # - User-typed prompt with no source: render plain wrapped body text.
+        from_recent = preset.get("from_recent")
+        has_template = bool(preset.get("source_category"))
+        disclosure_body: QLabel | None = None
+        if from_recent:
+            disclosure_btn, disclosure_body = _build_prompt_disclosure(self, preset["prompt"])
+            row.addWidget(disclosure_btn, 0, QtC.AlignTop)
+            title_text = (
+                _truncate(preset["label"]) if has_template
+                else _truncate(_first_sentence(preset["prompt"]))
+            )
+            text = QLabel(title_text)
+            text.setWordWrap(True)
+            text.setTextFormat(QtC.PlainText)
+            text.setStyleSheet(
+                "color: palette(text); font-size: 13px; font-weight: 600; "
+                "background: transparent; border: none;"
+            )
+            row.addWidget(text, 1)
+        elif not has_template:
+            text = QLabel(preset["prompt"])
+            text.setWordWrap(True)
+            text.setTextFormat(QtC.PlainText)
+            text.setStyleSheet(
+                "color: palette(text); font-size: 12px; font-weight: 400; "
+                "background: transparent; border: none;"
+            )
+            row.addWidget(text, 1)
+        else:
+            disclosure_btn, disclosure_body = _build_prompt_disclosure(self, preset["prompt"])
+            # Chevron lives at the left edge so the revealed prompt below sits
+            # directly under the affordance that opened it.
+            row.addWidget(disclosure_btn, 0, QtC.AlignTop)
+            text = QLabel(_truncate(preset["label"]))
+            text.setStyleSheet(
+                "color: palette(text); font-size: 13px; font-weight: 600; "
+                "background: transparent; border: none;"
+            )
+            row.addWidget(text, 1)
+
+        self._star = _StarButton(
+            preset["prompt"],
+            preset.get("label") if preset.get("source_category") else None,
+            preset.get("source_category"),
+            self,
+        )
+        # Anchor the star top-right when the card grows tall (multi-line text).
+        row.addWidget(self._star, 0, QtC.AlignTop)
+        outer.addLayout(row)
+        if disclosure_body is not None:
+            outer.addWidget(disclosure_body)
+
+        # Recent cards carry a generation timestamp - surface it as a small
+        # muted line so the user can tell entries apart at a glance.
+        if preset.get("from_recent"):
+            date_text = format_smart_date(preset.get("ts") or "")
+            if date_text:
+                date_label = QLabel(date_text)
+                # Muted via a softer gray so it adapts to both light and dark themes.
+                date_label.setStyleSheet(
+                    "color: rgba(128,128,128,0.85); font-size: 11px; "
+                    "background: transparent; border: none;"
+                )
+                outer.addWidget(date_label)
+
+    def star_button(self) -> _StarButton:
+        return self._star
+
+    def preset(self) -> dict:
+        return self._preset
 
     def enterEvent(self, event):  # noqa: N802
         self.setStyleSheet(_CARD_HOVER)
@@ -113,15 +435,142 @@ class _ClickableCard(QFrame):
         super().mousePressEvent(event)
 
 
-class _SidebarButton(QPushButton):
-    """Sidebar button with colored HTML icon via rich text label overlay."""
+class _BeforeAfterCard(QFrame):
+    """Richer card: BeforeAfterSlider preview on top, label + star below.
 
-    def __init__(self, icon_html: str, text: str, parent=None):
+    Used for curated templates that have ``demo_url_before`` / ``demo_url_after``.
+    Clicking anywhere on the card (slider OR label) selects the preset.
+    The slider's drag interaction sets the divider position but does NOT
+    trigger selection - the user must click + release without dragging.
+    """
+
+    def __init__(
+        self,
+        preset: dict,
+        on_click,
+        demo_loader=None,
+        absolute_url=None,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.setObjectName("card")
+        self._preset = preset
+        self._on_click = on_click
+        self.setCursor(QtC.PointingHandCursor)
+        self.setStyleSheet(_CARD_NORMAL)
+        # Fixed card width matches the slider - every Top Pick cell ends up
+        # the same size in the grid regardless of label length.
+        self.setFixedWidth(380)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # --- slider preview ---
+        # Late import to avoid Qt initialisation order issues at module load.
+        from .before_after_slider import BeforeAfterSlider
+
+        self._slider = BeforeAfterSlider(self)
+        # Square preview - keeps the Top Picks grid visually uniform.
+        self._slider.setFixedSize(380, 380)
+        self._slider.clicked.connect(self._emit_click)
+        outer.addWidget(self._slider)
+
+        # --- footer block: label + chevron + star, plus collapsible prompt ---
+        footer_wrap = QWidget(self)
+        footer_outer = QVBoxLayout(footer_wrap)
+        footer_outer.setContentsMargins(12, 10, 8, 10)
+        footer_outer.setSpacing(6)
+
+        footer = QHBoxLayout()
+        footer.setContentsMargins(0, 0, 0, 0)
+        footer.setSpacing(8)
+
+        disclosure_btn, disclosure_body = _build_prompt_disclosure(self, preset["prompt"])
+        # Chevron on the left, before the title - same ordering as list cards.
+        footer.addWidget(disclosure_btn, 0, QtC.AlignTop)
+
+        label = QLabel(_truncate(preset["label"]))
+        label.setStyleSheet(
+            "color: palette(text); font-size: 13px; font-weight: 600; "
+            "background: transparent; border: none;"
+        )
+        footer.addWidget(label, 1)
+
+        self._star = _StarButton(
+            preset["prompt"],
+            preset.get("label"),
+            preset.get("source_category"),
+            self,
+        )
+        footer.addWidget(self._star, 0, QtC.AlignTop)
+
+        footer_outer.addLayout(footer)
+        footer_outer.addWidget(disclosure_body)
+        outer.addWidget(footer_wrap)
+
+        # --- demo image loading ---
+        # `demo_loader` is a TemplateDemoLoader instance shared across cards;
+        # `absolute_url` resolves a relative path like
+        # "/api/ai-edit/template-demos/<id>/before" to the full terra-lab.ai URL.
+        if demo_loader is not None and absolute_url is not None:
+            tid = preset.get("id", "")
+            url_before = preset.get("demo_url_before")
+            url_after = preset.get("demo_url_after")
+            self._demo_loader = demo_loader
+            demo_loader.loaded.connect(self._on_demo_loaded)
+            if tid and url_before:
+                demo_loader.request(tid, "before", absolute_url(url_before))
+            if tid and url_after:
+                demo_loader.request(tid, "after", absolute_url(url_after))
+        else:
+            self._demo_loader = None
+
+    def _on_demo_loaded(self, template_id: str, which: str, pixmap) -> None:
+        if template_id != self._preset.get("id"):
+            return
+        if which == "before":
+            self._slider.set_before(pixmap)
+        elif which == "after":
+            self._slider.set_after(pixmap)
+
+    def _emit_click(self):
+        self._on_click(self._preset)
+
+    def star_button(self) -> _StarButton:
+        return self._star
+
+    def preset(self) -> dict:
+        return self._preset
+
+    def enterEvent(self, event):  # noqa: N802
+        self.setStyleSheet(_CARD_HOVER)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):  # noqa: N802
+        self.setStyleSheet(_CARD_NORMAL)
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):  # noqa: N802
+        # Slider has its own click semantic; only fire if click hit the
+        # footer area below the slider.
+        if event.button() == QtC.LeftButton:
+            if hasattr(event, "position"):
+                y = int(event.position().y())
+            else:
+                y = event.pos().y()
+            if y >= self._slider.height():
+                self._on_click(self._preset)
+        super().mousePressEvent(event)
+
+
+class _SidebarButton(QPushButton):
+    """Sidebar tab entry: colored HTML icon + label (+ optional count badge)."""
+
+    def __init__(self, icon_html: str, label_html: str, parent=None):
         super().__init__(parent)
         self.setText("")
-        self._label = QLabel(
-            f'{icon_html}  <span style="font-size:13px; color:palette(text);">{text}</span>'
-        )
+        self._label = QLabel(f"{icon_html}&nbsp;&nbsp;{label_html}")
         self._label.setTextFormat(QtC.RichText)
         self._label.setAttribute(QtC.WA_TransparentForMouseEvents)
         self._label.setStyleSheet("background: transparent; border: none; padding: 0px;")
@@ -129,240 +578,740 @@ class _SidebarButton(QPushButton):
         layout.setContentsMargins(10, 6, 10, 6)
         layout.addWidget(self._label)
 
+    def set_label_html(self, icon_html: str, label_html: str):
+        self._label.setText(f"{icon_html}&nbsp;&nbsp;{label_html}")
+
+
+# ---------------------------------------------------------------------------
+# Sync workers
+# ---------------------------------------------------------------------------
+
+class _LibrarySyncWorker(QThread):
+    """Background fetch of /api/plugin/history + /api/plugin/favorites.
+    Emits one signal per successful section so the dialog can refresh
+    progressively (history can return before favorites or vice-versa).
+
+    Recent + Favorites render as text-only cards; we no longer pull the rich
+    before/after history endpoint here (Top Picks owns the slider UI)."""
+
+    history_fetched = pyqtSignal(list)
+    favorites_fetched = pyqtSignal(list)
+    failed = pyqtSignal(str)
+
+    def __init__(self, client, auth: dict, parent=None):
+        super().__init__(parent)
+        self._client = client
+        self._auth = auth
+
+    def run(self):
+        try:
+            hist = self._client.get_history(self._auth)
+        except Exception as e:
+            self.failed.emit(f"history: {e}")
+            return
+        if isinstance(hist, dict) and "error" not in hist:
+            self.history_fetched.emit(hist.get("prompts", []) or [])
+        else:
+            self.failed.emit(
+                f"history: {hist.get('error', 'unknown') if isinstance(hist, dict) else 'parse_error'}"
+            )
+
+        try:
+            favs = self._client.get_favorites(self._auth)
+        except Exception as e:
+            self.failed.emit(f"favorites: {e}")
+            return
+        if isinstance(favs, dict) and "error" not in favs:
+            self.favorites_fetched.emit(favs.get("favorites", []) or [])
+        else:
+            self.failed.emit(
+                f"favorites: {favs.get('error', 'unknown') if isinstance(favs, dict) else 'parse_error'}"
+            )
+
+
+class _FavoriteSyncWorker(QThread):
+    """Fire-and-forget POST/DELETE for a single favorite toggle."""
+
+    def __init__(
+        self,
+        client,
+        auth: dict,
+        prompt: str,
+        label: str,
+        source_category: str,
+        now_favorited: bool,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self._client = client
+        self._auth = auth
+        self._prompt = prompt
+        self._label = label or None
+        self._source_category = source_category or None
+        self._now_favorited = now_favorited
+
+    def run(self):
+        try:
+            if self._now_favorited:
+                self._client.add_favorite(
+                    self._auth, self._prompt, self._label, self._source_category
+                )
+            else:
+                self._client.remove_favorite(self._auth, self._prompt)
+        except Exception as e:
+            log_warning(f"Favorite sync failed (silent): {e}")
+
+
+# ---------------------------------------------------------------------------
+# Dialog
+# ---------------------------------------------------------------------------
 
 class PromptTemplatesDialog(QDialog):
-    """Modal dialog for browsing and selecting prompt templates."""
+    """Tab-style modal for browsing recent, favorites, top picks, and templates."""
 
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        parent=None,
+        client=None,
+        auth_provider=None,
+        server_catalog: dict | None = None,
+    ):
+        """
+        client: TerraLabClient instance (optional). If None, no server sync.
+        auth_provider: callable returning current auth headers dict (optional).
+            We take a callable instead of a header so we always send a fresh
+            token, even if the user re-activates while the dialog is constructed.
+        server_catalog: parsed result of GET /api/ai-edit/presets (optional).
+            When provided, presets carry demo_url_before/demo_url_after and the
+            dialog renders rich before/after cards. When None, falls back to
+            the local prompt_presets catalog with text-only cards.
+        """
         super().__init__(parent)
-        self.setWindowTitle(tr("Prompt Templates"))
-        self.setMinimumSize(580, 440)
-        self.resize(660, 560)
+        self.setWindowTitle(tr("Prompt library"))
+        self.setMinimumSize(640, 480)
+        # Wider default so the 4-card grid + slider previews have room to breathe.
+        self.resize(1100, 720)
         self.setSizeGripEnabled(True)
+        # Styled tooltip - by default Qt's tooltip is unframed and reads as
+        # floating black text on macOS. This gives it a proper popover look.
+        self.setStyleSheet(
+            "QToolTip { "
+            "background-color: palette(base); "
+            "color: palette(text); "
+            "border: 1px solid rgba(128,128,128,0.5); "
+            "border-radius: 6px; "
+            "padding: 6px 10px; "
+            "font-size: 12px; "
+            "}"
+        )
+
+        self._client = client
+        self._auth_provider = auth_provider
+        self._server_catalog = server_catalog
+
+        # Lazy-instantiated demo image fetcher (only when server catalog is
+        # available - otherwise there's nothing to fetch).
+        self._demo_loader = None
+        if server_catalog is not None and client is not None:
+            from .template_demo_loader import TemplateDemoLoader
+
+            self._demo_loader = TemplateDemoLoader(self)
 
         self._selected_preset: dict | None = None
-        self._categories = get_all_categories()
-        self._sidebar_buttons: list[_SidebarButton] = []
-        self._section_widgets: dict[str, QWidget] = {}
-        self._card_widgets: list[tuple[QWidget, dict, str]] = []
-        self._active_cat_key: str = "favorites"
+        self._categories_by_key: dict[str, dict] = {}
+        self._sidebar_buttons: dict[str, _SidebarButton] = {}
+        self._pages: dict[str, QWidget] = {}
+        # Cards mix _ClickableCard and _BeforeAfterCard - store as generic
+        # widgets keyed by the page they live on. Star refresh uses
+        # `card.star_button()` and `card.preset()`, both implemented on both.
+        self._card_widgets: list[tuple[QWidget, str]] = []
+        # Default landing: Top Picks. First-time users see curated content,
+        # not their empty Recent/Favorites.
+        self._active_tab: str = "favorites"
+        self._sync_worker: _LibrarySyncWorker | None = None
+        self._fav_workers: list[_FavoriteSyncWorker] = []
 
+        # Recent pagination - rebuilt fresh every time the Recent page renders.
+        self._recent_layout: QVBoxLayout | None = None
+        self._recent_load_more_btn: QPushButton | None = None
+        self._recent_visible_count: int = 0
+
+        self._load_categories()
         self._build_ui()
+        self._start_sync()
+
+    # -- Data ------------------------------------------------------------
+
+    def _load_categories(self):
+        """Build the category dict from the server catalog.
+
+        `get_all_categories` reads the explicit `server_catalog` first, falls
+        back to the locally-cached catalog (`prompt_presets_client`), and
+        returns empty themed shells when neither is available."""
+        cats = get_all_categories(self._server_catalog)
+        self._categories_by_key = {c["key"]: c for c in cats}
+
+    # -- Layout ----------------------------------------------------------
 
     def _build_ui(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(8)
 
-        # Search bar
         self._search_input = QLineEdit()
-        self._search_input.setPlaceholderText(tr("Search templates..."))
+        self._search_input.setPlaceholderText(tr("Search prompts..."))
         self._search_input.setClearButtonEnabled(True)
         self._search_input.setStyleSheet(_SEARCH_BOX)
         self._search_input.textChanged.connect(self._on_search_changed)
         root.addWidget(self._search_input)
 
-        # Main area: sidebar + scroll
         body = QHBoxLayout()
         body.setSpacing(8)
 
-        # Sidebar
-        sidebar_widget = QWidget()
-        sidebar_widget.setFixedWidth(120)
-        sidebar_layout = QVBoxLayout(sidebar_widget)
+        # Sidebar - wide enough for the longest label ("Presentation renders"
+        # @ 13px font ≈ 165px) + icon + padding without ellipsis on any tab.
+        sidebar = QWidget()
+        sidebar.setFixedWidth(220)
+        sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(2)
 
-        for cat in self._categories:
-            sidebar_info = _SIDEBAR_LABELS.get(cat["key"], ("", cat["label"]))
-            icon_html, label_text = sidebar_info
-            btn = _SidebarButton(icon_html, label_text)
-            btn.setCursor(QtC.PointingHandCursor)
-            btn.setSizePolicy(QtC.SizePolicyExpanding, QtC.SizePolicyFixed)
-            btn.setProperty("cat_key", cat["key"])
-            btn.clicked.connect(
-                lambda checked, k=cat["key"]: self._scroll_to_category(k)
-            )
+        for key in _TAB_ORDER:
+            if key == "__separator__":
+                sep_wrap = QWidget()
+                sep_wrap.setFixedHeight(13)
+                sep_inner = QVBoxLayout(sep_wrap)
+                sep_inner.setContentsMargins(12, 6, 12, 6)
+                line = QFrame()
+                line.setFixedHeight(1)
+                line.setStyleSheet(
+                    "background: rgba(128,128,128,0.3); border: none;"
+                )
+                sep_inner.addWidget(line)
+                sidebar_layout.addWidget(sep_wrap)
+                continue
+            cat = self._categories_by_key.get(key)
+            if cat is None:
+                continue
+            btn = self._build_sidebar_button(key, cat)
             sidebar_layout.addWidget(btn)
-            self._sidebar_buttons.append(btn)
+            self._sidebar_buttons[key] = btn
 
         sidebar_layout.addStretch()
-        body.addWidget(sidebar_widget)
+        body.addWidget(sidebar)
 
-        # Separator
-        sep = QFrame()
-        sep.setFrameShape(QtC.FrameVLine)
-        sep.setFrameShadow(QtC.FrameSunken)
-        body.addWidget(sep)
+        vsep = QFrame()
+        vsep.setFrameShape(QtC.FrameVLine)
+        vsep.setFrameShadow(QtC.FrameSunken)
+        body.addWidget(vsep)
 
-        # Scrollable content
-        self._scroll_area = QScrollArea()
-        self._scroll_area.setWidgetResizable(True)
-        self._scroll_area.setFrameShape(QtC.FrameNoFrame)
-        self._scroll_area.setHorizontalScrollBarPolicy(
-            QtC.ScrollBarAlwaysOff
-        )
+        # Stack of pages, one per tab + a hidden search-results page.
+        self._stack = QStackedWidget()
+        for key in _TAB_ORDER:
+            if key == "__separator__":
+                continue
+            if key not in self._categories_by_key:
+                continue
+            page = self._build_page(key)
+            self._pages[key] = page
+            self._stack.addWidget(page)
+        # Search results page - shown when the search input is non-empty.
+        self._search_page = self._build_search_page()
+        self._stack.addWidget(self._search_page)
 
-        content_widget = QWidget()
-        self._content_layout = QVBoxLayout(content_widget)
-        self._content_layout.setContentsMargins(4, 0, 4, 0)
-        self._content_layout.setSpacing(12)
-
-        for cat in self._categories:
-            section = self._build_section(cat)
-            self._content_layout.addWidget(section)
-            self._section_widgets[cat["key"]] = section
-
-        self._content_layout.addStretch()
-        self._scroll_area.setWidget(content_widget)
-        self._scroll_area.verticalScrollBar().valueChanged.connect(
-            self._on_scroll_changed
-        )
-
-        body.addWidget(self._scroll_area, 1)
+        body.addWidget(self._stack, 1)
         root.addLayout(body, 1)
 
-        self._update_sidebar_highlight("favorites")
+        # Remember which tab to restore when the search box is cleared.
+        self._previous_tab: str = self._active_tab
+        self._switch_to_tab(self._active_tab)
 
-    def _build_section(self, category: dict) -> QWidget:
-        """Build one category section with header + preset cards."""
-        section = QWidget()
-        layout = QVBoxLayout(section)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(5)
+    def _build_sidebar_button(self, key: str, category: dict) -> _SidebarButton:
+        count = None
+        if key in _TABS_WITH_COUNT:
+            count = len(category.get("presets", []))
+        btn = _SidebarButton(
+            _sidebar_icon_html(key),
+            _tab_label(key, category["label"], count),
+        )
+        btn.setCursor(QtC.PointingHandCursor)
+        btn.setSizePolicy(QtC.SizePolicyExpanding, QtC.SizePolicyFixed)
+        btn.clicked.connect(lambda checked, k=key: self._on_sidebar_click(k))
+        return btn
 
-        cat_key = category["key"]
-        icon = _SECTION_ICONS.get(cat_key, "")
-        color = _SIDEBAR_COLORS.get(cat_key, "palette(text)")
+    def _on_sidebar_click(self, key: str):
+        """Sidebar click is an explicit "leave search" - clear the box."""
+        if self._search_input.text().strip():
+            self._search_input.blockSignals(True)
+            self._search_input.clear()
+            self._search_input.blockSignals(False)
+        self._switch_to_tab(key)
 
-        header = QLabel(f"{icon}  {category['label']}")
-        header.setStyleSheet(_SECTION_HEADER.format(color=color))
-        layout.addWidget(header)
+    def _refresh_sidebar_button(self, key: str):
+        cat = self._categories_by_key.get(key)
+        if cat is None or key not in self._sidebar_buttons:
+            return
+        count = None
+        if key in _TABS_WITH_COUNT:
+            count = len(cat.get("presets", []))
+        self._sidebar_buttons[key].set_label_html(
+            _sidebar_icon_html(key),
+            _tab_label(key, cat["label"], count),
+        )
 
-        for preset in category["presets"]:
-            card = self._build_preset_card(preset, cat_key, color)
+    # -- Pages -----------------------------------------------------------
+
+    def _build_page(self, key: str) -> QWidget:
+        """One scrollable page per sidebar tab - cards for that category only.
+
+        Top Picks (``favorites``) uses a 3-column square-card grid with
+        before/after slider previews. Recent paginates with a Load-more
+        button so power users with thousands of prompts open instantly.
+        Every other tab is a plain vertical list of text cards."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtC.FrameNoFrame)
+        scroll.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
+
+        content = QWidget()
+        category = self._categories_by_key[key]
+
+        if key == "favorites":
+            # Wrap the grid in a vbox so the cards anchor at the top of the
+            # scrollable page instead of stretching to fill all the height.
+            outer_v = QVBoxLayout(content)
+            outer_v.setContentsMargins(6, 4, 6, 10)
+            outer_v.setSpacing(0)
+            grid_host = QWidget()
+            grid = QGridLayout(grid_host)
+            grid.setContentsMargins(0, 0, 0, 0)
+            grid.setHorizontalSpacing(10)
+            grid.setVerticalSpacing(10)
+            self._populate_grid_cards(grid, category["presets"], key, columns=2)
+            if not category["presets"]:
+                empty = self._build_empty_state(key)
+                if empty is not None:
+                    grid.addWidget(empty, 0, 0, 1, 2)
+            outer_v.addWidget(grid_host)
+            outer_v.addStretch()
+        elif key == "recent":
+            layout = QVBoxLayout(content)
+            layout.setContentsMargins(6, 4, 6, 10)
+            layout.setSpacing(6)
+            presets = category["presets"]
+            if not presets:
+                empty = self._build_empty_state(key)
+                if empty is not None:
+                    layout.addWidget(empty)
+                self._recent_layout = None
+                self._recent_load_more_btn = None
+                self._recent_visible_count = 0
+            else:
+                visible = min(_RECENT_PAGE_SIZE, len(presets))
+                self._populate_list_cards(layout, presets[:visible], key)
+                btn = QPushButton(self._load_more_label(len(presets) - visible))
+                btn.setStyleSheet(_LOAD_MORE_BTN)
+                btn.setCursor(QtC.PointingHandCursor)
+                btn.clicked.connect(self._on_load_more_recent)
+                btn.setVisible(visible < len(presets))
+                row = QHBoxLayout()
+                row.setContentsMargins(0, 6, 0, 0)
+                row.addStretch()
+                row.addWidget(btn)
+                row.addStretch()
+                layout.addLayout(row)
+                self._recent_layout = layout
+                self._recent_load_more_btn = btn
+                self._recent_visible_count = visible
+            layout.addStretch()
+        else:
+            layout = QVBoxLayout(content)
+            layout.setContentsMargins(6, 4, 6, 10)
+            layout.setSpacing(6)
+            self._populate_list_cards(layout, category["presets"], key)
+            if not category["presets"]:
+                empty = self._build_empty_state(key)
+                if empty is not None:
+                    layout.addWidget(empty)
+            layout.addStretch()
+
+        scroll.setWidget(content)
+        return scroll
+
+    @staticmethod
+    def _load_more_label(remaining: int) -> str:
+        return tr("Load more ({n} remaining)").format(n=remaining)
+
+    def _on_load_more_recent(self):
+        """Append the next batch of Recent cards above the load-more button."""
+        cat = self._categories_by_key.get("recent")
+        if cat is None or self._recent_layout is None or self._recent_load_more_btn is None:
+            return
+        if not _is_alive(self._recent_load_more_btn):
+            return
+        presets = cat["presets"]
+        cur = self._recent_visible_count
+        if cur >= len(presets):
+            self._recent_load_more_btn.setVisible(False)
+            return
+        next_batch = presets[cur: cur + _RECENT_PAGE_SIZE]
+
+        # Insert cards before the load-more button so the button stays anchored
+        # at the bottom of the list as more entries scroll in.
+        btn_parent_row = None
+        for i in range(self._recent_layout.count()):
+            item = self._recent_layout.itemAt(i)
+            if item is None:
+                continue
+            if item.layout() is not None and item.layout().indexOf(self._recent_load_more_btn) >= 0:
+                btn_parent_row = i
+                break
+        insert_at = btn_parent_row if btn_parent_row is not None else self._recent_layout.count() - 1
+        for preset in next_batch:
+            card = _ClickableCard(preset, self._on_card_clicked)
+            card.star_button().toggled_state.connect(self._on_star_toggled)
+            self._recent_layout.insertWidget(insert_at, card)
+            self._card_widgets.append((card, "recent"))
+            insert_at += 1
+
+        self._recent_visible_count += len(next_batch)
+        remaining = len(presets) - self._recent_visible_count
+        if remaining <= 0:
+            self._recent_load_more_btn.setVisible(False)
+        else:
+            self._recent_load_more_btn.setText(self._load_more_label(remaining))
+
+    def _populate_grid_cards(
+        self, grid: QGridLayout, presets: list[dict], page_key: str, columns: int = 3
+    ):
+        """Top Picks layout: square BeforeAfterCard cells in a grid.
+
+        Falls back to a text card when the demo loader or client isn't wired
+        (offline / pre-auth dialog open) so the grid still renders."""
+        for idx, preset in enumerate(presets):
+            row, col = divmod(idx, columns)
+            # TEMP: preview images aren't ready yet — force the text-card path
+            # for Top Picks until the before/after assets land. Restore the
+            # _BeforeAfterCard branch below once demo URLs are wired.
+            # if self._demo_loader is not None and self._client is not None:
+            #     from ..core.prompt_presets_client import absolute_demo_url
+            #
+            #     def _abs(rel, _client=self._client):
+            #         return absolute_demo_url(_client, rel)
+            #
+            #     card = _BeforeAfterCard(
+            #         preset,
+            #         self._on_card_clicked,
+            #         demo_loader=self._demo_loader,
+            #         absolute_url=_abs,
+            #     )
+            # else:
+            card = _ClickableCard(preset, self._on_card_clicked)
+            card.star_button().toggled_state.connect(self._on_star_toggled)
+            grid.addWidget(card, row, col)
+            self._card_widgets.append((card, page_key))
+
+    def _populate_list_cards(self, layout: QVBoxLayout, presets: list[dict], page_key: str):
+        """All non-Top-Picks tabs: vertical list of plain text cards."""
+        for preset in presets:
+            card = _ClickableCard(preset, self._on_card_clicked)
+            card.star_button().toggled_state.connect(self._on_star_toggled)
             layout.addWidget(card)
-            self._card_widgets.append((card, preset, cat_key))
+            self._card_widgets.append((card, page_key))
 
-        return section
+    # Back-compat shim - search results layout still calls _populate_cards;
+    # keep it for non-grid contexts and route to the list variant.
+    def _populate_cards(self, layout: QVBoxLayout, presets: list[dict], page_key: str):
+        self._populate_list_cards(layout, presets, page_key)
 
-    def _build_preset_card(
-        self, preset: dict, cat_key: str, color: str = "palette(text)"
-    ) -> _ClickableCard:
-        """Build a clickable preset card."""
-        card = _ClickableCard(preset, self._on_use_clicked)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(10, 7, 10, 7)
-        card_layout.setSpacing(2)
+    def _build_search_page(self) -> QWidget:
+        """Empty container for cross-tab search results. Filled by
+        _rebuild_search_results whenever the search box is non-empty."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtC.FrameNoFrame)
+        scroll.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
 
-        top_row = QHBoxLayout()
-        top_row.setSpacing(6)
+        content = QWidget()
+        self._search_layout = QVBoxLayout(content)
+        self._search_layout.setContentsMargins(6, 4, 6, 10)
+        self._search_layout.setSpacing(10)
+        self._search_layout.addStretch()
 
-        # For favorites, resolve color from source category
-        if cat_key == "favorites":
-            src = preset.get("source_category", "")
-            if src:
-                color = _SIDEBAR_COLORS.get(src, color)
+        scroll.setWidget(content)
+        return scroll
 
-        label = QLabel(preset["label"])
-        label.setStyleSheet(
-            f"font-weight: bold; font-size: 13px; color: {color}; "
-            "background: transparent; border: none;"
+    def _rebuild_search_results(self, query: str):
+        """Wipe + repopulate the search page with cards matching `query`
+        across every category."""
+        while self._search_layout.count() > 0:
+            item = self._search_layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+        # Drop old search-page card refs so star refresh doesn't touch ghosts.
+        self._card_widgets = [
+            (c, k) for (c, k) in self._card_widgets if k != "__search__"
+        ]
+
+        total = 0
+        for key in _TAB_ORDER:
+            if key == "__separator__":
+                continue
+            category = self._categories_by_key.get(key)
+            if category is None:
+                continue
+            matches = [
+                p for p in category.get("presets", []) if _preset_matches(p, query)
+            ]
+            if not matches:
+                continue
+            self._search_layout.addWidget(self._search_section_header(key, len(matches)))
+            self._populate_cards(self._search_layout, matches, "__search__")
+            total += len(matches)
+
+        if total == 0:
+            empty = QLabel(tr("No matches found."))
+            empty.setStyleSheet(_EMPTY_MSG)
+            empty.setAlignment(QtC.AlignCenter)
+            empty.setWordWrap(True)
+            self._search_layout.addWidget(empty)
+
+        self._search_layout.addStretch()
+
+    def _search_section_header(self, key: str, match_count: int) -> QLabel:
+        category = self._categories_by_key[key]
+        label_html = (
+            f'{_sidebar_icon_html(key)}&nbsp;&nbsp;'
+            f'<span style="font-size:13px; font-weight:bold; color:palette(text);">'
+            f'{category["label"]}</span>'
+            f'&nbsp;<span style="color:rgba(128,128,128,0.7); font-size:11px;">'
+            f'({match_count})</span>'
         )
-        top_row.addWidget(label)
-
-        top_row.addStretch()
-        card_layout.addLayout(top_row)
-
-        # Prompt text
-        prompt_label = QLabel(preset["prompt"])
-        prompt_label.setWordWrap(True)
-        prompt_label.setStyleSheet(
-            "font-size: 11px; color: palette(text); padding: 0px; "
-            "background: transparent; border: none;"
+        header = QLabel(label_html)
+        header.setTextFormat(QtC.RichText)
+        header.setStyleSheet(
+            "QLabel { padding: 4px 0px; background: transparent; border: none; }"
         )
-        card_layout.addWidget(prompt_label)
+        return header
 
-        return card
+    def _build_empty_state(self, key: str) -> QWidget | None:
+        if key == "recent":
+            icon_path = _HISTORY_SVG
+            message = tr(
+                "Nothing here yet. The prompts you run will land here, ready to replay."
+            )
+        elif key == "user_favorites":
+            icon_path = _STAR_OUTLINE_SVG
+            message = tr(
+                "No favorites yet. Tap the ★ on any prompt to keep it close."
+            )
+        else:
+            return None
 
-    def _on_use_clicked(self, preset: dict):
+        # Outer container so we can center horizontally inside the scroll area.
+        outer = QWidget()
+        outer_layout = QHBoxLayout(outer)
+        outer_layout.setContentsMargins(20, 40, 20, 40)
+
+        inner = QWidget()
+        inner.setMaximumWidth(360)
+        layout = QVBoxLayout(inner)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+        layout.setAlignment(QtC.AlignCenter)
+
+        icon_label = QLabel()
+        icon_label.setPixmap(QIcon(icon_path).pixmap(36, 36))
+        icon_label.setAlignment(QtC.AlignCenter)
+        icon_label.setStyleSheet("background: transparent; border: none;")
+        layout.addWidget(icon_label)
+
+        msg = QLabel(message)
+        msg.setStyleSheet(_EMPTY_MSG)
+        msg.setAlignment(QtC.AlignCenter)
+        msg.setWordWrap(True)
+        layout.addWidget(msg)
+
+        outer_layout.addStretch()
+        outer_layout.addWidget(inner)
+        outer_layout.addStretch()
+        return outer
+
+    # -- Tab switching ---------------------------------------------------
+
+    def _switch_to_tab(self, key: str):
+        """Show the stack page for `key` and highlight its sidebar button.
+        Does not touch the search input - clearing the search is the caller's
+        responsibility (see _on_sidebar_click)."""
+        if key not in self._pages:
+            return
+        self._active_tab = key
+        self._previous_tab = key
+        self._stack.setCurrentWidget(self._pages[key])
+        for k, btn in self._sidebar_buttons.items():
+            btn.setStyleSheet(_SIDEBAR_ITEM_ACTIVE if k == key else _SIDEBAR_ITEM)
+
+    # -- Interaction -----------------------------------------------------
+
+    def _on_card_clicked(self, preset: dict):
         self._selected_preset = preset
+        if preset.get("from_recent"):
+            telemetry.track("recent_selected")
+            telemetry.flush()
         self.accept()
+
+    def _prune_dead_cards(self):
+        """Drop card refs whose underlying Qt widget has been destroyed."""
+        self._card_widgets = [
+            (c, k) for (c, k) in self._card_widgets
+            if _is_alive(c) and _is_alive(c.star_button())
+        ]
+
+    def _on_star_toggled(self, prompt: str, now_fav: bool, label: str, source_cat: str):
+        # Refresh every visible star button (other tabs may show the same prompt).
+        # Defensive: cards can be destroyed mid-iteration when a page rebuild
+        # races with the star-toggled signal - skip ghost widgets cleanly.
+        self._prune_dead_cards()
+        for card, _ in list(self._card_widgets):
+            try:
+                card.star_button().refresh()
+            except RuntimeError:
+                continue
+        # Only Favorites changes when a star is toggled - leave Recent alone so
+        # the user keeps their scroll position after Load-more.
+        self._reload_dynamic_pages(keys=("user_favorites",))
+        # Fire server sync (fire-and-forget).
+        self._sync_favorite(prompt, label, source_cat, now_fav)
+
+    def _sync_favorite(self, prompt: str, label: str, source_cat: str, now_fav: bool):
+        if self._client is None or self._auth_provider is None:
+            return
+        auth = self._auth_provider() or {}
+        if not auth.get("Authorization"):
+            return
+        worker = _FavoriteSyncWorker(
+            self._client, auth, prompt, label, source_cat, now_fav, parent=self
+        )
+        worker.finished.connect(lambda: self._on_fav_worker_done(worker))
+        self._fav_workers.append(worker)
+        worker.start()
+
+    def _on_fav_worker_done(self, worker: _FavoriteSyncWorker):
+        try:
+            self._fav_workers.remove(worker)
+        except ValueError:
+            pass
+        worker.deleteLater()
+
+    def _reload_dynamic_pages(self, keys=("recent", "user_favorites")):
+        """Rebuild the named dynamic tabs from current cache. Callers pass
+        only the subset that actually changed so untouched tabs keep their
+        scroll position (Load-more state in particular)."""
+        self._load_categories()
+
+        keyset = set(keys)
+        self._card_widgets = [
+            (c, k) for (c, k) in self._card_widgets if k not in keyset
+        ]
+
+        for key in keys:
+            if key not in self._pages:
+                continue
+            old = self._pages[key]
+            idx = self._stack.indexOf(old)
+            new = self._build_page(key)
+            self._stack.insertWidget(idx, new)
+            self._stack.removeWidget(old)
+            old.deleteLater()
+            self._pages[key] = new
+
+        for key in _TABS_WITH_COUNT:
+            if key in keyset:
+                self._refresh_sidebar_button(key)
+
+        # If a search is active, re-run it so the results pick up new presets
+        # (e.g. a newly-fetched Recent entry, or a card whose star state changed).
+        query = self._search_input.text().strip().lower()
+        if query and self._active_tab == "__search__":
+            self._rebuild_search_results(query)
 
     def get_selected_preset(self) -> dict | None:
         return self._selected_preset
 
-    def _scroll_to_category(self, cat_key: str):
-        """Scroll so the category header is at the top of the viewport."""
-        widget = self._section_widgets.get(cat_key)
-        if not widget:
+    # -- Server sync -----------------------------------------------------
+
+    def _start_sync(self):
+        """Kick off a background fetch of /history + /favorites. If client/auth
+        unavailable, silently skips - local cache is the source for this session."""
+        if self._client is None or self._auth_provider is None:
             return
-        content_widget = self._scroll_area.widget()
-        pos_in_content = widget.mapTo(content_widget, widget.rect().topLeft())
-        self._scroll_area.verticalScrollBar().setValue(pos_in_content.y())
-        self._update_sidebar_highlight(cat_key)
+        auth = self._auth_provider() or {}
+        if not auth.get("Authorization"):
+            return
+        worker = _LibrarySyncWorker(self._client, auth, parent=self)
+        worker.history_fetched.connect(self._on_history_fetched)
+        worker.favorites_fetched.connect(self._on_favorites_fetched)
+        worker.failed.connect(self._on_sync_failed)
+        worker.finished.connect(lambda: self._on_sync_worker_done(worker))
+        self._sync_worker = worker
+        worker.start()
 
-    def _on_scroll_changed(self):
-        sb = self._scroll_area.verticalScrollBar()
-        viewport_top = sb.value()
+    def _on_history_fetched(self, prompts: list):
+        prompt_history.replace_recent(prompts)
+        self._reload_dynamic_pages(keys=("recent",))
 
-        # When scrolled to the bottom, highlight the last section
-        if sb.value() >= sb.maximum() - 5:
-            cat_keys = list(self._section_widgets.keys())
-            if cat_keys:
-                last_key = cat_keys[-1]
-                if last_key != self._active_cat_key:
-                    self._update_sidebar_highlight(last_key)
-                return
+    def _on_favorites_fetched(self, favorites: list):
+        prompt_history.replace_favorites(favorites)
+        self._reload_dynamic_pages(keys=("user_favorites",))
 
-        closest_key = "favorites"
-        closest_dist = float("inf")
+    def _on_sync_failed(self, msg: str):
+        log_debug(f"Prompt library sync failed (local cache stays): {msg}")
 
-        for cat_key, widget in self._section_widgets.items():
-            widget_top = widget.mapTo(
-                self._scroll_area.widget(), widget.rect().topLeft()
-            ).y()
-            dist = abs(widget_top - viewport_top)
-            if widget_top <= viewport_top + 40 and dist < closest_dist:
-                closest_dist = dist
-                closest_key = cat_key
+    def _on_sync_worker_done(self, worker: _LibrarySyncWorker):
+        if self._sync_worker is worker:
+            self._sync_worker = None
+        worker.deleteLater()
 
-        if closest_key != self._active_cat_key:
-            self._update_sidebar_highlight(closest_key)
-
-    def _update_sidebar_highlight(self, active_key: str):
-        self._active_cat_key = active_key
-        for btn in self._sidebar_buttons:
-            cat_key = btn.property("cat_key")
-            if cat_key == active_key:
-                color = _SIDEBAR_COLORS.get(cat_key, "palette(text)")
-                btn.setStyleSheet(_SIDEBAR_ITEM_ACTIVE.format(color=color))
-            else:
-                btn.setStyleSheet(_SIDEBAR_ITEM.format())
+    # -- Search ----------------------------------------------------------
 
     def _on_search_changed(self, text: str):
+        """Search across all categories. Non-empty query → search-results page;
+        empty query → restore the last sidebar tab."""
         query = text.strip().lower()
-        visible_cats: set[str] = set()
+        if not query:
+            if self._active_tab == "__search__":
+                # Restore the tab the user was on before they started searching.
+                target = self._previous_tab if self._previous_tab in self._pages else "favorites"
+                self._active_tab = target
+                self._stack.setCurrentWidget(self._pages[target])
+                for k, btn in self._sidebar_buttons.items():
+                    btn.setStyleSheet(_SIDEBAR_ITEM_ACTIVE if k == target else _SIDEBAR_ITEM)
+            return
 
-        for card_widget, preset, cat_key in self._card_widgets:
-            if not query:
-                card_widget.setVisible(True)
-                visible_cats.add(cat_key)
-            else:
-                match = (
-                    query in preset["label"].lower()
-                    or query in preset["prompt"].lower()  # noqa: W503
-                    or query in preset.get("source_category", "").lower()  # noqa: W503
-                )
-                card_widget.setVisible(match)
-                if match:
-                    visible_cats.add(cat_key)
+        # Entering search: remember current tab so we can restore it on clear.
+        if self._active_tab != "__search__":
+            self._previous_tab = self._active_tab
+        self._rebuild_search_results(query)
+        self._stack.setCurrentWidget(self._search_page)
+        self._active_tab = "__search__"
+        # Drop sidebar highlight while searching - no tab is "active".
+        for btn in self._sidebar_buttons.values():
+            btn.setStyleSheet(_SIDEBAR_ITEM)
 
-        for cat_key, section_widget in self._section_widgets.items():
-            section_widget.setVisible(cat_key in visible_cats)
+    # -- Cleanup ---------------------------------------------------------
 
-        if query:
-            for btn in self._sidebar_buttons:
-                btn.setStyleSheet(_SIDEBAR_ITEM.format())
-        else:
-            self._update_sidebar_highlight(self._active_cat_key)
+    def closeEvent(self, event):  # noqa: N802
+        # Workers run in QThreads; drain them before the dialog is destroyed
+        # so QThread's destructor never trips "Destroyed while still running".
+        # Terminate as a last resort to avoid taking QGIS down with us.
+        if self._sync_worker is not None and self._sync_worker.isRunning():
+            if not self._sync_worker.wait(2000):
+                self._sync_worker.terminate()
+                self._sync_worker.wait(500)
+        for w in list(self._fav_workers):
+            if w.isRunning():
+                if not w.wait(2000):
+                    w.terminate()
+                    w.wait(500)
+        super().closeEvent(event)

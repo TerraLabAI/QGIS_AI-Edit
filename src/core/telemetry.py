@@ -38,6 +38,8 @@ _NO_CONSENT_EVENTS = frozenset({
     "generation_failed",
     "generation_cancelled",
     "first_generation_milestone",
+    "favorite_toggled",
+    "recent_selected",
 })
 
 
@@ -66,6 +68,12 @@ class TelemetryCollector:
         self._auth_manager = auth_manager
         self._plugin_version = plugin_version
         self._batch: list = []
+        # Pre-auth lifecycle events (activation_screen_viewed, plugin_opened,
+        # activation_attempted) are queued here until the user enters a key.
+        # First successful flush() drains the queue so the activation funnel
+        # is recoverable. Capped to avoid unbounded growth if the user never
+        # activates.
+        self._pending_pre_auth: list = []
         self._workers: list = []
         self._session_props = self._build_session_props()
 
@@ -113,19 +121,32 @@ class TelemetryCollector:
 
         Lifecycle events (`_NO_CONSENT_EVENTS`) ship as long as the plugin is
         activated; everything else additionally requires telemetry consent.
+        Events emitted before activation (no Bearer token yet) are parked in
+        `_pending_pre_auth` and drained on the first authenticated flush so
+        the activation_screen_viewed → plugin_activated funnel is observable.
         """
-        if not self._batch:
+        if not self._batch and not self._pending_pre_auth:
             return
+
         if not self._has_auth():
+            # Park lifecycle events so they reach PostHog once the user
+            # activates. Drop everything else (consent-gated paths shouldn't
+            # be reachable pre-auth anyway). Cap at 50 to avoid runaway
+            # memory if the user opens the plugin many times without ever
+            # activating.
+            for evt in self._batch:
+                if evt["event"] in _NO_CONSENT_EVENTS and len(self._pending_pre_auth) < 50:
+                    self._pending_pre_auth.append(evt)
             self._batch.clear()
             return
 
         consented = self._has_consent()
-        events_to_send = [
+        events_to_send = list(self._pending_pre_auth) + [
             e for e in self._batch
             if consented or e["event"] in _NO_CONSENT_EVENTS
         ]
         self._batch.clear()
+        self._pending_pre_auth.clear()
 
         if not events_to_send:
             return

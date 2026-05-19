@@ -32,7 +32,7 @@ class GenerationService:
     def reset(self):
         self._cancelled = False
 
-    # Below this base64 size we send the image inline in the submit body —
+    # Below this base64 size we send the image inline in the submit body -
     # a single round-trip looks cleaner from outside and avoids an extra API
     # call for the common-case small generations (1 K resolution typically
     # encodes to <2 MB of PNG). Above it, we'd risk the serverless body cap,
@@ -46,7 +46,7 @@ class GenerationService:
         Skipped entirely when the image is small enough to inline so we don't
         burn an extra round-trip on small generations.
 
-        Failures here are silent (logged but not surfaced) — we'd rather pay
+        Failures here are silent (logged but not surfaced) - we'd rather pay
         the inline body cost than show a network error for a path we control
         entirely and can retry as inline.
         """
@@ -115,10 +115,8 @@ class GenerationService:
         upload_token = self._try_upload_token_flow(image_b64, auth)
 
         # Pull geospatial + iteration context off the pipeline ctx so the
-        # server can enrich the PREPROMPT with location and silently attach
-        # the original input as a reference on iterations. All fields are
-        # optional — old servers ignore them, no plugin re-release needed
-        # for backwards compat.
+        # backend can use it. All fields optional - old backends ignore
+        # them, no plugin re-release needed for backwards compat.
         geo_kwargs: dict = {}
         if ctx is not None:
             if ctx.centroid_lat is not None and ctx.centroid_lon is not None:
@@ -128,6 +126,10 @@ class GenerationService:
                 geo_kwargs["ground_resolution_m"] = ctx.ground_resolution_m
             if ctx.parent_request_id:
                 geo_kwargs["parent_request_id"] = ctx.parent_request_id
+            if ctx.template_id:
+                geo_kwargs["template_id"] = ctx.template_id
+            if ctx.template_name:
+                geo_kwargs["template_name"] = ctx.template_name
 
         if upload_token is not None:
             resp = self._client.submit_generation(

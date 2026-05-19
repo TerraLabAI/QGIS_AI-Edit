@@ -28,7 +28,7 @@ class _ZoneDeleteBadge(QgsMapCanvasItem):
 
     Lives in the canvas's QGraphicsScene so it follows the canvas during
     pan/zoom (the scene gets pixel-shifted during pan, so anything in it
-    stays aligned with the rubber band — a plain widget parented to the
+    stays aligned with the rubber band - a plain widget parented to the
     viewport would not). Click handling is done by the parent map tool's
     canvasPressEvent via :meth:`hit_test`, because an active map tool eats
     mouse events before the scene items see them.
@@ -129,7 +129,7 @@ class RectangleSelectionTool(QgsMapTool):
         """Crosshair while no zone is selected (draw mode), open hand once
         a zone exists so the user feels they can move around again. Panning
         from inside the tool stays delegated to QGIS's built-in middle-mouse
-        and Space+drag — left-drag is reserved for drawing, which is the
+        and Space+drag - left-drag is reserved for drawing, which is the
         primary action and what users expect after a Launch.
         """
         shape = Qt.CursorShape.OpenHandCursor if self._has_zone else QtC.CrossCursor
@@ -142,7 +142,7 @@ class RectangleSelectionTool(QgsMapTool):
             event.button() == QtC.LeftButton
             and self._has_zone  # noqa: W503
             and self._delete_badge is not None  # noqa: W503
-            and self._delete_badge.hit_test(event.pos())  # noqa: W503
+            and self._delete_badge.hit_test(QtC.event_pos(event))  # noqa: W503
         ):
             self._on_delete_zone()
             return
@@ -152,14 +152,14 @@ class RectangleSelectionTool(QgsMapTool):
         if event.button() == QtC.LeftButton:
             if self._has_zone:
                 return
-            self._start_point = self.toMapCoordinates(event.pos())
+            self._start_point = self.toMapCoordinates(QtC.event_pos(event))
             self._is_drawing = True
             self._create_rubber_band()
 
     def canvasMoveEvent(self, event):
         if not self._is_drawing or self._start_point is None:
             return
-        end_point = self.toMapCoordinates(event.pos())
+        end_point = self.toMapCoordinates(QtC.event_pos(event))
         rect = QgsRectangle(self._start_point, end_point)
         rect.normalize()
         if rect.width() > 0 and rect.height() > 0:
@@ -175,7 +175,7 @@ class RectangleSelectionTool(QgsMapTool):
             return
         if event.button() == QtC.LeftButton and self._is_drawing:
             self._is_drawing = False
-            end_point = self.toMapCoordinates(event.pos())
+            end_point = self.toMapCoordinates(QtC.event_pos(event))
             rect = QgsRectangle(self._start_point, end_point)
             rect.normalize()
             rect, ratio = self._snap_to_ratio(rect)
@@ -271,11 +271,30 @@ class RectangleSelectionTool(QgsMapTool):
         # user would only see the zone get cleared instead of exiting.
         super().keyPressEvent(event)
 
+    def preserve_state_on_next_deactivate(self) -> None:
+        """Tell the next deactivate() to keep the zone + badge alive.
+
+        Plugin calls this right before switching the canvas to one of our
+        own tools (Mark up), so the zone outline survives the transition.
+        Without the flag, deactivate clears state - the right default when
+        the user picks pan / measure / another plugin's tool, which would
+        otherwise leave AI-Edit overlays hanging on the canvas.
+        """
+        self._preserve_on_deactivate = True
+
     def deactivate(self):
+        # The in-progress drawing band is always discarded. Zone state, the
+        # × badge and the persistent rectangle outline only survive when the
+        # plugin explicitly asked us to keep them (i.e. switching to a Mark
+        # up tool). Otherwise we drop them so unrelated map-tool switches
+        # (pan, measure, other plugins) don't leave AI-Edit overlays behind.
         self._clear_rubber_band()
-        self._has_zone = False
-        self._zone_rect = None
-        self._hide_delete_badge()
+        if getattr(self, "_preserve_on_deactivate", False):
+            self._preserve_on_deactivate = False
+        else:
+            self._has_zone = False
+            self._zone_rect = None
+            self._hide_delete_badge()
         super().deactivate()
 
     def cleanup(self) -> None:

@@ -28,6 +28,7 @@ RightDockWidgetArea = _resolve(Qt, "DockWidgetArea", "RightDockWidgetArea")
 # Qt.CursorShape
 PointingHandCursor = _resolve(Qt, "CursorShape", "PointingHandCursor")
 CrossCursor = _resolve(Qt, "CursorShape", "CrossCursor")
+WaitCursor = _resolve(Qt, "CursorShape", "WaitCursor")
 
 # Qt.AlignmentFlag
 AlignCenter = _resolve(Qt, "AlignmentFlag", "AlignCenter")
@@ -40,6 +41,25 @@ Key_Escape = _resolve(Qt, "Key", "Key_Escape")
 
 # Qt.ShortcutContext
 WindowShortcut = _resolve(Qt, "ShortcutContext", "WindowShortcut")
+WidgetWithChildrenShortcut = _resolve(
+    Qt, "ShortcutContext", "WidgetWithChildrenShortcut"
+)
+
+
+def event_pos(event):
+    """Return a Qt5/Qt6-safe QPoint for a QMouseEvent or QgsMapMouseEvent.
+
+    Qt6 deprecates ``QMouseEvent.pos()`` in favour of
+    ``position().toPoint()``; use this wrapper everywhere a mouse event's
+    widget-local position is needed so the same source runs on QGIS 3 and 4.
+    """
+    if hasattr(event, "position"):
+        try:
+            return event.position().toPoint()
+        except (AttributeError, TypeError):
+            pass
+    return event.pos()
+
 
 # Qt.KeyboardModifier
 ShiftModifier = _resolve(Qt, "KeyboardModifier", "ShiftModifier")
@@ -50,6 +70,9 @@ RightButton = _resolve(Qt, "MouseButton", "RightButton")
 
 # Qt.FocusPolicy
 NoFocus = _resolve(Qt, "FocusPolicy", "NoFocus")
+
+# Qt.FocusReason
+OtherFocusReason = _resolve(Qt, "FocusReason", "OtherFocusReason")
 
 # Qt.ToolButtonStyle
 ToolButtonTextBesideIcon = _resolve(Qt, "ToolButtonStyle", "ToolButtonTextBesideIcon")
@@ -70,13 +93,13 @@ WA_StyledBackground = _resolve(Qt, "WidgetAttribute", "WA_StyledBackground")
 ScrollBarAlwaysOff = _resolve(Qt, "ScrollBarPolicy", "ScrollBarAlwaysOff")
 ScrollBarAsNeeded = _resolve(Qt, "ScrollBarPolicy", "ScrollBarAsNeeded")
 
-# QTextOption.WrapMode — wrap mid-token so a long URL or unbreakable string
+# QTextOption.WrapMode - wrap mid-token so a long URL or unbreakable string
 # still flows to the next line instead of triggering horizontal scroll.
 WrapAtWordBoundaryOrAnywhere = _resolve(
     QTextOption, "WrapMode", "WrapAtWordBoundaryOrAnywhere"
 )
 
-# QTextEdit.LineWrapMode — pinned to widget width so wrapping always engages
+# QTextEdit.LineWrapMode - pinned to widget width so wrapping always engages
 # even when QSS or a rich-text paste would otherwise leave it implicit.
 LineWrapWidgetWidth = _resolve(QTextEdit, "LineWrapMode", "WidgetWidth")
 
@@ -116,15 +139,18 @@ BlockingNoError = _resolve(QgsBlockingNetworkRequest, "ErrorCode", "NoError")
 # Qgis.GeometryType (QGIS 4) vs QgsWkbTypes (QGIS 3)
 try:
     from qgis.core import Qgis
-    PolygonGeometry = getattr(
-        getattr(Qgis, "GeometryType", None), "Polygon",
-        None,
-    )
+    _gt = getattr(Qgis, "GeometryType", None)
+    PolygonGeometry = getattr(_gt, "Polygon", None)
+    LineGeometry = getattr(_gt, "Line", None)
 except Exception:
     PolygonGeometry = None
+    LineGeometry = None
 if PolygonGeometry is None:
     from qgis.core import QgsWkbTypes
     PolygonGeometry = QgsWkbTypes.PolygonGeometry
+if LineGeometry is None:
+    from qgis.core import QgsWkbTypes
+    LineGeometry = QgsWkbTypes.LineGeometry
 
 
 # QNetworkReply.NetworkError

@@ -24,8 +24,8 @@ class PipelineContext:
     # so the server doesn't need its own reprojection library.
     centroid_lat: float | None = None
     centroid_lon: float | None = None
-    # Meters per pixel at the centroid, used to enrich the PREPROMPT with
-    # ground resolution context.
+    # Meters per pixel at the centroid, sent to the backend as ground
+    # resolution context.
     ground_resolution_m: float | None = None
     export_width: int | None = None
     export_height: int | None = None
@@ -36,6 +36,19 @@ class PipelineContext:
     # result, so the server can silently attach the original input as a
     # reference image to anchor coherence across edits.
     parent_request_id: str | None = None
+
+    # Template attribution: set when the submitted prompt exactly matches a
+    # curated preset (after whitespace normalization). Lets the dashboard
+    # distinguish "ran Top Pick X" from "wrote custom prompt".
+    template_id: str | None = None
+    template_name: str | None = None
+    # Vectorize hints carried from the template metadata (catalog), so the
+    # post-generation result panel can suggest extracting class regions
+    # with the color already pre-filled. vector_color is the single-class
+    # hex string; vector_classes is the multi-class list (each entry has
+    # color + label). Either may be None.
+    vector_color: str | None = None
+    vector_classes: list[dict] | None = None
 
     # Submit (populated by generation_service.py)
     request_id: str | None = None
