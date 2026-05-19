@@ -319,21 +319,40 @@ def _build_top_picks(catalog: dict | None) -> list[dict]:
     return out
 
 
+def _find_server_category(catalog: dict | None, cat_key: str) -> dict | None:
+    """Return the raw server category dict for `cat_key`, or None."""
+    if not isinstance(catalog, dict):
+        return None
+    for cat in catalog.get("categories", []) or []:
+        if isinstance(cat, dict) and cat.get("key") == cat_key:
+            return cat
+    return None
+
+
+def _themed_category_label(cat_key: str, catalog: dict | None) -> str:
+    """Resolve the user-facing category label.
+
+    Prefers the server's polyglot label when available (single source of truth,
+    so new categories don't need a plugin .ts update), and falls back to the
+    plugin's local tr() table when offline or for the very first session."""
+    cat = _find_server_category(catalog, cat_key)
+    if cat is not None:
+        resolved = _pick_label(cat.get("label"), "")
+        if resolved:
+            return resolved
+    return tr(_CATEGORY_LABELS[cat_key])
+
+
 def _build_themed_category(cat_key: str, catalog: dict | None) -> list[dict]:
     """All presets in `cat_key` from the server catalog (empty if unavailable)."""
-    if not isinstance(catalog, dict):
+    cat = _find_server_category(catalog, cat_key)
+    if cat is None:
         return []
-    for cat in catalog.get("categories", []) or []:
-        if not isinstance(cat, dict):
-            continue
-        if cat.get("key") != cat_key:
-            continue
-        return [
-            _normalize_preset(p, cat_key)
-            for p in (cat.get("presets") or [])
-            if isinstance(p, dict)
-        ]
-    return []
+    return [
+        _normalize_preset(p, cat_key)
+        for p in (cat.get("presets") or [])
+        if isinstance(p, dict)
+    ]
 
 
 def get_all_categories(server_catalog: dict | None = None) -> list[dict]:
@@ -368,7 +387,7 @@ def get_all_categories(server_catalog: dict | None = None) -> list[dict]:
     for cat_key in _CATEGORY_ORDER:
         result.append({
             "key": cat_key,
-            "label": tr(_CATEGORY_LABELS[cat_key]),
+            "label": _themed_category_label(cat_key, server_catalog),
             "presets": _build_themed_category(cat_key, server_catalog),
         })
 

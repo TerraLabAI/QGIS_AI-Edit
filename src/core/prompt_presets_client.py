@@ -6,7 +6,7 @@ The server is the single source of truth for templates; when the cache
 is missing and the network is down (first install offline), themed tabs
 render empty until a fetch succeeds.
 
-Response shape (v2):
+Response shape (v2, with polyglot prompts):
     {
       "version": 2,
       "categories": [
@@ -16,8 +16,8 @@ Response shape (v2):
           "presets": [
             {
               "id": "...",
-              "label": { "en": "...", ... },
-              "prompt": "...",
+              "label":  { "en": "...", "fr": "...", "es": "...", "pt": "..." },
+              "prompt": { "en": "...", "fr": "...", "es": "...", "pt": "..." },
               "top_pick"?: true,
               "vector_color"?: "#FF0000",
               "demo_url_before": "/api/ai-edit/template-demos/<id>/before",
@@ -30,6 +30,9 @@ Response shape (v2):
       ],
       "top_picks": ["<preset_id>", ...]
     }
+
+    Legacy string-only `prompt` values are still accepted for back-compat;
+    `_pick_label` resolves either shape to the current locale's string.
 """
 from __future__ import annotations
 
@@ -46,11 +49,24 @@ _CACHE_TS_KEY = "terralab/ai_edit/server_catalog_v2_ts"
 _CACHE_TTL_SECONDS = 24 * 60 * 60
 
 
+def _is_polyglot_or_string(value: Any) -> bool:
+    """Accept either a plain string (legacy v2) or a polyglot dict with at
+    least one non-empty language value (current `{en, fr, es, pt}` shape).
+    `_pick_label` falls back to 'en' so we don't force its presence here,
+    but the dict must contain at least one usable variant."""
+    if isinstance(value, str):
+        return bool(value)
+    if isinstance(value, dict):
+        return any(isinstance(v, str) and v for v in value.values())
+    return False
+
+
 def _validate_catalog(payload: Any) -> dict | None:
     """Return the catalog dict if shape is recognised, else None.
 
-    Defensive: future server tweaks shouldn't crash the plugin - anything that
-    doesn't match the v2 shape falls back to local presets.
+    Defensive: future server tweaks shouldn't crash the plugin. Accepts both
+    legacy v2 (string `prompt`) and current polyglot (`{en, fr, es, pt}` dict
+    `prompt`) shapes so freshly translated catalogs are not rejected.
     """
     if not isinstance(payload, dict):
         return None
@@ -71,7 +87,9 @@ def _validate_catalog(payload: Any) -> dict | None:
         for p in presets:
             if not isinstance(p, dict):
                 return None
-            if not isinstance(p.get("id"), str) or not isinstance(p.get("prompt"), str):
+            if not isinstance(p.get("id"), str):
+                return None
+            if not _is_polyglot_or_string(p.get("prompt")):
                 return None
     return payload
 
