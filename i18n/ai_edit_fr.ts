@@ -94,6 +94,16 @@ AI-powered image editing for geospatial data</source>
         <translation>Réserver un appel vidéo</translation>
     </message>
     <message>
+        <source>Browse the prompt library (view only while generating)</source>
+        <translation>Parcourir la bibliothèque de prompts (lecture seule pendant la génération)</translation>
+    </message>
+    <message>
+        <source>Bug, question, feature request?
+We'd love to hear from you!</source>
+        <translation>Bug, question, demande de fonctionnalité ?
+Nous serions ravis d'avoir votre retour !</translation>
+    </message>
+    <message>
         <source>Cancel</source>
         <translation>Annuler</translation>
     </message>
@@ -262,6 +272,14 @@ AI-powered image editing for geospatial data</source>
         <translation>Supprimer les petites taches avant le traçage : filtre pré-polygonisation (nombre de pixels connectés).</translation>
     </message>
     <message>
+        <source>Dropping it on the map...</source>
+        <translation>Dépose sur la carte...</translation>
+    </message>
+    <message>
+        <source>EXPERIMENTAL (may produce unexpected results)</source>
+        <translation>EXPÉRIMENTAL (peut produire des résultats inattendus)</translation>
+    </message>
+    <message>
         <source>Edit the prompt above and retry, or pick a new action below</source>
         <translation>Modifiez le prompt ci-dessus et réessayez, ou choisissez une nouvelle action ci-dessous</translation>
     </message>
@@ -290,6 +308,10 @@ AI-powered image editing for geospatial data</source>
         <translation>Quitter et revenir au début</translation>
     </message>
     <message>
+        <source>Expand/Contract:</source>
+        <translation>Élargir/Contracter :</translation>
+    </message>
+    <message>
         <source>Export error: {error}</source>
         <translation>Erreur d'export : {error}</translation>
     </message>
@@ -308,6 +330,14 @@ AI-powered image editing for geospatial data</source>
     <message>
         <source>File does not exist</source>
         <translation>Le fichier n'existe pas</translation>
+    </message>
+    <message>
+        <source>Fill holes:</source>
+        <translation>Remplir les trous :</translation>
+    </message>
+    <message>
+        <source>Fill interior holes in the selection</source>
+        <translation>Remplir les trous intérieurs dans la sélection</translation>
     </message>
     <message>
         <source>Finish</source>
@@ -338,6 +368,10 @@ AI-powered image editing for geospatial data</source>
         <translation>Générer</translation>
     </message>
     <message>
+        <source>Generate on the same zone using the current map view</source>
+        <translation>Générer sur la même zone avec la vue actuelle de la carte</translation>
+    </message>
+    <message>
         <source>Generation already in progress</source>
         <translation>Génération déjà en cours</translation>
     </message>
@@ -350,6 +384,10 @@ AI-powered image editing for geospatial data</source>
         <translation>Obtenir votre clé</translation>
     </message>
     <message>
+        <source>Grabbing your masterpiece...</source>
+        <translation>Récupération de votre chef-d'œuvre...</translation>
+    </message>
+    <message>
         <source>Help</source>
         <translation>Aide</translation>
     </message>
@@ -360,10 +398,6 @@ AI-powered image editing for geospatial data</source>
     <message>
         <source>Hide prompt</source>
         <translation>Masquer le prompt</translation>
-    </message>
-    <message>
-        <source>Higher = smoother polygons (Douglas-Peucker, in pixels).</source>
-        <translation>Plus haut = polygones plus lisses (Douglas-Peucker, en pixels).</translation>
     </message>
     <message>
         <source>I agree to the {terms} and {privacy}</source>
@@ -410,16 +444,16 @@ AI-powered image editing for geospatial data</source>
         <translation>Lancer AI Edit</translation>
     </message>
     <message>
-        <source>Like it?</source>
-        <translation>Vous aimez ?</translation>
-    </message>
-    <message>
         <source>Load more ({n} remaining)</source>
         <translation>Voir plus ({n} restant·e·s)</translation>
     </message>
     <message>
         <source>Loading account info...</source>
         <translation>Chargement des infos du compte...</translation>
+    </message>
+    <message>
+        <source>Loading…</source>
+        <translation>Chargement…</translation>
     </message>
     <message>
         <source>Manage account on terra-lab.ai</source>
@@ -434,10 +468,6 @@ AI-powered image editing for geospatial data</source>
         <translation>Annoter</translation>
     </message>
     <message>
-        <source>Mark up ({})</source>
-        <translation>Annoter ({})</translation>
-    </message>
-    <message>
         <source>Mark up: sketch hints on the map for your next prompt.</source>
         <translation>Annoter : esquissez des repères sur la carte pour votre prochain prompt.</translation>
     </message>
@@ -448,6 +478,10 @@ AI-powered image editing for geospatial data</source>
     <message>
         <source>Min size (sieve):</source>
         <translation>Taille minimale (tamis) :</translation>
+    </message>
+    <message>
+        <source>No AI Edit output available. Generate a map first to vectorize it.</source>
+        <translation>Aucune sortie AI Edit disponible. Générez d'abord une carte pour la vectoriser.</translation>
     </message>
     <message>
         <source>No favorites yet. Tap the ★ on any prompt to keep it close.</source>
@@ -474,10 +508,6 @@ AI-powered image editing for geospatial data</source>
         <translation>OK</translation>
     </message>
     <message>
-        <source>Online or virtual raster: save it as GeoTIFF first.</source>
-        <translation>Raster en ligne ou virtuel : enregistrez-le d'abord en GeoTIFF.</translation>
-    </message>
-    <message>
         <source>Open the prompt library: recent, favorites, and templates</source>
         <translation>Ouvrir la bibliothèque de prompts : récents, favoris et templates</translation>
     </message>
@@ -494,20 +524,24 @@ AI-powered image editing for geospatial data</source>
         <translation>Contour</translation>
     </message>
     <message>
-        <source>Output resolution</source>
-        <translation>Resolution de sortie</translation>
+        <source>Output resolution. Higher = sharper, more precise edits.</source>
+        <translation>Résolution de sortie. Plus élevée = édits plus nets et précis.</translation>
     </message>
     <message>
         <source>Pencil</source>
         <translation>Crayon</translation>
     </message>
     <message>
-        <source>Per-channel ± distance when matching pixels (0-100).</source>
-        <translation>Distance ± par canal lors de la correspondance des pixels (0-100).</translation>
+        <source>Per-channel ± distance when matching pixels.</source>
+        <translation>Distance ± par canal lors de la correspondance des pixels.</translation>
     </message>
     <message>
         <source>Pick a raster from the source list first.</source>
         <translation>Choisissez d'abord un raster dans la liste source.</translation>
+    </message>
+    <message>
+        <source>Pick an AI Edit output to vectorize.</source>
+        <translation>Choisissez une sortie AI Edit à vectoriser.</translation>
     </message>
     <message>
         <source>Pick annotation color</source>
@@ -516,10 +550,6 @@ AI-powered image editing for geospatial data</source>
     <message>
         <source>Pick color</source>
         <translation>Choisir la couleur</translation>
-    </message>
-    <message>
-        <source>Pick the raster you want to extract polygons from.</source>
-        <translation>Choisissez le raster dont vous voulez extraire des polygones.</translation>
     </message>
     <message>
         <source>Plan</source>
@@ -534,6 +564,10 @@ AI-powered image editing for geospatial data</source>
         <translation>Veuillez entrer votre clé d'activation.</translation>
     </message>
     <message>
+        <source>Positive = expand outward, Negative = shrink inward</source>
+        <translation>Positif = élargir vers l'extérieur, Négatif = rétrécir vers l'intérieur</translation>
+    </message>
+    <message>
         <source>Preparing...</source>
         <translation>Préparation...</translation>
     </message>
@@ -546,8 +580,16 @@ AI-powered image editing for geospatial data</source>
         <translation>Bibliothèque de prompts</translation>
     </message>
     <message>
+        <source>Prompt library (view only)</source>
+        <translation>Bibliothèque de prompts (lecture seule)</translation>
+    </message>
+    <message>
         <source>Recent</source>
         <translation>Récents</translation>
+    </message>
+    <message>
+        <source>Reduce small variations in the outline (0 = no change)</source>
+        <translation>Réduire les petites variations du contour (0 = aucun changement)</translation>
     </message>
     <message>
         <source>Reference image preview</source>
@@ -558,16 +600,8 @@ AI-powered image editing for geospatial data</source>
         <translation>Affiner la vectorisation</translation>
     </message>
     <message>
-        <source>Generate on the same zone using the current map view</source>
-        <translation>Générer sur la même zone avec la vue actuelle de la carte</translation>
-    </message>
-    <message>
         <source>Remove from favorites</source>
         <translation>Retirer des favoris</translation>
-    </message>
-    <message>
-        <source>Render this in 2K or 4K</source>
-        <translation>Rendre ceci en 2K ou 4K</translation>
     </message>
     <message>
         <source>Resets</source>
@@ -594,6 +628,14 @@ AI-powered image editing for geospatial data</source>
         <translation>Réessayer</translation>
     </message>
     <message>
+        <source>Round corners for natural shapes like trees and bushes. Increase 'Simplify outline' for smoother results.</source>
+        <translation>Arrondir les coins pour les formes naturelles comme les arbres et les buissons. Augmentez 'Simplifier le contour' pour des résultats plus lisses.</translation>
+    </message>
+    <message>
+        <source>Round corners:</source>
+        <translation>Arrondir les coins :</translation>
+    </message>
+    <message>
         <source>Run the AI edit on your selected zone</source>
         <translation>Lancer l'édition IA sur votre zone sélectionnée</translation>
     </message>
@@ -610,10 +652,6 @@ AI-powered image editing for geospatial data</source>
         <translation>Rechercher des prompts...</translation>
     </message>
     <message>
-        <source>Segment</source>
-        <translation>Segmenter</translation>
-    </message>
-    <message>
         <source>Segment elements on raster images using AI (opens AI Segmentation plugin)</source>
         <translation>Segmenter des éléments sur des images raster avec l'IA (ouvre le plugin AI Segmentation)</translation>
     </message>
@@ -628,6 +666,14 @@ AI-powered image editing for geospatial data</source>
     <message>
         <source>Selected zone too small (min 50x50px)</source>
         <translation>Zone sélectionnée trop petite (min 50x50px)</translation>
+    </message>
+    <message>
+        <source>Selection</source>
+        <translation>Sélection</translation>
+    </message>
+    <message>
+        <source>Sending your image to the AI...</source>
+        <translation>Envoi de votre image à l'IA...</translation>
     </message>
     <message>
         <source>Service not configured. Please contact support.</source>
@@ -656,6 +702,10 @@ AI-powered image editing for geospatial data</source>
     <message>
         <source>Show prompt</source>
         <translation>Afficher le prompt</translation>
+    </message>
+    <message>
+        <source>Show {n} experimental templates</source>
+        <translation>Afficher {n} modèles expérimentaux</translation>
     </message>
     <message>
         <source>Sign up or sign in to receive your activation key</source>
@@ -694,6 +744,10 @@ AI-powered image editing for geospatial data</source>
         <translation>Abonnez-vous pour débloquer :</translation>
     </message>
     <message>
+        <source>Taking a bit longer than usual...</source>
+        <translation>Cela prend un peu plus de temps que d'habitude...</translation>
+    </message>
+    <message>
         <source>Tap to pick a color from a dialog.</source>
         <translation>Appuyez pour choisir une couleur depuis une boîte de dialogue.</translation>
     </message>
@@ -708,6 +762,10 @@ AI-powered image editing for geospatial data</source>
     <message>
         <source>The generation service returned an unexpected response, please retry.</source>
         <translation>Le service de génération a renvoyé une réponse inattendue, veuillez réessayer.</translation>
+    </message>
+    <message>
+        <source>The model couldn't finish this generation. It often means what your prompt describes is not visible in the selected area. Try a different zone or rephrase.</source>
+        <translation>Le modèle n'a pas pu terminer cette génération. Cela signifie souvent que ce que décrit votre prompt n'est pas visible dans la zone sélectionnée. Essayez une autre zone ou reformulez.</translation>
     </message>
     <message>
         <source>The service may be temporarily unavailable</source>
@@ -798,6 +856,10 @@ AI-powered image editing for geospatial data</source>
         <translation>Vectoriser ({})</translation>
     </message>
     <message>
+        <source>Vectorize this result →</source>
+        <translation>Vectoriser ce résultat →</translation>
+    </message>
+    <message>
         <source>Vectorizing “{name}”...</source>
         <translation>Vectorisation de « {name} »...</translation>
     </message>
@@ -818,6 +880,18 @@ AI-powered image editing for geospatial data</source>
         <translation>Que doit modifier l'IA ?</translation>
     </message>
     <message>
+        <source>What's next?</source>
+        <translation>Et après ?</translation>
+    </message>
+    <message>
+        <source>You've used your free credits</source>
+        <translation>Vous avez utilisé vos crédits gratuits</translation>
+    </message>
+    <message>
+        <source>Your subscription has expired or been canceled. Renew at terra-lab.ai/dashboard</source>
+        <translation>Votre abonnement a expiré ou a été annulé. Renouvelez-le sur terra-lab.ai/dashboard</translation>
+    </message>
+    <message>
         <source>credits remaining</source>
         <translation>crédits restants</translation>
     </message>
@@ -828,10 +902,6 @@ AI-powered image editing for geospatial data</source>
     <message>
         <source>just now</source>
         <translation>à l'instant</translation>
-    </message>
-    <message>
-        <source>modified</source>
-        <translation>modifié</translation>
     </message>
     <message>
         <source>or</source>
@@ -878,8 +948,8 @@ AI-powered image editing for geospatial data</source>
         <translation>⌖ Pointer sur la carte</translation>
     </message>
     <message>
-        <source>Vectorize this result →</source>
-        <translation>Vectoriser ce résultat →</translation>
+        <source>ⓘ Draw a zone first to anchor your guides. They'll ride along with the next generation inside that zone.</source>
+        <translation>ⓘ Tracez d'abord une zone pour ancrer vos repères. Ils suivront la prochaine génération à l'intérieur de cette zone.</translation>
     </message>
     <message>
         <source>✓ Saved as {name}</source>
@@ -888,34 +958,6 @@ AI-powered image editing for geospatial data</source>
     <message>
         <source>✓ {n} polygons added</source>
         <translation>✓ {n} polygones ajoutés</translation>
-    </message>
-    <message>
-        <source>Sending your image to the AI...</source>
-        <translation>Envoi de votre image à l'IA...</translation>
-    </message>
-    <message>
-        <source>Grabbing your masterpiece...</source>
-        <translation>Récupération de votre chef-d'œuvre...</translation>
-    </message>
-    <message>
-        <source>Dropping it on the map...</source>
-        <translation>Dépose sur la carte...</translation>
-    </message>
-    <message>
-        <source>Taking a bit longer than usual...</source>
-        <translation>Cela prend un peu plus de temps que d'habitude...</translation>
-    </message>
-    <message>
-        <source>Loading…</source>
-        <translation>Chargement…</translation>
-    </message>
-    <message>
-        <source>Output resolution. Higher = sharper, more precise edits.</source>
-        <translation>Résolution de sortie. Plus élevée = édits plus nets et précis.</translation>
-    </message>
-    <message>
-        <source>ⓘ Draw a zone first to anchor your guides. They'll ride along with the next generation inside that zone.</source>
-        <translation>ⓘ Tracez d'abord une zone pour ancrer vos repères. Ils suivront la prochaine génération à l'intérieur de cette zone.</translation>
     </message>
 </context>
 </TS>

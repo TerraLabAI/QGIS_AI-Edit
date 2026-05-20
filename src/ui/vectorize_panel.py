@@ -387,7 +387,7 @@ class VectorizePanel(QWidget):
             content_layout,
             tr("Simplify outline:"),
             tr("Reduce small variations in the outline (0 = no change)"),
-            0, 1000, 3,
+            0, 1000, 1,
         )
         self._round_corners_check = _check_row(
             content_layout,
@@ -411,7 +411,7 @@ class VectorizePanel(QWidget):
             content_layout,
             tr("Fill holes:"),
             tr("Fill interior holes in the selection"),
-            default=True,
+            default=False,
         )
 
         outer.addWidget(content)
@@ -437,7 +437,7 @@ class VectorizePanel(QWidget):
         for spin, default in (
             (self._tolerance_spin, 40),
             (self._sieve_spin, 10),
-            (self._simplify_spin, 3),
+            (self._simplify_spin, 1),
             (self._expand_spin, 0),
         ):
             spin.blockSignals(True)
@@ -445,7 +445,7 @@ class VectorizePanel(QWidget):
             spin.blockSignals(False)
         for chk, default in (
             (self._round_corners_check, False),
-            (self._fill_holes_check, True),
+            (self._fill_holes_check, False),
         ):
             chk.blockSignals(True)
             chk.setChecked(default)

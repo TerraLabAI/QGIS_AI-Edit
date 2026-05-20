@@ -1,13 +1,14 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import html
 import os
+import re
 import tempfile
 
 from qgis.core import QgsProject
 from qgis.PyQt.QtCore import (
     QPoint,
-    QPointF,
+    QRectF,
     QSize,
     Qt,
     QTimer,
@@ -18,6 +19,7 @@ from qgis.PyQt.QtGui import (
     QBrush,
     QColor,
     QDesktopServices,
+    QFont,
     QIcon,
     QImage,
     QKeySequence,
@@ -25,7 +27,8 @@ from qgis.PyQt.QtGui import (
     QPalette,
     QPen,
     QPixmap,
-    QPolygonF,
+    QSyntaxHighlighter,
+    QTextCharFormat,
     QTextCursor,
 )
 from qgis.PyQt.QtWidgets import (
@@ -277,6 +280,43 @@ class _FooterIconButton(QToolButton):
         super().leaveEvent(event)
 
 
+_HEX_RX = re.compile(r"#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})\b")
+
+
+def _expand_hex(hex_text: str) -> str:
+    """Expand `#RGB` to `#RRGGBB`. Returns input unchanged for 6-digit hex."""
+    h = hex_text.lstrip("#")
+    if len(h) == 3:
+        return "#" + "".join(c * 2 for c in h)
+    return "#" + h
+
+
+def _contrast_text_for(hex_text: str) -> str:
+    """Pick black or white text for readability against `hex_text` background.
+    Uses standard relative-luminance threshold."""
+    h = _expand_hex(hex_text).lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+    return "#000000" if luminance > 0.55 else "#FFFFFF"
+
+
+class _PromptHighlighter(QSyntaxHighlighter):
+    """Paints `#RRGGBB` / `#RGB` hex codes with their own color as background,
+    text flipped to black or white per luminance. Makes a color list in a
+    template visually scannable without leaving the textbox."""
+
+    def highlightBlock(self, text: str) -> None:  # noqa: N802 (Qt API)
+        if not text:
+            return
+        for match in _HEX_RX.finditer(text):
+            hex_text = match.group(0)
+            fmt = QTextCharFormat()
+            fmt.setBackground(QColor(_expand_hex(hex_text)))
+            fmt.setForeground(QColor(_contrast_text_for(hex_text)))
+            fmt.setFontWeight(QFont.Weight.Bold)
+            self.setFormat(match.start(), match.end() - match.start(), fmt)
+
+
 class _SubmitTextEdit(QTextEdit):
     """Borderless QTextEdit used inside _PromptContainer.
 
@@ -317,6 +357,9 @@ class _SubmitTextEdit(QTextEdit):
         # otherwise reserves space for it (the "invisible bar" at the bottom).
         self.setLineWrapMode(QtC.LineWrapWidgetWidth)
         self.setWordWrapMode(QtC.WrapAtWordBoundaryOrAnywhere)
+        # Paint hex codes (`#RRGGBB`) in the textbox with that color as
+        # background so color-list templates are scannable at a glance.
+        self._hex_highlighter = _PromptHighlighter(self.document())
         self.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
         # Force plain text on paste: rich-text from a browser or markdown
         # source can carry <pre> / white-space:nowrap that defeats wrapping,
@@ -616,10 +659,20 @@ class _PromptContainer(QFrame):
         self._text_edit.setReadOnly(readonly)
         # Visible-but-disabled while a generation runs - matches the Claude
         # chat input pattern of leaving the footer chrome in place.
-        self._templates_btn.setEnabled(not readonly)
+        # Templates stays clickable so the user can still browse the library
+        # mid-generation; the dialog itself opens in view-only mode.
+        self._templates_btn.setEnabled(True)
+        self._templates_btn.setToolTip(
+            tr("Browse the prompt library (view only while generating)")
+            if readonly
+            else tr("Open the prompt library: recent, favorites, and templates")
+        )
         self._resolution_btn.setEnabled(not readonly)
         self._markup_chip.setEnabled(not readonly)
         self._attach_btn.setEnabled(not readonly)
+
+    def is_readonly(self) -> bool:
+        return self._readonly
 
     def set_attach_enabled(self, enabled: bool) -> None:
         """Hide the + button when the refs store is at capacity.
@@ -747,6 +800,11 @@ class AIEditDockWidget(QDockWidget):
     vectorize_done_clicked = pyqtSignal()  # user clicked Done in Vectorize panel
     # (template_id, template_name) for analytics - id is stable, name is human-readable.
     template_selected = pyqtSignal(str, str)
+    # Fired when the prompt library opens; plugin listens and kicks off a
+    # background catalog refetch so the NEXT open shows the latest server
+    # state. Stale-while-revalidate: this open uses whatever the dock has
+    # cached, the refetch updates `self._server_catalog` for next time.
+    catalog_refresh_requested = pyqtSignal()
 
     def __init__(self, parent=None, reference_store: ReferenceImageStore | None = None):
         super().__init__(tr("AI Edit by TerraLab"), parent)
@@ -1626,21 +1684,55 @@ class AIEditDockWidget(QDockWidget):
         catalog if present; with neither, themed tabs render empty."""
         self._server_catalog = catalog
 
+    def _main_window_for_dialog(self):
+        """Parent to use for popup dialogs.
+
+        On macOS, parenting a dialog to a QDockWidget (especially when the
+        dock is floating, or when QGIS itself is in a fullscreen Space) makes
+        the dialog open in its own Mission Control Space, yanking the user
+        out of the QGIS workspace. The QGIS main window is always anchored
+        to the right Space, so we use it as the parent instead.
+
+        Falls back to `self` if iface isn't reachable for any reason.
+        """
+        try:
+            from qgis.utils import iface
+            mw = iface.mainWindow() if iface is not None else None
+            if mw is not None:
+                return mw
+        except Exception:  # nosec B110 - any failure falls back below.
+            pass
+        return self
+
     def _open_templates_dialog(self) -> dict | None:
         """Open the prompt library. Returns selected preset or None.
         template_selected fires only for curated picks (Top Picks / themed);
         Recent + Favorites have their own telemetry events that don't carry
         user prompt text."""
+        # Kick off a background catalog refetch so the NEXT open is fresh.
+        # This open uses whatever catalog the dock currently has.
+        self.catalog_refresh_requested.emit()
         from .prompt_templates_dialog import PromptTemplatesDialog
 
         auth_provider = None
         if self._library_auth_manager is not None:
             auth_provider = self._library_auth_manager.get_auth_header
+        # Parent the dialog to the QGIS main window, not to this dock widget.
+        # On macOS in fullscreen, a dialog parented to a (possibly floating)
+        # dock widget gets put into its own Mission Control Space and steals
+        # the user out of QGIS. Anchoring to mainWindow() keeps the popup in
+        # the same Space as QGIS itself.
+        parent_window = self._main_window_for_dialog()
+        browse_only = (
+            self._prompt_container.is_readonly()
+            or self._result_prompt_container.is_readonly()  # noqa: W503
+        )
         dlg = PromptTemplatesDialog(
-            self,
+            parent_window,
             client=self._library_client,
             auth_provider=auth_provider,
             server_catalog=self._server_catalog,
+            browse_only=browse_only,
         )
         if dlg.exec():
             preset = dlg.get_selected_preset()
@@ -1889,42 +1981,52 @@ class AIEditDockWidget(QDockWidget):
         self.set_launch_state()
 
     def set_generating(self, generating: bool):
-        """Toggle generation state -- keep prompt visible but grayed out."""
-        self._progress_widget.setVisible(generating)
-        self._result_section.setVisible(False)
-        self._warning_widget.setVisible(False)
-        self._set_upgrade_cta_wanted(False)
+        """Toggle generation state -- keep prompt visible but grayed out.
 
-        if generating:
-            self._progress_bar.setRange(0, 100)
-            self._progress_bar.setValue(0)
-            self._hide_status_box()
-            self._launch_section.setVisible(False)
-            self._select_zone_section.setVisible(False)
-            self._prompt_section.setVisible(True)
-            self._prompt_container.set_readonly(True)
-            # On regenerate the refs widget lives in the result container, so
-            # hiding result_section above would also hide the thumbnails.
-            # Move it back into the visible prompt container before locking.
-            self._place_reference_widget("prompt")
-            if self._reference_widget is not None:
-                self._reference_widget.set_readonly(True)
-            self._consent_widget.setVisible(False)
-            self._generate_btn.setVisible(False)
-            # Hide Exit during generation: the user shouldn't be tempted to
-            # cancel mid-run from this row. The title-bar X still works as
-            # an escape hatch.
-            self._exit_btn.setVisible(False)
-            self._progress_label.setText(tr("Preparing..."))
-        else:
-            self._prompt_container.set_readonly(False)
-            if self._reference_widget is not None:
-                self._reference_widget.set_readonly(False)
-            self._consent_widget.setVisible(not has_consent() and self._zone_selected)
-            self._generate_btn.setVisible(True)
-            self._exit_btn.setVisible(True)
-            self._refresh_resolution_triggers()
-            self._prompt_section.setVisible(True)
+        Wrapped in setUpdatesEnabled(False)/(True) so Qt batches the many
+        setVisible() calls below into a single repaint. Without this batch,
+        the panel reflows piecewise on Generate click and the user sees the
+        dock go blank for ~1s before the progress UI lands.
+        """
+        self.setUpdatesEnabled(False)
+        try:
+            self._progress_widget.setVisible(generating)
+            self._result_section.setVisible(False)
+            self._warning_widget.setVisible(False)
+            self._set_upgrade_cta_wanted(False)
+
+            if generating:
+                self._progress_bar.setRange(0, 100)
+                self._progress_bar.setValue(0)
+                self._hide_status_box()
+                self._launch_section.setVisible(False)
+                self._select_zone_section.setVisible(False)
+                self._prompt_section.setVisible(True)
+                self._prompt_container.set_readonly(True)
+                # On regenerate the refs widget lives in the result container, so
+                # hiding result_section above would also hide the thumbnails.
+                # Move it back into the visible prompt container before locking.
+                self._place_reference_widget("prompt")
+                if self._reference_widget is not None:
+                    self._reference_widget.set_readonly(True)
+                self._consent_widget.setVisible(False)
+                self._generate_btn.setVisible(False)
+                # Hide Exit during generation: the user shouldn't be tempted to
+                # cancel mid-run from this row. The title-bar X still works as
+                # an escape hatch.
+                self._exit_btn.setVisible(False)
+                self._progress_label.setText(tr("Preparing..."))
+            else:
+                self._prompt_container.set_readonly(False)
+                if self._reference_widget is not None:
+                    self._reference_widget.set_readonly(False)
+                self._consent_widget.setVisible(not has_consent() and self._zone_selected)
+                self._generate_btn.setVisible(True)
+                self._exit_btn.setVisible(True)
+                self._refresh_resolution_triggers()
+                self._prompt_section.setVisible(True)
+        finally:
+            self.setUpdatesEnabled(True)
 
     def set_generate_loading(self, loading: bool):
         """Toggle loading state on the Generate button during canvas export."""
@@ -2470,36 +2572,27 @@ class AIEditDockWidget(QDockWidget):
         apply_swatch_style(button, color)
 
     def _make_polygon_glyph_icon(self) -> QIcon:
-        """Footer Vectorize button glyph - hexagonal polygon outline with
-        small filled vertex dots, reads as "trace region into vectors".
+        """Footer Vectorize button glyph - same square-in-square shape as the
+        Prompt Library 'Segment' tab (Unicode ▣), drawn in black so it reads
+        clearly on the footer regardless of theme.
         """
         size = 40  # 2x for crisp rendering at 20px
         pm = QPixmap(size, size)
         pm.fill(Qt.GlobalColor.transparent)
         p = QPainter(pm)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        ink = self.palette().color(QPalette.ColorRole.WindowText)
+        ink = QColor("#000000")
         pen = QPen(ink)
-        pen.setWidthF(2.0)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        pen.setWidthF(2.4)
+        pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
         p.setPen(pen)
         p.setBrush(Qt.BrushStyle.NoBrush)
-        vertices = [
-            QPointF(20, 6),
-            QPointF(33, 13),
-            QPointF(33, 27),
-            QPointF(20, 34),
-            QPointF(7, 27),
-            QPointF(7, 13),
-        ]
-        p.drawPolygon(QPolygonF(vertices))
-        # Filled vertex dots (3 of them, just enough to read as "vertex-aware")
+        outer = QRectF(6, 6, 28, 28)
+        p.drawRect(outer)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(ink))
-        dot_r = 2.2
-        for v in (vertices[0], vertices[2], vertices[4]):
-            p.drawEllipse(v, dot_r, dot_r)
+        inner = QRectF(13, 13, 14, 14)
+        p.drawRect(inner)
         p.end()
         return QIcon(pm)
 
@@ -2582,7 +2675,7 @@ class AIEditDockWidget(QDockWidget):
 
         calendly_url = "https://calendly.com/barbot-yvann/30min"
 
-        dlg = QDialog(self)
+        dlg = QDialog(self._main_window_for_dialog())
         dlg.setWindowTitle(tr("Contact us"))
         dlg.setMinimumWidth(350)
         dlg.setMaximumWidth(450)
@@ -2655,7 +2748,7 @@ class AIEditDockWidget(QDockWidget):
             "</table>"
         )
 
-        dlg = QDialog(self)
+        dlg = QDialog(self._main_window_for_dialog())
         dlg.setWindowTitle(tr("Shortcuts"))
         lay = _VBox(dlg)
         lay.setContentsMargins(16, 16, 16, 12)

@@ -46,7 +46,12 @@ from .logger import log_debug, log_warning
 
 _CACHE_KEY = "terralab/ai_edit/server_catalog_v2"
 _CACHE_TS_KEY = "terralab/ai_edit/server_catalog_v2_ts"
-_CACHE_TTL_SECONDS = 24 * 60 * 60
+# 1h. The cache is now primarily an instant-render + offline fallback under a
+# stale-while-revalidate strategy: every plugin start fires force_refresh=True
+# on a background thread, so the catalog stays fresh without blocking the UI.
+# Older 24h TTL meant pushed server changes took up to a day to surface even
+# after a QGIS restart - actively painful during catalog iteration.
+_CACHE_TTL_SECONDS = 60 * 60
 
 
 def _is_polyglot_or_string(value: Any) -> bool:
@@ -141,6 +146,27 @@ def _write_cache(catalog: dict) -> None:
     except Exception as err:  # noqa: BLE001 - QSettings IO errors aren't fatal.
         log_warning(f"Failed to persist preset cache: {err}")
     # Drop the in-memory memo so the next call sees the fresh catalog.
+    try:
+        from . import prompt_presets as _pp
+
+        _pp.invalidate_catalog_memo()
+    except Exception:  # pragma: no cover - circular-import guard  # nosec B110
+        pass
+
+
+def invalidate_cache() -> None:
+    """Wipe the persisted catalog so the next fetch is forced to hit the server.
+
+    Useful from the QGIS Python Console when the server catalog changed but the
+    local cache is still serving the old version (push then `from
+    QGIS_AI_Edit_Team.src.core.prompt_presets_client import invalidate_cache;
+    invalidate_cache()`)."""
+    try:
+        settings = QSettings()
+        settings.remove(_CACHE_KEY)
+        settings.remove(_CACHE_TS_KEY)
+    except Exception as err:  # noqa: BLE001 - QSettings IO errors aren't fatal.
+        log_warning(f"Failed to clear preset cache: {err}")
     try:
         from . import prompt_presets as _pp
 

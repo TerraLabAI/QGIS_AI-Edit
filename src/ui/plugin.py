@@ -7,7 +7,7 @@ from qgis.core import QgsPointXY, QgsRectangle
 from qgis.gui import QgsRubberBand
 from qgis.PyQt.QtCore import QEvent, QObject, QSettings, QThread, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QIcon, QKeySequence
-from qgis.PyQt.QtWidgets import QAction, QApplication, QShortcut
+from qgis.PyQt.QtWidgets import QAction, QShortcut
 
 from ..api.terralab_client import TerraLabClient
 from ..core import prompt_history, telemetry
@@ -30,10 +30,12 @@ from ..core.logger import log, log_debug, log_warning
 from ..core.pipeline_context import PipelineContext
 from ..core.prompt_presets import get_vector_hints, lookup_template_by_prompt
 from ..core.reference_image_store import ReferenceImageStore
+from ..workers.export_worker import ExportWorker
 from ..workers.generation_worker import GenerationWorker
 from .canvas_exporter import (
-    export_canvas_zone,
+    apply_export_context,
     has_server_config,
+    prepare_export,
     set_server_config,
 )
 from .dock_widget import AIEditDockWidget
@@ -244,6 +246,41 @@ def _enrich_error_message(error: str, code: str = "") -> str:
     return localized
 
 
+_GENERIC_MODEL_FAILURE_HINTS = (
+    "couldn't complete",
+    "could not complete",
+    "rephrasing your prompt",
+    "no credit was charged",
+)
+
+
+def _is_generic_model_failure(message: str, normalized_code: str) -> bool:
+    """True when the failure looks like the server's catch-all 'model failed'
+    response (no specific quota / auth / network code). Used to swap the
+    raw message for a softer 'the target may not be in this area' hint
+    when the run took unusually long before failing."""
+    if normalized_code in {
+        "QUOTA_EXCEEDED",
+        "LIMIT_REACHED",
+        "USAGE_LIMIT_REACHED",
+        "MONTHLY_LIMIT_REACHED",
+        "TRIAL_EXHAUSTED",
+        "INVALID_KEY",
+        "SUBSCRIPTION_INACTIVE",
+        "FREE_TIER_EXPIRED",
+        "AUTH_ERROR",
+        "TIMEOUT",
+        "DNS_ERROR",
+        "NO_INTERNET",
+        "PROXY_ERROR",
+        "SSL_ERROR",
+        "CONNECTION_REFUSED",
+    }:
+        return False
+    text = (message or "").lower()
+    return any(needle in text for needle in _GENERIC_MODEL_FAILURE_HINTS)
+
+
 class AIEditPlugin:
     """Main QGIS plugin class. Orchestrates all tiers."""
 
@@ -256,6 +293,12 @@ class AIEditPlugin:
         self._settings_action = None
         self._selected_extent = None
         self._worker = None
+        # Off-thread canvas exporter. Built fresh per click in _on_generate so
+        # the heavy render+PNG-encode doesn't freeze the UI.
+        self._export_worker: ExportWorker | None = None
+        # Stash data captured on the main thread that the export-completed
+        # callback needs to chain into the GenerationWorker. Cleared after use.
+        self._pending_generation: dict | None = None
         self._selection_rubber_band = None
         self._previous_map_tool = None
         self._terralab_toolbar = None
@@ -290,7 +333,7 @@ class AIEditPlugin:
         # before the map tool's keyPressEvent sees it. Restored on exit.
         self._suppressed_undo_actions: list[tuple[QAction, bool]] = []
         # Global "Launch AI Edit" shortcut. Cross-platform via QKeySequence
-        # — Cmd+Alt+E on macOS, Ctrl+Alt+E on Windows/Linux.
+        # (Cmd+Alt+E on macOS, Ctrl+Alt+E on Windows/Linux).
         self._launch_shortcut: QShortcut | None = None
         self._in_tool_panel: str | None = None
         # Fires once per QGIS session, on the first dock-open. Lifecycle event,
@@ -306,10 +349,6 @@ class AIEditPlugin:
         self._auth_manager = AuthManager(self._client)
         self._generation_service = GenerationService(self._client)
         self._reference_store = ReferenceImageStore()
-
-        # MCP programmatic API
-        from ..mcp_api import EditMCPAPI
-        self.mcp_api = EditMCPAPI(self)
 
     @property
     def auth_manager(self):
@@ -466,6 +505,7 @@ class AIEditPlugin:
         self._dock_widget.generate_clicked.connect(self._on_generate)
         self._dock_widget.retry_clicked.connect(self._on_retry)
         self._dock_widget.template_selected.connect(self._on_template_selected)
+        self._dock_widget.catalog_refresh_requested.connect(self._load_server_catalog)
         self._dock_widget.activation_attempted.connect(self._on_activation_attempted)
         self._dock_widget.change_key_clicked.connect(self._on_change_key)
         self._dock_widget.settings_clicked.connect(self._on_settings_clicked)
@@ -543,6 +583,25 @@ class AIEditPlugin:
                 self._worker.terminate()
                 self._worker.wait(1000)
         self._worker = None
+
+        # Same drain for the canvas-export worker. Drop the pending hand-off
+        # so a late completed-signal doesn't try to kick a GenerationWorker
+        # against a torn-down dock.
+        self._pending_generation = None
+        if self._export_worker and self._export_worker.isRunning():
+            for sig in [
+                self._export_worker.completed,
+                self._export_worker.failed,
+                self._export_worker.finished,
+            ]:
+                try:
+                    sig.disconnect()
+                except (RuntimeError, TypeError):
+                    pass
+            if not self._export_worker.wait(3000):
+                self._export_worker.terminate()
+                self._export_worker.wait(500)
+        self._export_worker = None
 
         # Stop background loader workers and disconnect signals. Their run()
         # methods are blocking network calls with built-in timeouts, so a
@@ -807,8 +866,17 @@ class AIEditPlugin:
     def _load_server_catalog(self):
         """Fetch the AI Edit preset catalog in the background and hand it to
         the dock when ready. Failures are silent - the stale cache or the
-        local fallback covers the dialog in the meantime."""
-        self._catalog_loader = _ServerCatalogLoaderWorker(self._client)
+        local fallback covers the dialog in the meantime.
+
+        `force_refresh=True` is the stale-while-revalidate move: the dock
+        already shows the stale cache synchronously for instant UX, and this
+        background worker always re-hits the server so the user gets the
+        latest catalog within seconds. Without force_refresh, fetch would
+        short-circuit on cache hit and the user could stay on a stale catalog
+        until the TTL expired (painful right after a server-side push)."""
+        self._catalog_loader = _ServerCatalogLoaderWorker(
+            self._client, force_refresh=True
+        )
         self._catalog_loader.loaded.connect(self._on_server_catalog_loaded)
         self._catalog_loader.failed.connect(self._on_server_catalog_failed)
         self._catalog_loader.start()
@@ -1290,6 +1358,9 @@ class AIEditPlugin:
         if self._worker and self._worker.isRunning():
             self._dock_widget.set_status(tr("Generation already in progress"), is_error=True)
             return
+        if self._export_worker and self._export_worker.isRunning():
+            # Click landed while a previous render is still in flight - swallow.
+            return
         if not self._selected_extent:
             self._dock_widget.set_status(tr("No zone selected"), is_error=True)
             return
@@ -1330,16 +1401,15 @@ class AIEditPlugin:
         else:
             suggested_res = self._dock_widget.get_selected_resolution()
 
-        # Show loading state on Generate button before blocking export
+        # Show loading state on Generate button - the heavy export now runs on
+        # a worker thread, so the UI thread stays responsive (no wait cursor).
         self._dock_widget.set_generate_loading(True)
-        QApplication.processEvents()
 
         try:
             map_settings = self._canvas.mapSettings()
             target_res = suggested_res if not self._dock_widget._is_free_tier else None
-            image_b64, img_w, img_h, actual_extent = export_canvas_zone(
-                map_settings, self._selected_extent, ctx=ctx,
-                target_resolution=target_res,
+            prep = prepare_export(
+                map_settings, self._selected_extent, target_resolution=target_res,
             )
         except Exception as e:
             self._dock_widget.set_generate_loading(False)
@@ -1347,6 +1417,56 @@ class AIEditPlugin:
                 tr("Export error: {error}").format(error=e), is_error=True
             )
             return
+
+        # Hand off everything the export-completed callback needs.
+        self._pending_generation = {
+            "prompt": prompt,
+            "ctx": ctx,
+            "prep": prep,
+            "suggested_res": suggested_res,
+            "crs_wkt": map_settings.destinationCrs().toWkt(),
+        }
+
+        worker = ExportWorker(prep, parent=self._dock_widget)
+        worker.completed.connect(self._on_export_completed)
+        worker.failed.connect(self._on_export_failed)
+        worker.finished.connect(lambda w=worker: self._cleanup_export_worker(w))
+        self._export_worker = worker
+        worker.start()
+
+    def _cleanup_export_worker(self, worker):
+        if self._export_worker is worker:
+            self._export_worker = None
+        worker.deleteLater()
+
+    def _on_export_failed(self, error_msg: str):
+        self._pending_generation = None
+        self._dock_widget.set_generate_loading(False)
+        self._dock_widget.set_status(
+            tr("Export error: {error}").format(error=error_msg), is_error=True
+        )
+
+    def _on_export_completed(
+        self,
+        image_b64: str,
+        img_w: int,
+        img_h: int,
+        actual_extent,
+        size_bytes: int,
+    ):
+        pending = self._pending_generation
+        self._pending_generation = None
+        if pending is None:
+            # User cancelled / dock was torn down before the render finished.
+            return
+
+        ctx = pending["ctx"]
+        prep = pending["prep"]
+        prompt = pending["prompt"]
+        suggested_res = pending["suggested_res"]
+        crs_wkt = pending["crs_wkt"]
+
+        apply_export_context(ctx, prep, actual_extent, size_bytes)
 
         # Use "auto" so the model preserves the input image dimensions.
         # Explicit ratios (e.g. "21:9") cause the model to reshape the output,
@@ -1362,7 +1482,6 @@ class AIEditPlugin:
             "xmax": actual_extent.xMaximum(),
             "ymax": actual_extent.yMaximum(),
         }
-        crs_wkt = map_settings.destinationCrs().toWkt()
         output_dir = get_output_dir()
 
         # Update rubber band to match the actual rendered extent
@@ -1426,6 +1545,13 @@ class AIEditPlugin:
         if self._map_tool:
             self._map_tool.set_locked(False)
         self._dock_widget.set_generating(False)
+        # Pull template metadata off the worker BEFORE cleanup so the
+        # generation_failed event is segmentable by template in PostHog.
+        template_id: str | None = None
+        template_name: str | None = None
+        if self._worker is not None and self._worker._ctx is not None:
+            template_id = self._worker._ctx.template_id
+            template_name = self._worker._ctx.template_name
         self._cleanup_worker()
         normalized_code = (code or "").strip().upper()
         message_lower = (message or "").lower()
@@ -1443,6 +1569,9 @@ class AIEditPlugin:
             "error_code": code,
             "duration_seconds": round(duration, 1),
             "resolution": getattr(self, "_last_suggested_res", ""),
+            "template_id": template_id,
+            "template_name": template_name,
+            "used_template": bool(template_id),
         }))
         telemetry.flush()
         if normalized_code == "TRIAL_EXHAUSTED":
@@ -1455,20 +1584,35 @@ class AIEditPlugin:
             telemetry.track("trial_exhausted_viewed", {"error_type": code or "QUOTA_EXCEEDED"})
         else:
             enriched = _enrich_error_message(message, code)
+            # When a generic model failure happens after a long run, almost
+            # every time it's because the target the prompt described is not
+            # visible in the selected zone (e.g. asking for mangroves on a
+            # German aerial). Soften the wall-of-text and hint at the cause.
+            if duration >= 40 and _is_generic_model_failure(message, normalized_code):
+                enriched = tr(
+                    "The model couldn't finish this generation. "
+                    "It often means what your prompt describes is not visible "
+                    "in the selected area. Try a different zone or rephrase."
+                )
             self._dock_widget.set_status(enriched, is_error=True)
         log_warning(f"Generation failed: {message} (code={code})")
 
     def _on_generation_finished(self, result_info: dict):
         if self._map_tool:
             self._map_tool.set_locked(False)
-        # Pull the request_id + vectorize hints off the worker's ctx BEFORE
-        # cleanup so we can send the request_id as parent_request_id on the
-        # next submit (iteration anchor) and re-arm the Vectorize CTA with
-        # the template's pre-filled color.
+        # Pull the request_id + vectorize hints + template metadata off the
+        # worker's ctx BEFORE cleanup so we can send the request_id as
+        # parent_request_id on the next submit (iteration anchor), re-arm
+        # the Vectorize CTA with the template's pre-filled color, and
+        # segment generation_completed by template in PostHog.
         vector_color: str | None = None
+        template_id: str | None = None
+        template_name: str | None = None
         if self._worker is not None and self._worker._ctx is not None:
             self._last_completed_request_id = self._worker._ctx.request_id
             vector_color = self._worker._ctx.vector_color
+            template_id = self._worker._ctx.template_id
+            template_name = self._worker._ctx.template_name
         self._cleanup_worker()
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
 
@@ -1481,6 +1625,9 @@ class AIEditPlugin:
             telemetry.track("generation_completed", self._enrich_generation_props({
                 "duration_seconds": round(duration, 1),
                 "resolution": getattr(self, "_last_suggested_res", ""),
+                "template_id": template_id,
+                "template_name": template_name,
+                "used_template": bool(template_id),
             }))
             telemetry.flush()
             self._maybe_emit_first_generation_milestone()

@@ -334,5 +334,17 @@ class ReferenceImagesWidget(QWidget):
         self._refresh()
 
     def _open_preview(self, image_path: str) -> None:
-        dlg = _ImagePreviewDialog(image_path, self)
+        # Parent to QGIS main window, not to this widget. On macOS fullscreen,
+        # a dialog parented to a widget inside a (possibly floating) dock can
+        # open in a different Mission Control Space and yank the user out of
+        # QGIS. See AIEditDockWidget._main_window_for_dialog for the rationale.
+        parent_window = self
+        try:
+            from qgis.utils import iface
+            mw = iface.mainWindow() if iface is not None else None
+            if mw is not None:
+                parent_window = mw
+        except Exception:  # nosec B110 - fall back to self on any failure.
+            pass
+        dlg = _ImagePreviewDialog(image_path, parent_window)
         dlg.exec()

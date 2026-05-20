@@ -68,20 +68,42 @@ def _get_align() -> int | None:
     return None
 
 
-def export_canvas_zone(
+class ExportPrep:
+    """Snapshot of everything the render+encode step needs.
+
+    Built on the main thread (cheap), passed to a worker thread which can
+    safely render off-screen and PNG-encode without touching the UI. Keeps
+    references to layers via the cloned map settings; layers stay alive
+    because QgsMapSettings holds them and the project owns them.
+    """
+
+    __slots__ = (
+        "settings",
+        "out_w",
+        "out_h",
+        "actual_extent",
+        "background_color",
+        "map_crs",
+    )
+
+    def __init__(self, settings, out_w, out_h, actual_extent, background_color, map_crs):
+        self.settings = settings
+        self.out_w = out_w
+        self.out_h = out_h
+        self.actual_extent = actual_extent
+        self.background_color = background_color
+        self.map_crs = map_crs
+
+
+def prepare_export(
     map_settings: QgsMapSettings,
     extent: QgsRectangle,
-    ctx=None,
     target_resolution: str | None = None,
-) -> tuple[str, int, int, QgsRectangle]:
-    """Export a zone of the QGIS canvas as a base64-encoded PNG string.
+) -> ExportPrep:
+    """Cheap main-thread prep: pick output size, clone settings, log warnings.
 
-    When ``target_resolution`` is None, the output size honors the finest
-    native resolution across visible layers (capped by ``max_dim``). When
-    set, the tier label drives the longest side.
-
-    Returns:
-        Tuple of (base64_png_string, width_px, height_px, actual_extent).
+    Returns an ExportPrep that ``render_export`` can consume from a worker
+    thread. Raises ValueError / RuntimeError on bad input or missing config.
     """
     if extent.width() <= 0 or extent.height() <= 0:
         raise ValueError("Invalid extent: width and height must be positive")
@@ -104,9 +126,6 @@ def export_canvas_zone(
         )
 
     out_w, out_h = _aspect_dims(extent, longest, align, max_dim)
-
-    # Adjust extent to match output pixel aspect so QGIS doesn't expand the
-    # rendered area beyond what the user selected.
     adjusted_extent = _adjust_extent_to_aspect(extent, out_w, out_h)
 
     settings = _clone_map_settings(map_settings)
@@ -115,41 +134,66 @@ def export_canvas_zone(
 
     _warn_if_xyz_capped(map_settings.layers(), adjusted_extent, map_crs, out_w)
 
-    actual_extent = settings.visibleExtent()
+    return ExportPrep(
+        settings=settings,
+        out_w=out_w,
+        out_h=out_h,
+        actual_extent=settings.visibleExtent(),
+        background_color=map_settings.backgroundColor(),
+        map_crs=map_crs,
+    )
 
-    image = QImage(QSize(out_w, out_h), QtC.FormatARGB32)
-    image.fill(map_settings.backgroundColor())
+
+def render_export(prep: ExportPrep) -> tuple[str, int, QgsRectangle]:
+    """Heavy work: render off-screen + PNG encode + base64.
+
+    Thread-safe; intended to run on a worker thread. Returns
+    ``(base64_png, byte_size, actual_extent)``.
+    """
+    image = QImage(QSize(prep.out_w, prep.out_h), QtC.FormatARGB32)
+    image.fill(prep.background_color)
     painter = QPainter(image)
-    job = QgsMapRendererCustomPainterJob(settings, painter)
+    job = QgsMapRendererCustomPainterJob(prep.settings, painter)
     job.start()
     job.waitForFinished()
     painter.end()
 
-    # Serialize as lossless PNG. Iterative edits on the same zone re-eat the
-    # previous output, so any encoding loss compounds.
     buffer = QBuffer()
     buffer.open(QtC.WriteOnly)
     image.save(buffer, "PNG")
-    b64 = base64.b64encode(buffer.data().data()).decode("ascii")
+    raw = buffer.data().data()
+    b64 = base64.b64encode(raw).decode("ascii")
+    return b64, len(raw), prep.actual_extent
 
-    if ctx is not None:
-        ctx.extent = {
-            "xmin": actual_extent.xMinimum(),
-            "ymin": actual_extent.yMinimum(),
-            "xmax": actual_extent.xMaximum(),
-            "ymax": actual_extent.yMaximum(),
-        }
-        ctx.crs_wkt = map_crs.toWkt()
-        ctx.crs_authid = map_crs.authid() or None
-        ctx.centroid_lat, ctx.centroid_lon = _centroid_wgs84(actual_extent, map_crs)
-        ctx.ground_resolution_m = _compute_ground_resolution_m(
-            actual_extent, out_w, out_h, map_crs
-        )
-        ctx.export_width = out_w
-        ctx.export_height = out_h
-        ctx.image_size_bytes = len(buffer.data().data())
 
-    return b64, out_w, out_h, actual_extent
+def apply_export_context(
+    ctx,
+    prep: ExportPrep,
+    actual_extent: QgsRectangle,
+    image_size_bytes: int,
+) -> None:
+    """Populate the PipelineContext with extent + CRS + size metadata.
+
+    Split out so the worker thread can hand the result back to the main
+    thread which then mutates the ctx (PipelineContext isn't designed to be
+    written from multiple threads)."""
+    if ctx is None:
+        return
+    ctx.extent = {
+        "xmin": actual_extent.xMinimum(),
+        "ymin": actual_extent.yMinimum(),
+        "xmax": actual_extent.xMaximum(),
+        "ymax": actual_extent.yMaximum(),
+    }
+    ctx.crs_wkt = prep.map_crs.toWkt()
+    ctx.crs_authid = prep.map_crs.authid() or None
+    ctx.centroid_lat, ctx.centroid_lon = _centroid_wgs84(actual_extent, prep.map_crs)
+    ctx.ground_resolution_m = _compute_ground_resolution_m(
+        actual_extent, prep.out_w, prep.out_h, prep.map_crs
+    )
+    ctx.export_width = prep.out_w
+    ctx.export_height = prep.out_h
+    ctx.image_size_bytes = image_size_bytes
 
 
 def _aspect_dims(

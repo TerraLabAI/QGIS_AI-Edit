@@ -46,7 +46,11 @@ from ..core import qt_compat as QtC
 from ..core.date_format import format_smart_date
 from ..core.i18n import tr
 from ..core.logger import log_debug, log_warning
-from ..core.prompt_presets import format_template_prompt, get_all_categories
+from ..core.prompt_presets import (
+    _CATEGORY_ORDER,
+    format_template_prompt,
+    get_all_categories,
+)
 
 
 def _is_alive(obj) -> bool:
@@ -63,6 +67,28 @@ def _is_alive(obj) -> bool:
 
 # Page size for Recent's "Load more" pagination.
 _RECENT_PAGE_SIZE = 50
+
+# Themed categories show every reliable card up front; curation is enforced
+# by `experimental: true` on fragile presets, which are gated behind their
+# own amber disclosure button. There's no second "Show N more" reveal.
+
+
+def _split_experimental(presets: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Partition a category's presets into (reliable, experimental).
+
+    Experimental presets are server-flagged templates that Nano Banana 2
+    hallucinates on often (NDVI maps, individual-instance counting, watershed
+    delineation, etc). The dialog renders them behind a separate disclosure
+    so the curated default view stays trustworthy."""
+    reliable: list[dict] = []
+    experimental: list[dict] = []
+    for p in presets:
+        if p.get("experimental"):
+            experimental.append(p)
+        else:
+            reliable.append(p)
+    return reliable, experimental
+
 
 _PLUGIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 _ICONS_DIR = os.path.join(_PLUGIN_DIR, "resources", "icons")
@@ -135,21 +161,30 @@ _LOAD_MORE_BTN = (
     "border-color: rgba(128,128,128,0.5); }"
 )
 
-# Sidebar tab order. "__separator__" inserts a visual divider in the sidebar.
-# Default landing is "favorites" (Top Picks) - first-time users see curated
-# content, not their empty Recent/Favorites lists. The 8 themed tabs match
-# the server-side PRESET_CATEGORIES taxonomy (cartography / landcover /
-# segment / climate / urban / energy / cleanup / presentation).
+# Amber-tinted button + header used for the experimental disclosure so the
+# fragile-templates section reads as "proceed with caution" without flagging
+# every individual card.
+_EXPERIMENTAL_BTN = (
+    "QPushButton { background: rgba(255,193,7,0.10); "
+    "border: 1px solid rgba(255,152,0,0.55); border-radius: 4px; "
+    "padding: 8px 14px; font-size: 12px; color: palette(text); }"
+    "QPushButton:hover { background: rgba(255,193,7,0.18); "
+    "border-color: rgba(255,152,0,0.85); }"
+)
+
+_EXPERIMENTAL_HEADER = (
+    "QLabel { color: #B8860B; font-size: 11px; font-weight: 600; "
+    "background: transparent; border: none; padding: 4px 2px 0px 2px; "
+    "letter-spacing: 0.5px; }"
+)
+
+# Sidebar tab order. Themed tabs are sourced from `_CATEGORY_ORDER` so the
+# data facade and the sidebar can't drift; the dialog only owns the synthetic
+# wrapper (Top Picks, separator, Favorites, Recent). "__separator__" inserts
+# a visual divider.
 _TAB_ORDER = [
     "favorites",      # Top Picks (curated)
-    "cartography",
-    "landcover",
-    "segment",
-    "climate",
-    "urban",
-    "energy",
-    "cleanup",
-    "presentation",
+    *_CATEGORY_ORDER,
     "__separator__",
     "user_favorites",
     "recent",
@@ -159,6 +194,7 @@ _TAB_ORDER = [
 _TABS_WITH_COUNT = {"recent", "user_favorites"}
 
 # Sidebar glyph: Recent + Top Picks use an SVG image, others use Unicode with a tint.
+# Mirror `prompt_presets._CATEGORY_META` so every category in _TAB_ORDER has a glyph.
 _SIDEBAR_GLYPHS = {
     "user_favorites": ("☆", "#e57373"),
     "cartography": ("❖", "#9880b0"),
@@ -169,6 +205,11 @@ _SIDEBAR_GLYPHS = {
     "energy": ("☀", "#d4a548"),
     "cleanup": ("⌫", "#a0a058"),
     "presentation": ("❀", "#c08fa0"),
+    "forestry": ("✺", "#4d8c3f"),
+    "agriculture": ("✿", "#c4a548"),
+    "archaeology": ("⛏", "#9b7a4f"),
+    "geology": ("◈", "#8c6a4b"),
+    "hydrology": ("≈", "#3b8fb0"),
 }
 
 _MAX_TITLE_CHARS = 80
@@ -675,6 +716,7 @@ class PromptTemplatesDialog(QDialog):
         client=None,
         auth_provider=None,
         server_catalog: dict | None = None,
+        browse_only: bool = False,
     ):
         """
         client: TerraLabClient instance (optional). If None, no server sync.
@@ -685,9 +727,15 @@ class PromptTemplatesDialog(QDialog):
             When provided, presets carry demo_url_before/demo_url_after and the
             dialog renders rich before/after cards. When None, falls back to
             the local prompt_presets catalog with text-only cards.
+        browse_only: when True, card clicks do not select a preset (used
+            while a generation is in flight). The user can still scroll, star
+            favorites, and inspect prompts.
         """
         super().__init__(parent)
-        self.setWindowTitle(tr("Prompt library"))
+        self._browse_only = browse_only
+        self.setWindowTitle(
+            tr("Prompt library (view only)") if browse_only else tr("Prompt library")
+        )
         self.setMinimumSize(640, 480)
         # Wider default so the 4-card grid + slider previews have room to breathe.
         self.resize(1100, 720)
@@ -735,6 +783,10 @@ class PromptTemplatesDialog(QDialog):
         self._recent_layout: QVBoxLayout | None = None
         self._recent_load_more_btn: QPushButton | None = None
         self._recent_visible_count: int = 0
+        # Themed-category pagination state, keyed by category key. Each entry
+        # carries the layout, load-more button, and how many cards are visible.
+        # Rebuilt fresh every time _build_page runs for a themed tab.
+        self._themed_state: dict[str, dict] = {}
 
         self._load_categories()
         self._build_ui()
@@ -928,15 +980,91 @@ class PromptTemplatesDialog(QDialog):
             layout = QVBoxLayout(content)
             layout.setContentsMargins(6, 4, 6, 10)
             layout.setSpacing(6)
-            self._populate_list_cards(layout, category["presets"], key)
-            if not category["presets"]:
+            presets = category["presets"]
+            if not presets:
                 empty = self._build_empty_state(key)
                 if empty is not None:
                     layout.addWidget(empty)
+                self._themed_state.pop(key, None)
+            else:
+                # Every reliable preset is shown up front; experimentals
+                # (server-flagged fragile prompts) hide behind a single
+                # amber disclosure so the curated default view stays clean.
+                reliable, experimental = _split_experimental(presets)
+                self._populate_list_cards(layout, reliable, key)
+
+                exp_btn = None
+                if experimental:
+                    exp_btn = QPushButton(
+                        self._show_experimental_label(len(experimental))
+                    )
+                    exp_btn.setStyleSheet(_EXPERIMENTAL_BTN)
+                    exp_btn.setCursor(QtC.PointingHandCursor)
+                    exp_btn.clicked.connect(
+                        lambda _=False, k=key: self._on_show_experimental(k)
+                    )
+                    row = QHBoxLayout()
+                    row.setContentsMargins(0, 6, 0, 0)
+                    row.addStretch()
+                    row.addWidget(exp_btn)
+                    row.addStretch()
+                    layout.addLayout(row)
+                    self._themed_state[key] = {
+                        "layout": layout,
+                        "experimental": experimental,
+                        "exp_btn": exp_btn,
+                    }
+                else:
+                    self._themed_state.pop(key, None)
             layout.addStretch()
 
         scroll.setWidget(content)
         return scroll
+
+    @staticmethod
+    def _show_experimental_label(count: int) -> str:
+        return tr("Show {n} experimental templates").format(n=count)
+
+    def _on_show_experimental(self, key: str):
+        """Reveal the experimental templates for this category, prefixed
+        with a small amber header that warns the prompts may misfire."""
+        state = self._themed_state.get(key)
+        if state is None:
+            return
+        exp_btn = state.get("exp_btn")
+        experimental = state.get("experimental") or []
+        layout = state["layout"]
+        if exp_btn is None or not _is_alive(exp_btn) or not experimental:
+            return
+        insert_at = self._row_index_of(layout, exp_btn)
+        header = QLabel(tr("EXPERIMENTAL (may produce unexpected results)"))
+        header.setStyleSheet(_EXPERIMENTAL_HEADER)
+        header.setWordWrap(True)
+        layout.insertWidget(insert_at, header)
+        insert_at += 1
+        for preset in experimental:
+            card = _ClickableCard(preset, self._on_card_clicked)
+            card.star_button().toggled_state.connect(self._on_star_toggled)
+            layout.insertWidget(insert_at, card)
+            self._card_widgets.append((card, key))
+            insert_at += 1
+        exp_btn.setVisible(False)
+        state["exp_btn"] = None
+        self._themed_state.pop(key, None)
+
+    @staticmethod
+    def _row_index_of(layout: QVBoxLayout, btn: QPushButton) -> int:
+        """Return the layout index of the row that hosts `btn`, so callers
+        can insertWidget before it. Falls back to layout.count() - 1 (right
+        before the trailing stretch) if the row can't be found."""
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            if item is None:
+                continue
+            sub = item.layout()
+            if sub is not None and sub.indexOf(btn) >= 0:
+                return i
+        return max(0, layout.count() - 1)
 
     @staticmethod
     def _load_more_label(remaining: int) -> str:
@@ -990,7 +1118,7 @@ class PromptTemplatesDialog(QDialog):
         (offline / pre-auth dialog open) so the grid still renders."""
         for idx, preset in enumerate(presets):
             row, col = divmod(idx, columns)
-            # TEMP: preview images aren't ready yet — force the text-card path
+            # TEMP: preview images aren't ready yet, force the text-card path
             # for Top Picks until the before/after assets land. Restore the
             # _BeforeAfterCard branch below once demo URLs are wired.
             # if self._demo_loader is not None and self._client is not None:
@@ -1155,6 +1283,8 @@ class PromptTemplatesDialog(QDialog):
     # -- Interaction -----------------------------------------------------
 
     def _on_card_clicked(self, preset: dict):
+        if self._browse_only:
+            return
         self._selected_preset = preset
         if preset.get("from_recent"):
             telemetry.track("recent_selected")
