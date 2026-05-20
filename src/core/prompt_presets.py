@@ -49,7 +49,7 @@ _CATEGORY_META = {
 _CATEGORY_LABELS = {
     "cartography": "Cartography",
     "landcover": "Land cover",
-    "segment": "Vectorize",
+    "segment": "Segment",
     "climate": "Climate scenarios",
     "urban": "Urban scenarios",
     "energy": "Energy & solar",

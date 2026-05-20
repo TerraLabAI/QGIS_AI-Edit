@@ -11,57 +11,11 @@ import time
 
 from qgis.PyQt.QtCore import QThread, pyqtSignal
 
+from ..core.i18n import tr
+from ..core.loading_messages import get_phase_messages
 from ..core.logger import log_debug
 from ..core.pipeline_context import save_debug_artifacts
 from ..ui.raster_writer import write_geotiff
-
-# Messages grouped by phase: early (warming up), mid (working), late (finishing)
-_MESSAGES_EARLY = [
-    "Waking up the AI...",
-    "Summoning pixels...",
-    "Booting the imagination engine...",
-    "Warming up neural networks...",
-    "Loading the good brushes...",
-    "Stretching before the sprint...",
-    "Calibrating the vibes...",
-    "Dusting off the satellite dish...",
-    "Politely knocking on the GPU...",
-    "Rolling up sleeves...",
-]
-
-_MESSAGES_MID = [
-    "Teaching geography to a robot...",
-    "Convincing clouds to move...",
-    "Negotiating with terrain...",
-    "Pixel diplomacy in progress...",
-    "Consulting the map gods...",
-    "Rearranging atoms one by one...",
-    "Whispering to satellites...",
-    "Painting with math...",
-    "Having a deep talk with the pixels...",
-    "Redrawing reality, hold on...",
-    "The AI is squinting at your map...",
-    "Crunching landscapes like cereal...",
-    "Rewriting cartography textbooks...",
-    "Arguing with the render engine...",
-    "Bending light to our will...",
-    "Making the impossible merely improbable...",
-    "Assembling tiny map elves...",
-    "Applying imagination at scale...",
-]
-
-_MESSAGES_LATE = [
-    "Almost there, just a few more pixels...",
-    "Putting the finishing touches...",
-    "Quality control in progress...",
-    "One last coat of paint...",
-    "Polishing the result...",
-    "The AI says it's happy with this one...",
-    "Just tidying up the edges...",
-    "Final pixel inspection...",
-    "Wrapping it up nicely...",
-    "Any second now...",
-]
 
 # Fallback if server doesn't return estimated_time (should rarely happen)
 DEFAULT_ESTIMATED_TIME = 25
@@ -110,7 +64,7 @@ class GenerationWorker(QThread):
         self._context_images = context_images or []
 
     def run(self):
-        self.progress.emit("Preparing...", 0)
+        self.progress.emit(tr("Preparing..."), 0)
 
         if not self._skip_trial_check:
             try:
@@ -123,12 +77,14 @@ class GenerationWorker(QThread):
                 self.error.emit(reason, code)
                 return
 
-        self.progress.emit("Sending your image to the AI...", 5)
+        self.progress.emit(tr("Sending your image to the AI..."), 5)
 
-        # Shuffle each phase independently for variety
-        early = list(_MESSAGES_EARLY)
-        mid = list(_MESSAGES_MID)
-        late = list(_MESSAGES_LATE)
+        # Shuffle each phase independently for variety. Messages are pulled
+        # from the locale-specific pool so the user sees them in their
+        # language without a per-emit tr() lookup.
+        early = get_phase_messages("early")
+        mid = get_phase_messages("mid")
+        late = get_phase_messages("late")
         random.shuffle(early)
         random.shuffle(mid)
         random.shuffle(late)
@@ -166,7 +122,7 @@ class GenerationWorker(QThread):
 
                 # If past estimated time, show "taking longer" messages
                 if t >= 1.0:
-                    msg = "Taking a bit longer than usual..."
+                    msg = tr("Taking a bit longer than usual...")
 
                 self.progress.emit(msg, pct)
 
@@ -187,7 +143,7 @@ class GenerationWorker(QThread):
             )
             return
 
-        self.progress.emit("Grabbing your masterpiece...", 93)
+        self.progress.emit(tr("Grabbing your masterpiece..."), 93)
 
         try:
             image_data = self._client.download_image(result.image_url)
@@ -196,7 +152,7 @@ class GenerationWorker(QThread):
             self.error.emit(f"Failed to download result image: {e}", "DOWNLOAD_ERROR")
             return
 
-        self.progress.emit("Dropping it on the map...", 97)
+        self.progress.emit(tr("Dropping it on the map..."), 97)
 
         try:
             geotiff_path = write_geotiff(

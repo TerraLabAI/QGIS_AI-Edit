@@ -558,12 +558,8 @@ Edición de imágenes geoespaciales con IA</translation>
         <translation>Refinar vectorización</translation>
     </message>
     <message>
-        <source>Regenerate</source>
-        <translation>Regenerar</translation>
-    </message>
-    <message>
-        <source>Regenerate on the same zone using the current map view</source>
-        <translation>Regenerar en la misma zona usando la vista actual del mapa</translation>
+        <source>Generate on the same zone using the current map view</source>
+        <translation>Generar en la misma zona usando la vista actual del mapa</translation>
     </message>
     <message>
         <source>Remove from favorites</source>
@@ -612,6 +608,10 @@ Edición de imágenes geoespaciales con IA</translation>
     <message>
         <source>Search prompts...</source>
         <translation>Buscar prompts...</translation>
+    </message>
+    <message>
+        <source>Segment</source>
+        <translation>Segmentar</translation>
     </message>
     <message>
         <source>Segment elements on raster images using AI (opens AI Segmentation plugin)</source>
@@ -878,8 +878,8 @@ Edición de imágenes geoespaciales con IA</translation>
         <translation>⌖ Seleccionar en el mapa</translation>
     </message>
     <message>
-        <source>▦ Vectorize this result →</source>
-        <translation>▦ Vectorizar este resultado →</translation>
+        <source>Vectorize this result →</source>
+        <translation>Vectorizar este resultado →</translation>
     </message>
     <message>
         <source>✓ Saved as {name}</source>
@@ -888,6 +888,34 @@ Edición de imágenes geoespaciales con IA</translation>
     <message>
         <source>✓ {n} polygons added</source>
         <translation>✓ {n} polígonos añadidos</translation>
+    </message>
+    <message>
+        <source>Sending your image to the AI...</source>
+        <translation>Enviando tu imagen a la IA...</translation>
+    </message>
+    <message>
+        <source>Grabbing your masterpiece...</source>
+        <translation>Recogiendo tu obra maestra...</translation>
+    </message>
+    <message>
+        <source>Dropping it on the map...</source>
+        <translation>Colocándolo en el mapa...</translation>
+    </message>
+    <message>
+        <source>Taking a bit longer than usual...</source>
+        <translation>Está tardando un poco más de lo normal...</translation>
+    </message>
+    <message>
+        <source>Loading…</source>
+        <translation>Cargando…</translation>
+    </message>
+    <message>
+        <source>Output resolution. Higher = sharper, more precise edits.</source>
+        <translation>Resolución de salida. Más alta = ediciones más nítidas y precisas.</translation>
+    </message>
+    <message>
+        <source>ⓘ Draw a zone first to anchor your guides. They'll ride along with the next generation inside that zone.</source>
+        <translation>ⓘ Dibuja primero una zona para anclar tus guías. Se aplicarán a la próxima generación dentro de esa zona.</translation>
     </message>
 </context>
 </TS>

@@ -31,6 +31,9 @@ def vectorize_by_color(
     simplify_factor: float = 1.5,
     layer_name: str | None = None,
     output_rgb: tuple[int, int, int] | None = None,
+    round_corners: bool = False,
+    expand_value: int = 0,
+    fill_holes: bool = False,
 ) -> QgsVectorLayer:
     """Extract pixels matching ``target_rgb`` (±tolerance per channel) as polygons.
 
@@ -70,6 +73,24 @@ def vectorize_by_color(
     ).astype(np.uint8)
     if int(mask.sum()) == 0:
         raise RuntimeError("No pixels matched the selected color")
+
+    # Mask-level morphological refinement (expand/contract then fill holes).
+    # Same order as AI Segmentation's apply_mask_refinement so behavior matches.
+    if expand_value != 0 or fill_holes:
+        mask = _refine_mask(mask, expand_value=expand_value, fill_holes=fill_holes)
+        if int(mask.sum()) == 0:
+            raise RuntimeError("No pixels matched the selected color")
+
+    # Erase a thin border of pixels so Polygonize can never trace the AI Edit
+    # zone's bounding rectangle. Without this, dilate or fill_holes pushes the
+    # mask to the raster edge and produces a giant frame-shaped polygon.
+    # Inset scales with expand_value so a heavy dilate still gets cropped back.
+    border_inset = max(2, int(expand_value) + 2) if expand_value > 0 else 2
+    if mask.shape[0] > 2 * border_inset and mask.shape[1] > 2 * border_inset:
+        mask[:border_inset, :] = 0
+        mask[-border_inset:, :] = 0
+        mask[:, :border_inset] = 0
+        mask[:, -border_inset:] = 0
 
     mem_raster_driver = gdal.GetDriverByName("MEM")
     mask_ds = mem_raster_driver.Create("", width, height, 1, gdal.GDT_Byte)
@@ -132,6 +153,11 @@ def vectorize_by_color(
             simplified = geom.simplify(simplify_tol)
             if not simplified.isEmpty():
                 geom = simplified
+        if round_corners:
+            # Chaikin smoothing - 5 iterations matches AI Segmentation.
+            smoothed = geom.smooth(5, 0.25)
+            if not smoothed.isEmpty():
+                geom = smoothed
         feat = QgsFeature()
         feat.setGeometry(geom)
         feat.setAttributes([1])
@@ -159,6 +185,86 @@ def vectorize_by_color(
 # style-library green tone with a thick outline so the polygon perimeter
 # survives at any zoom level.
 DEFAULT_OUTPUT_RGB: tuple[int, int, int] = (0, 200, 83)
+
+
+def _refine_mask(
+    mask: np.ndarray,
+    expand_value: int = 0,
+    fill_holes: bool = False,
+) -> np.ndarray:
+    """Dilate/erode then optionally fill interior holes. scipy fast-path,
+    pure-numpy fallback. Same order as AI Segmentation's apply_mask_refinement.
+    """
+    result = mask.astype(np.uint8).copy()
+    if expand_value != 0:
+        iterations = abs(int(expand_value))
+        try:
+            from scipy import ndimage
+            structure = ndimage.generate_binary_structure(2, 1)
+            if expand_value > 0:
+                result = ndimage.binary_dilation(
+                    result, structure=structure, iterations=iterations
+                ).astype(np.uint8)
+            else:
+                result = ndimage.binary_erosion(
+                    result, structure=structure, iterations=iterations
+                ).astype(np.uint8)
+        except ImportError:
+            result = _numpy_morphology(result, iterations, expand=expand_value > 0)
+    if fill_holes:
+        try:
+            from scipy import ndimage
+            result = ndimage.binary_fill_holes(result).astype(np.uint8)
+        except ImportError:
+            result = _numpy_fill_holes(result)
+    return result
+
+
+def _numpy_morphology(mask: np.ndarray, iterations: int, expand: bool) -> np.ndarray:
+    """Pure-numpy 4-connected dilation/erosion fallback when scipy missing."""
+    result = mask.copy()
+    for _ in range(iterations):
+        shifted = result.copy()
+        shifted[1:, :] |= result[:-1, :]
+        shifted[:-1, :] |= result[1:, :]
+        shifted[:, 1:] |= result[:, :-1]
+        shifted[:, :-1] |= result[:, 1:]
+        if expand:
+            result = shifted
+        else:
+            shrunk = result.copy()
+            shrunk[1:, :] &= result[:-1, :]
+            shrunk[:-1, :] &= result[1:, :]
+            shrunk[:, 1:] &= result[:, :-1]
+            shrunk[:, :-1] &= result[:, 1:]
+            result = shrunk
+    return result
+
+
+def _numpy_fill_holes(mask: np.ndarray) -> np.ndarray:
+    """Pure-numpy flood-fill from borders to mark exterior, invert for holes."""
+    h, w = mask.shape
+    padded = np.zeros((h + 2, w + 2), dtype=np.uint8)
+    padded[1:-1, 1:-1] = mask
+    exterior = np.zeros_like(padded, dtype=bool)
+    exterior[0, :] = padded[0, :] == 0
+    exterior[-1, :] = padded[-1, :] == 0
+    exterior[:, 0] = padded[:, 0] == 0
+    exterior[:, -1] = padded[:, -1] == 0
+    background = padded == 0
+    for _ in range(min(max(h, w), 2048)):
+        expanded = exterior.copy()
+        expanded[1:, :] |= exterior[:-1, :]
+        expanded[:-1, :] |= exterior[1:, :]
+        expanded[:, 1:] |= exterior[:, :-1]
+        expanded[:, :-1] |= exterior[:, 1:]
+        expanded &= background
+        if np.array_equal(expanded, exterior):
+            break
+        exterior = expanded
+    result = padded.copy()
+    result[(padded == 0) & (~exterior)] = 1
+    return result[1:-1, 1:-1]
 
 
 def _apply_style(layer: QgsVectorLayer, output_rgb: tuple[int, int, int]) -> None:

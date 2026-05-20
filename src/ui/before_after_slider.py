@@ -10,6 +10,8 @@ from qgis.PyQt.QtCore import QT_VERSION, QPointF, QRectF, QSize, Qt, QTimer, pyq
 from qgis.PyQt.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen, QPixmap
 from qgis.PyQt.QtWidgets import QWidget
 
+from ..core.i18n import tr
+
 QT6 = QT_VERSION >= 0x060000
 
 # Auto-loop period (ms): full oscillation 0 → 100 → 0.
@@ -292,4 +294,4 @@ class BeforeAfterSlider(QWidget):
         f = painter.font()
         f.setPointSize(9)
         painter.setFont(f)
-        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "Loading…")
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, tr("Loading…"))

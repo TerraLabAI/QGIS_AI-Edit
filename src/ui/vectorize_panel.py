@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import os
 
-from qgis.core import QgsFeature, QgsProject, QgsRasterLayer
+from qgis.core import QgsFeature, QgsLayerTree, QgsProject, QgsRasterLayer
 from qgis.PyQt.QtCore import QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import (
     QApplication,
+    QCheckBox,
     QColorDialog,
     QGroupBox,
     QHBoxLayout,
@@ -28,7 +29,7 @@ from ..core import telemetry
 from ..core.i18n import tr
 from ..core.vectorization_service import vectorize_by_color
 from .eyedropper_tool import EyedropperMapTool
-from .layer_groups import get_or_create_ai_edit_group
+from .layer_groups import AI_EDIT_GROUP_NAME, get_or_create_ai_edit_group
 from .layer_tree_combobox import LayerTreeComboBox
 from .panel_helpers import apply_swatch_style, build_panel_header, panel_section_label
 
@@ -58,6 +59,27 @@ _BTN_GHOST_QSS = (
 )
 
 
+def _is_ai_edit_output(layer) -> bool:
+    """Return True when ``layer`` lives under the AI-Edit layer-tree group.
+
+    The AI-Edit group is the canonical home for every plugin-generated
+    raster, so group membership is a reliable marker for "produced by AI
+    Edit" without stamping per-layer properties.
+    """
+    if not isinstance(layer, QgsRasterLayer):
+        return False
+    root = QgsProject.instance().layerTreeRoot()
+    node = root.findLayer(layer.id())
+    if node is None:
+        return False
+    parent = node.parent()
+    while parent is not None and parent is not root:
+        if parent.name() == AI_EDIT_GROUP_NAME:
+            return True
+        parent = parent.parent()
+    return False
+
+
 class VectorizePanel(QWidget):
     """Color-based raster-to-polygon workflow.
 
@@ -83,9 +105,6 @@ class VectorizePanel(QWidget):
         self._last_raster_id: str | None = None
         self._last_target_rgb: tuple[int, int, int] | None = None
         self._eyedropper_tool: EyedropperMapTool | None = None
-        # Refine box: always visible from cold-entry, collapsed by default.
-        # Title gets a "· modified" badge when any spinbox is off-defaults.
-        self._refine_expanded = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -101,15 +120,34 @@ class VectorizePanel(QWidget):
             )
         )
 
-        # --- Source raster: layer-tree combo ---------------------------
+        # --- Source raster: layer-tree combo (AI Edit outputs only) ----
         layout.addWidget(panel_section_label(tr("From")))
 
         self._layer_combo = LayerTreeComboBox()
         self._layer_combo.setToolTip(
-            tr("Pick the raster you want to extract polygons from.")
+            tr("Pick an AI Edit output to vectorize.")
         )
+        self._layer_combo.set_layer_filter(_is_ai_edit_output)
         self._layer_combo.layerChanged.connect(self._refresh_panel_state)
         layout.addWidget(self._layer_combo)
+
+        # Empty-state hint when no AI Edit output exists yet. Shown in place
+        # of the From combo's "no valid raster" silence so users understand
+        # this tool needs a generated layer.
+        self._empty_state_label = QLabel(
+            tr(
+                "No AI Edit output available. Generate a map first to "
+                "vectorize it."
+            )
+        )
+        self._empty_state_label.setWordWrap(True)
+        self._empty_state_label.setStyleSheet(
+            "font-size: 11px; color: palette(text); background: transparent;"
+            " border: 1px solid rgba(128, 128, 128, 0.25); border-radius: 4px;"
+            " padding: 10px;"
+        )
+        self._empty_state_label.setVisible(False)
+        layout.addWidget(self._empty_state_label)
 
         # --- Color row -------------------------------------------------
         layout.addWidget(panel_section_label(tr("Color")))
@@ -141,11 +179,10 @@ class VectorizePanel(QWidget):
 
         # --- Refine box (hidden until first successful vectorization) ---
         # Refining only makes sense once polygons exist, so the whole group
-        # stays out of sight on cold entry and slides in after the first run.
+        # stays out of sight on cold entry and appears fully expanded after
+        # the first Vectorize click.
         self._refine_group = self._build_refine_group()
-        self._refine_content.setVisible(False)
         self._refine_group.setVisible(False)
-        self._refresh_refine_title()
         layout.addWidget(self._refine_group)
 
         # 150 ms debounce so dragging a spinbox doesn't fire 60 vectorizations.
@@ -195,6 +232,13 @@ class VectorizePanel(QWidget):
         button enabled-state from the current combo selection.
         """
         self._reset_state()
+        # If the combo auto-picked an online basemap (no on-disk source),
+        # prefer the most recent AI-Edit output or any file-backed RGB
+        # raster so the panel opens in a usable state instead of erroring.
+        if not self._current_layer_is_valid():
+            preferred = self._find_preferred_raster()
+            if preferred is not None:
+                self._layer_combo.setLayer(preferred)
         self._refresh_panel_state()
 
     def preconfigure(
@@ -237,26 +281,26 @@ class VectorizePanel(QWidget):
         apply_swatch_style(self._color_btn, self._color)
         self._status_label.setVisible(False)
         self._reset_refine_spinboxes()
-        self._refine_expanded = False
-        self._refine_content.setVisible(False)
         self._refine_group.setVisible(False)
-        self._refresh_refine_title()
         self._run_btn.setText(tr("Vectorize"))
         # LayerTreeComboBox auto-refreshes via project signals; no manual
         # repopulation needed here.
 
     def _build_refine_group(self) -> QGroupBox:
-        """Collapsible Refine group, mirrors AI Segmentation's pattern."""
-        group = QGroupBox("▼ " + tr("Refine vectorization"))
+        """Refine group - always fully expanded, no disclosure arrow.
+
+        The whole group stays hidden until the first successful Vectorize
+        click; once visible, every control is shown at once with no toggle.
+        """
+        group = QGroupBox(tr("Refine vectorization"))
         group.setCheckable(False)
-        group.setCursor(QtC.PointingHandCursor)
-        group.mousePressEvent = self._on_refine_title_clicked
         group.setStyleSheet(
             "QGroupBox { background-color: transparent; border: none;"
             " border-radius: 0px; margin: 0px; padding: 0px; padding-top: 20px; }"
             "QGroupBox::title { subcontrol-origin: padding;"
             " subcontrol-position: top left; padding: 2px 4px;"
-            " background-color: transparent; border: none; }"
+            " background-color: transparent; border: none;"
+            " font-weight: bold; }"
         )
         outer = QVBoxLayout(group)
         outer.setSpacing(0)
@@ -305,12 +349,28 @@ class VectorizePanel(QWidget):
             parent_layout.addLayout(row)
             return spin
 
+        def _check_row(parent_layout, label_text: str, tip: str,
+                       default: bool) -> QCheckBox:
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            lab = QLabel(label_text)
+            lab.setStyleSheet("font-size: 11px; color: palette(text);")
+            lab.setToolTip(tip)
+            chk = QCheckBox()
+            chk.setChecked(default)
+            chk.setToolTip(tip)
+            row.addWidget(lab)
+            row.addStretch()
+            row.addWidget(chk)
+            parent_layout.addLayout(row)
+            return chk
+
         content_layout.addWidget(_section(tr("Detection")))
         self._tolerance_spin = _spin_row(
             content_layout,
             tr("Color tolerance:"),
-            tr("Per-channel ± distance when matching pixels (0-100)."),
-            0, 100, 40,
+            tr("Per-channel ± distance when matching pixels."),
+            0, 10000, 40,
         )
         self._sieve_spin = _spin_row(
             content_layout,
@@ -319,52 +379,56 @@ class VectorizePanel(QWidget):
                 "Drop tiny blobs before tracing: pre-polygonize filter "
                 "(connected pixel count)."
             ),
-            0, 500, 10,
+            0, 50000, 10,
         )
 
         content_layout.addWidget(_section(tr("Outline")))
         self._simplify_spin = _spin_row(
             content_layout,
             tr("Simplify outline:"),
-            tr("Higher = smoother polygons (Douglas-Peucker, in pixels)."),
-            0, 50, 3,
+            tr("Reduce small variations in the outline (0 = no change)"),
+            0, 1000, 3,
+        )
+        self._round_corners_check = _check_row(
+            content_layout,
+            tr("Round corners:"),
+            tr(
+                "Round corners for natural shapes like trees and bushes. "
+                "Increase 'Simplify outline' for smoother results."
+            ),
+            default=False,
+        )
+
+        content_layout.addWidget(_section(tr("Selection")))
+        self._expand_spin = _spin_row(
+            content_layout,
+            tr("Expand/Contract:"),
+            tr("Positive = expand outward, Negative = shrink inward"),
+            -1000, 1000, 0,
+        )
+        self._expand_spin.setSuffix(" px")
+        self._fill_holes_check = _check_row(
+            content_layout,
+            tr("Fill holes:"),
+            tr("Fill interior holes in the selection"),
+            default=True,
         )
 
         outer.addWidget(content)
-        self._refine_content = content
 
-        for spin in (self._tolerance_spin, self._sieve_spin, self._simplify_spin):
+        for spin in (
+            self._tolerance_spin,
+            self._sieve_spin,
+            self._simplify_spin,
+            self._expand_spin,
+        ):
             spin.valueChanged.connect(self._on_refine_changed)
+        for chk in (self._round_corners_check, self._fill_holes_check):
+            chk.stateChanged.connect(self._on_refine_changed)
 
         return group
 
-    def _on_refine_title_clicked(self, event) -> None:
-        y = (
-            event.position().toPoint().y()
-            if hasattr(event, "position")
-            else event.pos().y()
-        )
-        if y > 25:
-            return
-        self._refine_expanded = not self._refine_expanded
-        self._refresh_refine_title()
-        self._refine_content.setVisible(self._refine_expanded)
-
-    def _refresh_refine_title(self) -> None:
-        """Title shows the disclosure arrow and a "· modified" badge when
-        any spinbox differs from its default.
-        """
-        arrow = "▼" if self._refine_expanded else "▶"
-        modified = (
-            self._tolerance_spin.value() != 40
-            or self._sieve_spin.value() != 10  # noqa: W503
-            or self._simplify_spin.value() != 3  # noqa: W503
-        )
-        suffix = "  · " + tr("modified") if modified else ""
-        self._refine_group.setTitle(arrow + " " + tr("Refine vectorization") + suffix)
-
     def _on_refine_changed(self, _value=None) -> None:
-        self._refresh_refine_title()
         if self._last_layer_id is None:
             return
         self._refine_timer.start(150)
@@ -374,15 +438,35 @@ class VectorizePanel(QWidget):
             (self._tolerance_spin, 40),
             (self._sieve_spin, 10),
             (self._simplify_spin, 3),
+            (self._expand_spin, 0),
         ):
             spin.blockSignals(True)
             spin.setValue(default)
             spin.blockSignals(False)
+        for chk, default in (
+            (self._round_corners_check, False),
+            (self._fill_holes_check, True),
+        ):
+            chk.blockSignals(True)
+            chk.setChecked(default)
+            chk.blockSignals(False)
 
     def _refresh_panel_state(self, *_args) -> None:
         """Enable the Vectorize button when the combo's current layer is
         a multi-band RGB raster with a real on-disk source.
+
+        The combo is filtered to AI Edit outputs only; when the project has
+        none, swap the combo for the empty-state hint and disable Vectorize.
         """
+        has_any_output = self._layer_combo.count_layers() > 0
+        self._empty_state_label.setVisible(not has_any_output)
+        self._layer_combo.setVisible(has_any_output)
+
+        if not has_any_output:
+            self._show_status("", is_error=False)
+            self._run_btn.setEnabled(False)
+            return
+
         layer = self._layer_combo.currentLayer()
         is_raster = isinstance(layer, QgsRasterLayer)
         has_file_source = (
@@ -395,20 +479,52 @@ class VectorizePanel(QWidget):
         if is_valid:
             self._show_status("", is_error=False)
             self._run_btn.setEnabled(not self._busy)
-        elif is_raster and not has_file_source:
-            self._show_status(
-                tr("Online or virtual raster: save it as GeoTIFF first."),
-                is_error=True,
-            )
-            self._run_btn.setEnabled(False)
-        elif is_raster:
-            self._show_status(
-                tr("This raster needs at least 3 bands (RGB)."), is_error=True
-            )
-            self._run_btn.setEnabled(False)
         else:
-            self._show_status("", is_error=False)
+            self._show_status(
+                tr("Pick an AI Edit output to vectorize."),
+                is_error=False,
+                is_hint=True,
+            )
             self._run_btn.setEnabled(False)
+
+    def _current_layer_is_valid(self) -> bool:
+        layer = self._layer_combo.currentLayer()
+        if not isinstance(layer, QgsRasterLayer):
+            return False
+        src = layer.source()
+        return bool(src) and os.path.exists(src) and layer.bandCount() >= 3
+
+    def _find_preferred_raster(self) -> QgsRasterLayer | None:
+        """Pick the best raster to vectorize on cold panel open.
+
+        Order: most-recent AI-Edit output, then any other file-backed RGB
+        raster in the project. Returns None if no candidate exists.
+        """
+        project = QgsProject.instance()
+        root = project.layerTreeRoot()
+
+        def _is_valid(layer) -> bool:
+            if not isinstance(layer, QgsRasterLayer):
+                return False
+            src = layer.source()
+            return bool(src) and os.path.exists(src) and layer.bandCount() >= 3
+
+        # AI-Edit group: top child is the most recent output.
+        for child in root.children():
+            if (
+                child.name() == AI_EDIT_GROUP_NAME
+                and hasattr(child, "children")  # noqa: W503
+            ):
+                for sub in child.children():
+                    if QgsLayerTree.isLayer(sub) and _is_valid(sub.layer()):
+                        return sub.layer()
+                break
+
+        # Fallback: scan all project rasters in tree order.
+        for layer in project.mapLayers().values():
+            if _is_valid(layer):
+                return layer
+        return None
 
     def _on_color_clicked(self) -> None:
         chosen = QColorDialog.getColor(self._color, self, tr("Pick color"))
@@ -515,6 +631,9 @@ class VectorizePanel(QWidget):
         tolerance = int(self._tolerance_spin.value())
         simplify_factor = float(self._simplify_spin.value())
         sieve_threshold = int(self._sieve_spin.value())
+        round_corners = bool(self._round_corners_check.isChecked())
+        expand_value = int(self._expand_spin.value())
+        fill_holes = bool(self._fill_holes_check.isChecked())
 
         self._busy = True
         self._run_btn.setEnabled(False)
@@ -536,6 +655,9 @@ class VectorizePanel(QWidget):
                 sieve_threshold=sieve_threshold,
                 simplify_factor=simplify_factor,
                 layer_name=layer_name,
+                round_corners=round_corners,
+                expand_value=expand_value,
+                fill_holes=fill_holes,
             )
 
             previous_id = self._last_layer_id
@@ -587,6 +709,9 @@ class VectorizePanel(QWidget):
                     "tolerance": tolerance,
                     "sieve": sieve_threshold,
                     "simplify": int(simplify_factor),
+                    "round_corners": round_corners,
+                    "expand": expand_value,
+                    "fill_holes": fill_holes,
                     "is_initial": is_initial,
                 },
             )
@@ -618,10 +743,6 @@ class VectorizePanel(QWidget):
             # Surface the Refine box (hidden on cold entry) and pull the
             # user's eye to tolerance, which fixes ~90 % of zero-match cases.
             self._refine_group.setVisible(True)
-            if not self._refine_expanded:
-                self._refine_expanded = True
-                self._refine_content.setVisible(True)
-                self._refresh_refine_title()
             self._tolerance_spin.setFocus()
         else:
             self._show_status(message, is_error=True)
@@ -646,12 +767,19 @@ class VectorizePanel(QWidget):
             self._run_btn.setText(tr("Vectorize"))
 
     def _show_status(
-        self, message: str, is_error: bool, is_success: bool = False
+        self,
+        message: str,
+        is_error: bool,
+        is_success: bool = False,
+        is_hint: bool = False,
     ) -> None:
         if is_error:
             color = ERROR_TEXT
         elif is_success:
             color = SUCCESS_TEXT
+        elif is_hint:
+            # Soft grey: calm hint, distinct from red error / green success.
+            color = "rgba(160, 160, 160, 0.85)"
         else:
             color = "palette(text)"
         self._status_label.setStyleSheet(

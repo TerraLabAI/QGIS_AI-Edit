@@ -32,12 +32,12 @@ from qgis.core import (
 )
 from qgis.gui import QgsMapCanvas, QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import QObject, pyqtSignal
-from qgis.PyQt.QtGui import QColor
+from qgis.PyQt.QtGui import QColor, QKeySequence
 
 from ..core import qt_compat as QtC
 from ..core.logger import log_debug
 
-MARKUP_LAYER_NAME = "Mark up (temp)"
+MARKUP_LAYER_NAME = "AI Edit guidance markup"
 _MARKUP_PROPERTY = "ai_edit_markup"
 
 
@@ -52,9 +52,10 @@ def _symbol_property(name: str):
     return getattr(QgsSymbolLayer, name)
 
 
-# Stroke width in screen pixels. "Pas trop fine" - visible at 1K/2K/4K
-# canvas-to-PNG export without being a thick blob.
-STROKE_WIDTH_PX = 2.5
+# Stroke width in screen pixels. Bold enough that Nano Banana reads the
+# stroke as a pointer instead of mistaking it for a thin feature on the
+# underlying map.
+STROKE_WIDTH_PX = 4.5
 
 
 def _stroke_color_value(color: QColor) -> str:
@@ -64,8 +65,10 @@ def _stroke_color_value(color: QColor) -> str:
 class MarkupLayerManager(QObject):
     """Owns the LineString memory layer that stores Mark up annotations.
 
-    Lifecycle is driven by the plugin: created lazily on first commit,
-    removed on Generate success / Exit / zone clear / Clear all.
+    Lifecycle: created lazily on first commit, then reused for every
+    subsequent annotation across sessions. The layer persists across
+    Markup exit / Generate / new zone selection; only Clear all (or the
+    plugin unload) drops it.
     """
 
     annotation_count_changed = pyqtSignal(int)
@@ -128,7 +131,7 @@ class MarkupLayerManager(QObject):
 
     @staticmethod
     def _apply_style(layer: QgsVectorLayer) -> None:
-        """Thin line symbol; color comes from the per-feature ``color`` field."""
+        """Single colored line symbol; per-feature ``color`` field drives stroke."""
         symbol = QgsLineSymbol.createSimple(
             {
                 "line_color": _stroke_color_value(QColor(230, 51, 51)),
@@ -285,6 +288,14 @@ class _MarkupBaseMapTool(QgsMapTool):
             self._active = False
             event.accept()
             return
+        # Cmd/Ctrl+Z while the canvas has focus: undo the last annotation.
+        # The map tool sees this BEFORE QGIS's main-window event filter (key
+        # events don't bubble to parents), which is why the dock-level filter
+        # alone misses the very first strokes after the panel opens.
+        if event.matches(QKeySequence.StandardKey.Undo):
+            self._manager.undo_last()
+            event.accept()
+            return
         super().keyPressEvent(event)
 
 
@@ -335,10 +346,14 @@ class PencilMapTool(_MarkupBaseMapTool):
 
 
 class ArrowMapTool(_MarkupBaseMapTool):
-    """Drag-to-arrow: press = start, drag = preview, release = commit."""
+    """Drag-to-arrow: press = start, drag = preview, release = commit.
 
-    HEAD_LEN_PX = 16.0
-    HEAD_ANGLE_DEG = 28.0
+    Head is deliberately oversized so the tip reads as the pointer target
+    even after the canvas is rasterised to PNG at the model's input size.
+    """
+
+    HEAD_LEN_PX = 32.0
+    HEAD_ANGLE_DEG = 32.0
 
     def __init__(self, canvas: QgsMapCanvas, manager: MarkupLayerManager) -> None:
         super().__init__(canvas, manager, shape="arrow")

@@ -5,12 +5,13 @@ import time
 
 from qgis.core import QgsPointXY, QgsRectangle
 from qgis.gui import QgsRubberBand
-from qgis.PyQt.QtCore import QSettings, QThread, pyqtSignal
+from qgis.PyQt.QtCore import QEvent, QObject, QSettings, QThread, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QIcon, QKeySequence
 from qgis.PyQt.QtWidgets import QAction, QApplication, QShortcut
 
 from ..api.terralab_client import TerraLabClient
 from ..core import prompt_history, telemetry
+from ..core import qt_compat as QtC
 from ..core.activation_manager import (
     clear_activation,
     clear_config_cache,
@@ -47,6 +48,34 @@ from .raster_writer import (
     get_output_dir,
 )
 from .selection_map_tool import RectangleSelectionTool
+
+
+class _MarkupUndoFilter(QObject):
+    """Main-window event filter that intercepts Cmd/Ctrl+Z during Mark up.
+
+    Installed via mainWindow.installEventFilter() so the keypress fires
+    before QGIS's own Undo action regardless of which widget has focus.
+    """
+
+    def __init__(self, on_undo) -> None:
+        super().__init__()
+        self._on_undo = on_undo
+
+    def eventFilter(self, obj, event):  # noqa: N802
+        if event.type() != QEvent.Type.KeyPress:
+            return False
+        if event.matches(QKeySequence.StandardKey.Undo):
+            self._on_undo()
+            return True
+        return False
+
+
+# Global shortcut to open the dock + start a new edit. Qt portably maps
+# Ctrl → Cmd on macOS, so the same string fires Cmd+Alt+E on Mac and
+# Ctrl+Alt+E on Windows/Linux. Exported so dock_widget can display it
+# in the Shortcuts dialog without duplicating the literal string.
+LAUNCH_SHORTCUT = "Ctrl+Alt+E"
+
 
 DASHBOARD_ERROR_URL = (
     "https://terra-lab.ai/dashboard"
@@ -253,7 +282,16 @@ class AIEditPlugin:
         self._markup_manager: MarkupLayerManager | None = None
         self._markup_tool_objs: dict[str, object] = {}
         self._pre_markup_map_tool = None
-        self._markup_undo_shortcut: QShortcut | None = None
+        # Markup undo runs via a main-window event filter (more reliable
+        # than QShortcut, which loses key races against QGIS's own Ctrl+Z).
+        self._markup_event_filter: _MarkupUndoFilter | None = None
+        # While Markup is open we disable any main-window QAction bound to
+        # Ctrl/Cmd+Z so QGIS's project undo doesn't swallow the keystroke
+        # before the map tool's keyPressEvent sees it. Restored on exit.
+        self._suppressed_undo_actions: list[tuple[QAction, bool]] = []
+        # Global "Launch AI Edit" shortcut. Cross-platform via QKeySequence
+        # — Cmd+Alt+E on macOS, Ctrl+Alt+E on Windows/Linux.
+        self._launch_shortcut: QShortcut | None = None
         self._in_tool_panel: str | None = None
         # Fires once per QGIS session, on the first dock-open. Lifecycle event,
         # ships without explicit consent (no PII).
@@ -416,7 +454,6 @@ class AIEditPlugin:
             log_warning(f"Server catalog stale read failed: {err}")
             self._dock_widget.set_server_catalog(None)
         self._load_server_catalog()
-        from ..core import qt_compat as QtC
         self._iface.addDockWidget(QtC.RightDockWidgetArea, self._dock_widget)
         _first_install_settings = QSettings()
         if not _first_install_settings.value("AIEdit/dock_shown_once", False, type=bool):
@@ -448,6 +485,16 @@ class AIEditPlugin:
         # Title-bar X close doesn't go through _toggle_dock, so listen for the
         # underlying visibility change to keep the map tool / cursor in sync.
         self._dock_widget.visibilityChanged.connect(self._on_dock_visibility_changed)
+
+        # Global launch shortcut: Ctrl+Alt+E on Win/Linux, Cmd+Alt+E (⌥⌘E)
+        # on macOS. WindowShortcut scope fires from anywhere inside QGIS
+        # without us having to focus a particular widget first.
+        self._launch_shortcut = QShortcut(
+            QKeySequence(LAUNCH_SHORTCUT),
+            self._iface.mainWindow(),
+        )
+        self._launch_shortcut.setContext(QtC.WindowShortcut)
+        self._launch_shortcut.activated.connect(self._on_launch_shortcut)
 
         # Create map tool
         self._map_tool = RectangleSelectionTool(self._canvas)
@@ -535,9 +582,20 @@ class AIEditPlugin:
             self._markup_manager.disconnect_signals()
         self._markup_manager = None
         self._pre_markup_map_tool = None
-        if self._markup_undo_shortcut is not None:
-            self._markup_undo_shortcut.setEnabled(False)
-            self._markup_undo_shortcut = None
+        if self._markup_event_filter is not None:
+            try:
+                self._iface.mainWindow().removeEventFilter(self._markup_event_filter)
+            except RuntimeError:
+                pass
+            self._markup_event_filter = None
+        self._restore_qgis_undo()
+        if self._launch_shortcut is not None:
+            try:
+                self._launch_shortcut.setEnabled(False)
+                self._launch_shortcut.deleteLater()
+            except RuntimeError:
+                pass
+            self._launch_shortcut = None
 
         if self._dock_widget:
             self._iface.removeDockWidget(self._dock_widget)
@@ -821,6 +879,15 @@ class AIEditPlugin:
             self._map_tool.set_has_zone(False)
         self._deactivate_selection_tool()
 
+    def _on_launch_shortcut(self):
+        """Global shortcut: open the dock if hidden, then start a new edit."""
+        if self._dock_widget is None:
+            return
+        if not self._dock_widget.isVisible():
+            self._dock_widget.setVisible(True)
+        self._dock_widget.raise_()
+        self._on_launch_clicked()
+
     def _on_launch_clicked(self):
         """User clicked 'Launch AI Edit' on the entry screen."""
         telemetry.track("launch_clicked")
@@ -857,8 +924,8 @@ class AIEditPlugin:
         if self._map_tool:
             self._map_tool.set_has_zone(False)
         self._deactivate_selection_tool()
-        # Drop any Mark up annotations so they don't bleed into the next session.
-        self._clear_markup_layer()
+        # Mark up annotations persist across sessions on a single shared layer.
+        # User wipes them explicitly via the Clear all button.
         self._dock_widget.set_launch_state()
 
     def _on_retry(self, prompt: str):
@@ -907,7 +974,9 @@ class AIEditPlugin:
         # original input so the model keeps style coherence.
         ctx.parent_request_id = self._last_completed_request_id
 
-        match = lookup_template_by_prompt(prompt)
+        # Armed template wins over text match so user edits keep vector hints.
+        armed = self._dock_widget.get_active_template()
+        match = armed or lookup_template_by_prompt(prompt)
         if match:
             ctx.template_id, ctx.template_name = match
             ctx.vector_color, ctx.vector_classes = get_vector_hints(ctx.template_id)
@@ -996,7 +1065,6 @@ class AIEditPlugin:
         Toggles: a second click on the footer Mark up icon while the panel is
         already open closes it (same as the in-panel Finish button).
         """
-        from ..core import qt_compat as QtC
 
         if self._in_tool_panel == "markup":
             self._exit_tool_panel()
@@ -1016,20 +1084,18 @@ class AIEditPlugin:
         self._dock_widget.set_markup_annotation_count(
             self._markup_manager.annotation_count()
         )
-        # Cmd/Ctrl+Z undoes the last annotation while in Mark up. Parented to
-        # the QGIS main window with WindowShortcut scope so it fires whether
-        # focus is on the dock OR the canvas (the user clicks the canvas to
-        # draw, so dock-only scope misses the common path). Toggled via
-        # setEnabled() on enter/exit so we never steal QGIS's own undo
-        # outside Mark up mode.
-        if self._markup_undo_shortcut is None:
-            self._markup_undo_shortcut = QShortcut(
-                QKeySequence(QKeySequence.StandardKey.Undo),
-                self._iface.mainWindow(),
-            )
-            self._markup_undo_shortcut.setContext(QtC.WindowShortcut)
-            self._markup_undo_shortcut.activated.connect(self._on_markup_undo)
-        self._markup_undo_shortcut.setEnabled(True)
+        # Cmd/Ctrl+Z undoes the last annotation while in Mark up. Three
+        # layers handle every focus state:
+        #   1. _suppress_qgis_undo() disables QGIS's project-undo QAction so
+        #      it doesn't swallow the keystroke when the canvas is focused.
+        #   2. The map tool's keyPressEvent handles the key while the canvas
+        #      has focus (after a drag/draw the canvas keeps focus).
+        #   3. The main-window event filter is the fallback for when focus
+        #      is on the dock (e.g., right after the user clicks a tool).
+        if self._markup_event_filter is None:
+            self._markup_event_filter = _MarkupUndoFilter(self._on_markup_undo)
+        self._iface.mainWindow().installEventFilter(self._markup_event_filter)
+        self._suppress_qgis_undo()
         telemetry.track("markup_opened")
 
     def _on_markup_tool_changed(self, tool_key: str):
@@ -1123,10 +1189,41 @@ class AIEditPlugin:
             except RuntimeError:
                 pass
         self._pre_markup_map_tool = None
-        if self._markup_undo_shortcut is not None:
-            self._markup_undo_shortcut.setEnabled(False)
+        if self._markup_event_filter is not None:
+            try:
+                self._iface.mainWindow().removeEventFilter(self._markup_event_filter)
+            except RuntimeError:
+                pass
+        self._restore_qgis_undo()
         self._in_tool_panel = None
         self._dock_widget.exit_tool_panel()
+
+    def _suppress_qgis_undo(self) -> None:
+        """Disable every main-window QAction bound to Cmd/Ctrl+Z while in
+        Markup so QGIS's project-undo shortcut never intercepts the
+        keystroke before our handlers can fire. Restored via the matching
+        ``_restore_qgis_undo()`` call on panel exit / unload.
+        """
+        if self._suppressed_undo_actions:
+            return
+        target_seq = QKeySequence(QKeySequence.StandardKey.Undo)
+        mainwin = self._iface.mainWindow()
+        for action in mainwin.findChildren(QAction):
+            try:
+                shortcuts = action.shortcuts() or [action.shortcut()]
+            except RuntimeError:
+                continue
+            if any(sc == target_seq for sc in shortcuts if not sc.isEmpty()):
+                self._suppressed_undo_actions.append((action, action.isEnabled()))
+                action.setEnabled(False)
+
+    def _restore_qgis_undo(self) -> None:
+        for action, was_enabled in self._suppressed_undo_actions:
+            try:
+                action.setEnabled(was_enabled)
+            except RuntimeError:
+                pass
+        self._suppressed_undo_actions = []
 
     def _clear_markup_layer(self):
         """Drop the in-memory annotation layer (no-op if absent)."""
@@ -1219,10 +1316,11 @@ class AIEditPlugin:
         # the original input as a silent reference.
         ctx.parent_request_id = self._last_completed_request_id
 
-        # Tag the job with template_id when the submitted prompt matches a
-        # curated preset verbatim (after whitespace normalization). Any edit
-        # breaks the match → no tag → counted as custom.
-        match = lookup_template_by_prompt(prompt)
+        # Tag the job with template_id. The armed template (set when the
+        # user picked a preset) wins so prompt edits keep the association;
+        # fall back to exact text match for prompts loaded any other way.
+        armed = self._dock_widget.get_active_template()
+        match = armed or lookup_template_by_prompt(prompt)
         if match:
             ctx.template_id, ctx.template_name = match
             ctx.vector_color, ctx.vector_classes = get_vector_hints(ctx.template_id)
@@ -1470,7 +1568,6 @@ class AIEditPlugin:
 
     def _show_selection_rectangle(self, extent):
         self._clear_selection_rectangle()
-        from ..core import qt_compat as QtC
         rb = QgsRubberBand(self._canvas, QtC.PolygonGeometry)
         rb.setColor(QColor(0, 0, 0, 0))
         rb.setStrokeColor(QColor(65, 105, 225, 180))

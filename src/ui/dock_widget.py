@@ -557,7 +557,9 @@ class _PromptContainer(QFrame):
         # Allow per-action tooltips (Qt swallows them by default in QMenu).
         self._resolution_menu.setToolTipsVisible(True)
         self._resolution_btn = _FooterIconButton(self)
-        self._resolution_btn.setToolTip(tr("Output resolution"))
+        self._resolution_btn.setToolTip(
+            tr("Output resolution. Higher = sharper, more precise edits.")
+        )
         self._resolution_btn.setCursor(QtC.PointingHandCursor)
         self._resolution_btn.setStyleSheet(self._FOOTER_TEXT_BTN_HOVERPROP_STYLE)
         self._resolution_btn.clicked.connect(self._show_resolution_menu)
@@ -749,7 +751,9 @@ class AIEditDockWidget(QDockWidget):
     def __init__(self, parent=None, reference_store: ReferenceImageStore | None = None):
         super().__init__(tr("AI Edit by TerraLab"), parent)
         self.setAllowedAreas(QtC.LeftDockWidgetArea | QtC.RightDockWidgetArea)
-        self.setMinimumWidth(260)
+        # 300px keeps the footer (Unlock pill + 3 right-aligned icons) fully
+        # visible even after the credit counter hides on narrow docks.
+        self.setMinimumWidth(300)
         self._reference_store = reference_store
         # Wired by plugin.py via set_library_dependencies - the Prompt library
         # dialog uses these to sync Recent/Favorites with the server. The
@@ -758,6 +762,12 @@ class AIEditDockWidget(QDockWidget):
         self._library_client = None
         self._library_auth_manager = None
         self._server_catalog: dict | None = None
+
+        # Armed template: set when the user picks a preset from the prompt
+        # library so edits to the prompt text don't drop the association
+        # (used by plugin.py to keep vector hints + Vectorize CTA active).
+        self._active_template_id: str | None = None
+        self._active_template_name: str | None = None
 
         # Global Escape: exit the flow no matter where focus is (canvas while
         # drawing a zone, prompt textarea, progress bar, etc.). WindowShortcut
@@ -894,20 +904,9 @@ class AIEditDockWidget(QDockWidget):
         else:
             self._reference_widget = None
 
-        # Consent checkbox (shown only until first generation)
+        # Consent checkbox (shown only until first generation). Use native
+        # QGIS style so the checkmark glyph renders correctly.
         self._consent_check = QCheckBox()
-        self._consent_check.setStyleSheet(
-            "QCheckBox::indicator {"
-            "  width: 16px; height: 16px;"
-            "  border: 1px solid palette(text);"
-            "  border-radius: 3px;"
-            "  background-color: palette(base);"
-            "}"
-            f"QCheckBox::indicator:checked {{"
-            f"  background-color: {BRAND_BLUE};"
-            f"  border-color: {BRAND_BLUE};"
-            f"}}"
-        )
         self._consent_check.setText("")  # text set via label below
         consent_layout = QHBoxLayout()
         consent_layout.setContentsMargins(0, 0, 0, 0)
@@ -967,7 +966,10 @@ class AIEditDockWidget(QDockWidget):
         self._exit_btn = QPushButton(tr("Exit"))
         self._exit_btn.setToolTip(tr("Exit and return to the start"))
         self._exit_btn.setCursor(QtC.PointingHandCursor)
-        self._exit_btn.setFixedWidth(72)
+        # Width: hold a longer label ("Quitter", "Salir", "Sair") without
+        # clipping. We use minimumWidth instead of fixedWidth so future
+        # translations longer than the current set still fit.
+        self._exit_btn.setMinimumWidth(88)
         self._exit_btn.setMinimumHeight(34)
         self._exit_btn.setStyleSheet(_BTN_GHOST)
         self._exit_btn.clicked.connect(self._on_exit_clicked)
@@ -1059,6 +1061,7 @@ class AIEditDockWidget(QDockWidget):
         self._result_prompt_container.resolution_changed.connect(
             self._on_resolution_selected
         )
+        self._result_prompt_container.markup_clicked.connect(self.markup_clicked.emit)
         if self._reference_widget is not None:
             self._result_prompt_container.files_dropped.connect(
                 self._reference_widget.add_paths
@@ -1071,14 +1074,14 @@ class AIEditDockWidget(QDockWidget):
             )
         self._result_layout.addWidget(self._result_prompt_container)
 
-        # Action row: Regenerate (primary, flex) + Exit (ghost, fixed).
+        # Action row: Generate (primary, flex) + Exit (ghost, fixed).
         result_actions_row = QHBoxLayout()
         result_actions_row.setContentsMargins(0, 4, 0, 0)
         result_actions_row.setSpacing(6)
 
-        self._result_regenerate_btn = QPushButton(tr("Regenerate"))
+        self._result_regenerate_btn = QPushButton(tr("Generate"))
         self._result_regenerate_btn.setToolTip(
-            tr("Regenerate on the same zone using the current map view")
+            tr("Generate on the same zone using the current map view")
         )
         self._result_regenerate_btn.setCursor(QtC.PointingHandCursor)
         self._result_regenerate_btn.setStyleSheet(_BTN_GREEN)
@@ -1088,7 +1091,9 @@ class AIEditDockWidget(QDockWidget):
         self._result_exit_btn = QPushButton(tr("Exit"))
         self._result_exit_btn.setToolTip(tr("Exit and return to the start"))
         self._result_exit_btn.setCursor(QtC.PointingHandCursor)
-        self._result_exit_btn.setFixedWidth(72)
+        # See `_exit_btn` above for why this is a minimum rather than fixed
+        # width.
+        self._result_exit_btn.setMinimumWidth(88)
         self._result_exit_btn.setMinimumHeight(34)
         self._result_exit_btn.setStyleSheet(_BTN_GHOST)
         self._result_exit_btn.clicked.connect(self._on_exit_clicked)
@@ -1097,7 +1102,7 @@ class AIEditDockWidget(QDockWidget):
         self._result_layout.addLayout(result_actions_row)
 
         # Minimal status line - shown under the action row after generation.
-        # Submitting the prompt (Enter key) and the Regenerate button both
+        # Submitting the prompt (Enter key) and the Generate button both
         # trigger a regen on the same zone.
         self._layer_saved_label = QLabel()
         self._layer_saved_label.setWordWrap(True)
@@ -1109,8 +1114,6 @@ class AIEditDockWidget(QDockWidget):
         self._layer_saved_label.setCursor(QtC.PointingHandCursor)
         self._layer_saved_label.linkActivated.connect(self._on_layer_saved_link_clicked)
         self._layer_saved_label.setVisible(False)
-        if hasattr(self, "_result_upgrade_nudge"):
-            self._result_upgrade_nudge.setVisible(False)
         self._saved_layer_id: str | None = None
         self._result_layout.addWidget(self._layer_saved_label)
 
@@ -1131,7 +1134,7 @@ class AIEditDockWidget(QDockWidget):
         )
         cta_layout.addWidget(self._vectorize_cta_swatch)
         self._vectorize_cta_btn = QPushButton()
-        self._vectorize_cta_btn.setText(tr("▦ Vectorize this result →"))
+        self._vectorize_cta_btn.setText(tr("Vectorize this result →"))
         self._vectorize_cta_btn.setFlat(True)
         self._vectorize_cta_btn.setCursor(QtC.PointingHandCursor)
         self._vectorize_cta_btn.setStyleSheet(
@@ -1146,22 +1149,6 @@ class AIEditDockWidget(QDockWidget):
         self._vectorize_cta_section.setVisible(False)
         self._vectorize_cta_pending: tuple[str, str] | None = None
         self._result_layout.addWidget(self._vectorize_cta_section)
-
-        # Free-tier conversion nudge shown right after a successful generation -
-        # the peak-satisfaction moment is the highest-yield place to ask.
-        self._result_upgrade_nudge = QLabel()
-        self._result_upgrade_nudge.setWordWrap(True)
-        self._result_upgrade_nudge.setTextFormat(QtC.RichText)
-        self._result_upgrade_nudge.setStyleSheet(
-            "font-size: 11px; color: palette(text); background: transparent;"
-            " border: none; padding: 2px 0 0 0;"
-        )
-        self._result_upgrade_nudge.setOpenExternalLinks(False)
-        self._result_upgrade_nudge.linkActivated.connect(
-            lambda _: self._on_result_upgrade_clicked()
-        )
-        self._result_upgrade_nudge.setVisible(False)
-        self._result_layout.addWidget(self._result_upgrade_nudge)
 
         self._result_section.setVisible(False)
         main_layout.addWidget(self._result_section)
@@ -1244,7 +1231,8 @@ class AIEditDockWidget(QDockWidget):
         layout.addStretch()
 
         # Footer section - single row: ring + count + Subscribe pill on the
-        # left, gear/help menus on the right.
+        # left, gear/help menus on the right. The Subscribe pill auto-hides
+        # via resizeEvent when the dock is too narrow to fit everything.
         footer_widget = QWidget()
         footer_row = QHBoxLayout(footer_widget)
         footer_row.setContentsMargins(0, 4, 0, 4)
@@ -1278,33 +1266,20 @@ class AIEditDockWidget(QDockWidget):
         self._upgrade_cta.clicked.connect(self._on_upgrade_clicked)
         self._upgrade_cta.setVisible(False)
         footer_row.addWidget(self._upgrade_cta)
+        # Tracks whether the upsell *should* be shown (subscribers shouldn't).
+        self._upgrade_cta_wanted = False
+        # Tracks whether the credit ring + count have data; resizeEvent uses
+        # this to keep them hidden on narrow docks.
+        self._credits_wanted = False
 
         footer_row.addStretch()
 
-        # Tools button - opens a popup menu (Mark up, Vectorize) that swap
-        # with the main view. Painted in palette(text) to match the ⚙ / ?
-        # glyphs sitting next to it (emoji 🧰 was a colored outlier).
-        # Two flat footer icons in place of the older Tools popup menu.
-        # Markup = pencil glyph; Vectorize = polygon-with-vertices glyph.
-        # Both painted in palette(text) to match ⚙ / ? alongside.
-        self._markup_btn = _FooterIconButton(footer_widget)
-        self._markup_btn.setToolTip(tr("Mark up"))
-        self._markup_btn.setAccessibleName(tr("Mark up"))
-        self._markup_btn.setCursor(QtC.PointingHandCursor)
-        self._markup_btn.setFocusPolicy(QtC.NoFocus)
-        self._markup_btn.setStyleSheet(_FOOTER_ICON_BTN_STYLE)
-        self._markup_btn.setIcon(self._make_pencil_glyph_icon())
-        self._markup_btn.setIconSize(QSize(20, 20))
-        self._markup_btn.clicked.connect(self.markup_clicked.emit)
-        markup_seq = QKeySequence("Alt+M")
-        self._markup_btn.setShortcut(markup_seq)
-        self._markup_btn.setToolTip(
-            tr("Mark up ({})").format(
-                markup_seq.toString(QKeySequence.SequenceFormat.NativeText)
-            )
-        )
-        self._markup_btn.setVisible(False)
-        footer_row.addWidget(self._markup_btn)
+        # Mark up is reachable via the pencil chip next to the prompt; the
+        # footer button has been removed to avoid duplication. Alt+M still
+        # opens markup via the global shortcut wired below.
+        self._markup_shortcut = QShortcut(QKeySequence("Alt+M"), self)
+        self._markup_shortcut.setContext(QtC.WindowShortcut)
+        self._markup_shortcut.activated.connect(self.markup_clicked.emit)
 
         self._vectorize_btn = _FooterIconButton(footer_widget)
         self._vectorize_btn.setToolTip(tr("Vectorize"))
@@ -1365,6 +1340,7 @@ class AIEditDockWidget(QDockWidget):
         scroll_area.setWidget(main_widget)
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QtC.FrameNoFrame)
+        scroll_area.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
         self.setWidget(scroll_area)
 
         # State
@@ -1556,6 +1532,30 @@ class AIEditDockWidget(QDockWidget):
 
         return widget
 
+    # Below ~360px the inline footer (ring + count + pill + 3 icons) starts
+    # clipping the right-aligned Help button; hide the credit counter to free
+    # room so the Help, Settings and Vectorize icons stay reachable.
+    _CREDITS_MIN_WIDTH = 360
+
+    def _set_upgrade_cta_wanted(self, wanted: bool) -> None:
+        self._upgrade_cta_wanted = wanted
+        self._upgrade_cta.setVisible(wanted)
+
+    def _set_credits_wanted(self, wanted: bool) -> None:
+        self._credits_wanted = wanted
+        self._apply_credits_visibility()
+
+    def _apply_credits_visibility(self) -> None:
+        """Hide the credit ring + count when the dock is too narrow."""
+        wide_enough = self.width() >= self._CREDITS_MIN_WIDTH
+        show = self._credits_wanted and wide_enough
+        self._credits_label.setVisible(show)
+        self._credit_ring.setVisible(show)
+
+    def resizeEvent(self, event):  # noqa: N802
+        super().resizeEvent(event)
+        self._apply_credits_visibility()
+
     def _build_warning_widget(self) -> QWidget:
         """Build yellow warning widget for when no layers are available."""
         widget = QWidget()
@@ -1663,13 +1663,12 @@ class AIEditDockWidget(QDockWidget):
         self._activation_widget.setVisible(not activated)
         self._main_widget.setVisible(activated)
         self._settings_btn.setVisible(activated)
-        self._markup_btn.setVisible(activated)
         self._vectorize_btn.setVisible(activated)
         if activated:
             self.hide_trial_info()
             self._update_layer_warning()
             self._cancel_key_btn.setVisible(False)
-            self._upgrade_cta.setVisible(self._is_free_tier)
+            self._set_upgrade_cta_wanted(self._is_free_tier)
             self.set_launch_state()
         else:
             self._setup_header.setVisible(True)
@@ -1687,9 +1686,8 @@ class AIEditDockWidget(QDockWidget):
         self._activation_widget.setVisible(True)
         self._main_widget.setVisible(False)
         self._settings_btn.setVisible(False)
-        self._markup_btn.setVisible(False)
         self._vectorize_btn.setVisible(False)
-        self._upgrade_cta.setVisible(False)
+        self._set_upgrade_cta_wanted(False)
         self._setup_header.setVisible(False)
         self._setup_desc.setVisible(False)
         self._signup_section.setVisible(False)
@@ -1741,14 +1739,13 @@ class AIEditDockWidget(QDockWidget):
         if used is not None and limit is not None:
             remaining = max(0, limit - used)
             self._credits_label.setText(f"{remaining} / {limit}")
-            self._credits_label.setVisible(True)
             self._credit_ring.set_credits(used, limit, free_tier=is_free_tier)
-            self._credit_ring.setVisible(True)
             tooltip = tr("Credits remaining this month: {remaining} / {total}").format(
                 remaining=remaining, total=limit
             )
             self._credit_ring.setToolTip(tooltip)
             self._credits_label.setToolTip(tooltip)
+            self._set_credits_wanted(True)
             # Cache + auto-surface the upsell banner when free tier hits 0.
             self._cached_used = used
             self._cached_limit = limit
@@ -1763,9 +1760,8 @@ class AIEditDockWidget(QDockWidget):
             elif not exhausted:
                 self._trial_info_box.setVisible(False)
         else:
-            self._credits_label.setVisible(False)
-            self._credit_ring.setVisible(False)
-        self._upgrade_cta.setVisible(is_free_tier and self._activated)
+            self._set_credits_wanted(False)
+        self._set_upgrade_cta_wanted(is_free_tier and self._activated)
         self._refresh_resolution_triggers()
         self._update_generate_button_text()
 
@@ -1779,8 +1775,6 @@ class AIEditDockWidget(QDockWidget):
         self._zone_selected = True
         self._hide_status_box()
         self._layer_saved_label.setVisible(False)
-        if hasattr(self, "_result_upgrade_nudge"):
-            self._result_upgrade_nudge.setVisible(False)
         self._launch_section.setVisible(False)
         self._select_zone_section.setVisible(False)
         self._result_section.setVisible(False)
@@ -1845,8 +1839,6 @@ class AIEditDockWidget(QDockWidget):
         self._progress_widget.setVisible(False)
         self._result_section.setVisible(False)
         self._layer_saved_label.setVisible(False)
-        if hasattr(self, "_result_upgrade_nudge"):
-            self._result_upgrade_nudge.setVisible(False)
         self._consent_widget.setVisible(False)
         self._generate_btn.setVisible(False)
         self._exit_btn.setVisible(False)
@@ -1855,6 +1847,8 @@ class AIEditDockWidget(QDockWidget):
         self._prompt_input.clear()
         self._prompt_input.setFixedHeight(60)
         self._result_prompt_input.clear()
+        self._active_template_id = None
+        self._active_template_name = None
         # Resolution persists for the QGIS session - initial tier default is
         # applied at init (paid "2K") and coerced to "1K" by
         # _refresh_resolution_triggers when free tier is confirmed.
@@ -1884,8 +1878,6 @@ class AIEditDockWidget(QDockWidget):
         self._progress_widget.setVisible(False)
         self._result_section.setVisible(False)
         self._layer_saved_label.setVisible(False)
-        if hasattr(self, "_result_upgrade_nudge"):
-            self._result_upgrade_nudge.setVisible(False)
         self._consent_widget.setVisible(False)
         self._generate_btn.setVisible(False)
         # No Exit in this state - the screen is just the draw invitation.
@@ -1901,7 +1893,7 @@ class AIEditDockWidget(QDockWidget):
         self._progress_widget.setVisible(generating)
         self._result_section.setVisible(False)
         self._warning_widget.setVisible(False)
-        self._upgrade_cta.setVisible(False)
+        self._set_upgrade_cta_wanted(False)
 
         if generating:
             self._progress_bar.setRange(0, 100)
@@ -2074,17 +2066,7 @@ class AIEditDockWidget(QDockWidget):
             tr("✓ Saved as {name}").format(name=link_html))
         self._layer_saved_label.setVisible(True)
 
-        show_nudge = self._is_free_tier and self._activated
-        if show_nudge:
-            self._result_upgrade_nudge.setText(
-                tr("Like it?") + " " +
-                f'<a href="terralab:subscribe" style="color: {BRAND_BLUE};' +
-                ' text-decoration: none; font-weight: bold;">' +
-                tr("Render this in 2K or 4K") + " &rarr;</a>"
-            )
-        self._result_upgrade_nudge.setVisible(show_nudge)
-
-        self._upgrade_cta.setVisible(self._is_free_tier and self._activated)
+        self._set_upgrade_cta_wanted(self._is_free_tier and self._activated)
 
     def show_trial_exhausted_info(self, message: str, subscribe_url: str):
         self._hide_limit_cta()
@@ -2194,11 +2176,6 @@ class AIEditDockWidget(QDockWidget):
         url = self._trial_info_url or get_subscribe_url()
         QDesktopServices.openUrl(QUrl(url))
 
-    def _on_result_upgrade_clicked(self):
-        from ..core import telemetry
-        telemetry.track("subscribe_link_clicked", {"source": "result_nudge"})
-        QDesktopServices.openUrl(QUrl(get_subscribe_url()))
-
     def _on_exit_clicked(self):
         """Exit: ask the plugin to cancel + return to LAUNCH state."""
         self.exit_clicked.emit()
@@ -2286,7 +2263,7 @@ class AIEditDockWidget(QDockWidget):
         """
         self._generate_btn.setText(tr("Generate"))
         self._generate_btn.setToolTip(tr("Run the AI edit on your selected zone"))
-        self._result_regenerate_btn.setText(tr("Regenerate"))
+        self._result_regenerate_btn.setText(tr("Generate"))
 
     def set_resolution_credit_costs(self, costs: dict[str, int]):
         """Update per-resolution credit costs (server config). Costs are
@@ -2304,6 +2281,10 @@ class AIEditDockWidget(QDockWidget):
         preset = self._open_templates_dialog()
         if not preset:
             return
+
+        # Arm the template so subsequent prompt edits keep the association.
+        self._active_template_id = str(preset.get("id") or "") or None
+        self._active_template_name = str(preset.get("label") or "") or None
 
         if self._result_section.isVisible():
             self._result_prompt_input.blockSignals(True)
@@ -2325,9 +2306,29 @@ class AIEditDockWidget(QDockWidget):
     def _on_prompt_changed(self):
         self._enforce_prompt_max_length(self._prompt_input)
         self._update_generate_enabled()
+        self._clear_active_template_if_empty()
 
     def _on_result_prompt_changed(self):
         self._enforce_prompt_max_length(self._result_prompt_input)
+        self._clear_active_template_if_empty()
+
+    def _clear_active_template_if_empty(self) -> None:
+        """Drop the armed template once both prompt inputs are empty.
+
+        Edits to the prompt text keep the association alive; clearing it out
+        (or hitting Exit) is the signal that the next prompt is unrelated.
+        """
+        prompt = self._prompt_input.toPlainText().strip()
+        result = self._result_prompt_input.toPlainText().strip()
+        if not prompt and not result:
+            self._active_template_id = None
+            self._active_template_name = None
+
+    def get_active_template(self) -> tuple[str, str] | None:
+        """Return the armed (template_id, template_name) if any."""
+        if self._active_template_id:
+            return self._active_template_id, self._active_template_name or ""
+        return None
 
     @staticmethod
     def _enforce_prompt_max_length(text_edit: QTextEdit) -> None:
@@ -2468,10 +2469,6 @@ class AIEditDockWidget(QDockWidget):
     def _apply_swatch_style(button: QPushButton, color: QColor) -> None:
         apply_swatch_style(button, color)
 
-    def _make_pencil_glyph_icon(self) -> QIcon:
-        """Thin wrapper around the module-level pencil factory using the dock's palette ink."""
-        return _pencil_icon(self.palette().color(QPalette.ColorRole.WindowText))
-
     def _make_polygon_glyph_icon(self) -> QIcon:
         """Footer Vectorize button glyph - hexagonal polygon outline with
         small filled vertex dots, reads as "trace region into vectors".
@@ -2568,7 +2565,7 @@ class AIEditDockWidget(QDockWidget):
         )
         # The swatch communicates the pre-filled color already; the label
         # stays generic so it works for every template.
-        self._vectorize_cta_btn.setText(tr("▦ Vectorize this result →"))
+        self._vectorize_cta_btn.setText(tr("Vectorize this result →"))
         self._vectorize_cta_pending = (layer_id, normalised)
         self._vectorize_cta_section.setVisible(True)
 
@@ -2633,6 +2630,7 @@ class AIEditDockWidget(QDockWidget):
         undo_key = QKeySequence(QKeySequence.StandardKey.Undo).toString(
             QKeySequence.SequenceFormat.NativeText
         )
+        launch_key = native("Ctrl+Alt+E")
         markup_key = native("Alt+M")
         vectorize_key = native("Alt+V")
         key_style = (
@@ -2648,6 +2646,7 @@ class AIEditDockWidget(QDockWidget):
         shortcuts_html = (
             "<table cellspacing='4' cellpadding='2'>"
             f"<tr><td colspan='2' style='padding-bottom:2px;'><b>{tr('Editing')}</b></td></tr>"
+            f"<tr><td>{k.format(launch_key)}</td><td>{tr('Launch AI Edit')}</td></tr>"
             f"<tr><td>{k.format(enter_key)}</td><td>{tr('Generate')}</td></tr>"
             f"<tr><td>{k.format('Esc')}</td><td>{tr('Cancel selection')}</td></tr>"
             f"<tr><td>{k.format(undo_key)}</td><td>{tr('Undo')}</td></tr>"

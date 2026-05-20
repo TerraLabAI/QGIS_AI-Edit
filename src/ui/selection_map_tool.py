@@ -113,6 +113,7 @@ class RectangleSelectionTool(QgsMapTool):
         self._zone_rect = None
         self._locked = False
         self._pending_context_menu = False
+        self._is_panning = False
         self._refresh_cursor()
 
         # Badge anchored to the rubber band's top-right corner. Lives in the
@@ -127,36 +128,42 @@ class RectangleSelectionTool(QgsMapTool):
 
     def _refresh_cursor(self) -> None:
         """Crosshair while no zone is selected (draw mode), open hand once
-        a zone exists so the user feels they can move around again. Panning
-        from inside the tool stays delegated to QGIS's built-in middle-mouse
-        and Space+drag - left-drag is reserved for drawing, which is the
-        primary action and what users expect after a Launch.
+        a zone exists so left-drag pans the map like QGIS's native pan tool.
         """
         shape = Qt.CursorShape.OpenHandCursor if self._has_zone else QtC.CrossCursor
         self.setCursor(QCursor(shape))
 
     def canvasPressEvent(self, event):
-        if self._locked:
-            return
+        # Pan stays available even while locked (during generation) so the
+        # user can move the map around. Drawing a new zone and deleting the
+        # current one are the only actions blocked by the lock.
         if (
-            event.button() == QtC.LeftButton
+            not self._locked
+            and event.button() == QtC.LeftButton  # noqa: W503
             and self._has_zone  # noqa: W503
             and self._delete_badge is not None  # noqa: W503
             and self._delete_badge.hit_test(QtC.event_pos(event))  # noqa: W503
         ):
             self._on_delete_zone()
             return
-        if event.button() == QtC.RightButton and self._has_zone:
+        if event.button() == QtC.RightButton and self._has_zone and not self._locked:
             self._pending_context_menu = True
             return
         if event.button() == QtC.LeftButton:
             if self._has_zone:
+                self._is_panning = True
+                self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
+                return
+            if self._locked:
                 return
             self._start_point = self.toMapCoordinates(QtC.event_pos(event))
             self._is_drawing = True
             self._create_rubber_band()
 
     def canvasMoveEvent(self, event):
+        if self._is_panning:
+            self.canvas().panAction(event)
+            return
         if not self._is_drawing or self._start_point is None:
             return
         end_point = self.toMapCoordinates(QtC.event_pos(event))
@@ -172,6 +179,11 @@ class RectangleSelectionTool(QgsMapTool):
         if event.button() == QtC.RightButton and getattr(self, "_pending_context_menu", False):
             self._pending_context_menu = False
             self._show_zone_context_menu(event)
+            return
+        if event.button() == QtC.LeftButton and self._is_panning:
+            self._is_panning = False
+            self.canvas().panActionEnd(QtC.event_pos(event))
+            self._refresh_cursor()
             return
         if event.button() == QtC.LeftButton and self._is_drawing:
             self._is_drawing = False

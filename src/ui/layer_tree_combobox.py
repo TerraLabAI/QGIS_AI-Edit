@@ -52,6 +52,10 @@ class LayerTreeComboBox(QComboBox):
         self._current_layer_id = None  # track selection across refreshes
         self._layer_ids = []  # ordered list of selectable layer IDs
         self._refreshing = False
+        # Optional callable(layer) -> bool. When set, layers returning False
+        # are skipped during _traverse. Used by Vectorize to restrict the
+        # picker to AI-Edit-generated outputs.
+        self._layer_filter = None
 
         from qgis.PyQt.QtCore import QSize
         self.setIconSize(QSize(16, 16))
@@ -102,6 +106,14 @@ class LayerTreeComboBox(QComboBox):
     def count_layers(self):
         """Return the number of selectable (non-header) items."""
         return len(self._layer_ids)
+
+    def set_layer_filter(self, predicate) -> None:
+        """Restrict the combo to layers passing ``predicate(layer) -> bool``.
+
+        Pass None to clear the filter. The combo refreshes immediately.
+        """
+        self._layer_filter = predicate
+        self._refresh()
 
     def cleanup(self):
         """Disconnect project signals."""
@@ -201,12 +213,21 @@ class LayerTreeComboBox(QComboBox):
             if QgsLayerTree.isLayer(child):
                 layer = child.layer()
                 if (layer and layer.type() == layer.RasterLayer
-                        and child.isVisible()):  # noqa: W503
+                        and child.isVisible()  # noqa: W503
+                        and self._passes_filter(layer)):  # noqa: W503
                     return True
             elif QgsLayerTree.isGroup(child):
                 if child.isVisible() and self._has_visible_rasters(child):
                     return True
         return False
+
+    def _passes_filter(self, layer) -> bool:
+        if self._layer_filter is None:
+            return True
+        try:
+            return bool(self._layer_filter(layer))
+        except Exception:
+            return False
 
     def _traverse(self, node, depth=0):
         """Recursively walk the layer tree and add items."""
@@ -220,7 +241,8 @@ class LayerTreeComboBox(QComboBox):
             elif QgsLayerTree.isLayer(child):
                 layer = child.layer()
                 if (layer and layer.type() == layer.RasterLayer
-                        and child.isVisible()):  # noqa: W503
+                        and child.isVisible()  # noqa: W503
+                        and self._passes_filter(layer)):  # noqa: W503
                     visible_children.append(child)
 
         depth_role = _IndentDelegate.DEPTH_ROLE
