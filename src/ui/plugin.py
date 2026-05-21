@@ -28,7 +28,11 @@ from ..core.generation_service import GenerationService
 from ..core.i18n import tr
 from ..core.logger import log, log_debug, log_warning
 from ..core.pipeline_context import PipelineContext
-from ..core.prompt_presets import get_vector_hints, lookup_template_by_prompt
+from ..core.prompt_presets import (
+    detect_freeform_vector_intent,
+    get_vector_hints,
+    lookup_template_by_prompt,
+)
 from ..core.reference_image_store import ReferenceImageStore
 from ..workers.export_worker import ExportWorker
 from ..workers.generation_worker import GenerationWorker
@@ -1048,6 +1052,11 @@ class AIEditPlugin:
         if match:
             ctx.template_id, ctx.template_name = match
             ctx.vector_color, ctx.vector_classes = get_vector_hints(ctx.template_id)
+        else:
+            # No preset matched. Still light up the Vectorize CTA when the
+            # free-form prompt asks to segment, detect, or vectorize one
+            # feature type without naming colors (server paints #FF0000).
+            ctx.vector_color = detect_freeform_vector_intent(prompt)
 
         output_dir = get_output_dir()
 
@@ -1395,6 +1404,11 @@ class AIEditPlugin:
         if match:
             ctx.template_id, ctx.template_name = match
             ctx.vector_color, ctx.vector_classes = get_vector_hints(ctx.template_id)
+        else:
+            # No preset matched. Still light up the Vectorize CTA when the
+            # free-form prompt asks to segment, detect, or vectorize one
+            # feature type without naming colors (server paints #FF0000).
+            ctx.vector_color = detect_freeform_vector_intent(prompt)
 
         if self._dock_widget._is_free_tier:
             suggested_res = "1K"

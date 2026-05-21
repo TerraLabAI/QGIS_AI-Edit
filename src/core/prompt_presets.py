@@ -337,6 +337,132 @@ def get_vector_hints(template_id: str) -> tuple[str | None, list[dict] | None]:
     return None, None
 
 
+# Free-form detection-intent matcher. Mirrors the server-side preprompt rule
+# that paints a 2-color #FF0000 / #FFFFFF map when a prompt asks to segment,
+# detect, or vectorize ONE feature type without naming colors. Keep these
+# regexes in sync with the website preprompt; both must trigger on the same
+# prompts, otherwise the swatch color in the CTA will not match what the
+# model actually paints.
+#
+# Coverage is en / fr / es / pt (the four user-prompt languages we support).
+# Stems are written so a single match captures infinitive, imperative, and
+# past-participle conjugations (segment / segments / segmenting / segmenter /
+# segmente / segmenté / segmentar / segmenta / segmentado / etc.).
+
+_VERB_TAIL = r"[a-zçéèêàôîïùûœáâãíóôõúüñ]*"  # any conjugation / suffix
+
+_FREEFORM_DETECT_VERB_RX = re.compile(
+    r"\b("
+    # segment / segmenter / segmentar (en/fr/es/pt)
+    r"segment|"
+    # detect / detection / détecter / detectar (en/fr/es/pt, accent optional)
+    r"d[eé]tect|"
+    # find / found / trouver / encontrar / encuentr (en/fr/es/pt)
+    r"find|found|trouv|encontr|encuentr|"
+    # locate / localiser / localizar (en/fr/es/pt)
+    r"locat|localis|localiz|"
+    # identify / identifier / identificar (en/fr/es/pt)
+    r"identif|"
+    # extract / extraire / extrait / extraer / extrair (en/fr/es/pt)
+    r"extract|extrai|extra[íe][rtz]?|"
+    # isolate / isoler / aislar / isolar (en/fr/es/pt)
+    r"isolat|isol|aisl|"
+    # mask / masquer / mascarar / enmascarar (en/fr/es/pt)
+    r"mask|masqu|mascar|enmascar|"
+    # outline / contourer / contornear / contornar (en/fr/es/pt)
+    r"outlin|contour|contorn|"
+    # highlight / surligner / resaltar / destacar (en/fr/es/pt)
+    r"highlight|surlign|resalt|destac|"
+    # trace / tracer / trazar / traçar (en/fr/es/pt)
+    r"trac|traz|traç|"
+    # delineate / délimiter / delimitar (en/fr/es/pt)
+    r"delineat|d[eé]limit|"
+    # vectorize / vectoriser / vectorizar / vetorizar (pt drops c) +
+    # typo variants (vecorize, vetorize, vectorise). [ct]{1,2} catches "ct",
+    # "t" (pt vetorizar), and "c" (vecoriz typo).
+    r"v[ea][ct]{1,2}or[iy][sz]|"
+    # polygonize / polygoniser / poligonizar (en/fr/es/pt)
+    r"polygoni[sz]|poligoni[sz]|"
+    # demarcate / démarquer / demarcar (fr/es/pt mainly)
+    r"demarc|d[eé]marqu|"
+    # mark / marquer / marcar (last because broad, but covered by tail guards)
+    r"marqu|marc"
+    r")" + _VERB_TAIL + r"\b",
+    re.IGNORECASE,
+)
+
+_FREEFORM_COLOR_OR_HEX_RX = re.compile(
+    r"#[0-9A-Fa-f]{3,8}\b|"
+    r"\b("
+    # english
+    r"red|white|black|blue|green|yellow|orange|pink|purple|gray|grey|"
+    r"brown|beige|magenta|cyan|silver|gold|golden|"
+    # french (with optional plural/feminine endings)
+    r"rouges?|blan[cs]he?s?|noires?|bleu(?:e|s|es)?|verte?s?|jaunes?|"
+    r"oranges?|roses?|violet(?:te|s|tes)?|grise?s?|marrons?|bruns?|brunes?|"
+    r"argent[ée]e?s?|dor[ée]e?s?|mauves?|"
+    # spanish
+    r"rojos?|blancos?|blancas?|negros?|negras?|azules?|verdes?|amarillos?|amarillas?|"
+    r"naranjas?|rosas?|morados?|moradas?|marr[oó]n(?:es)?|grises?|plateados?|"
+    # portuguese
+    r"vermelhos?|vermelhas?|brancos?|brancas?|pretos?|pretas?|amarelos?|amarelas?|"
+    r"laranjas?|roxos?|roxas?|cinzas?|marrons?|castanhos?|castanhas?|"
+    r"dourados?|prateados?"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Land cover / land use phrasing. When present, the server applies a 4-class
+# default (red urban, green vegetation, blue water, gray bare) so the
+# single-color CTA does not fit. Skip those. Multi-class enumerations
+# ("classify into", "classes :", "categorias :") also skip because the server
+# respects user-listed classes and may paint multiple colors.
+_FREEFORM_LULC_RX = re.compile(
+    r"\b("
+    # english
+    r"land[- ]?use|land[- ]?cover|landuse|landcover|lulc|"
+    # french
+    r"occupation\s+du\s+sol|occupation\s+des\s+sols|usage\s+du\s+sol|"
+    r"utilisation\s+des\s+sols|couverture\s+du\s+sol|couverture\s+des\s+sols|"
+    # spanish
+    r"uso\s+del\s+suelo|cobertura\s+del\s+suelo|"
+    # portuguese
+    r"uso\s+do\s+solo|cobertura\s+do\s+solo|mapeamento\s+de\s+uso|"
+    # multi-class hints in all 4 langs
+    r"classif|classes\s*:|cat[ée]gories\s*:|categorias\s*:|categor[íi]as\s*:"
+    r")",
+    re.IGNORECASE,
+)
+
+# Inferred output color when the server falls back to the 2-color default.
+_FREEFORM_VECTOR_COLOR = "#FF0000"
+
+
+def detect_freeform_vector_intent(prompt_text: str) -> str | None:
+    """Return the inferred output color when a free-form prompt looks like a
+    single-target detection, segmentation, or vectorization request. Returns
+    None when the prompt names colors, hex codes, or land cover keywords
+    (those bypass the server's 2-color default so the CTA swatch would not
+    match what the model paints).
+
+    Call this only after lookup_template_by_prompt returns None, so a real
+    preset match always wins. Stays in sync with the server preprompt in the
+    website config; update both together.
+    """
+    if not prompt_text:
+        return None
+    text = prompt_text.strip()
+    if not text:
+        return None
+    if _FREEFORM_LULC_RX.search(text):
+        return None
+    if _FREEFORM_COLOR_OR_HEX_RX.search(text):
+        return None
+    if not _FREEFORM_DETECT_VERB_RX.search(text):
+        return None
+    return _FREEFORM_VECTOR_COLOR
+
+
 def _build_prompt_lookup(catalog: dict | None) -> dict[str, dict]:
     """Map raw prompt text -> {label, category} for re-attaching template
     metadata to Recent/Favorites entries the user saved from a template.

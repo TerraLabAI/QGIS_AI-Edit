@@ -172,11 +172,14 @@ class GenerationService:
         poll_interval = resp.get("poll_interval", self._poll_interval)
         estimated_time = resp.get("estimated_time")
         max_wait = resp.get("max_wait")  # Server-driven hard ceiling (seconds)
-        absolute_max_polls = int(360 / poll_interval)
+        # Cap the polling loop at 1000 iterations to guard against a misconfigured
+        # tiny poll_interval producing a multi-hour wait.
+        HARD_CAP = 1000
+        absolute_max_polls = min(int(360 / poll_interval), HARD_CAP)
         if max_wait:
-            max_polls = int(max_wait / poll_interval)
+            max_polls = min(int(max_wait / poll_interval), HARD_CAP)
         elif estimated_time:
-            max_polls = max(absolute_max_polls, int(estimated_time * 3 / poll_interval))
+            max_polls = min(max(absolute_max_polls, int(estimated_time * 3 / poll_interval)), HARD_CAP)
         else:
             max_polls = absolute_max_polls
 

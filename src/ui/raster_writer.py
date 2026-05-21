@@ -201,7 +201,7 @@ def _humanize_prompt(prompt: str, max_chars: int = 30) -> str:
         return ""
     if len(text) > max_chars:
         cut = text[:max_chars].rsplit(" ", 1)[0] or text[:max_chars]
-        text = cut.rstrip(" ,.;:-") + "…"
+        text = cut.rstrip(" ,.;:-") + "..."
     return text[:1].upper() + text[1:]
 
 
