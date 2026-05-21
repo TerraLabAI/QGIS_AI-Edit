@@ -1,0 +1,595 @@
+
+
+
+
+
+
+
+
+from __future__ import annotations
+
+import base64
+import dataclasses
+import os
+import shutil
+import tempfile
+import time
+import uuid
+from dataclasses import dataclass
+
+from qgis.PyQt.QtCore import QSize
+from qgis.PyQt.QtGui import QImage, QImageReader
+
+from . import qt_compat as QtC
+from .config_store import ConfigMissing, get_export_copy, get_export_dial, require_dial
+from .i18n import tr
+from .logger import log_debug, log_warning
+
+MAX_SOURCE_BYTES = 50 * 1024 * 1024
+
+
+
+
+
+_TMP_PREFIX = "qgis-ai-edit-refs-"
+_active_dirs: set[str] = set()
+
+
+_STALE_TMP_AGE_S = 24 * 3600
+_SUPPORTED_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+
+
+
+
+
+
+
+
+_SCALED_DECODE_FORMATS = frozenset({b"jpeg", b"jpg"})
+
+
+def sweep_stale_reference_dirs(now: float | None = None) -> int:
+
+
+
+    now = time.time() if now is None else now
+    removed = 0
+    try:
+        base = tempfile.gettempdir()
+        names = os.listdir(base)
+    except OSError:
+        return 0
+    for name in names:
+        if not name.startswith(_TMP_PREFIX):
+            continue
+        path = os.path.join(base, name)
+        if path in _active_dirs:
+            continue
+        try:
+            if not os.path.isdir(path) or os.path.islink(path):
+                continue
+            if now - os.path.getmtime(path) < _STALE_TMP_AGE_S:
+                continue
+        except OSError:
+            continue
+        shutil.rmtree(path, ignore_errors=True)
+        if not os.path.exists(path):
+            removed += 1
+    if removed:
+        log_debug(f"Swept {removed} stale reference folder(s)")
+    return removed
+
+
+def max_references() -> int:
+
+
+
+    return int(require_dial("reference_encode.max_references", lo=1, hi=100))
+
+
+def _cap_for_add() -> int:
+
+    try:
+        return max_references()
+    except ConfigMissing:
+        raise ReferenceImageStoreError(tr("Loading settings from the server...")) from None
+
+
+def _served_encoding() -> dict | None:
+
+    try:
+        return {
+            "longest_side_px": int(require_dial("reference_encode.longest_side_px", lo=16, hi=16384)),
+            "jpeg_quality": int(require_dial("reference_encode.jpeg_quality", lo=1, hi=100)),
+            "webp_quality": int(require_dial("reference_encode.webp_quality", lo=1, hi=100)),
+        }
+    except ConfigMissing:
+        return None
+
+
+def _longest_side_target(width: int, height: int) -> QSize | None:
+
+
+    enc = _served_encoding()
+    if enc is None:
+        return None
+    target = enc["longest_side_px"]
+    if max(width, height) <= target:
+        return None
+    if width >= height:
+        return QSize(target, max(1, round(height * target / width)))
+    return QSize(max(1, round(width * target / height)), target)
+
+
+def _fit_longest_side(image: QImage) -> QImage:
+
+    size = _longest_side_target(image.width(), image.height())
+    if size is None:
+        return image
+    return image.scaled(
+        size,
+        QtC.KeepAspectRatio,
+        QtC.SmoothTransformation,
+    )
+
+
+def _decode_scaled_source(source_path: str) -> QImage:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    reader = QImageReader(source_path)
+    reader.setAutoTransform(True)
+    if bytes(reader.format()).lower() not in _SCALED_DECODE_FORMATS:
+        return reader.read()
+    size = reader.size()
+    scaled = (
+        _longest_side_target(size.width(), size.height())
+        if size.isValid() and size.width() > 0 and size.height() > 0
+        else None
+    )
+    if scaled is None:
+        return reader.read()
+    reader.setScaledSize(scaled)
+    image = reader.read()
+    if image.isNull():
+
+
+        plain_reader = QImageReader(source_path)
+        plain_reader.setAutoTransform(True)
+        image = plain_reader.read()
+    return image
+
+
+def encode_references_b64(paths: list[str]) -> list[str]:
+
+
+
+
+    out: list[str] = []
+    for path in paths:
+        try:
+            with open(path, "rb") as f:
+                out.append(base64.b64encode(f.read()).decode("ascii"))
+        except OSError as err:
+            log_debug(f"Reference image skipped (unreadable): {path} ({err})")
+    return out
+
+
+def encode_references_with_notes(
+    paths: list[str], notes: list[str]
+) -> tuple[list[str], list[str]]:
+
+
+
+
+
+
+    out_images: list[str] = []
+    out_notes: list[str] = []
+    for idx, path in enumerate(paths):
+        try:
+            with open(path, "rb") as f:
+                out_images.append(base64.b64encode(f.read()).decode("ascii"))
+        except OSError as err:
+            log_debug(f"Reference image skipped (unreadable): {path} ({err})")
+            continue
+        out_notes.append(notes[idx] if idx < len(notes) else "")
+    return out_images, out_notes
+
+
+@dataclass(frozen=True)
+class ReferenceImage:
+    id: str
+    path: str
+    source_filename: str
+    size_bytes: int
+
+
+
+    source_kind: str = "file"
+
+
+    whole_layer: bool = False
+
+
+    pending_encode: bool = False
+
+
+class ReferenceImageStoreError(Exception):
+    pass
+
+
+class ReferenceImageStore:
+
+
+    def __init__(self) -> None:
+
+
+
+
+        self._tmp_dir: str | None = None
+
+
+        self._pending_deletes: list[str] = []
+
+        self._refs: dict[str, ReferenceImage] = {}
+
+
+        self._notes: dict[str, str] = {}
+
+
+        self._auto_notes: dict[str, str] = {}
+
+    def _session_dir(self) -> str:
+
+        if self._tmp_dir is None or not os.path.isdir(self._tmp_dir):
+            if self._tmp_dir is None:
+                sweep_stale_reference_dirs()
+            if self._tmp_dir is not None:
+                _active_dirs.discard(self._tmp_dir)
+            self._tmp_dir = tempfile.mkdtemp(prefix=_TMP_PREFIX)
+            _active_dirs.add(self._tmp_dir)
+        return self._tmp_dir
+
+    def _delete_file(self, path: str) -> bool:
+        try:
+            os.remove(path)
+            return True
+        except FileNotFoundError:
+            return True
+        except OSError:
+            return False
+
+    def _retry_pending_deletes(self) -> None:
+        self._pending_deletes = [
+            path for path in self._pending_deletes if not self._delete_file(path)
+        ]
+
+    def _save_image(self, image: QImage, path: str, fmt: str, quality: int = -1) -> bool:
+
+        try:
+            if image.save(path, fmt, quality) and os.path.getsize(path) > 0:
+                return True
+        except OSError:
+            pass  # nosec B110
+        if not self._delete_file(path):
+            self._pending_deletes.append(path)
+        return False
+
+
+
+    def add(self, source_path: str) -> ReferenceImage:
+
+
+
+
+        cap = _cap_for_add()
+        if len(self._refs) >= cap:
+            raise ReferenceImageStoreError(
+                tr("Maximum {n} reference images reached").format(n=cap)
+            )
+
+        if not os.path.isfile(source_path):
+            raise ReferenceImageStoreError(
+                get_export_copy("pipeline.reference_image_store.file_missing", tr("File does not exist"))
+            )
+
+        ext = os.path.splitext(source_path)[1].lower()
+        if ext not in _SUPPORTED_EXTS:
+            raise ReferenceImageStoreError(
+                get_export_copy(
+                    "pipeline.reference_image_store.unsupported_format",
+                    tr("Unsupported format. Use PNG, JPG, WEBP or BMP, or drop a QGIS layer."),
+                )
+            )
+
+        try:
+            src_size = os.path.getsize(source_path)
+        except OSError as err:
+            log_debug(f"Reference image unreadable: {err}")
+            raise ReferenceImageStoreError(
+                get_export_copy(
+                    "pipeline.reference_image_store.unreadable",
+                    tr("This file cannot be read. Check that it still exists and that you can open it."),
+                )
+            ) from err
+
+        if src_size > get_export_dial("reference_encode.max_source_bytes", MAX_SOURCE_BYTES):
+            raise ReferenceImageStoreError(
+                get_export_copy("pipeline.reference_image_store.too_large", tr("Image too large (max 50 MB)"))
+            )
+
+        image = _decode_scaled_source(source_path)
+        if image.isNull():
+            raise ReferenceImageStoreError(
+                get_export_copy("pipeline.reference_image_store.decode_failed", tr("Failed to decode image"))
+            )
+
+        ref_id = uuid.uuid4().hex[:12]
+        enc = _served_encoding()
+        if enc is None:
+            dest_path = os.path.join(self._session_dir(), f"{ref_id}.png")
+            saved = self._save_image(image, dest_path, "PNG")
+        else:
+            dest_path = os.path.join(self._session_dir(), f"{ref_id}.jpg")
+            saved = self._save_image(_fit_longest_side(image), dest_path, "JPEG", enc["jpeg_quality"])
+        if not saved:
+            raise ReferenceImageStoreError(
+                get_export_copy(
+                    "pipeline.reference_image_store.write_compressed_failed",
+                    tr("Failed to write compressed image"),
+                )
+            )
+
+        try:
+            final_size = os.path.getsize(dest_path)
+        except OSError:
+            final_size = 0
+
+        record = ReferenceImage(
+            id=ref_id,
+            path=dest_path,
+            source_filename=os.path.basename(source_path),
+            size_bytes=final_size,
+            source_kind="file",
+            pending_encode=enc is None,
+        )
+        self._refs[ref_id] = record
+        log_debug(
+            f"Reference image added: id={ref_id}, "
+            f"src_size={src_size}, final_size={final_size}, "
+            f"count={len(self._refs)}"
+        )
+        return record
+
+    def add_from_qimage(
+        self,
+        image: QImage,
+        source_name: str,
+        source_kind: str = "layer",
+        whole_layer: bool = False,
+    ) -> ReferenceImage:
+
+
+
+
+
+
+
+
+
+
+        cap = _cap_for_add()
+        if len(self._refs) >= cap:
+            raise ReferenceImageStoreError(
+                tr("Maximum {n} reference images reached").format(n=cap)
+            )
+        if image is None or image.isNull():
+            raise ReferenceImageStoreError(
+                get_export_copy("pipeline.reference_image_store.render_failed", tr("Failed to render layer"))
+            )
+
+        ref_id = uuid.uuid4().hex[:12]
+        enc = _served_encoding()
+        dest_path = self._write_render(image, ref_id, enc)
+        if dest_path is None:
+            raise ReferenceImageStoreError(
+                get_export_copy(
+                    "pipeline.reference_image_store.write_rendered_failed",
+                    tr("Failed to write rendered image"),
+                )
+            )
+
+        try:
+            final_size = os.path.getsize(dest_path)
+        except OSError:
+            final_size = 0
+
+        record = ReferenceImage(
+            id=ref_id,
+            path=dest_path,
+            source_filename=source_name,
+            size_bytes=final_size,
+            source_kind=source_kind,
+            whole_layer=bool(whole_layer),
+            pending_encode=enc is None,
+        )
+        self._refs[ref_id] = record
+        log_debug(
+            f"Reference image added from render: id={ref_id}, "
+            f"final_size={final_size}, count={len(self._refs)}"
+        )
+        return record
+
+    def _write_render(self, image: QImage, ref_id: str, enc: dict | None) -> str | None:
+
+
+
+        if enc is None:
+            dest_path = os.path.join(self._session_dir(), f"{ref_id}.png")
+            return dest_path if self._save_image(image, dest_path, "PNG") else None
+        image = _fit_longest_side(image)
+        dest_path = os.path.join(self._session_dir(), f"{ref_id}.webp")
+        if self._save_image(image, dest_path, "WEBP", enc["webp_quality"]):
+            return dest_path
+
+
+        dest_path = os.path.join(self._session_dir(), f"{ref_id}.png")
+        return dest_path if self._save_image(image, dest_path, "PNG") else None
+
+    def encode_pending(self) -> bool:
+
+
+
+
+        pending = [r for r in self._refs.values() if r.pending_encode]
+        if not pending:
+            return True
+        enc = _served_encoding()
+        if enc is None:
+            return False
+        for record in pending:
+            image = QImage(record.path)
+            if image.isNull():
+                continue
+            new_id = uuid.uuid4().hex[:12]
+            if record.source_kind == "file":
+                new_path = os.path.join(self._session_dir(), f"{new_id}.jpg")
+                if not self._save_image(_fit_longest_side(image), new_path, "JPEG", enc["jpeg_quality"]):
+                    continue
+            else:
+                new_path = self._write_render(image, new_id, enc)
+                if new_path is None:
+                    continue
+            try:
+                size = os.path.getsize(new_path)
+            except OSError:
+                size = 0
+            old_path = record.path
+            self._refs[record.id] = dataclasses.replace(
+                record, path=new_path, size_bytes=size, pending_encode=False
+            )
+            if not self._delete_file(old_path):
+                self._pending_deletes.append(old_path)
+        return True
+
+    def set_note(self, ref_id: str, note: str) -> None:
+
+
+        if not isinstance(ref_id, str) or ref_id not in self._refs or not isinstance(note, str):
+            return
+        if note:
+            self._notes[ref_id] = note
+        else:
+            self._notes.pop(ref_id, None)
+
+    def set_auto_note(self, ref_id: str, note: str) -> None:
+
+
+        if isinstance(ref_id, str) and ref_id in self._refs and isinstance(note, str) and note:
+            self._auto_notes[ref_id] = note
+
+    def move_to_end(self, ref_ids: list[str]) -> None:
+
+
+        tail = [ref_id for ref_id in ref_ids if ref_id in self._refs]
+        if not tail:
+            return
+        keep = {k: v for k, v in self._refs.items() if k not in tail}
+        keep.update((ref_id, self._refs[ref_id]) for ref_id in tail)
+        self._refs = keep
+
+    def get_note(self, ref_id: str) -> str:
+        return self._notes.get(ref_id, "") if isinstance(ref_id, str) else ""
+
+    def snapshot_notes(self) -> list[str]:
+
+
+        return [
+            (self._notes.get(record.id, "").strip()
+             or self._auto_notes.get(record.id, "").strip())
+            for record in self._refs.values()
+        ]
+
+    def remove(self, ref_id: str) -> None:
+
+        if not isinstance(ref_id, str):
+            return
+        record = self._refs.pop(ref_id, None)
+        self._notes.pop(ref_id, None)
+        self._auto_notes.pop(ref_id, None)
+        if record is None:
+            return
+        self._retry_pending_deletes()
+        if not self._delete_file(record.path):
+            log_warning(f"Reference image {ref_id} is in use; deletion deferred")
+            self._pending_deletes.append(record.path)
+
+    def clear(self) -> None:
+
+        for ref_id in list(self._refs.keys()):
+            self.remove(ref_id)
+
+    def list(self) -> list[ReferenceImage]:
+
+        return list(self._refs.values())
+
+    def count(self) -> int:
+        return len(self._refs)
+
+    def snapshot_paths(self) -> list[str]:
+
+
+
+
+
+        self.encode_pending()
+        return [record.path for record in self._refs.values()]
+
+    def get_all_b64(self) -> list[str]:
+
+
+
+        return encode_references_b64(self.snapshot_paths())
+
+    def total_size_bytes(self) -> int:
+        return sum(r.size_bytes for r in self._refs.values())
+
+    def cleanup(self) -> None:
+
+        self._refs.clear()
+        self._notes.clear()
+        self._auto_notes.clear()
+        self._retry_pending_deletes()
+        tmp_dir = self._tmp_dir
+        if tmp_dir is None:
+            return
+        if os.path.isdir(tmp_dir):
+            try:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            except Exception as err:  # nosec B110
+                log_warning(f"Failed to clean reference tmp dir: {err}")
+        if os.path.isdir(tmp_dir):
+
+
+            log_warning("Reference tmp dir still in use; left for the next sweep")
+        _active_dirs.discard(tmp_dir)
+        self._pending_deletes = []
+        self._tmp_dir = None
