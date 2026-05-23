@@ -3,32 +3,35 @@ from __future__ import annotations
 import os
 import time
 
-from qgis.core import QgsPointXY, QgsRectangle
+from qgis.core import QgsApplication, QgsPointXY, QgsRectangle
 from qgis.gui import QgsRubberBand
-from qgis.PyQt.QtCore import QEvent, QObject, QSettings, QThread, pyqtSignal
+from qgis.PyQt.QtCore import QEvent, QObject, QSettings, QTimer
 from qgis.PyQt.QtGui import QColor, QIcon, QKeySequence
 from qgis.PyQt.QtWidgets import QAction, QShortcut
 
 from ..api.terralab_client import TerraLabClient
-from ..core import prompt_history, telemetry
 from ..core import qt_compat as QtC
-from ..core.activation_manager import (
+from ..core import telemetry
+from ..core.auth.activation_manager import (
     clear_activation,
     clear_config_cache,
     get_activation_key,
     get_dashboard_url,
     get_server_config,
     has_consent,
+    migrate_legacy_key,
     save_activation,
     save_consent,
     validate_key_with_server,
 )
-from ..core.auth_manager import AuthManager
-from ..core.generation_service import GenerationService
+from ..core.auth.auth_manager import AuthManager
+from ..core.config_store import ConfigStore, set_store
+from ..core.generation.generation_service import GenerationService
+from ..core.generation.pipeline_context import PipelineContext
 from ..core.i18n import tr
 from ..core.logger import log, log_debug, log_warning
-from ..core.pipeline_context import PipelineContext
-from ..core.prompt_presets import (
+from ..core.prompts import prompt_history
+from ..core.prompts.prompt_presets import (
     detect_freeform_vector_intent,
     get_vector_hints,
     lookup_template_by_prompt,
@@ -36,6 +39,7 @@ from ..core.prompt_presets import (
 from ..core.reference_image_store import ReferenceImageStore
 from ..workers.export_worker import ExportWorker
 from ..workers.generation_worker import GenerationWorker
+from ..workers.generic_request_task import GenericRequestTask
 from .canvas_exporter import (
     apply_export_context,
     has_server_config,
@@ -43,17 +47,17 @@ from .canvas_exporter import (
     set_server_config,
 )
 from .dock_widget import AIEditDockWidget
-from .markup_tools import (
+from .raster_writer import (
+    add_geotiff_to_project,
+    get_output_dir,
+)
+from .tools.markup_tools import (
     ArrowMapTool,
     CircleMapTool,
     MarkupLayerManager,
     PencilMapTool,
 )
-from .raster_writer import (
-    add_geotiff_to_project,
-    get_output_dir,
-)
-from .selection_map_tool import RectangleSelectionTool
+from .tools.selection_map_tool import RectangleSelectionTool
 
 
 class _MarkupUndoFilter(QObject):
@@ -76,10 +80,7 @@ class _MarkupUndoFilter(QObject):
         return False
 
 
-# Global shortcut to open the dock + start a new edit. Qt portably maps
-# Ctrl → Cmd on macOS, so the same string fires Cmd+Alt+E on Mac and
-# Ctrl+Alt+E on Windows/Linux. Exported so dock_widget can display it
-# in the Shortcuts dialog without duplicating the literal string.
+# Qt maps Ctrl -> Cmd on macOS automatically.
 LAUNCH_SHORTCUT = "Ctrl+Alt+E"
 
 
@@ -93,93 +94,24 @@ SUBSCRIBE_ERROR_URL = (
 )
 
 
-class _CreditsLoaderWorker(QThread):
-    """Background worker to fetch usage/credits without blocking QGIS."""
-
-    loaded = pyqtSignal(dict)
-    failed = pyqtSignal()
-
-    def __init__(self, auth_manager):
-        super().__init__()
-        self._auth_manager = auth_manager
-
-    def run(self):
-        result = self._auth_manager.get_usage_info()
-        if "error" not in result:
-            self.loaded.emit(result)
-        else:
-            self.failed.emit()
+def _key_validation_request(client, key):
+    """Run validate_key_with_server and reshape its (ok, msg, code) tuple into
+    the dict shape GenericRequestTask expects ({} on success, {"error": msg,
+    "code": code} on failure)."""
+    success, message, code = validate_key_with_server(client, key)
+    if success:
+        return {}
+    return {"error": message, "code": code}
 
 
-class _KeyValidationWorker(QThread):
-    """Background worker to validate activation key with server."""
-
-    valid = pyqtSignal()
-    invalid = pyqtSignal(str, str)  # message, error_code
-
-    def __init__(self, client, key: str):
-        super().__init__()
-        self._client = client
-        self._key = key
-
-    def run(self):
-        success, message, code = validate_key_with_server(self._client, self._key)
-        if success:
-            self.valid.emit()
-        else:
-            self.invalid.emit(message, code)
-
-
-class _ExportConfigLoaderWorker(QThread):
-    """Background worker to fetch export config from server without blocking QGIS."""
-
-    loaded = pyqtSignal(dict)
-    failed = pyqtSignal(str)
-
-    def __init__(self, client):
-        super().__init__()
-        self._client = client
-
-    def run(self):
-        try:
-            log_debug("Export config: fetching from server...")
-            config = self._client.get_export_config()
-            if "error" not in config:
-                log_debug("Export config: loaded from server")
-                self.loaded.emit(config)
-            else:
-                error_msg = config.get("error", "Unknown error")
-                log_warning(f"Export config: server returned error - {error_msg}")
-                self.failed.emit(f"Server error: {error_msg}")
-        except Exception as e:
-            log_warning(f"Export config: fetch failed - {e}")
-            self.failed.emit(f"Connection error: {e}")
-
-
-class _ServerCatalogLoaderWorker(QThread):
-    """Background fetch of /api/ai-edit/presets so QGIS startup never blocks."""
-
-    loaded = pyqtSignal(dict)
-    failed = pyqtSignal()
-
-    def __init__(self, client, force_refresh: bool = False):
-        super().__init__()
-        self._client = client
-        self._force_refresh = force_refresh
-
-    def run(self):
-        try:
-            from ..core.prompt_presets_client import fetch_server_catalog
-
-            catalog = fetch_server_catalog(self._client, force_refresh=self._force_refresh)
-        except Exception as err:  # noqa: BLE001
-            log_warning(f"Server catalog worker raised: {err}")
-            self.failed.emit()
-            return
-        if catalog is None:
-            self.failed.emit()
-        else:
-            self.loaded.emit(catalog)
+def _server_catalog_request(client, force_refresh: bool):
+    """Fetch server preset catalog. Returns the dict on success or a sentinel
+    error dict so GenericRequestTask routes via ``failed``."""
+    from ..core.prompts.prompt_presets_client import fetch_server_catalog
+    catalog = fetch_server_catalog(client, force_refresh=force_refresh)
+    if catalog is None:
+        return {"error": "Catalog unavailable", "code": "UNAVAILABLE"}
+    return catalog
 
 
 def _localize_server_error(error: str, code: str) -> str:
@@ -212,11 +144,14 @@ def _localize_server_error(error: str, code: str) -> str:
         "MISCONFIGURED": tr("Service not configured. Please contact support."),
         "SERVER_ERROR": tr("Service temporarily unavailable, please retry shortly."),
         "DB_ERROR": tr("Database error, please retry shortly."),
-        "BAD_REQUEST": tr("Invalid request."),
-        "BAD_INPUT": tr("Invalid input."),
-        "INVALID_INPUT": tr("Invalid input."),
-        "PAYLOAD_TOO_LARGE": tr("Image too large for the service."),
-        "RESOLUTION_NOT_ALLOWED": tr("Free plan is limited to 1K resolution. Upgrade for higher resolutions."),
+        "BAD_REQUEST": tr("Invalid request. Check your prompt and the selected area, then try again."),
+        "BAD_INPUT": tr("Invalid input. Check your prompt and the selected area."),
+        "INVALID_INPUT": tr("Invalid input. Try a different image or selection."),
+        "PAYLOAD_TOO_LARGE": tr("Image too large. Try selecting a smaller area or lowering the resolution."),
+        "RESOLUTION_NOT_ALLOWED": tr(
+            "This resolution is not available on your plan."
+            " Upgrade to unlock higher resolutions."
+        ),
         "NOT_FOUND": tr("Resource not found."),
         "NOT_SEEDED": tr("Catalog not yet available, please retry shortly."),
         "DEMO_FETCH_FAILED": tr("Could not load the demo preview."),
@@ -285,6 +220,28 @@ def _is_generic_model_failure(message: str, normalized_code: str) -> bool:
     return any(needle in text for needle in _GENERIC_MODEL_FAILURE_HINTS)
 
 
+def _resolve_class_label(
+    vector_color: str | None, vector_classes: list[dict] | None
+) -> str:
+    """Look up the semantic class name for ``vector_color`` in the multi-class
+    catalog. Empty string when the template only declares a color, leaving
+    the field blank in the table for the user to fill in (autocomplete kicks
+    in after the first value is typed).
+    """
+    if not vector_color or not isinstance(vector_classes, list):
+        return ""
+    target = vector_color.upper().lstrip("#")
+    for entry in vector_classes:
+        if not isinstance(entry, dict):
+            continue
+        color = (entry.get("color") or "").upper().lstrip("#")
+        if color and color == target:
+            label = entry.get("label")
+            if isinstance(label, str):
+                return label.strip()
+    return ""
+
+
 class AIEditPlugin:
     """Main QGIS plugin class. Orchestrates all tiers."""
 
@@ -293,6 +250,7 @@ class AIEditPlugin:
         self._canvas = iface.mapCanvas()
         self._dock_widget = None
         self._map_tool = None
+        self._swipe_controller = None
         self._action = None
         self._settings_action = None
         self._selected_extent = None
@@ -304,6 +262,7 @@ class AIEditPlugin:
         # callback needs to chain into the GenerationWorker. Cleared after use.
         self._pending_generation: dict | None = None
         self._selection_rubber_band = None
+        self._selection_rubber_band_halo = None
         self._previous_map_tool = None
         self._terralab_toolbar = None
         self._export_config_loader = None
@@ -315,15 +274,10 @@ class AIEditPlugin:
         self._last_crs_wkt = None
         self._last_aspect_ratio = None
         self._last_suggested_res = None
-        # request_id of the most recent completed generation on the current
-        # selection. Sent to the server on the next submit so it can attach
-        # the original input as a hidden reference image, anchoring style
-        # coherence across iterations. Cleared on fresh zone selection.
+        # Iteration anchor: sent as parent_request_id on the next submit.
         self._last_completed_request_id: str | None = None
         self._key_validation_worker = None
-        # Last successful server-side key revalidation (unix seconds). Used to
-        # skip /api/plugin/usage round-trips when the user toggles the dock
-        # rapidly; rate limit is 10/60s per key, so no cache => silent failures.
+        # Skip /usage round-trips while rapidly toggling the dock (10/60s rate limit).
         self._last_key_validation_unix: float = 0.0
         # Mark up state. Lazy: manager is created on first entry.
         self._markup_manager: MarkupLayerManager | None = None
@@ -349,6 +303,10 @@ class AIEditPlugin:
         # Initialize tiers
         self._dev_mode = False
         self._skip_trial_check = False
+        # ConfigStore owns server config, cached activation config, telemetry
+        # collector. Wired so unload + Plugin Reloader leave no globals behind.
+        self._config_store = ConfigStore()
+        set_store(self._config_store)
         self._client = self._create_client()
         self._auth_manager = AuthManager(self._client)
         self._generation_service = GenerationService(self._client)
@@ -370,26 +328,33 @@ class AIEditPlugin:
         """Create TerraLabClient. Reads TERRALAB_BASE_URL from .env.local."""
         plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         env_path = os.path.join(plugin_dir, ".env.local")
-        if os.path.isfile(env_path):
-            env_vars = self._load_env_file(env_path)
-            self._dev_mode = env_vars.get("DEBUG", "").lower() == "true"
-            self._skip_trial_check = (
-                env_vars.get("SKIP_TRIAL_CHECK", "").lower() == "true"
-            )
-        return TerraLabClient()
+        env_vars: dict = {}
+        try:
+            if os.path.isfile(env_path):
+                env_vars = self._load_env_file(env_path)
+        except OSError as err:
+            # Network shares or USB drives can vanish mid-read; defaults are
+            # safe (dev_mode and skip_trial_check stay False).
+            log_warning(f".env.local read failed, using defaults: {err}")
+        self._dev_mode = env_vars.get("DEBUG", "").lower() == "true"
+        self._skip_trial_check = env_vars.get("SKIP_TRIAL_CHECK", "").lower() == "true"
+        return TerraLabClient(env_vars=env_vars)
 
     @staticmethod
     def _load_env_file(path: str) -> dict:
         """Parse a simple KEY=VALUE env file (ignores comments and blank lines)."""
-        env = {}
-        with open(path, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    key, _, value = line.partition("=")
-                    env[key.strip()] = value.strip().strip('"').strip("'")
+        env: dict = {}
+        try:
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        key, _, value = line.partition("=")
+                        env[key.strip()] = value.strip().strip('"').strip("'")
+        except OSError as err:
+            log_warning(f".env.local read failed: {err}")
         return env
 
     @staticmethod
@@ -408,7 +373,12 @@ class AIEditPlugin:
         return "unknown"
 
     def initGui(self):
-        """Called by QGIS when plugin is loaded."""
+        # Idempotent; defers silently if auth DB is locked.
+        try:
+            migrate_legacy_key()
+        except Exception as err:  # nosec B110
+            log_warning(f"Auth migration raised: {err}")
+
         plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         icon_path = os.path.join(plugin_dir, "resources", "icons", "icon.png")
 
@@ -482,20 +452,20 @@ class AIEditPlugin:
         self._dock_widget = AIEditDockWidget(
             self._iface.mainWindow(), reference_store=self._reference_store
         )
-        # Hand the dock the client + auth manager so it can pass them to the
-        # Prompt library dialog for server-side history/favorites sync.
         self._dock_widget.set_library_dependencies(self._client, self._auth_manager)
-        # Server catalog (v2): hand the stale cache (if any) to the dock
-        # synchronously so opening the library is instant, then revalidate on
-        # a worker thread. First-time installs offline see empty themed tabs
-        # until the worker succeeds.
-        try:
-            from ..core.prompt_presets_client import read_cached_catalog_stale_ok
+        # Defer stale catalog read off initGui so startup never blocks on disk.
 
-            self._dock_widget.set_server_catalog(read_cached_catalog_stale_ok())
-        except Exception as err:  # noqa: BLE001
-            log_warning(f"Server catalog stale read failed: {err}")
-            self._dock_widget.set_server_catalog(None)
+        def _load_stale_catalog():
+            try:
+                from ..core.prompts.prompt_presets_client import read_cached_catalog_stale_ok
+
+                if self._dock_widget is not None:
+                    self._dock_widget.set_server_catalog(read_cached_catalog_stale_ok())
+            except Exception as err:  # noqa: BLE001
+                log_warning(f"Server catalog stale read failed: {err}")
+                if self._dock_widget is not None:
+                    self._dock_widget.set_server_catalog(None)
+        QTimer.singleShot(0, _load_stale_catalog)
         self._load_server_catalog()
         self._iface.addDockWidget(QtC.RightDockWidgetArea, self._dock_widget)
         _first_install_settings = QSettings()
@@ -526,6 +496,29 @@ class AIEditPlugin:
         self._dock_widget.vectorize_suggestion_clicked.connect(
             self._on_vectorize_suggestion_clicked
         )
+        # Before/After swipe: toggle-based, no dock panel. The footer
+        # button toggle drives the SwipeController; the controller signals
+        # back so the button visual + enable state stays in sync.
+        from .panels.swipe_panel import SwipeController
+        # parent must be a QObject; AIEditPlugin is a plain Python class.
+        # The controller has no natural Qt parent, so we own its lifecycle
+        # explicitly via cleanup() in unload().
+        self._swipe_controller = SwipeController(None)
+        self._dock_widget.swipe_toggled.connect(self._on_swipe_toggled)
+        self._swipe_controller.activated.connect(self._on_swipe_armed)
+        self._swipe_controller.deactivated.connect(self._on_swipe_disarmed)
+        self._swipe_controller.eligibility_changed.connect(
+            self._dock_widget.set_swipe_button_enabled
+        )
+        # Opening the Help menu disarms any active swipe, same rule as
+        # the other AI Edit actions: only one tool owns the canvas at a
+        # time so the user is never left guessing which mode they are in.
+        self._dock_widget.help_menu_open_changed.connect(self._on_help_menu_open_changed)
+        # Seed the initial enable state from the layer that's active right
+        # now (currentLayerChanged only fires on subsequent changes).
+        self._dock_widget.set_swipe_button_enabled(
+            self._swipe_controller.can_swipe_now()
+        )
         # Title-bar X close doesn't go through _toggle_dock, so listen for the
         # underlying visibility change to keep the map tool / cursor in sync.
         self._dock_widget.visibilityChanged.connect(self._on_dock_visibility_changed)
@@ -544,6 +537,7 @@ class AIEditPlugin:
         self._map_tool = RectangleSelectionTool(self._canvas)
         self._map_tool.selection_made.connect(self._on_zone_selected)
         self._map_tool.zone_too_small.connect(self._on_zone_too_small)
+        self._map_tool.zone_invalid.connect(self._on_zone_invalid)
         self._map_tool.zone_delete_requested.connect(self._on_zone_delete_requested)
 
         # Restore saved activation key
@@ -551,7 +545,7 @@ class AIEditPlugin:
         if not self._auth_manager.has_activation_key():
             telemetry.track("activation_screen_viewed")
 
-        from .error_report_dialog import start_log_collector
+        from .dialogs.error_report_dialog import start_log_collector
 
         start_log_collector()
 
@@ -572,61 +566,57 @@ class AIEditPlugin:
 
     def unload(self):
         """Called by QGIS when plugin is unloaded."""
-        # Stop generation worker. `quit()` is a no-op on workers without an
-        # event loop, so cooperative cancel is the primary stop signal and
-        # terminate() is reserved for last-resort cleanup that would otherwise
-        # leak a running QThread when the plugin object is destroyed.
-        if self._worker and self._worker.isRunning():
+        # Stop generation task. QgsTaskManager owns the task lifecycle, so we
+        # request cancellation and drop our reference; the framework drains
+        # the run() loop and emits taskTerminated on the main thread.
+        if self._worker is not None and self._worker.is_active():
             self._generation_service.cancel()
-            for sig in [self._worker.finished, self._worker.progress, self._worker.error]:
+            for sig in [self._worker.succeeded, self._worker.progress, self._worker.failed]:
                 try:
                     sig.disconnect()
                 except (RuntimeError, TypeError):
                     pass
-            if not self._worker.wait(5000):
-                self._worker.terminate()
-                self._worker.wait(1000)
+            try:
+                self._worker.cancel()
+            except Exception:  # nosec B110
+                pass
         self._worker = None
 
         # Same drain for the canvas-export worker. Drop the pending hand-off
         # so a late completed-signal doesn't try to kick a GenerationWorker
         # against a torn-down dock.
         self._pending_generation = None
-        if self._export_worker and self._export_worker.isRunning():
-            for sig in [
-                self._export_worker.completed,
-                self._export_worker.failed,
-                self._export_worker.finished,
-            ]:
+        if self._export_worker is not None and self._export_worker.is_active():
+            for sig in [self._export_worker.completed, self._export_worker.failed]:
                 try:
                     sig.disconnect()
                 except (RuntimeError, TypeError):
                     pass
-            if not self._export_worker.wait(3000):
-                self._export_worker.terminate()
-                self._export_worker.wait(500)
+            try:
+                self._export_worker.cancel()
+            except Exception:  # nosec B110
+                pass
         self._export_worker = None
 
-        # Stop background loader workers and disconnect signals. Their run()
-        # methods are blocking network calls with built-in timeouts, so a
-        # 5s wait is enough for the common case; we only fall through to
-        # terminate when the network stack itself is wedged.
+        # Stop background loader QgsTasks. We disconnect signals (slots
+        # would land on a dying dock) then cancel; the task manager drains
+        # the run() loop and disposes of the task itself.
         for loader in [
             self._export_config_loader,
             self._credits_loader,
             self._key_validation_worker,
             self._catalog_loader,
         ]:
-            if loader:
-                try:
-                    loader.disconnect()
-                except (RuntimeError, TypeError):
-                    pass
-                if loader.isRunning():
-                    if not loader.wait(5000):
-                        loader.terminate()
-                        loader.wait(1000)
-                loader.deleteLater()
+            if loader is None:
+                continue
+            try:
+                loader.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+            try:
+                loader.cancel()
+            except Exception:  # nosec B110
+                pass
         self._export_config_loader = None
         self._credits_loader = None
         self._key_validation_worker = None
@@ -660,7 +650,21 @@ class AIEditPlugin:
                 pass
             self._launch_shortcut = None
 
+        if self._swipe_controller is not None:
+            try:
+                self._swipe_controller.cleanup()
+            except RuntimeError:
+                pass
+            self._swipe_controller = None
+
         if self._dock_widget:
+            # Disconnect QgsProject signals before the dock is destroyed.
+            # closeEvent used to do this but firing on every hide also broke
+            # the dock when the user re-opened it from the Panels menu.
+            try:
+                self._dock_widget.cleanup()
+            except Exception as err:  # nosec B110
+                log_warning(f"Dock cleanup failed: {err}")
             self._iface.removeDockWidget(self._dock_widget)
             self._dock_widget.deleteLater()
             self._dock_widget = None
@@ -671,7 +675,7 @@ class AIEditPlugin:
         except Exception as err:  # nosec B110
             log_warning(f"Reference store cleanup failed: {err}")
 
-        from .error_report_dialog import stop_log_collector
+        from .dialogs.error_report_dialog import stop_log_collector
 
         stop_log_collector()
 
@@ -728,6 +732,12 @@ class AIEditPlugin:
                 log_warning(f"Map tool cleanup failed: {err}")
         self._map_tool = None
         clear_config_cache()
+        # Cancel any in-flight telemetry flush tasks before tearing down the
+        # store so QgsTaskManager doesn't outlive the collector.
+        telemetry.shutdown_telemetry()
+        if self._config_store is not None:
+            self._config_store.clear()
+        set_store(None)
         log("AI Edit plugin unloaded")
 
     @staticmethod
@@ -773,6 +783,11 @@ class AIEditPlugin:
         telemetry.track("first_generation_milestone", props)
         telemetry.flush()
         settings.setValue("AIEdit/first_generation_milestone_fired", True)
+        # Force-flush so a crash doesn't lose the flag and re-fire the milestone.
+        try:
+            settings.sync()
+        except Exception:  # nosec B110
+            pass
         self._first_generation_milestone_emitted = True
 
     def _toggle_dock(self):
@@ -822,10 +837,21 @@ class AIEditPlugin:
             # Stay on LAUNCH state; tool is activated on user click.
             return
 
-        self._key_validation_worker = _KeyValidationWorker(self._client, saved_key)
-        self._key_validation_worker.valid.connect(self._on_key_valid)
-        self._key_validation_worker.invalid.connect(self._on_key_invalid)
-        self._key_validation_worker.start()
+        # Optimistic activation: a saved key implies the user is already
+        # signed up. Show the activated UI immediately and disable
+        # Launch until the async credit check confirms; otherwise the
+        # sign-up screen flashes for half a second on every reload.
+        self._dock_widget.set_activated(True)
+        self._settings_action.setEnabled(True)
+        self._dock_widget.set_launch_enabled(False)
+
+        self._key_validation_worker = GenericRequestTask(
+            "AI Edit key validation",
+            lambda c=self._client, k=saved_key: _key_validation_request(c, k),
+        )
+        self._key_validation_worker.succeeded.connect(lambda _payload: self._on_key_valid())
+        self._key_validation_worker.failed.connect(self._on_key_invalid)
+        QgsApplication.taskManager().addTask(self._key_validation_worker)
 
     def _on_key_valid(self):
         """Server confirmed the key is valid."""
@@ -849,7 +875,8 @@ class AIEditPlugin:
         """Open the Account Settings dialog."""
         if not self._auth_manager.has_activation_key():
             return
-        from .account_settings_dialog import AccountSettingsDialog
+        self._disarm_swipe()
+        from .dialogs.account_settings_dialog import AccountSettingsDialog
 
         dlg = AccountSettingsDialog(
             client=self._client,
@@ -858,14 +885,23 @@ class AIEditPlugin:
             parent=self._iface.mainWindow(),
         )
         dlg.change_key_requested.connect(self._on_change_key)
-        dlg.exec()
+        self._dock_widget.set_settings_button_active(True)
+        try:
+            dlg.exec()
+        finally:
+            self._dock_widget.set_settings_button_active(False)
 
     def _load_export_config(self):
         """Fetch export config from server in background thread."""
-        self._export_config_loader = _ExportConfigLoaderWorker(self._client)
-        self._export_config_loader.loaded.connect(self._on_export_config_loaded)
-        self._export_config_loader.failed.connect(self._on_export_config_failed)
-        self._export_config_loader.start()
+        self._export_config_loader = GenericRequestTask(
+            "AI Edit export config",
+            self._client.get_export_config,
+        )
+        self._export_config_loader.succeeded.connect(self._on_export_config_loaded)
+        self._export_config_loader.failed.connect(
+            lambda msg, code: self._on_export_config_failed(f"Server error: {msg}")
+        )
+        QgsApplication.taskManager().addTask(self._export_config_loader)
 
     def _load_server_catalog(self):
         """Fetch the AI Edit preset catalog in the background and hand it to
@@ -878,12 +914,13 @@ class AIEditPlugin:
         latest catalog within seconds. Without force_refresh, fetch would
         short-circuit on cache hit and the user could stay on a stale catalog
         until the TTL expired (painful right after a server-side push)."""
-        self._catalog_loader = _ServerCatalogLoaderWorker(
-            self._client, force_refresh=True
+        self._catalog_loader = GenericRequestTask(
+            "AI Edit preset catalog",
+            lambda c=self._client: _server_catalog_request(c, force_refresh=True),
         )
-        self._catalog_loader.loaded.connect(self._on_server_catalog_loaded)
-        self._catalog_loader.failed.connect(self._on_server_catalog_failed)
-        self._catalog_loader.start()
+        self._catalog_loader.succeeded.connect(self._on_server_catalog_loaded)
+        self._catalog_loader.failed.connect(lambda _msg, _code: self._on_server_catalog_failed())
+        QgsApplication.taskManager().addTask(self._catalog_loader)
 
     def _on_server_catalog_loaded(self, catalog: dict):
         if self._dock_widget is not None:
@@ -936,7 +973,7 @@ class AIEditPlugin:
         its own handler that also returns the dock to LAUNCH - see
         _on_exit_clicked.
         """
-        if self._worker and self._worker.isRunning():
+        if self._worker is not None and self._worker.is_active():
             duration = time.time() - getattr(self, "_generation_start_time", time.time())
             telemetry.track("generation_cancelled", self._enrich_generation_props({
                 "duration_seconds": round(duration, 1),
@@ -963,26 +1000,30 @@ class AIEditPlugin:
     def _on_launch_clicked(self):
         """User clicked 'Launch AI Edit' on the entry screen."""
         telemetry.track("launch_clicked")
+        self._disarm_swipe()
         self._activate_selection_tool()
         self._dock_widget.set_selecting_zone_state()
 
     def _on_dock_visibility_changed(self, visible: bool):
-        """Restore the canvas state when the dock is hidden by any path.
-
-        Covers the title-bar X close, the QGIS Panels menu toggle, and
-        anything else that hides the dock outside our _toggle_dock action.
-        """
         if visible:
+            return
+        # Mid-generation: cancel through _on_stop so refund + state reset run together.
+        if self._worker is not None and self._worker.is_active():
+            self._on_stop()
             return
         self._deactivate_selection_tool()
         self._clear_selection_rectangle()
         self._selected_extent = None
         if self._map_tool:
             self._map_tool.set_has_zone(False)
+        # Disarm swipe: without the dock the toggle is unreachable.
+        if self._swipe_controller is not None and self._swipe_controller.is_active():
+            self._swipe_controller.stop()
 
     def _on_exit_clicked(self):
         """User clicked Exit / Done: cancel work and return to LAUNCH."""
-        if self._worker and self._worker.isRunning():
+        self._disarm_swipe()
+        if self._worker is not None and self._worker.is_active():
             duration = time.time() - getattr(self, "_generation_start_time", time.time())
             telemetry.track("generation_cancelled", self._enrich_generation_props({
                 "duration_seconds": round(duration, 1),
@@ -1018,7 +1059,7 @@ class AIEditPlugin:
 
     def _run_generation_from_stored(self, prompt: str):
         """Run generation using previously stored zone data (for retry)."""
-        if self._worker and self._worker.isRunning():
+        if self._worker is not None and self._worker.is_active():
             self._dock_widget.set_status(tr("Generation already in progress"), is_error=True)
             return
 
@@ -1100,23 +1141,45 @@ class AIEditPlugin:
             suggested_resolution=self._last_suggested_res or "1K",
             context_images=self._reference_store.get_all_b64(),
         )
-        self._worker.finished.connect(self._on_generation_finished)
+        self._worker.succeeded.connect(self._on_generation_finished)
         self._worker.progress.connect(self._on_generation_progress)
-        self._worker.error.connect(self._on_generation_error)
-        self._worker.start()
+        self._worker.failed.connect(self._on_generation_error)
+        QgsApplication.taskManager().addTask(self._worker)
 
     def _on_zone_selected(self, extent: QgsRectangle):
         self._selected_extent = extent
-        # Fresh zone breaks the iteration chain - the new submission isn't
-        # editing the same area as the prior one, so the original-input
-        # anchor would mislead the model.
+        # Fresh zone breaks the iteration chain (parent_request_id + armed template).
         self._last_completed_request_id = None
+        if self._dock_widget is not None:
+            try:
+                self._dock_widget.clear_active_template()
+            except AttributeError:
+                pass
         self._show_selection_rectangle(extent)
         self._dock_widget.set_zone_selected()
         log_debug("Zone selected")
 
     def _on_zone_too_small(self):
-        self._dock_widget.set_status(tr("Selected zone too small (min 50x50px)"), is_error=True)
+        try:
+            canvas = self._canvas
+            canvas_w = canvas.width() if canvas else 0
+            min_pct = int(round(50 * 100 / canvas_w)) if canvas_w > 0 else 5
+        except Exception:
+            min_pct = 5
+        self._dock_widget.set_status(
+            tr(
+                "Selected zone too small. Draw a rectangle at least "
+                "{pct}% of the canvas size."
+            ).format(pct=max(1, min_pct)),
+            is_error=True,
+        )
+
+    def _on_zone_invalid(self, code: str, message: str):
+        """Edge-zone refusal at draw time (antimeridian, polar, oversized,
+        rotated map, invalid CRS). Surfaces a clear localized banner so the
+        user can adjust before clicking Generate."""
+        self._dock_widget.set_status(message, is_error=True)
+        log_warning(f"Zone refused: {code} - {message}")
 
     def _on_zone_delete_requested(self):
         """Clear the current zone and return to the SELECTING_ZONE step.
@@ -1142,6 +1205,7 @@ class AIEditPlugin:
         Toggles: a second click on the footer Mark up icon while the panel is
         already open closes it (same as the in-panel Finish button).
         """
+        self._disarm_swipe()
 
         if self._in_tool_panel == "markup":
             self._exit_tool_panel()
@@ -1161,14 +1225,8 @@ class AIEditPlugin:
         self._dock_widget.set_markup_annotation_count(
             self._markup_manager.annotation_count()
         )
-        # Cmd/Ctrl+Z undoes the last annotation while in Mark up. Three
-        # layers handle every focus state:
-        #   1. _suppress_qgis_undo() disables QGIS's project-undo QAction so
-        #      it doesn't swallow the keystroke when the canvas is focused.
-        #   2. The map tool's keyPressEvent handles the key while the canvas
-        #      has focus (after a drag/draw the canvas keeps focus).
-        #   3. The main-window event filter is the fallback for when focus
-        #      is on the dock (e.g., right after the user clicks a tool).
+        # Cmd/Ctrl+Z undo across all focus paths: suppress QGIS undo action,
+        # map tool key handler (canvas focus), main-window event filter (dock focus).
         if self._markup_event_filter is None:
             self._markup_event_filter = _MarkupUndoFilter(self._on_markup_undo)
         self._iface.mainWindow().installEventFilter(self._markup_event_filter)
@@ -1221,6 +1279,7 @@ class AIEditPlugin:
         Toggles: a second click on the footer Vectorize icon while the panel
         is open closes it (same as the in-panel Done button).
         """
+        self._disarm_swipe()
         if self._in_tool_panel == "vectorize":
             self._exit_tool_panel()
             return
@@ -1231,9 +1290,11 @@ class AIEditPlugin:
         self._dock_widget.set_vectorize_state()
         telemetry.track("vectorize_panel_opened")
 
-    def _on_vectorize_suggestion_clicked(self, layer_id: str, color_hex: str):
+    def _on_vectorize_suggestion_clicked(
+        self, layer_id: str, color_hex: str, class_label: str
+    ):
         """User clicked the post-generation \"Vectorize this result\" CTA.
-        Open the panel with the source raster + color pre-filled.
+        Open the panel with the source raster + color + class label pre-filled.
 
         Bypasses the toggle in `_on_vectorize_clicked` so a second click on
         the CTA never closes an already-open panel.
@@ -1248,14 +1309,57 @@ class AIEditPlugin:
         # activate() runs first via set_vectorize_state; preconfigure overrides
         # the just-reset state with the template's values.
         self._dock_widget._vectorize_panel.preconfigure(
-            layer_id=layer_id, color_hex=color_hex
+            layer_id=layer_id, color_hex=color_hex, class_label=class_label
         )
         telemetry.track(
-            "vectorize_suggestion_clicked", {"color": color_hex}
+            "vectorize_suggestion_clicked",
+            {"color": color_hex, "has_class_label": bool(class_label)},
         )
 
     def _on_vectorize_done_clicked(self):
         self._exit_tool_panel()
+
+    def _disarm_swipe(self) -> None:
+        """Stop the swipe map tool if it is currently armed.
+
+        Called from every other AI Edit action (vectorize, markup,
+        settings, help, exit, launch) so the canvas only ever runs one
+        AI Edit tool at a time. The user explicitly asked for this: as
+        soon as they pick another action, the swipe must release the
+        canvas so they are not left in a stale compare mode.
+        """
+        if self._swipe_controller is not None and self._swipe_controller.is_active():
+            self._swipe_controller.stop()
+
+    def _on_help_menu_open_changed(self, opened: bool) -> None:
+        if opened:
+            self._disarm_swipe()
+
+    def _on_swipe_toggled(self, checked: bool) -> None:
+        """Footer Before/After toggled by the user.
+
+        ``checked=True`` arms the swipe map tool on the currently active
+        AI-Edit raster; ``checked=False`` disarms it and restores the
+        previous map tool. No dock panel is shown either way.
+        """
+        if checked:
+            self._swipe_controller.start()
+        else:
+            self._swipe_controller.stop()
+
+    def _on_swipe_armed(self) -> None:
+        self._dock_widget.set_swipe_button_checked(True)
+        telemetry.track("swipe_armed")
+
+    def _on_swipe_disarmed(self) -> None:
+        self._dock_widget.set_swipe_button_checked(False)
+        # After disarm, the active layer might have become non-eligible
+        # while the swipe was on; re-evaluate the enable state so the
+        # button greys out cleanly.
+        self._dock_widget.set_swipe_button_enabled(
+            self._swipe_controller.can_swipe_now()
+        )
+        telemetry.track("swipe_disarmed")
 
     def _exit_tool_panel(self):
         """Common path for Done from either tool panel."""
@@ -1364,15 +1468,18 @@ class AIEditPlugin:
             log_warning(f"Activation failed: {message}")
 
     def _on_generate(self, prompt: str):
-        if self._worker and self._worker.isRunning():
+        if self._worker is not None and self._worker.is_active():
             self._dock_widget.set_status(tr("Generation already in progress"), is_error=True)
             return
-        if self._export_worker and self._export_worker.isRunning():
+        if self._export_worker is not None and self._export_worker.is_active():
             # Click landed while a previous render is still in flight - swallow.
             return
         if not self._selected_extent:
             self._dock_widget.set_status(tr("No zone selected"), is_error=True)
             return
+        # Launching a new generation is a clear "I am done comparing"
+        # signal: drop the swipe overlay so the canvas renders fresh.
+        self._disarm_swipe()
 
         # Save consent on first generation and hide checkbox
         if not has_consent():
@@ -1415,9 +1522,9 @@ class AIEditPlugin:
         else:
             suggested_res = self._dock_widget.get_selected_resolution()
 
-        # Show loading state on Generate button - the heavy export now runs on
-        # a worker thread, so the UI thread stays responsive (no wait cursor).
-        self._dock_widget.set_generate_loading(True)
+        # Lock UI; prep ticker animates while export+upload run off-thread.
+        self._dock_widget.set_generating(True)
+        self._dock_widget.set_status("")
 
         try:
             map_settings = self._canvas.mapSettings()
@@ -1426,11 +1533,14 @@ class AIEditPlugin:
                 map_settings, self._selected_extent, target_resolution=target_res,
             )
         except Exception as e:
-            self._dock_widget.set_generate_loading(False)
+            self._dock_widget.set_generating(False)
             self._dock_widget.set_status(
                 tr("Export error: {error}").format(error=e), is_error=True
             )
             return
+
+        if getattr(prep, "xyz_cap_warning", None):
+            self._dock_widget.set_status(prep.xyz_cap_warning, is_error=False)
 
         # Hand off everything the export-completed callback needs.
         self._pending_generation = {
@@ -1441,21 +1551,19 @@ class AIEditPlugin:
             "crs_wkt": map_settings.destinationCrs().toWkt(),
         }
 
-        worker = ExportWorker(prep, parent=self._dock_widget)
+        worker = ExportWorker(prep)
         worker.completed.connect(self._on_export_completed)
         worker.failed.connect(self._on_export_failed)
-        worker.finished.connect(lambda w=worker: self._cleanup_export_worker(w))
         self._export_worker = worker
-        worker.start()
+        QgsApplication.taskManager().addTask(worker)
 
     def _cleanup_export_worker(self, worker):
         if self._export_worker is worker:
             self._export_worker = None
-        worker.deleteLater()
 
     def _on_export_failed(self, error_msg: str):
         self._pending_generation = None
-        self._dock_widget.set_generate_loading(False)
+        self._dock_widget.set_generating(False)
         self._dock_widget.set_status(
             tr("Export error: {error}").format(error=error_msg), is_error=True
         )
@@ -1481,6 +1589,10 @@ class AIEditPlugin:
         crs_wkt = pending["crs_wkt"]
 
         apply_export_context(ctx, prep, actual_extent, size_bytes)
+
+        # Canvas captured: advance the prep ticker to the upload phase so the
+        # message pool reflects what's actually happening next (sending bytes).
+        self._dock_widget.prep_advance_phase("upload")
 
         # Use "auto" so the model preserves the input image dimensions.
         # Explicit ratios (e.g. "21:9") cause the model to reshape the output,
@@ -1511,8 +1623,8 @@ class AIEditPlugin:
 
         if self._map_tool:
             self._map_tool.set_locked(True)
-        self._dock_widget.set_generating(True)
-        self._dock_widget.set_status("")
+        # set_generating(True) already called at click time. Don't call again
+        # here or we'd reset the prep ticker phase + bar back to 1%.
         self._generation_service.reset()
         self._generation_start_time = time.time()
         telemetry.track("generation_started", self._enrich_generation_props({
@@ -1547,25 +1659,24 @@ class AIEditPlugin:
             suggested_resolution=suggested_res,
             context_images=self._reference_store.get_all_b64(),
         )
-        self._worker.finished.connect(self._on_generation_finished)
+        self._worker.succeeded.connect(self._on_generation_finished)
         self._worker.progress.connect(self._on_generation_progress)
-        self._worker.error.connect(self._on_generation_error)
-        self._worker.start()
+        self._worker.failed.connect(self._on_generation_error)
+        QgsApplication.taskManager().addTask(self._worker)
 
     def _on_generation_progress(self, status: str, percentage: int):
         self._dock_widget.set_progress_message(status, percentage)
 
-    def _on_generation_error(self, message: str, code: str):
+    def _on_generation_error(self, message: str, code: str, ctx_snapshot: dict | None = None):
         if self._map_tool:
             self._map_tool.set_locked(False)
         self._dock_widget.set_generating(False)
-        # Pull template metadata off the worker BEFORE cleanup so the
-        # generation_failed event is segmentable by template in PostHog.
-        template_id: str | None = None
-        template_name: str | None = None
-        if self._worker is not None and self._worker._ctx is not None:
-            template_id = self._worker._ctx.template_id
-            template_name = self._worker._ctx.template_name
+        # Template metadata arrives in the ctx_snapshot dict copied off the
+        # worker thread (C2). Read it before cleanup so generation_failed is
+        # segmentable by template in PostHog.
+        snap = ctx_snapshot or {}
+        template_id = snap.get("template_id")
+        template_name = snap.get("template_name")
         self._cleanup_worker()
         normalized_code = (code or "").strip().upper()
         message_lower = (message or "").lower()
@@ -1579,14 +1690,29 @@ class AIEditPlugin:
             or "monthly limit reached" in message_lower  # noqa: W503
         )
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
-        telemetry.track("generation_failed", self._enrich_generation_props({
+        extra_props: dict = {
             "error_code": code,
             "duration_seconds": round(duration, 1),
             "resolution": getattr(self, "_last_suggested_res", ""),
             "template_id": template_id,
             "template_name": template_name,
             "used_template": bool(template_id),
-        }))
+        }
+        # WRITE_ERROR is ~90% Windows-path; surface enough to triage the sub-class.
+        if normalized_code == "WRITE_ERROR":
+            try:
+                import sys as _sys
+                output_dir = get_output_dir() or ""
+                extra_props.update({
+                    "os": _sys.platform,
+                    "output_dir_len": len(output_dir),
+                    "output_dir_has_unicode": not output_dir.isascii(),
+                    "output_dir_has_spaces": " " in output_dir,
+                    "exception_msg": (message or "")[:500],
+                })
+            except Exception:  # nosec B110
+                pass
+        telemetry.track("generation_failed", self._enrich_generation_props(extra_props))
         telemetry.flush()
         if normalized_code == "TRIAL_EXHAUSTED":
             config = get_server_config(self._client)
@@ -1614,19 +1740,12 @@ class AIEditPlugin:
     def _on_generation_finished(self, result_info: dict):
         if self._map_tool:
             self._map_tool.set_locked(False)
-        # Pull the request_id + vectorize hints + template metadata off the
-        # worker's ctx BEFORE cleanup so we can send the request_id as
-        # parent_request_id on the next submit (iteration anchor), re-arm
-        # the Vectorize CTA with the template's pre-filled color, and
-        # segment generation_completed by template in PostHog.
-        vector_color: str | None = None
-        template_id: str | None = None
-        template_name: str | None = None
-        if self._worker is not None and self._worker._ctx is not None:
-            self._last_completed_request_id = self._worker._ctx.request_id
-            vector_color = self._worker._ctx.vector_color
-            template_id = self._worker._ctx.template_id
-            template_name = self._worker._ctx.template_name
+        # result_info already holds the ctx snapshot copied off the worker.
+        self._last_completed_request_id = result_info.get("request_id")
+        vector_color: str | None = result_info.get("vector_color")
+        vector_classes: list[dict] | None = result_info.get("vector_classes")
+        template_id: str | None = result_info.get("template_id")
+        template_name: str | None = result_info.get("template_name")
         self._cleanup_worker()
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
 
@@ -1635,6 +1754,10 @@ class AIEditPlugin:
                 result_info["geotiff_path"],
                 result_info.get("prompt", ""),
             )
+            try:
+                self._iface.setActiveLayer(layer)
+            except Exception as err:  # nosec B110
+                log_warning(f"setActiveLayer failed: {err}")
             prompt_history.add_recent(result_info.get("prompt", ""))
             telemetry.track("generation_completed", self._enrich_generation_props({
                 "duration_seconds": round(duration, 1),
@@ -1646,10 +1769,10 @@ class AIEditPlugin:
             telemetry.flush()
             self._maybe_emit_first_generation_milestone()
             self._dock_widget.set_generation_complete(layer.name(), layer.id())
-            # If the template carried a vector_color, suggest Vectorize next.
-            # Skipped silently when the catalog cache is unavailable or the
-            # template wasn't tagged (A1 from the eng review).
-            self._dock_widget.set_vectorize_suggestion(layer.id(), vector_color)
+            class_label = _resolve_class_label(vector_color, vector_classes)
+            self._dock_widget.set_vectorize_suggestion(
+                layer.id(), vector_color, class_label
+            )
             self._refresh_credits()
             log(f"Generation complete ({round(duration, 1)}s): {result_info['geotiff_path']}")
         except Exception as e:
@@ -1666,20 +1789,25 @@ class AIEditPlugin:
 
     def _refresh_credits(self):
         """Fetch and display current credits in background (non-blocking)."""
-        self._credits_loader = _CreditsLoaderWorker(self._auth_manager)
-        self._credits_loader.loaded.connect(self._on_credits_loaded)
-        self._credits_loader.failed.connect(self._on_credits_failed)
-        self._credits_loader.start()
+        self._credits_loader = GenericRequestTask(
+            "AI Edit credits",
+            self._auth_manager.get_usage_info,
+        )
+        self._credits_loader.succeeded.connect(self._on_credits_loaded)
+        self._credits_loader.failed.connect(lambda _msg, _code: self._on_credits_failed())
+        QgsApplication.taskManager().addTask(self._credits_loader)
 
     def _on_credits_failed(self):
         """Credits fetch failed - clear loading state so the UI is usable."""
         if self._dock_widget:
             self._dock_widget.set_checking_credits(False)
+            self._dock_widget.set_launch_enabled(True)
 
     def _on_credits_loaded(self, usage: dict):
         """Update dock widget with credits from background fetch."""
         if self._dock_widget:
             self._dock_widget.set_checking_credits(False)
+            self._dock_widget.set_launch_enabled(True)
             used = usage.get("images_used")
             limit = usage.get("images_limit")
             is_free = usage.get("is_free_tier", False)
@@ -1709,20 +1837,14 @@ class AIEditPlugin:
                 )
 
     def _cleanup_worker(self):
-        """Safely clean up the worker thread without crashing QGIS."""
+        """Drop our reference to the QgsTask; TaskManager owns its lifetime."""
         if self._worker is None:
             return
-        # Disconnect signals first to prevent callbacks on deleted UI
-        for sig in [self._worker.finished, self._worker.progress, self._worker.error]:
+        for sig in [self._worker.succeeded, self._worker.progress, self._worker.failed]:
             try:
                 sig.disconnect()
             except (RuntimeError, TypeError):
                 pass
-        try:
-            self._worker.wait(5000)
-        except RuntimeError:
-            pass
-        self._worker.deleteLater()
         self._worker = None
 
     # --- Selection rectangle management ---
@@ -1732,19 +1854,25 @@ class AIEditPlugin:
         rb = QgsRubberBand(self._canvas, QtC.PolygonGeometry)
         rb.setColor(QColor(0, 0, 0, 0))
         rb.setStrokeColor(QColor(65, 105, 225, 180))
-        rb.setWidth(3)
-        rb.addPoint(QgsPointXY(extent.xMinimum(), extent.yMinimum()), False)
-        rb.addPoint(QgsPointXY(extent.xMaximum(), extent.yMinimum()), False)
-        rb.addPoint(QgsPointXY(extent.xMaximum(), extent.yMaximum()), False)
-        rb.addPoint(QgsPointXY(extent.xMinimum(), extent.yMaximum()), True)
+        rb.setWidth(2)
+        for x, y, last in (
+            (extent.xMinimum(), extent.yMinimum(), False),
+            (extent.xMaximum(), extent.yMinimum(), False),
+            (extent.xMaximum(), extent.yMaximum(), False),
+            (extent.xMinimum(), extent.yMaximum(), True),
+        ):
+            rb.addPoint(QgsPointXY(x, y), last)
         self._selection_rubber_band = rb
 
     def _clear_selection_rectangle(self):
-        if self._selection_rubber_band:
+        for attr in ("_selection_rubber_band_halo", "_selection_rubber_band"):
+            band = getattr(self, attr, None)
+            if not band:
+                continue
             try:
-                scene = self._selection_rubber_band.scene()
+                scene = band.scene()
                 if scene is not None:
-                    scene.removeItem(self._selection_rubber_band)
+                    scene.removeItem(band)
             except (RuntimeError, AttributeError):
                 pass
-            self._selection_rubber_band = None
+            setattr(self, attr, None)

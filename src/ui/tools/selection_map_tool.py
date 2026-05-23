@@ -6,8 +6,8 @@ from qgis.PyQt.QtCore import QPointF, QRectF, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QCursor, QPainter, QPen
 from qgis.PyQt.QtWidgets import QMenu
 
-from ..core import qt_compat as QtC
-from ..core.i18n import tr
+from ...core import qt_compat as QtC
+from ...core.i18n import tr
 
 SUPPORTED_RATIOS = [
     (1, 1),
@@ -35,8 +35,8 @@ class _ZoneDeleteBadge(QgsMapCanvasItem):
     """
 
     RADIUS = 12
-    _BRAND_BLUE = QColor("#1976d2")
-    _DISABLED_BG = QColor(25, 118, 210, 115)
+    _BRAND_BLUE = QColor("#1e88e5")
+    _DISABLED_BG = QColor(30, 136, 229, 115)
 
     def __init__(self, canvas):
         super().__init__(canvas)
@@ -53,6 +53,10 @@ class _ZoneDeleteBadge(QgsMapCanvasItem):
         if self._enabled == enabled:
             return
         self._enabled = enabled
+        if enabled:
+            self.setToolTip(tr("Clear this zone"))
+        else:
+            self.setToolTip(tr("Cancel the running generation first (close the dock)"))
         self.update()
 
     def hit_test(self, canvas_pt) -> bool:
@@ -101,6 +105,9 @@ class RectangleSelectionTool(QgsMapTool):
     selection_made = pyqtSignal(QgsRectangle)
     zone_too_small = pyqtSignal()
     zone_delete_requested = pyqtSignal()
+    # Emitted when the drawn zone fails the edge-case checks (antimeridian,
+    # polar, area too big, invalid CRS, map rotated). Args: (error_code, message).
+    zone_invalid = pyqtSignal(str, str)
 
     MIN_SIZE_PX = 50
 
@@ -201,6 +208,22 @@ class RectangleSelectionTool(QgsMapTool):
                 self._clear_rubber_band()
                 self.zone_too_small.emit()
                 return
+
+            # Refuse antimeridian / polar / oversized / rotated / invalid-CRS at draw time.
+            try:
+                from ...core.errors import AIEditError
+                from ..canvas_exporter import validate_zone
+
+                canvas = self.canvas()
+                map_crs = canvas.mapSettings().destinationCrs() if canvas else None
+                rotation = canvas.rotation() if canvas else 0.0
+                validate_zone(rect, map_crs, rotation)
+            except AIEditError as err:
+                self._clear_rubber_band()
+                self.zone_invalid.emit(err.code.value, err.message)
+                return
+            except Exception:  # nosec B110
+                pass
 
             self._clear_rubber_band()
             self._has_zone = True
@@ -364,6 +387,13 @@ class RectangleSelectionTool(QgsMapTool):
         self._rubber_band.addPoint(QgsPointXY(start.x(), end.y()), True)
 
     def _clear_rubber_band(self):
+        # Canvas/scene C++ side may be gone during shutdown; swallow to let exit proceed.
         if self._rubber_band:
-            self.canvas().scene().removeItem(self._rubber_band)
+            try:
+                canvas = self.canvas()
+                scene = canvas.scene() if canvas else None
+                if scene is not None:
+                    scene.removeItem(self._rubber_band)
+            except (RuntimeError, AttributeError):
+                pass
             self._rubber_band = None

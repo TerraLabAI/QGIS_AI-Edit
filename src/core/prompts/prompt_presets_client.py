@@ -42,7 +42,7 @@ from typing import Any
 
 from qgis.PyQt.QtCore import QSettings
 
-from .logger import log_debug, log_warning
+from ..logger import log_debug, log_warning
 
 _CACHE_KEY = "terralab/ai_edit/server_catalog_v2"
 _CACHE_TS_KEY = "terralab/ai_edit/server_catalog_v2_ts"
@@ -159,7 +159,7 @@ def invalidate_cache() -> None:
 
     Useful from the QGIS Python Console when the server catalog changed but the
     local cache is still serving the old version (push then `from
-    QGIS_AI_Edit_Team.src.core.prompt_presets_client import invalidate_cache;
+    QGIS_AI_Edit_Team.src.core.prompts.prompt_presets_client import invalidate_cache;
     invalidate_cache()`)."""
     try:
         settings = QSettings()

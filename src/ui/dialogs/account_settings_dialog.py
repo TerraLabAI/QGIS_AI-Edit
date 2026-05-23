@@ -6,25 +6,28 @@ from datetime import datetime
 from qgis.PyQt.QtCore import QThread, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QDialog,
+    QFileDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
-from ..core import qt_compat as QtC
-from ..core.activation_manager import (
+from ...core import qt_compat as QtC
+from ...core.auth.activation_manager import (
     get_dashboard_url,
     get_privacy_url,
     get_subscribe_url,
     get_terms_url,
 )
-from ..core.i18n import tr
-from .dock_widget import BRAND_BLUE, BRAND_GREEN, BRAND_RED
+from ...core.i18n import tr
+from ..dock_widget import BRAND_BLUE, BRAND_BLUE_HOVER, BRAND_GREEN, BRAND_RED
+from ..raster_writer import get_output_dir, set_output_dir
 
 PRODUCT_ID = "ai-edit"
 PRODUCT_NAME = "AI Edit"
@@ -38,7 +41,7 @@ _STATUS_DISPLAY = {
 _LINK_BTN = (
     f"QPushButton {{ border: none; color: {BRAND_BLUE}; font-size: 11px;"
     f" text-decoration: underline; padding: 2px 4px; background: transparent; }}"
-    f"QPushButton:hover {{ color: #1565c0; }}"
+    f"QPushButton:hover {{ color: {BRAND_BLUE_HOVER}; }}"
 )
 
 _CARD_STYLE = (
@@ -159,30 +162,102 @@ class AccountSettingsDialog(QDialog):
         if sub:
             self._content_layout.addWidget(self._build_subscription_card(sub))
 
-        manage_label = QLabel(
-            f'<a href="{get_dashboard_url()}" style="color: {BRAND_BLUE};">'
-            f'{tr("Manage account on terra-lab.ai")}</a>'
-        )
-        manage_label.setOpenExternalLinks(True)
-        manage_label.setAlignment(QtC.AlignCenter)
-        manage_label.setStyleSheet("font-size: 11px; padding-top: 2px;")
-        self._content_layout.addWidget(manage_label)
+        self._content_layout.addWidget(self._build_output_folder_card())
 
-        # Permanent access to legal docs - the consent checkbox only shows once
-        # at first generation, so users need a way back to Terms and Privacy
-        # from inside the plugin afterwards.
+        # Discreet footer: thin top separator, small muted Terms / Privacy links.
+        footer = QFrame()
+        footer.setObjectName("legalFooter")
+        footer.setStyleSheet(
+            "QFrame#legalFooter { border: none;"
+            " border-top: 1px solid rgba(127,127,127,0.18); }"
+        )
+        footer_layout = QHBoxLayout(footer)
+        footer_layout.setContentsMargins(0, 8, 0, 0)
+        footer_layout.setSpacing(0)
+        footer_layout.addStretch()
         legal_label = QLabel(
-            f'<a href="{get_terms_url()}" style="color: {BRAND_BLUE};">{tr("Terms")}</a>'
-            f' · '
-            f'<a href="{get_privacy_url()}" style="color: {BRAND_BLUE};">{tr("Privacy")}</a>'
+            f'<a href="{get_terms_url()}" style="color: rgba(128,128,128,0.85);'
+            f' text-decoration: none;">{tr("Terms")}</a>'
+            f' <span style="color: rgba(128,128,128,0.5);">·</span> '
+            f'<a href="{get_privacy_url()}" style="color: rgba(128,128,128,0.85);'
+            f' text-decoration: none;">{tr("Privacy")}</a>'
         )
         legal_label.setOpenExternalLinks(True)
-        legal_label.setAlignment(QtC.AlignCenter)
-        legal_label.setStyleSheet("font-size: 11px; color: palette(text); padding-top: 2px;")
-        self._content_layout.addWidget(legal_label)
+        legal_label.setStyleSheet("font-size: 10px;")
+        footer_layout.addWidget(legal_label)
+        footer_layout.addStretch()
+        self._content_layout.addWidget(footer)
 
         self._content_widget.setVisible(True)
         self.adjustSize()
+
+    def _build_output_folder_card(self) -> QFrame:
+        card = QFrame()
+        card.setObjectName("outputFolderCard")
+        # Scoped selector: only the card frame paints the border/background, so
+        # QLabel descendants (which inherit QFrame in Qt) don't pick up the box.
+        card.setStyleSheet(
+            "QFrame#outputFolderCard { background-color: rgba(127,127,127,0.05);"
+            " border: 1px solid rgba(127,127,127,0.15); border-radius: 6px; }"
+        )
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(4)
+
+        title = QLabel(tr("Output folder"))
+        title.setStyleSheet(
+            "font-weight: 600; color: palette(text); font-size: 11px;"
+            " background: transparent; border: none;"
+        )
+        layout.addWidget(title)
+
+        hint = QLabel(
+            tr("Empty = ~/Documents/AI Edit/ (or next to your saved project).")
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet(
+            "color: palette(text); font-size: 10px;"
+            " background: transparent; border: none;"
+        )
+        layout.addWidget(hint)
+
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        row.setContentsMargins(0, 2, 0, 0)
+        self._output_dir_edit = QLineEdit()
+        from qgis.core import QgsSettings
+        current = QgsSettings().value("AIEdit/output_dir", "", type=str)
+        self._output_dir_edit.setText(current)
+        self._output_dir_edit.setPlaceholderText(tr("Default (auto)"))
+        self._output_dir_edit.setToolTip(
+            tr(
+                "Where AI Edit writes its generated GeoTIFFs. "
+                "Leave empty to use ~/Documents/AI Edit/ (or the saved project folder)."
+            )
+        )
+        self._output_dir_edit.editingFinished.connect(self._on_output_dir_edited)
+        self._output_dir_edit.setFixedHeight(24)
+        row.addWidget(self._output_dir_edit, 1)
+
+        browse_btn = QPushButton(tr("Browse..."))
+        browse_btn.setFixedHeight(24)
+        browse_btn.clicked.connect(self._on_output_dir_browse)
+        row.addWidget(browse_btn)
+
+        layout.addLayout(row)
+        return card
+
+    def _on_output_dir_edited(self) -> None:
+        set_output_dir(self._output_dir_edit.text().strip())
+
+    def _on_output_dir_browse(self) -> None:
+        current = self._output_dir_edit.text().strip() or get_output_dir()
+        chosen = QFileDialog.getExistingDirectory(
+            self, tr("Choose output folder"), current
+        )
+        if chosen:
+            self._output_dir_edit.setText(chosen)
+            set_output_dir(chosen)
 
     def _on_failed(self, message: str):
         self._loading_label.setVisible(False)
@@ -314,22 +389,37 @@ class AccountSettingsDialog(QDialog):
         )
         card_layout.addWidget(progress)
 
+        footer_row = QHBoxLayout()
+        footer_row.setContentsMargins(0, 2, 0, 0)
+        footer_row.setSpacing(6)
+
         if is_free and remaining == 0:
-            cta_label = QLabel(
+            left_label = QLabel(
                 f'<a href="{get_subscribe_url()}" style="color: {BRAND_BLUE};">'
                 f'{tr("Subscribe")}</a>'
             )
-            cta_label.setWordWrap(True)
-            cta_label.setOpenExternalLinks(True)
-            cta_label.setStyleSheet(f"font-size: 10px; color: {BRAND_RED};")
-            card_layout.addWidget(cta_label)
+            left_label.setOpenExternalLinks(True)
+            left_label.setStyleSheet(f"font-size: 10px; color: {BRAND_RED};")
+            footer_row.addWidget(left_label)
         else:
             period_end = sub.get("current_period_end", "")
             if period_end and not is_free:
                 reset_text = self._format_date(period_end)
                 reset_label = QLabel(f"{tr('Resets')} {reset_text}")
                 reset_label.setStyleSheet("font-size: 10px; color: palette(text);")
-                card_layout.addWidget(reset_label)
+                footer_row.addWidget(reset_label)
+
+        footer_row.addStretch()
+
+        manage_label = QLabel(
+            f'<a href="{get_dashboard_url()}" style="color: {BRAND_BLUE};'
+            f' text-decoration: none;">{tr("Manage on terra-lab.ai")} ↗</a>'
+        )
+        manage_label.setOpenExternalLinks(True)
+        manage_label.setStyleSheet("font-size: 10px;")
+        footer_row.addWidget(manage_label)
+
+        card_layout.addLayout(footer_row)
 
         return card
 

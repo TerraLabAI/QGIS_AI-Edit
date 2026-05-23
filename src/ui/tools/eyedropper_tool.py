@@ -13,7 +13,7 @@ from qgis.core import QgsPointXY, QgsRaster, QgsRasterLayer
 from qgis.gui import QgsMapCanvas, QgsMapTool
 from qgis.PyQt.QtGui import QColor
 
-from ..core import qt_compat as QtC
+from ...core import qt_compat as QtC
 
 
 class EyedropperMapTool(QgsMapTool):

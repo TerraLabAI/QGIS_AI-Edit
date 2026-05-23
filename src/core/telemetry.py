@@ -1,35 +1,19 @@
-"""Lightweight telemetry for AI Edit plugin.
-
-Events are batched in memory and flushed in a single HTTP call at the
-end of each generation cycle (success, failure, or cancel). This keeps
-overhead to 1 extra request per generation.
-
-Rules:
-- Only sends when the user has given consent (privacy checkbox)
-- Only sends when an activation key is set (authenticated)
-- No PII is collected: no emails, no prompts, no image data
-- All data is aggregate/numerical: durations, error codes, resolutions
-- Errors in telemetry never affect plugin functionality (fail silently)
-"""
+"""Telemetry batched in memory, flushed once per generation cycle. Fails silently."""
 
 import platform
-import time
+from datetime import datetime, timezone
 from typing import Optional
 
-from qgis.PyQt.QtCore import QThread
+from qgis.core import QgsApplication, QgsTask
 
-# Events whose payload carries no user-generated content (no prompts, no
-# image bytes, no paths, no coords). These ship as soon as the plugin is
-# activated. Properties limited to: plugin_version, OS, QGIS version, durations,
-# error_codes, resolution string, prompt_length (a count, not the text).
-#
-# Only `plugin_error` stays gated by ToS acceptance because its error_message
-# field carries raw exception text that can include paths or fragments.
+# No user-generated content; ship pre-consent so the activation funnel stays
+# observable. plugin_error stays consent-gated (raw exception text can include paths).
 _NO_CONSENT_EVENTS = frozenset({
     "plugin_opened",
     "plugin_activated",
     "activation_screen_viewed",
     "activation_attempted",
+    "launch_clicked",
     "subscribe_link_clicked",
     "trial_exhausted_viewed",
     "template_selected",
@@ -40,45 +24,54 @@ _NO_CONSENT_EVENTS = frozenset({
     "first_generation_milestone",
     "favorite_toggled",
     "recent_selected",
+    "markup_opened",
+    "vectorize_panel_opened",
+    "vectorize_suggestion_clicked",
+    "vectorize_completed",
+    "swipe_armed",
+    "swipe_disarmed",
+    # Refund visibility — without these the 199 WRITE_ERROR / 11 DOWNLOAD_ERROR
+    # billing-bleed bug stays invisible.
+    "generation_refund_attempted",
+    "generation_refund_failed",
 })
 
 
-class TelemetryFlushWorker(QThread):
-    """Sends one telemetry batch without blocking the QGIS UI thread."""
+class _TelemetryFlushTask(QgsTask):
+    """Sends one batch. Failures swallowed: telemetry must never break the plugin."""
 
     def __init__(self, client, events: list, auth: dict):
-        super().__init__()
+        super().__init__("AI Edit telemetry flush", QgsTask.Flag.CanCancel)
         self._client = client
         self._events = events
         self._auth = auth
 
-    def run(self):
+    def run(self) -> bool:
+        if self.isCanceled():
+            return False
         try:
             self._client.send_telemetry_batch(self._events, self._auth)
-        except Exception:
-            # Telemetry must never break plugin functionality
-            pass  # nosec B110
+        except Exception:  # nosec B110
+            pass
+        return True
+
+    def finished(self, result: bool) -> None:
+        return
 
 
 class TelemetryCollector:
-    """Collects telemetry events and flushes them as a batch."""
-
     def __init__(self, client, auth_manager, plugin_version: str = ""):
         self._client = client
         self._auth_manager = auth_manager
         self._plugin_version = plugin_version
         self._batch: list = []
-        # Pre-auth lifecycle events (activation_screen_viewed, plugin_opened,
-        # activation_attempted) are queued here until the user enters a key.
-        # First successful flush() drains the queue so the activation funnel
-        # is recoverable. Capped to avoid unbounded growth if the user never
-        # activates.
+        # Pre-auth lifecycle events parked here until first authenticated flush
+        # drains them, so the activation funnel stays observable. Capped to 50.
         self._pending_pre_auth: list = []
-        self._workers: list = []
+        self._inflight: list[_TelemetryFlushTask] = []
         self._session_props = self._build_session_props()
 
     def _build_session_props(self) -> dict:
-        """Static properties sent with every event (computed once)."""
         import sys
 
         try:
@@ -101,14 +94,19 @@ class TelemetryCollector:
         return bool(auth and auth.get("Authorization"))
 
     def _has_consent(self) -> bool:
-        from .activation_manager import has_consent
+        from .auth.activation_manager import has_consent
         return has_consent()
 
+    def _now_iso(self) -> str:
+        # ms precision so same-second events don't collide on the server-side dedup key.
+        return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace(
+            "+00:00", "Z"
+        )
+
     def track(self, event: str, properties: Optional[dict] = None):
-        """Add an event to the batch. Will be sent on next flush()."""
         evt = {
             "event": event,
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "timestamp": self._now_iso(),
             "properties": {
                 **self._session_props,
                 **(properties or {}),
@@ -117,23 +115,12 @@ class TelemetryCollector:
         self._batch.append(evt)
 
     def flush(self):
-        """Send all batched events to the server. Non-blocking on failure.
-
-        Lifecycle events (`_NO_CONSENT_EVENTS`) ship as long as the plugin is
-        activated; everything else additionally requires telemetry consent.
-        Events emitted before activation (no Bearer token yet) are parked in
-        `_pending_pre_auth` and drained on the first authenticated flush so
-        the activation_screen_viewed → plugin_activated funnel is observable.
-        """
+        """Non-blocking. Lifecycle events ship pre-consent; everything else
+        requires consent. Pre-auth events queue in _pending_pre_auth."""
         if not self._batch and not self._pending_pre_auth:
             return
 
         if not self._has_auth():
-            # Park lifecycle events so they reach PostHog once the user
-            # activates. Drop everything else (consent-gated paths shouldn't
-            # be reachable pre-auth anyway). Cap at 50 to avoid runaway
-            # memory if the user opens the plugin many times without ever
-            # activating.
             for evt in self._batch:
                 if evt["event"] in _NO_CONSENT_EVENTS and len(self._pending_pre_auth) < 50:
                     self._pending_pre_auth.append(evt)
@@ -152,36 +139,63 @@ class TelemetryCollector:
             return
 
         auth = self._auth_manager.get_auth_header()
-        worker = TelemetryFlushWorker(self._client, events_to_send, auth)
-        self._workers.append(worker)
-        worker.finished.connect(lambda: self._on_worker_finished(worker))
-        worker.start()
-
-    def _on_worker_finished(self, worker):
+        task = _TelemetryFlushTask(self._client, events_to_send, auth)
+        # Hold a strong reference so the task isn't GC'd while running.
+        # The TaskManager would keep it alive too, but tracking lets us
+        # cancel everything cleanly on shutdown().
+        self._inflight.append(task)
         try:
-            self._workers.remove(worker)
+            task.taskCompleted.connect(lambda t=task: self._drop_inflight(t))
+            task.taskTerminated.connect(lambda t=task: self._drop_inflight(t))
+        except Exception:  # nosec B110
+            pass
+        QgsApplication.taskManager().addTask(task)
+
+    def _drop_inflight(self, task: "_TelemetryFlushTask") -> None:
+        try:
+            self._inflight.remove(task)
         except ValueError:
             pass
-        worker.deleteLater()
+
+    def shutdown(self):
+        for task in list(self._inflight):
+            try:
+                task.cancel()
+            except Exception:  # nosec B110
+                pass
+        self._inflight.clear()
 
 
-# Module-level singleton (set by plugin.py on init)
 _collector: Optional[TelemetryCollector] = None
 
 
 def init_telemetry(client, auth_manager, plugin_version: str = ""):
-    """Initialize the global telemetry collector."""
     global _collector
     _collector = TelemetryCollector(client, auth_manager, plugin_version)
+    try:
+        from .config_store import get_store
+        store = get_store()
+        if store is not None:
+            store.set_telemetry_collector(_collector)
+    except Exception:  # nosec B110
+        pass
 
 
 def track(event: str, properties: Optional[dict] = None):
-    """Queue a telemetry event. No-op if telemetry not initialized."""
     if _collector:
         _collector.track(event, properties)
 
 
 def flush():
-    """Flush all queued events. No-op if telemetry not initialized."""
     if _collector:
         _collector.flush()
+
+
+def shutdown_telemetry():
+    global _collector
+    if _collector is not None:
+        try:
+            _collector.shutdown()
+        except Exception:  # nosec B110
+            pass
+    _collector = None

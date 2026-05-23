@@ -10,6 +10,7 @@ from qgis.PyQt.QtCore import QT_VERSION, QPointF, QRectF, QSize, Qt, QTimer, pyq
 from qgis.PyQt.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen, QPixmap
 from qgis.PyQt.QtWidgets import QWidget
 
+from ..core import qt_compat as QtC
 from ..core.i18n import tr
 
 QT6 = QT_VERSION >= 0x060000
@@ -155,14 +156,12 @@ class BeforeAfterSlider(QWidget):
 
     @staticmethod
     def _event_x(ev) -> float:
-        return ev.position().x() if QT6 else ev.pos().x()
+        # QtC.event_pos returns a QPoint that exposes .x() on both Qt5 and
+        # Qt6, so callers stop branching on QT_VERSION themselves.
+        return QtC.event_pos(ev).x()
 
     def _update_pos_from_event(self, ev) -> None:
-        # Qt6: ev.position() returns QPointF; Qt5: ev.pos() returns QPoint.
-        if QT6:
-            x = ev.position().x()
-        else:
-            x = ev.pos().x()
+        x = QtC.event_pos(ev).x()
         w = max(1, self.width())
         self._pos = max(0.0, min(1.0, x / w))
         self.update()

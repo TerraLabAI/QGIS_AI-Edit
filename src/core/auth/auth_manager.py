@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from ..errors import ErrorCode
+from ..i18n import tr
+
 
 class AuthManager:
     """Manages authentication state for paid AI Edit plugin."""
@@ -33,27 +36,35 @@ class AuthManager:
             (allowed: bool, reason: str, error_code: str)
         """
         if not self._activation_key:
-            return False, "No activation key. Enter your key to use AI Edit.", "NO_KEY"
+            return (
+                False,
+                tr("No activation key. Enter your key to use AI Edit."),
+                ErrorCode.NO_KEY.value,
+            )
 
         auth = self.get_auth_header()
         try:
             usage = self._client.get_usage(auth=auth)
         except Exception:
-            return False, "Connection error. Check your internet connection.", "CONNECTION_ERROR"
+            return (
+                False,
+                tr("Connection error. Check your internet connection."),
+                ErrorCode.NO_NETWORK.value,
+            )
 
         if "error" in usage:
             code = usage.get("code", "")
             if code == "INVALID_KEY":
-                return False, "Invalid activation key.", "INVALID_KEY"
+                return False, tr("Invalid activation key."), ErrorCode.INVALID_KEY.value
             if code == "SUBSCRIPTION_INACTIVE":
-                return False, "Subscription expired.", "SUBSCRIPTION_INACTIVE"
+                return False, tr("Subscription expired."), ErrorCode.SUBSCRIPTION_EXPIRED.value
             if code == "NO_AUTH":
                 return (
                     False,
-                    "No activation key. Enter your key to use AI Edit.",
-                    "NO_KEY",
+                    tr("No activation key. Enter your key to use AI Edit."),
+                    ErrorCode.NO_KEY.value,
                 )
-            return False, usage.get("error", "Unknown error"), code
+            return False, usage.get("error", tr("Unknown error")), code
 
         used = usage.get("images_used", 0)
         limit = usage.get("images_limit", 0)
@@ -61,16 +72,24 @@ class AuthManager:
         if used >= limit:
             is_free = usage.get("is_free_tier", False)
             if is_free:
-                return False, f"All {limit} free credits used. Subscribe to continue.", "TRIAL_EXHAUSTED"
-            return False, f"Monthly limit reached ({used}/{limit}).", "QUOTA_EXCEEDED"
+                return (
+                    False,
+                    tr("All {limit} free credits used. Subscribe to continue.").format(limit=limit),
+                    ErrorCode.TRIAL_EXHAUSTED.value,
+                )
+            return (
+                False,
+                tr("Monthly limit reached ({used}/{limit}).").format(used=used, limit=limit),
+                ErrorCode.QUOTA_EXCEEDED.value,
+            )
 
         return True, f"{used}/{limit} images used", ""
 
     def get_usage_info(self) -> dict:
         """Fetch current usage info from backend."""
         if not self._activation_key:
-            return {"error": "No activation key", "code": "NO_KEY"}
+            return {"error": tr("No activation key"), "code": ErrorCode.NO_KEY.value}
         try:
             return self._client.get_usage(auth=self.get_auth_header())
         except Exception:
-            return {"error": "Connection error", "code": "CONNECTION_ERROR"}
+            return {"error": tr("Connection error"), "code": ErrorCode.NO_NETWORK.value}

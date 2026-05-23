@@ -5,7 +5,9 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
-from .logger import log_debug, log_warning
+from ..errors import ErrorCode
+from ..i18n import tr
+from ..logger import log_debug, log_warning
 
 
 @dataclass
@@ -25,12 +27,45 @@ class GenerationService:
         self._poll_interval = poll_interval
         self._max_polls = max_polls
         self._cancelled = False
+        self._active_request_id: str | None = None
+        self._active_auth: dict | None = None
 
     def cancel(self):
+        """Mark the polling loop as cancelled and fire a best-effort
+        server-side cancel so the row transitions to status='cancelled' and
+        the credits are refunded immediately (without waiting for the
+        reconciliation cron to time the row out)."""
         self._cancelled = True
+        request_id = self._active_request_id
+        auth = self._active_auth
+        if not request_id or not auth:
+            return
+        # Use QgsTask instead of a raw threading.Thread daemon. Python daemon
+        # threads running QgsBlockingNetworkRequest can corrupt Qt's network
+        # state on shutdown because Qt sockets aren't safe outside Qt threads.
+        try:
+            from qgis.core import QgsApplication
+
+            from ...workers.generic_request_task import GenericRequestTask
+
+            client = self._client
+
+            def _do_cancel():
+                try:
+                    client.cancel_generation(request_id, auth)
+                except Exception:  # nosec B110
+                    pass
+                return {}
+
+            task = GenericRequestTask("AI Edit generation cancel", _do_cancel)
+            QgsApplication.taskManager().addTask(task)
+        except Exception as err:  # nosec B110
+            log_warning(f"Cancel task could not be scheduled: {err}")
 
     def reset(self):
         self._cancelled = False
+        self._active_request_id = None
+        self._active_auth = None
 
     # Below this base64 size we send the image inline in the submit body -
     # a single round-trip looks cleaner from outside and avoids an extra API
@@ -98,7 +133,11 @@ class GenerationService:
     ) -> GenerationResult:
         """Submit image for generation and poll until complete."""
         if self._cancelled:
-            return GenerationResult(success=False, error="Generation cancelled")
+            return GenerationResult(
+                success=False,
+                error=tr("Generation cancelled"),
+                error_code=ErrorCode.GENERATION_CANCELLED.value,
+            )
 
         ctx_count = len(context_images) if context_images else 0
         log_debug(
@@ -159,6 +198,9 @@ class GenerationService:
 
         request_id = resp["request_id"]
         submit_time = time.time()
+        # Track active job so cancel() can fire a server-side cancel + refund.
+        self._active_request_id = request_id
+        self._active_auth = auth
         log_debug(
             f"Submitted: request_id={request_id}, "
             f"resolution={resp.get('resolution', suggested_resolution)}, "
@@ -208,7 +250,10 @@ class GenerationService:
         for i in range(max_polls):
             if self._cancelled:
                 return GenerationResult(
-                    success=False, error="Generation cancelled", request_id=request_id
+                    success=False,
+                    error=tr("Generation cancelled"),
+                    error_code=ErrorCode.GENERATION_CANCELLED.value,
+                    request_id=request_id,
                 )
 
             status_resp = self._client.poll_status(request_id, auth=auth)
@@ -221,7 +266,7 @@ class GenerationService:
                     ctx.final_status = "error"
                 return GenerationResult(
                     success=False,
-                    error=status_resp.get("error", "Status check failed"),
+                    error=status_resp.get("error") or tr("Status check failed"),
                     error_code=status_resp.get("code", ""),
                     request_id=request_id,
                 )
@@ -252,7 +297,7 @@ class GenerationService:
                     ctx.final_status = "failed"
                 return GenerationResult(
                     success=False,
-                    error=status_resp.get("error", "Generation failed"),
+                    error=status_resp.get("error") or tr("Generation failed"),
                     request_id=request_id,
                 )
 
@@ -261,10 +306,42 @@ class GenerationService:
                 for _ in range(int(poll_interval * 5)):
                     if self._cancelled:
                         return GenerationResult(
-                            success=False, error="Generation cancelled",
+                            success=False,
+                            error=tr("Generation cancelled"),
+                            error_code=ErrorCode.GENERATION_CANCELLED.value,
                             request_id=request_id,
                         )
                     time.sleep(0.2)
+
+        # Last-ditch poll with force_fallback=true: the plugin exhausted its
+        # poll budget but the server may have a terminal state cached, or can
+        # close it via fal queue now. Saves the user the round-trip to the
+        # reconcile cron (which would otherwise take up to 2 min to resolve).
+        try:
+            final = self._client.poll_status(request_id, auth=auth, force_fallback=True)
+            final_status = final.get("status", "unknown")
+            if final_status == "completed":
+                if ctx is not None:
+                    ctx.poll_count = max_polls
+                    ctx.total_wait_seconds = max_polls * poll_interval
+                    ctx.final_status = "completed"
+                return GenerationResult(
+                    success=True,
+                    image_url=final.get("image_url"),
+                    request_id=request_id,
+                )
+            if final_status == "failed":
+                if ctx is not None:
+                    ctx.poll_count = max_polls
+                    ctx.total_wait_seconds = max_polls * poll_interval
+                    ctx.final_status = "failed"
+                return GenerationResult(
+                    success=False,
+                    error=final.get("error") or tr("Generation failed"),
+                    request_id=request_id,
+                )
+        except Exception:  # nosec B110
+            pass
 
         if ctx is not None:
             ctx.poll_count = max_polls
@@ -273,6 +350,10 @@ class GenerationService:
 
         return GenerationResult(
             success=False,
-            error="Generation timed out, please try again",
+            error=tr(
+                "Generation timed out, please try again. "
+                "If a credit was charged, the server will refund it shortly."
+            ),
+            error_code=ErrorCode.GENERATION_TIMED_OUT.value,
             request_id=request_id,
         )

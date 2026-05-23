@@ -8,7 +8,19 @@ import re
 
 from qgis.core import QgsSettings
 
-from .i18n import tr
+from ..i18n import tr
+from .auth_helper import (
+    clear_activation as _auth_clear_activation,
+)
+from .auth_helper import (
+    get_activation_key as _auth_get_activation_key,
+)
+from .auth_helper import (
+    migrate_legacy_key as _auth_migrate_legacy_key,
+)
+from .auth_helper import (
+    save_activation as _auth_save_activation,
+)
 
 _KEY_RE = re.compile(r"^tl_[0-9a-f]{32}$")
 
@@ -51,8 +63,7 @@ DEFAULT_CONFIG = {
 
 
 def get_activation_key(settings=None) -> str:
-    s = settings or QgsSettings()
-    return s.value(f"{SETTINGS_PREFIX}activation_key", "")
+    return _auth_get_activation_key(settings)
 
 
 def has_consent(settings=None) -> bool:
@@ -68,15 +79,18 @@ def save_consent(settings=None):
 
 
 def save_activation(key: str, settings=None):
-    """Save activation key."""
-    s = settings or QgsSettings()
-    s.setValue(f"{SETTINGS_PREFIX}activation_key", key.strip())
+    """Save activation key (encrypted via QgsAuthManager when available)."""
+    _auth_save_activation(key, settings)
 
 
 def clear_activation(settings=None):
-    """Clear activation state (e.g. when key becomes invalid)."""
-    s = settings or QgsSettings()
-    s.setValue(f"{SETTINGS_PREFIX}activation_key", "")
+    """Clear activation state and the activation timestamp cohort marker."""
+    _auth_clear_activation(settings)
+
+
+def migrate_legacy_key(settings=None) -> bool:
+    """Migrate any QSettings-only key to QgsAuthManager. Idempotent."""
+    return _auth_migrate_legacy_key(settings)
 
 
 def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
@@ -162,16 +176,17 @@ def get_tutorial_url(client=None) -> str:
     return config.get("tutorial_url", "https://youtu.be/8qiNQVCGlsQ?si=Ps0XjBT8LW_1svkg")
 
 
-# -- Server config --
-
-_cached_config: dict | None = None
+# -- Server config (delegates to ConfigStore so unload + Plugin Reloader stay clean) --
 
 
 def get_server_config(client=None) -> dict:
     """Fetch server-driven config, with local caching and fallback."""
-    global _cached_config
-    if _cached_config is not None:
-        return _cached_config
+    from ..config_store import get_store
+    store = get_store()
+    if store is not None:
+        cached = store.get_activation_config()
+        if cached is not None:
+            return cached
 
     if client is None:
         return DEFAULT_CONFIG
@@ -179,7 +194,8 @@ def get_server_config(client=None) -> dict:
     try:
         result = client.get_config("ai-edit")
         if "error" not in result:
-            _cached_config = result
+            if store is not None:
+                store.set_activation_config(result)
             return result
     except Exception:
         pass  # nosec B110
@@ -189,5 +205,7 @@ def get_server_config(client=None) -> dict:
 
 def clear_config_cache():
     """Clear cached config (e.g. on plugin reload)."""
-    global _cached_config
-    _cached_config = None
+    from ..config_store import get_store
+    store = get_store()
+    if store is not None:
+        store.clear_activation_config()

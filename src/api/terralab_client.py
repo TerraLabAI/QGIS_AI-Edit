@@ -7,6 +7,7 @@ from qgis.PyQt.QtCore import QByteArray, QUrl
 from qgis.PyQt.QtNetwork import QNetworkRequest
 
 from ..core import qt_compat as QtC
+from ..core.i18n import tr
 from ..core.logger import log_debug, log_warning
 
 # Timeout defaults (milliseconds)
@@ -101,9 +102,15 @@ class TerraLabClient:
     network stack (proxy settings, Network Logger F12, SSL config).
     """
 
-    def __init__(self, base_url: str = None):
+    def __init__(self, base_url: str = None, env_vars: dict | None = None):
         if base_url is None:
-            base_url = self._read_base_url()
+            # Prefer env_vars passed by AIEditPlugin (already read once on
+            # the main thread). Fall back to reading .env.local if needed
+            # (mostly for tests and standalone usage).
+            if env_vars and env_vars.get("TERRALAB_BASE_URL"):
+                base_url = env_vars["TERRALAB_BASE_URL"]
+            else:
+                base_url = self._read_base_url()
         self.base_url = base_url.rstrip("/")
 
     @staticmethod
@@ -113,12 +120,15 @@ class TerraLabClient:
 
         plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         env_path = os.path.join(plugin_dir, ".env.local")
-        if os.path.isfile(env_path):
-            with open(env_path, encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("TERRALAB_BASE_URL="):
-                        return line.split("=", 1)[1].strip().strip('"').strip("'")
+        try:
+            if os.path.isfile(env_path):
+                with open(env_path, encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("TERRALAB_BASE_URL="):
+                            return line.split("=", 1)[1].strip().strip('"').strip("'")
+        except OSError:
+            pass  # nosec B110
         return "https://terra-lab.ai"
 
     # -- public API (same signatures as before) ----------------------------
@@ -234,13 +244,14 @@ class TerraLabClient:
             return (False, f"HTTP {status_int}")
         return (True, None)
 
-    def poll_status(self, request_id: str, auth: dict) -> dict:
-        """Poll generation status."""
-        return self._request(
-            "GET",
-            f"/api/ai-edit/generate/status?request_id={request_id}",
-            auth=auth,
-        )
+    def poll_status(self, request_id: str, auth: dict, force_fallback: bool = False) -> dict:
+        """Poll generation status. force_fallback=True bypasses the server's
+        grace window and asks it to hit fal queue immediately. Used as a last
+        attempt right before the plugin gives up polling."""
+        path = f"/api/ai-edit/generate/status?request_id={request_id}"
+        if force_fallback:
+            path += "&force_fallback=true"
+        return self._request("GET", path, auth=auth)
 
     def get_usage(self, auth: dict) -> dict:
         """Get usage info."""
@@ -297,6 +308,29 @@ class TerraLabClient:
             "POST", "/api/plugin/track", auth=auth, body=body, timeout_ms=5_000
         )
 
+    def cancel_generation(self, request_id: str, auth: dict) -> dict:
+        """Fire a server-side cancel for a pending generation.
+
+        Used when the user closes the dock mid-generation so the row is
+        marked 'cancelled' (and credits refunded) instead of being orphaned
+        until the reconcile cron times it out.
+        """
+        body = json.dumps({"request_id": request_id}).encode("utf-8")
+        return self._request(
+            "POST", "/api/ai-edit/generate/cancel", auth=auth, body=body, timeout_ms=5_000
+        )
+
+    def refund_generation(self, request_id: str, reason: str, auth: dict) -> dict:
+        """Ask the server to refund credits for a completed generation that
+        the plugin failed to deliver to the user (download error, disk write
+        error). The server returns 'already_refunded' if previously called.
+        Reason must be one of: download_failed, write_error, disk_full, unknown.
+        """
+        body = json.dumps({"request_id": request_id, "reason": reason}).encode("utf-8")
+        return self._request(
+            "POST", "/api/ai-edit/generate/refund", auth=auth, body=body, timeout_ms=10_000
+        )
+
     def download_image(self, url: str) -> bytes:
         """Download image bytes from a signed URL.
 
@@ -310,12 +344,16 @@ class TerraLabClient:
 
         if err != QtC.BlockingNoError:
             code, msg = _classify_network_error(blocker)
-            raise RuntimeError(f"Download failed ({code}): {msg}")
+            raise RuntimeError(
+                tr("Download failed ({code}): {msg}").format(code=code, msg=msg)
+            )
 
         reply = blocker.reply()
         http_status = reply.attribute(QtC.HttpStatusCodeAttribute)
         if http_status and _safe_int(http_status) >= 400:
-            raise RuntimeError(f"Download failed: HTTP {http_status}")
+            raise RuntimeError(
+                tr("Download failed: HTTP {status}").format(status=http_status)
+            )
 
         data = bytes(reply.content())
         content_type = reply.rawHeader(b"Content-Type")
@@ -415,5 +453,23 @@ class TerraLabClient:
 
 
 def _get_submit_timeout_ms(resolution: str) -> int:
-    """Client-side timeout for generation submission."""
+    """Client-side timeout for generation submission.
+
+    Reads the server-supplied ``submit_timeouts_ms`` from the export config
+    (loaded at plugin startup into ConfigStore). Falls back to the local
+    hardcoded defaults if the server hasn't shipped the field yet, so older
+    backends keep working.
+    """
+    try:
+        from ..core.config_store import get_store
+        store = get_store()
+        cfg = store.get_server_export_config() if store is not None else None
+        if cfg:
+            server_map = cfg.get("submit_timeouts_ms")
+            if isinstance(server_map, dict):
+                val = server_map.get(resolution)
+                if isinstance(val, (int, float)) and val > 0:
+                    return int(val)
+    except Exception:  # nosec B110
+        pass
     return _SUBMIT_TIMEOUTS_MS.get(resolution, _TIMEOUT_API)

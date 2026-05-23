@@ -24,7 +24,7 @@ try:  # SIP comes packaged with both PyQt5 and PyQt6 - used to detect dead C++ o
 except ImportError:  # pragma: no cover - defensive only
     _sip = None
 
-from qgis.PyQt.QtCore import QSize, QThread, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import QSize, QThread, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QDialog,
@@ -41,12 +41,13 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from ..core import prompt_history, telemetry
-from ..core import qt_compat as QtC
-from ..core.date_format import format_smart_date
-from ..core.i18n import tr
-from ..core.logger import log_debug, log_warning
-from ..core.prompt_presets import (
+from ...core import qt_compat as QtC
+from ...core import telemetry
+from ...core.date_format import format_smart_date
+from ...core.i18n import tr
+from ...core.logger import log_debug, log_warning
+from ...core.prompts import prompt_history
+from ...core.prompts.prompt_presets import (
     _CATEGORY_ORDER,
     format_template_prompt,
     get_all_categories,
@@ -90,7 +91,7 @@ def _split_experimental(presets: list[dict]) -> tuple[list[dict], list[dict]]:
     return reliable, experimental
 
 
-_PLUGIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+_PLUGIN_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 _ICONS_DIR = os.path.join(_PLUGIN_DIR, "resources", "icons")
 _HISTORY_SVG = os.path.join(_ICONS_DIR, "history.svg")
 _STAR_OUTLINE_SVG = os.path.join(_ICONS_DIR, "star.svg")
@@ -509,7 +510,7 @@ class _BeforeAfterCard(QFrame):
 
         # --- slider preview ---
         # Late import to avoid Qt initialisation order issues at module load.
-        from .before_after_slider import BeforeAfterSlider
+        from ..before_after_slider import BeforeAfterSlider
 
         self._slider = BeforeAfterSlider(self)
         # Square preview - keeps the Top Picks grid visually uniform.
@@ -575,6 +576,16 @@ class _BeforeAfterCard(QFrame):
         elif which == "after":
             self._slider.set_after(pixmap)
 
+    def deleteLater(self):  # noqa: N802 - Qt signature
+        # Drop the demo_loader signal connection so an inflight image load
+        # never tries to paint into a destroyed card.
+        if self._demo_loader is not None:
+            try:
+                self._demo_loader.loaded.disconnect(self._on_demo_loaded)
+            except (RuntimeError, TypeError):
+                pass
+        super().deleteLater()
+
     def _emit_click(self):
         self._on_click(self._preset)
 
@@ -596,10 +607,7 @@ class _BeforeAfterCard(QFrame):
         # Slider has its own click semantic; only fire if click hit the
         # footer area below the slider.
         if event.button() == QtC.LeftButton:
-            if hasattr(event, "position"):
-                y = int(event.position().y())
-            else:
-                y = event.pos().y()
+            y = QtC.event_pos(event).y()
             if y >= self._slider.height():
                 self._on_click(self._preset)
         super().mousePressEvent(event)
@@ -740,18 +748,6 @@ class PromptTemplatesDialog(QDialog):
         # Wider default so the 4-card grid + slider previews have room to breathe.
         self.resize(1100, 720)
         self.setSizeGripEnabled(True)
-        # Styled tooltip - by default Qt's tooltip is unframed and reads as
-        # floating black text on macOS. This gives it a proper popover look.
-        self.setStyleSheet(
-            "QToolTip { "
-            "background-color: palette(base); "
-            "color: palette(text); "
-            "border: 1px solid rgba(128,128,128,0.5); "
-            "border-radius: 6px; "
-            "padding: 6px 10px; "
-            "font-size: 12px; "
-            "}"
-        )
 
         self._client = client
         self._auth_provider = auth_provider
@@ -761,7 +757,7 @@ class PromptTemplatesDialog(QDialog):
         # available - otherwise there's nothing to fetch).
         self._demo_loader = None
         if server_catalog is not None and client is not None:
-            from .template_demo_loader import TemplateDemoLoader
+            from ..template_demo_loader import TemplateDemoLoader
 
             self._demo_loader = TemplateDemoLoader(self)
 
@@ -1122,7 +1118,7 @@ class PromptTemplatesDialog(QDialog):
             # for Top Picks until the before/after assets land. Restore the
             # _BeforeAfterCard branch below once demo URLs are wired.
             # if self._demo_loader is not None and self._client is not None:
-            #     from ..core.prompt_presets_client import absolute_demo_url
+            #     from ...core.prompts.prompt_presets_client import absolute_demo_url
             #
             #     def _abs(rel, _client=self._client):
             #         return absolute_demo_url(_client, rel)
@@ -1308,9 +1304,10 @@ class PromptTemplatesDialog(QDialog):
                 card.star_button().refresh()
             except RuntimeError:
                 continue
-        # Only Favorites changes when a star is toggled - leave Recent alone so
-        # the user keeps their scroll position after Load-more.
-        self._reload_dynamic_pages(keys=("user_favorites",))
+        # Defer the page rebuild so the star button finishes its click handler
+        # before its parent page gets deleteLater'd. Destroying a widget mid
+        # signal-emission crashes QGIS on Qt6.
+        QTimer.singleShot(0, lambda: self._reload_dynamic_pages(keys=("user_favorites",)))
         # Fire server sync (fire-and-forget).
         self._sync_favorite(prompt, label, source_cat, now_fav)
 
@@ -1320,8 +1317,12 @@ class PromptTemplatesDialog(QDialog):
         auth = self._auth_provider() or {}
         if not auth.get("Authorization"):
             return
+        # No parent: if the dialog closes mid-fetch, the worker keeps running to
+        # completion (POST/DELETE is read-write-safe to abandon) and self-deletes
+        # via finished -> deleteLater. Parenting to the dialog would destroy the
+        # parent while the worker is still alive, which crashes on Qt6.
         worker = _FavoriteSyncWorker(
-            self._client, auth, prompt, label, source_cat, now_fav, parent=self
+            self._client, auth, prompt, label, source_cat, now_fav, parent=None
         )
         worker.finished.connect(lambda: self._on_fav_worker_done(worker))
         self._fav_workers.append(worker)
@@ -1432,16 +1433,13 @@ class PromptTemplatesDialog(QDialog):
     # -- Cleanup ---------------------------------------------------------
 
     def closeEvent(self, event):  # noqa: N802
-        # Workers run in QThreads; drain them before the dialog is destroyed
-        # so QThread's destructor never trips "Destroyed while still running".
-        # Terminate as a last resort to avoid taking QGIS down with us.
+        # Workers run in QThreads; ask them to quit cleanly and wait. We never
+        # call terminate(): Qt docs warn it can corrupt the Python state on the
+        # target thread, which has been linked to QGIS crashes in the wild.
+        # _LibrarySyncWorker is owned by the dialog and parented - quit + wait
+        # is enough. _FavoriteSyncWorker has no parent (see _sync_favorite) so
+        # if it's still running we just let it finish in the background.
         if self._sync_worker is not None and self._sync_worker.isRunning():
-            if not self._sync_worker.wait(2000):
-                self._sync_worker.terminate()
-                self._sync_worker.wait(500)
-        for w in list(self._fav_workers):
-            if w.isRunning():
-                if not w.wait(2000):
-                    w.terminate()
-                    w.wait(500)
+            self._sync_worker.quit()
+            self._sync_worker.wait(2000)
         super().closeEvent(event)

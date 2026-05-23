@@ -4,19 +4,42 @@ Each language has its own set of messages instead of mechanical translations.
 Direct translation of jokes (e.g. "Pixel diplomacy in progress...") reads
 awkwardly, so each locale has idiomatic phrasing of the same spirit.
 
-Three phases pace the rotation across the generation lifetime:
-    EARLY (t < 0.3) - warming up
-    MID   (0.3-0.75) - working
-    LATE  (>= 0.75)  - finishing
+Five phases pace the rotation across the full lifetime:
+    CANVAS (click -> export done)        - bar 1-5%, capture the zone
+    UPLOAD (export -> /generate returns) - bar 5-10%, send bytes to AI
+    EARLY  (t < 0.3 of fal estimate)     - warming up
+    MID    (0.3-0.75 of fal estimate)    - working
+    LATE   (>= 0.75 of fal estimate)     - finishing
 
-The worker picks a phase by elapsed/estimated ratio and rotates within it.
+CANVAS + UPLOAD are paced by a UI ticker (dock_widget). EARLY/MID/LATE
+are picked by the generation worker from elapsed/estimated ratio.
 """
 from __future__ import annotations
 
-from .i18n import get_locale
+from ..i18n import get_locale
 
 _MESSAGES: dict[str, dict[str, list[str]]] = {
     "en": {
+        "canvas": [
+            "Snapping your zone...",
+            "Lining up the satellites...",
+            "Cropping reality at the right corner...",
+            "Squeezing the map into a polite rectangle...",
+            "Counting the pixels twice...",
+            "Photographing your patch of Earth...",
+            "Capturing the moment...",
+            "Tightening the bounding box...",
+        ],
+        "upload": [
+            "Beaming pixels to the cloud...",
+            "Stuffing megabytes in the tube...",
+            "Boarding the packets...",
+            "Mailing your zone to the AI...",
+            "Routing through the internet pipes...",
+            "Lifting bytes off the ground...",
+            "Knocking on the AI's door...",
+            "Express delivery in progress...",
+        ],
         "early": [
             "Waking up the AI...",
             "Summoning pixels...",
@@ -63,6 +86,26 @@ _MESSAGES: dict[str, dict[str, list[str]]] = {
         ],
     },
     "fr": {
+        "canvas": [
+            "Capture de votre zone...",
+            "Alignement des satellites...",
+            "Découpe parfaite au cordeau...",
+            "On range la carte dans un beau rectangle...",
+            "On recompte les pixels...",
+            "Photographie de votre bout de Terre...",
+            "On immortalise la zone...",
+            "Resserrage de la bounding box...",
+        ],
+        "upload": [
+            "Téléportation des pixels vers le cloud...",
+            "On bourre les mégaoctets dans le tube...",
+            "Embarquement des paquets...",
+            "Postage de votre zone à l'IA...",
+            "Routage dans les tuyaux d'internet...",
+            "Décollage des octets...",
+            "On toque à la porte de l'IA...",
+            "Livraison express en cours...",
+        ],
         "early": [
             "On réveille l'IA...",
             "Invocation des pixels...",
@@ -109,6 +152,26 @@ _MESSAGES: dict[str, dict[str, list[str]]] = {
         ],
     },
     "es": {
+        "canvas": [
+            "Capturando tu zona...",
+            "Alineando los satélites...",
+            "Recorte perfecto en marcha...",
+            "Metiendo el mapa en un rectángulo educado...",
+            "Recontando los píxeles...",
+            "Fotografiando tu trozo de Tierra...",
+            "Inmortalizando el momento...",
+            "Ajustando el bounding box...",
+        ],
+        "upload": [
+            "Teletransportando píxeles a la nube...",
+            "Embutiendo megabytes en el tubo...",
+            "Embarcando los paquetes...",
+            "Enviando tu zona a la IA...",
+            "Enrutando por los tubos de internet...",
+            "Despegando los bytes del suelo...",
+            "Tocando a la puerta de la IA...",
+            "Entrega exprés en curso...",
+        ],
         "early": [
             "Despertando a la IA...",
             "Invocando los píxeles...",
@@ -155,6 +218,26 @@ _MESSAGES: dict[str, dict[str, list[str]]] = {
         ],
     },
     "pt": {
+        "canvas": [
+            "Capturando sua zona...",
+            "Alinhando os satélites...",
+            "Recorte perfeito em andamento...",
+            "Encaixando o mapa num retângulo bem-comportado...",
+            "Recontando os pixels...",
+            "Fotografando seu pedaço da Terra...",
+            "Imortalizando o momento...",
+            "Apertando o bounding box...",
+        ],
+        "upload": [
+            "Teletransportando pixels para a nuvem...",
+            "Enfiando megabytes no tubo...",
+            "Embarcando os pacotes...",
+            "Enviando sua zona para a IA...",
+            "Roteando pelos canos da internet...",
+            "Decolando os bytes do chão...",
+            "Batendo na porta da IA...",
+            "Entrega expressa em andamento...",
+        ],
         "early": [
             "Acordando a IA...",
             "Invocando os pixels...",
@@ -214,7 +297,7 @@ def _resolve_lang() -> str:
 def get_phase_messages(phase: str) -> list[str]:
     """Return the message pool for `phase` in the user's locale.
 
-    `phase` must be one of "early", "mid", "late". Falls back to English
-    when the locale is unsupported, and to an empty list when the phase
-    name is unknown (no crash on programmer error)."""
+    `phase` must be one of "canvas", "upload", "early", "mid", "late".
+    Falls back to English when the locale is unsupported, and to an empty
+    list when the phase name is unknown (no crash on programmer error)."""
     return list(_MESSAGES[_resolve_lang()].get(phase) or _MESSAGES["en"].get(phase) or [])

@@ -34,11 +34,12 @@ from qgis.gui import QgsMapCanvas, QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QKeySequence
 
-from ..core import qt_compat as QtC
-from ..core.logger import log_debug
+from ...core import qt_compat as QtC
+from ...core.logger import log_debug
+from ..layer_groups import MARKUP_LAYER_PROPERTY, get_or_create_ai_edit_group
 
 MARKUP_LAYER_NAME = "AI Edit guidance markup"
-_MARKUP_PROPERTY = "ai_edit_markup"
+_MARKUP_PROPERTY = MARKUP_LAYER_PROPERTY
 
 
 def _symbol_property(name: str):
@@ -77,10 +78,29 @@ class MarkupLayerManager(QObject):
         super().__init__(parent)
         self._canvas = canvas
         self._layer: QgsVectorLayer | None = None
-        # Drop our reference the moment QGIS tears down the layer (user
-        # right-click → Remove Layer, project close, etc.) so we never call
-        # methods on a dead C++ wrapper.
-        QgsProject.instance().layersWillBeRemoved.connect(self._on_layers_removed)
+        self._next_markup_id = 1
+        # Drop our layer reference whenever QGIS tears it down so we never
+        # call methods on a dead C++ wrapper.
+        project = QgsProject.instance()
+        project.layersWillBeRemoved.connect(self._on_layers_removed)
+        project.cleared.connect(self._on_project_cleared)
+        try:
+            project.crsChanged.connect(self._on_project_crs_changed)
+        except (TypeError, RuntimeError):
+            pass
+
+    def _on_project_cleared(self) -> None:
+        if self._layer is not None:
+            self._layer = None
+            try:
+                self.annotation_count_changed.emit(0)
+            except RuntimeError:
+                pass
+
+    def _on_project_crs_changed(self) -> None:
+        if self._layer is not None:
+            log_debug("Mark up: project CRS changed, rebuilding layer")
+            self._layer = None
 
     def _on_layers_removed(self, layer_ids: list[str]) -> None:
         if self._layer is None:
@@ -95,7 +115,6 @@ class MarkupLayerManager(QObject):
             self.annotation_count_changed.emit(0)
 
     def _alive(self) -> bool:
-        """Return True iff our layer reference is non-None and still alive."""
         if self._layer is None:
             return False
         try:
@@ -112,26 +131,30 @@ class MarkupLayerManager(QObject):
         crs = QgsProject.instance().crs()
         uri = (
             f"MultiLineString?crs={crs.authid()}"
-            "&field=color:string"
-            "&field=shape:string"
+            "&field=id:integer"
+            "&field=color:string(7)"
+            "&field=shape:string(20)"
+            "&field=created_at:string(25)"
+            "&field=notes:string(255)"
         )
         layer = QgsVectorLayer(uri, MARKUP_LAYER_NAME, "memory")
         if not layer.isValid():
             raise RuntimeError("Failed to create Mark up memory layer")
+        self._next_markup_id = 1
         layer.setCustomProperty("skipMemoryLayersCheck", 1)
         layer.setCustomProperty(_MARKUP_PROPERTY, True)
         self._apply_style(layer)
-        # Add at the top of the layer tree, OUTSIDE the AI-Edit group: this
-        # layer is temporary scratch (removed on session end), so keeping
-        # it in the same group as kept outputs would be misleading.
-        QgsProject.instance().addMapLayer(layer, True)
+        # Pin at the bottom of the AI-Edit group; addMapLayer(False) blocks
+        # auto-insertion at the root.
+        QgsProject.instance().addMapLayer(layer, False)
+        group = get_or_create_ai_edit_group()
+        group.addLayer(layer)
         self._layer = layer
         log_debug(f"Mark up: layer created (crs={crs.authid()})")
         return layer
 
     @staticmethod
     def _apply_style(layer: QgsVectorLayer) -> None:
-        """Single colored line symbol; per-feature ``color`` field drives stroke."""
         symbol = QgsLineSymbol.createSimple(
             {
                 "line_color": _stroke_color_value(QColor(230, 51, 51)),
@@ -165,11 +188,17 @@ class MarkupLayerManager(QObject):
     def commit(self, geometry: QgsGeometry, color: QColor, shape: str) -> None:
         if geometry.isEmpty():
             return
+        import time as _time
         layer = self._ensure_layer()
         feat = QgsFeature(layer.fields())
         feat.setGeometry(geometry)
+        feat.setAttribute("id", self._next_markup_id)
+        self._next_markup_id += 1
         feat.setAttribute("color", _stroke_color_value(color))
         feat.setAttribute("shape", shape)
+        feat.setAttribute(
+            "created_at", _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime())
+        )
         layer.dataProvider().addFeature(feat)
         layer.updateExtents()
         layer.triggerRepaint()

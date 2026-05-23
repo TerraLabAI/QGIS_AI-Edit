@@ -1,39 +1,55 @@
-"""Off-thread canvas exporter.
-
-Pulled out of the synchronous _on_generate path because the heavy bits
-(QgsMapRendererCustomPainterJob.waitForFinished + PNG encode at 2K/4K)
-were freezing the UI thread for hundreds of ms, popping the wait cursor
-every time the user clicked Generate.
-"""
+"""Off-thread canvas exporter as a QgsTask."""
 from __future__ import annotations
 
-from qgis.PyQt.QtCore import QThread, pyqtSignal
+from qgis.core import QgsTask
+from qgis.PyQt.QtCore import pyqtSignal
 
 from ..ui.canvas_exporter import ExportPrep, render_export
 
 
-class ExportWorker(QThread):
-    """Run render_export on a worker thread, emit the result back."""
-
-    completed = pyqtSignal(str, int, int, object, int)
-    # b64, out_w, out_h, actual_extent, image_size_bytes
-
+class ExportWorker(QgsTask):
+    completed = pyqtSignal(str, int, int, object, int)  # b64, out_w, out_h, extent, bytes
     failed = pyqtSignal(str)
 
-    def __init__(self, prep: ExportPrep, parent=None):
-        super().__init__(parent)
+    def __init__(self, prep: ExportPrep):
+        super().__init__("AI Edit canvas export", QgsTask.Flag.CanCancel)
         self._prep = prep
+        self._success_payload: tuple | None = None
+        self._failure: str | None = None
 
-    def run(self):
+    def is_active(self) -> bool:
+        try:
+            return self.status() in (
+                QgsTask.TaskStatus.Running,
+                QgsTask.TaskStatus.Queued,
+                QgsTask.TaskStatus.OnHold,
+            )
+        except Exception:
+            return False
+
+    def run(self) -> bool:
+        if self.isCanceled():
+            return False
         try:
             b64, size_bytes, actual_extent = render_export(self._prep)
-        except Exception as err:  # noqa: BLE001 - surface to UI thread.
-            self.failed.emit(str(err))
-            return
-        self.completed.emit(
+        except Exception as err:  # noqa: BLE001
+            self._failure = str(err)
+            return False
+        if self.isCanceled():
+            return False
+        self._success_payload = (
             b64,
             self._prep.out_w,
             self._prep.out_h,
             actual_extent,
             size_bytes,
         )
+        return True
+
+    def finished(self, result: bool) -> None:
+        if self.isCanceled():
+            return
+        if result and self._success_payload is not None:
+            self.completed.emit(*self._success_payload)
+        elif self._failure is not None:
+            self.failed.emit(self._failure)

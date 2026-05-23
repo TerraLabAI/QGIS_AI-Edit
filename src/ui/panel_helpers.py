@@ -18,7 +18,7 @@ from qgis.PyQt.QtGui import (
 )
 from qgis.PyQt.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
-BRAND_BLUE = "#1976d2"
+BRAND_BLUE = "#1e88e5"
 
 SECTION_HEADER_QSS = (
     "font-weight: bold; font-size: 12px; color: palette(text);"
@@ -56,6 +56,26 @@ def build_panel_header(title: str, subtitle: str | None = None) -> QWidget:
     return bar
 
 
+def build_info_box(text: str) -> QLabel:
+    """Blue-tinted info box used as a panel-footer hint. Mirrors the
+    "Info Box" pattern in PLUGIN_DESIGN_SYSTEM.md (blue 8% bg, blue 20%
+    border) — used by Vectorize/Markup to surface the tool description
+    at the bottom of the panel instead of above the controls."""
+    label = QLabel(text)
+    label.setWordWrap(True)
+    label.setStyleSheet(
+        "QLabel {"
+        " background-color: rgba(25, 118, 210, 0.08);"
+        " border: 1px solid rgba(25, 118, 210, 0.2);"
+        " border-radius: 4px;"
+        " padding: 8px;"
+        " font-size: 11px;"
+        " color: palette(text);"
+        "}"
+    )
+    return label
+
+
 def panel_section_label(text: str) -> QLabel:
     """Small-caps section label (TOOL / COLOR / DETECTION / etc.)."""
     label = QLabel(text.upper())
@@ -67,6 +87,28 @@ def panel_section_label(text: str) -> QLabel:
         " letter-spacing: 1px;"
     )
     return label
+
+
+# Native-feeling group box: subtle border, title sitting on the frame.
+# Shared between Markup / Vectorize / Swipe so the three tool panels feel
+# like one coherent surface instead of three different visual styles.
+GROUP_BOX_QSS = (
+    "QGroupBox {"
+    " font-weight: bold; font-size: 11px;"
+    " color: palette(text);"
+    " border: 1px solid rgba(128, 128, 128, 0.30);"
+    " border-radius: 6px;"
+    " margin-top: 10px;"
+    " padding: 10px 8px 8px 8px;"
+    "}"
+    "QGroupBox::title {"
+    " subcontrol-origin: margin;"
+    " subcontrol-position: top left;"
+    " padding: 0 4px;"
+    " left: 8px;"
+    " background-color: palette(window);"
+    "}"
+)
 
 
 def apply_swatch_style(button: QPushButton, color: QColor) -> None:

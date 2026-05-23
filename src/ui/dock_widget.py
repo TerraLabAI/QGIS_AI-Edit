@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import os
+import random
 import re
 import tempfile
 
@@ -53,33 +54,34 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..core import qt_compat as QtC
-from ..core.activation_manager import (
+from ..core.auth.activation_manager import (
     get_subscribe_url,
     get_tutorial_url,
     has_consent,
 )
 from ..core.i18n import tr
-from ..core.prompt_presets import format_template_prompt
+from ..core.prompts.loading_messages import get_phase_messages
+from ..core.prompts.prompt_presets import format_template_prompt
 from ..core.reference_image_store import ReferenceImageStore
 from .credit_ring import CreditRing
-from .markup_panel import MarkupPanel
 from .panel_helpers import (
     apply_swatch_style,
     build_panel_header,
     make_section_header,
     panel_section_label,
 )
+from .panels.markup_panel import MarkupPanel
+from .panels.vectorize_panel import VectorizePanel
 from .reference_images_widget import ReferenceImagesWidget
-from .vectorize_panel import VectorizePanel
 
 # ---------------------------------------------------------------------------
 # Brand colors (Material Design 2 - shared with AI Segmentation)
 # ---------------------------------------------------------------------------
-BRAND_GREEN = "#2e7d32"
-BRAND_GREEN_HOVER = "#1b5e20"
+BRAND_GREEN = "#43a047"
+BRAND_GREEN_HOVER = "#2e7d32"
 BRAND_GREEN_DISABLED = "#c8e6c9"
-BRAND_BLUE = "#1976d2"
-BRAND_BLUE_HOVER = "#1565c0"
+BRAND_BLUE = "#1e88e5"
+BRAND_BLUE_HOVER = "#1976d2"
 BRAND_RED = "#d32f2f"
 BRAND_RED_HOVER = "#b71c1c"
 BRAND_GRAY = "#757575"
@@ -98,19 +100,18 @@ TERRALAB_URL = (
 )
 SUPPORT_EMAIL = "yvann.barbot@terra-lab.ai"
 
-# ---------------------------------------------------------------------------
-# Reusable QSS style constants (design system)
-# ---------------------------------------------------------------------------
+# Design-system QSS constants. border: none kills the native frame on dark themes.
 _BTN_GREEN = (
     f"QPushButton {{ background-color: {BRAND_GREEN}; color: #000000;"
-    f" padding: 8px 16px; }}"
+    f" padding: 8px 16px; border: none; border-radius: 4px; }}"
     f"QPushButton:hover {{ background-color: {BRAND_GREEN_HOVER}; color: #000000; }}"
     f"QPushButton:disabled {{ background-color: {BRAND_GREEN_DISABLED};"
     f" color: {DISABLED_TEXT}; }}"
 )
 
 _BTN_GREEN_AUTH = (
-    f"QPushButton {{ background-color: {BRAND_GREEN}; color: #000000; }}"
+    f"QPushButton {{ background-color: {BRAND_GREEN}; color: #000000;"
+    f" border: none; border-radius: 4px; }}"
     f"QPushButton:hover {{ background-color: {BRAND_GREEN_HOVER}; }}"
     f"QPushButton:disabled {{ background-color: {BRAND_DISABLED};"
     f" color: {DISABLED_TEXT}; }}"
@@ -118,28 +119,29 @@ _BTN_GREEN_AUTH = (
 
 _BTN_BLUE = (
     f"QPushButton {{ background-color: {BRAND_BLUE}; color: #000000;"
-    f" padding: 6px 12px; }}"
+    f" padding: 6px 12px; border: none; border-radius: 4px; }}"
     f"QPushButton:hover {{ background-color: {BRAND_BLUE_HOVER}; color: #000000; }}"
     f"QPushButton:disabled {{ background-color: {BRAND_DISABLED};"
     f" color: {DISABLED_TEXT}; }}"
 )
 
 _BTN_BLUE_AUTH = (
-    f"QPushButton {{ background-color: {BRAND_BLUE}; color: #000000; }}"
+    f"QPushButton {{ background-color: {BRAND_BLUE}; color: #000000;"
+    f" border: none; border-radius: 4px; }}"
     f"QPushButton:hover {{ background-color: {BRAND_BLUE_HOVER}; }}"
     f"QPushButton:disabled {{ background-color: {BRAND_DISABLED}; }}"
 )
 
 _BTN_GRAY = (
     f"QPushButton {{ background-color: {BRAND_GRAY}; color: #000000;"
-    f" padding: 4px 8px; }}"
+    f" padding: 4px 8px; border: none; border-radius: 4px; }}"
     f"QPushButton:hover {{ background-color: {BRAND_GRAY_HOVER}; color: #000000; }}"
     f"QPushButton:disabled {{ background-color: {BRAND_DISABLED}; color: {DISABLED_TEXT}; }}"
 )
 
 _BTN_DISABLED = (
     f"QPushButton {{ background-color: {BRAND_DISABLED}; color: {DISABLED_TEXT};"
-    f" padding: 8px 16px; }}"
+    f" padding: 8px 16px; border: none; border-radius: 4px; }}"
 )
 
 _BTN_GHOST = (
@@ -152,20 +154,27 @@ _BTN_GHOST = (
     f" border: 1px solid rgba(128, 128, 128, 0.15); color: {DISABLED_TEXT}; }}"
 )
 
-# Footer icon buttons (gear / question mark) - slim toolbuttons.
-# Hover/pressed states are gated by the dynamic ``hover`` property
-# rather than Qt's :hover pseudo-state. With InstantPopup menus, Qt
-# fails to clear :hover once the menu closes (the synthetic Leave
-# event is eaten by the popup), so the button stays tinted. The
-# property-driven approach lets us force-reset the visual via
-# ``_FooterIconButton.set_hovered(False)``.
+# Footer icon buttons (swipe / vectorize / gear / question mark).
+# Hover, active and disabled states are all driven by the dynamic
+# ``hover`` / ``active`` properties + Qt's :checked pseudo-state. The
+# TerraLab leaf-green tint marks "you are inside this tool" so the user
+# always knows which AI Edit action owns the canvas. Two states exist for
+# the same reason: ``[active]`` lets us light buttons that drive modal
+# dialogs / menus (where Qt's :checked would auto-toggle on click), while
+# :checked fits the genuine toggle (swipe).
 _FOOTER_ICON_BTN_STYLE = (
     "QToolButton { background: transparent; border: none; padding: 6px 10px;"
     " font-size: 22px; font-weight: 600;"
     " color: palette(text); border-radius: 4px; }"
     'QToolButton[hover="true"] { background: rgba(128,128,128,0.15); }'
+    'QToolButton[active="true"] { background: rgba(46, 125, 50, 0.55); }'
+    'QToolButton[active="true"][hover="true"] { background: rgba(46, 125, 50, 0.75); }'
+    "QToolButton:checked { background: rgba(46, 125, 50, 0.55); }"
+    "QToolButton:checked:hover { background: rgba(46, 125, 50, 0.75); }"
+    "QToolButton:disabled { color: rgba(128, 128, 128, 0.4); }"
     "QToolButton::menu-indicator { image: none; width: 0; }"
 )
+_FOOTER_ICON_TOGGLE_STYLE = _FOOTER_ICON_BTN_STYLE  # backward-compat alias
 
 _FOOTER_MENU_STYLE = (
     "QMenu { background: palette(base); border: 1px solid rgba(128,128,128,0.35);"
@@ -181,7 +190,7 @@ _INSTRUCTION_BOX = (
     "  border: 1px solid rgba(128, 128, 128, 0.25);"
     "  border-radius: 4px;"
     "  padding: 8px;"
-    "  font-size: 10px;"
+    "  font-size: 12px;"
     "  color: palette(text);"
     "}"
 )
@@ -261,12 +270,25 @@ class _FooterIconButton(QToolButton):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setProperty("hover", False)
+        self.setProperty("active", False)
 
     def set_hovered(self, hovered: bool) -> None:
         if bool(self.property("hover")) == hovered:
             return
         self.setProperty("hover", hovered)
         # Re-polish so the [hover="true"] selector takes effect.
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
+
+    def set_active(self, active: bool) -> None:
+        """Light the green "you are inside this tool" tint without making
+        the button checkable. Used for footer icons that drive modal
+        dialogs / menus where Qt's :checked would auto-toggle on click.
+        """
+        if bool(self.property("active")) == active:
+            return
+        self.setProperty("active", active)
         self.style().unpolish(self)
         self.style().polish(self)
         self.update()
@@ -791,8 +813,15 @@ class AIEditDockWidget(QDockWidget):
     zone_clear_requested = pyqtSignal()    # Escape pressed while a zone was selected
     markup_clicked = pyqtSignal()          # user picked Tools → Mark up
     vectorize_clicked = pyqtSignal()       # user picked Tools → Vectorize
-    # (layer_id, color_hex) from the "Extract regions" CTA in the result panel.
-    vectorize_suggestion_clicked = pyqtSignal(str, str)
+    # (layer_id, color_hex, class_label) from the "Extract regions" CTA in
+    # the result panel. class_label seeds the class_name attribute on
+    # every produced polygon (empty for mono-class templates that lack
+    # a server-side label).
+    vectorize_suggestion_clicked = pyqtSignal(str, str, str)
+    # Footer Before/After is a checkable toggle: True = user wants the
+    # swipe map tool armed, False = user wants it disarmed. The plugin
+    # routes both states to the SwipeController.
+    swipe_toggled = pyqtSignal(bool)
     markup_done_clicked = pyqtSignal()     # user clicked Done in Mark up panel
     markup_clear_clicked = pyqtSignal()    # user clicked Clear all in Mark up
     markup_tool_changed = pyqtSignal(str)  # 'pencil' | 'arrow' | 'circle'
@@ -805,18 +834,21 @@ class AIEditDockWidget(QDockWidget):
     # state. Stale-while-revalidate: this open uses whatever the dock has
     # cached, the refetch updates `self._server_catalog` for next time.
     catalog_refresh_requested = pyqtSignal()
+    # Fired when the Help (?) menu opens (True) or closes (False). The
+    # plugin uses this to light the green active tint on the help button
+    # and to disarm the swipe map tool when the user opens another action.
+    help_menu_open_changed = pyqtSignal(bool)
 
     def __init__(self, parent=None, reference_store: ReferenceImageStore | None = None):
         super().__init__(tr("AI Edit by TerraLab"), parent)
         self.setAllowedAreas(QtC.LeftDockWidgetArea | QtC.RightDockWidgetArea)
-        # 300px keeps the footer (Unlock pill + 3 right-aligned icons) fully
-        # visible even after the credit counter hides on narrow docks.
-        self.setMinimumWidth(300)
+        # Scale min width with font so hi-DPI displays don't crop the footer.
+        try:
+            char_w = self.fontMetrics().averageCharWidth()
+            self.setMinimumWidth(max(300, int(char_w * 50)))
+        except Exception:
+            self.setMinimumWidth(300)
         self._reference_store = reference_store
-        # Wired by plugin.py via set_library_dependencies - the Prompt library
-        # dialog uses these to sync Recent/Favorites with the server. The
-        # server catalog (richer presets with demo image URLs) is set by
-        # set_server_catalog after the plugin's startup fetch resolves.
         self._library_client = None
         self._library_auth_manager = None
         self._server_catalog: dict | None = None
@@ -826,6 +858,9 @@ class AIEditDockWidget(QDockWidget):
         # (used by plugin.py to keep vector hints + Vectorize CTA active).
         self._active_template_id: str | None = None
         self._active_template_name: str | None = None
+
+        # Parented so the 12 s shot dies with the dock, not against a deleted widget.
+        self._status_hide_timer: QTimer | None = None
 
         # Global Escape: exit the flow no matter where focus is (canvas while
         # drawing a zone, prompt textarea, progress bar, etc.). WindowShortcut
@@ -877,7 +912,7 @@ class AIEditDockWidget(QDockWidget):
         self._launch_btn = QPushButton(tr("Launch AI Edit"))
         self._launch_btn.setToolTip(tr("Start a new AI edit session"))
         self._launch_btn.setCursor(QtC.PointingHandCursor)
-        self._launch_btn.setMinimumHeight(40)
+        self._launch_btn.setMinimumHeight(36)
         self._launch_btn.setStyleSheet(_BTN_GREEN_AUTH)
         self._launch_btn.clicked.connect(self.launch_clicked.emit)
         launch_layout.addWidget(self._launch_btn)
@@ -891,14 +926,25 @@ class AIEditDockWidget(QDockWidget):
         sz_layout.setContentsMargins(0, 0, 0, 0)
         sz_layout.setSpacing(6)
 
-        self._select_zone_header = _make_section_header(tr("Select your zone"))
+        self._select_zone_header = _make_section_header(tr("Draw your zone"))
         sz_layout.addWidget(self._select_zone_header)
 
         self._select_zone_hint = QLabel(
-            tr("Click and drag on the map to draw a rectangular zone.")
+            tr("Click and drag on the map to outline what AI Edit will modify.")
         )
         self._select_zone_hint.setWordWrap(True)
-        self._select_zone_hint.setStyleSheet(_INSTRUCTION_BOX)
+        # Softer, more breathing-room variant of _INSTRUCTION_BOX - first impression
+        # of the plugin, so the hint reads as an invitation rather than a notice.
+        self._select_zone_hint.setStyleSheet(
+            "QLabel {"
+            "  background-color: rgba(128, 128, 128, 0.08);"
+            "  border: 1px solid rgba(128, 128, 128, 0.18);"
+            "  border-radius: 6px;"
+            "  padding: 12px 14px;"
+            "  font-size: 11px;"
+            "  color: palette(text);"
+            "}"
+        )
         sz_layout.addWidget(self._select_zone_hint)
 
         self._select_zone_section.setVisible(False)
@@ -1021,14 +1067,14 @@ class AIEditDockWidget(QDockWidget):
         self._generate_btn.setVisible(False)
         generate_row.addWidget(self._generate_btn, 1)
 
-        self._exit_btn = QPushButton(tr("Exit"))
+        self._exit_btn = QPushButton(tr("Done"))
         self._exit_btn.setToolTip(tr("Exit and return to the start"))
         self._exit_btn.setCursor(QtC.PointingHandCursor)
         # Width: hold a longer label ("Quitter", "Salir", "Sair") without
         # clipping. We use minimumWidth instead of fixedWidth so future
         # translations longer than the current set still fit.
         self._exit_btn.setMinimumWidth(88)
-        self._exit_btn.setMinimumHeight(34)
+        self._exit_btn.setMinimumHeight(36)
         self._exit_btn.setStyleSheet(_BTN_GHOST)
         self._exit_btn.clicked.connect(self._on_exit_clicked)
         self._exit_btn.setVisible(False)
@@ -1146,13 +1192,13 @@ class AIEditDockWidget(QDockWidget):
         self._result_regenerate_btn.clicked.connect(self._on_retry_clicked)
         result_actions_row.addWidget(self._result_regenerate_btn, 1)
 
-        self._result_exit_btn = QPushButton(tr("Exit"))
+        self._result_exit_btn = QPushButton(tr("Done"))
         self._result_exit_btn.setToolTip(tr("Exit and return to the start"))
         self._result_exit_btn.setCursor(QtC.PointingHandCursor)
         # See `_exit_btn` above for why this is a minimum rather than fixed
         # width.
         self._result_exit_btn.setMinimumWidth(88)
-        self._result_exit_btn.setMinimumHeight(34)
+        self._result_exit_btn.setMinimumHeight(36)
         self._result_exit_btn.setStyleSheet(_BTN_GHOST)
         self._result_exit_btn.clicked.connect(self._on_exit_clicked)
         result_actions_row.addWidget(self._result_exit_btn, 0)
@@ -1169,7 +1215,8 @@ class AIEditDockWidget(QDockWidget):
             "font-size: 11px; color: palette(text); background: transparent;"
             " border: none; padding: 4px 0 0 0;"
         )
-        self._layer_saved_label.setCursor(QtC.PointingHandCursor)
+        # ArrowCursor on the wrapper; Qt switches to PointingHand over the <a>.
+        self._layer_saved_label.setCursor(QtC.ArrowCursor)
         self._layer_saved_label.linkActivated.connect(self._on_layer_saved_link_clicked)
         self._layer_saved_label.setVisible(False)
         self._saved_layer_id: str | None = None
@@ -1187,12 +1234,12 @@ class AIEditDockWidget(QDockWidget):
         self._vectorize_cta_swatch = QLabel()
         self._vectorize_cta_swatch.setFixedSize(14, 14)
         self._vectorize_cta_swatch.setStyleSheet(
-            "background: #888; border: 1px solid rgba(128,128,128,0.5);"
+            "background: rgba(128,128,128,0.3); border: 1px solid rgba(128,128,128,0.5);"
             " border-radius: 3px;"
         )
         cta_layout.addWidget(self._vectorize_cta_swatch)
         self._vectorize_cta_btn = QPushButton()
-        self._vectorize_cta_btn.setText(tr("Vectorize this result →"))
+        self._vectorize_cta_btn.setText(tr("Vectorize this result") + " →")
         self._vectorize_cta_btn.setFlat(True)
         self._vectorize_cta_btn.setCursor(QtC.PointingHandCursor)
         self._vectorize_cta_btn.setStyleSheet(
@@ -1205,7 +1252,7 @@ class AIEditDockWidget(QDockWidget):
         self._vectorize_cta_btn.clicked.connect(self._on_vectorize_cta_clicked)
         cta_layout.addWidget(self._vectorize_cta_btn, 1)
         self._vectorize_cta_section.setVisible(False)
-        self._vectorize_cta_pending: tuple[str, str] | None = None
+        self._vectorize_cta_pending: tuple[str, str, str] | None = None
         self._result_layout.addWidget(self._vectorize_cta_section)
 
         self._result_section.setVisible(False)
@@ -1285,6 +1332,10 @@ class AIEditDockWidget(QDockWidget):
         self._vectorize_panel.done_clicked.connect(self.vectorize_done_clicked.emit)
         layout.addWidget(self._vectorize_panel)
 
+        # The Before/After swipe has no dock panel: it's a toggle on the
+        # footer Before/After button that arms a map tool on the canvas.
+        # See SwipeController in swipe_panel.py and the wiring in plugin.py.
+
         # Spacer to push footer to bottom
         layout.addStretch()
 
@@ -1310,7 +1361,7 @@ class AIEditDockWidget(QDockWidget):
 
         # "&&" so Qt renders a literal ampersand instead of consuming "&" as
         # a mnemonic accelerator (which would underline the next character).
-        self._upgrade_cta = QPushButton(tr("Unlock 2K && 4K"))
+        self._upgrade_cta = QPushButton(tr("Upgrade to 2K & 4K"))
         self._upgrade_cta.setToolTip(
             tr("Subscribe to unlock 2K and 4K outputs, 150 edits per month, cancel anytime.")
         )
@@ -1358,6 +1409,34 @@ class AIEditDockWidget(QDockWidget):
         self._vectorize_btn.setVisible(False)
         footer_row.addWidget(self._vectorize_btn)
 
+        # Swipe button - opens the Before/after compare panel. Hidden until
+        # an AI Edit output exists so the footer stays empty on first launch
+        # (visibility synced by set_vectorize_button_visible together with
+        # the vectorize footer button - both depend on having a generation).
+        # Before/After is a checkable toggle: click once to arm the swipe
+        # map tool, click again (or Esc on the canvas) to disarm. When
+        # armed the button paints a green tint so the user can see at a
+        # glance which tool the canvas is in.
+        self._swipe_btn = _FooterIconButton(footer_widget)
+        self._swipe_btn.setAccessibleName(tr("Before / after"))
+        self._swipe_btn.setCursor(QtC.PointingHandCursor)
+        self._swipe_btn.setFocusPolicy(QtC.NoFocus)
+        self._swipe_btn.setStyleSheet(_FOOTER_ICON_TOGGLE_STYLE)
+        self._swipe_btn.setIcon(self._make_swipe_glyph_icon())
+        self._swipe_btn.setIconSize(QSize(20, 20))
+        self._swipe_btn.setCheckable(True)
+        self._swipe_btn.setEnabled(False)  # gated on active layer eligibility
+        self._swipe_btn.toggled.connect(self.swipe_toggled.emit)
+        swipe_seq = QKeySequence("Alt+B")
+        self._swipe_btn.setShortcut(swipe_seq)
+        self._swipe_btn.setToolTip(
+            tr("Before / after ({})").format(
+                swipe_seq.toString(QKeySequence.SequenceFormat.NativeText)
+            )
+        )
+        self._swipe_btn.setVisible(False)
+        footer_row.addWidget(self._swipe_btn)
+
         # Settings button - gear icon, opens the Account Settings dialog
         # directly. Shortcuts have moved inside that dialog.
         self._settings_btn = _FooterIconButton(footer_widget)
@@ -1385,9 +1464,18 @@ class AIEditDockWidget(QDockWidget):
         help_menu.addAction(tr("Contact us"), self._on_contact_us)
         self._help_btn.setMenu(help_menu)
         # Force the hover tint off when the popup closes - Qt does not
-        # synthesise a Leave event in this case.
+        # synthesise a Leave event in this case. Also light the green
+        # active tint while the menu is open and broadcast the change so
+        # the plugin can disarm the swipe map tool.
+        help_menu.aboutToShow.connect(
+            lambda: (self._help_btn.set_active(True),
+                     self.help_menu_open_changed.emit(True))
+        )
         help_menu.aboutToHide.connect(
-            lambda btn=self._help_btn: (btn.setDown(False), btn.set_hovered(False))
+            lambda btn=self._help_btn: (
+                btn.setDown(False), btn.set_hovered(False), btn.set_active(False),
+                self.help_menu_open_changed.emit(False),
+            )
         )
         footer_row.addWidget(self._help_btn)
 
@@ -1405,6 +1493,8 @@ class AIEditDockWidget(QDockWidget):
         self._zone_selected = False
         self._activated = False
         self._checking_credits = False
+        self._swipe_eligible = False
+        self._swipe_panel_lock = False
         self._is_free_tier = True  # default hidden until confirmed Pro
         self._cached_used: int | None = None
         self._cached_limit: int | None = None
@@ -1633,7 +1723,10 @@ class AIEditDockWidget(QDockWidget):
         icon_label.setFixedSize(16, 16)
         warning_layout.addWidget(icon_label, 0, QtC.AlignTop)
 
-        self._warning_text = QLabel(tr("No visible layer. Add imagery to your project."))
+        self._warning_text = QLabel(tr(
+            "No visible imagery. Add a GeoTIFF, image file, or online basemap "
+            "(WMS, XYZ) to your project."
+        ))
         self._warning_text.setWordWrap(True)
         warning_layout.addWidget(self._warning_text, 1)
 
@@ -1712,7 +1805,7 @@ class AIEditDockWidget(QDockWidget):
         # Kick off a background catalog refetch so the NEXT open is fresh.
         # This open uses whatever catalog the dock currently has.
         self.catalog_refresh_requested.emit()
-        from .prompt_templates_dialog import PromptTemplatesDialog
+        from .dialogs.prompt_templates_dialog import PromptTemplatesDialog
 
         auth_provider = None
         if self._library_auth_manager is not None:
@@ -1750,12 +1843,19 @@ class AIEditDockWidget(QDockWidget):
 
     # --- Public methods ---
 
+    def set_launch_enabled(self, enabled: bool) -> None:
+        """Disable Launch AI Edit during async validation/credit checks
+        so the user can't fire a session before we know they're authorised.
+        Avoids flashing the sign-up screen on reload."""
+        self._launch_btn.setEnabled(enabled)
+
     def set_activated(self, activated: bool):
         self._activated = activated
         self._activation_widget.setVisible(not activated)
         self._main_widget.setVisible(activated)
         self._settings_btn.setVisible(activated)
         self._vectorize_btn.setVisible(activated)
+        self._swipe_btn.setVisible(activated)
         if activated:
             self.hide_trial_info()
             self._update_layer_warning()
@@ -1779,6 +1879,7 @@ class AIEditDockWidget(QDockWidget):
         self._main_widget.setVisible(False)
         self._settings_btn.setVisible(False)
         self._vectorize_btn.setVisible(False)
+        self._swipe_btn.setVisible(False)
         self._set_upgrade_cta_wanted(False)
         self._setup_header.setVisible(False)
         self._setup_desc.setVisible(False)
@@ -1941,6 +2042,12 @@ class AIEditDockWidget(QDockWidget):
         self._result_prompt_input.clear()
         self._active_template_id = None
         self._active_template_name = None
+
+    def clear_active_template(self) -> None:
+        """Drop the armed template so a new zone doesn't reuse a preset that
+        was picked for the previous zone. Called from plugin._on_zone_selected."""
+        self._active_template_id = None
+        self._active_template_name = None
         # Resolution persists for the QGIS session - initial tier default is
         # applied at init (paid "2K") and coerced to "1K" by
         # _refresh_resolution_triggers when free tier is confirmed.
@@ -1997,7 +2104,11 @@ class AIEditDockWidget(QDockWidget):
 
             if generating:
                 self._progress_bar.setRange(0, 100)
-                self._progress_bar.setValue(0)
+                # Start at 1% so the bar is visible immediately on click. The
+                # prep ticker animates 1->10% during canvas+upload phases, then
+                # the worker's first real progress signal (>=5%) takes over.
+                self._progress_bar.setValue(1)
+                self._progress_target = 1
                 self._hide_status_box()
                 self._launch_section.setVisible(False)
                 self._select_zone_section.setVisible(False)
@@ -2015,8 +2126,9 @@ class AIEditDockWidget(QDockWidget):
                 # cancel mid-run from this row. The title-bar X still works as
                 # an escape hatch.
                 self._exit_btn.setVisible(False)
-                self._progress_label.setText(tr("Preparing..."))
+                self._start_prep_ticker("canvas")
             else:
+                self._stop_prep_ticker()
                 self._prompt_container.set_readonly(False)
                 if self._reference_widget is not None:
                     self._reference_widget.set_readonly(False)
@@ -2027,6 +2139,54 @@ class AIEditDockWidget(QDockWidget):
                 self._prompt_section.setVisible(True)
         finally:
             self.setUpdatesEnabled(True)
+
+    # Prep ticker: animates the bar 1->10% during canvas (export) and upload
+    # phases, rotating playful messages so the user gets visible feedback
+    # instead of a static "Preparing..." until the worker's first poll.
+    def _start_prep_ticker(self, phase: str) -> None:
+        self._prep_phase = phase
+        self._prep_messages_pool = get_phase_messages(phase) or [tr("Preparing...")]
+        random.shuffle(self._prep_messages_pool)
+        self._prep_idx = 0
+        # Set first message right away so the user sees something immediately.
+        self._progress_label.setText(self._prep_messages_pool[0])
+        if not hasattr(self, "_prep_ticker") or self._prep_ticker is None:
+            self._prep_ticker = QTimer(self)
+            self._prep_ticker.setInterval(1300)
+            self._prep_ticker.timeout.connect(self._tick_prep)
+        if not self._prep_ticker.isActive():
+            self._prep_ticker.start()
+
+    def _stop_prep_ticker(self) -> None:
+        if hasattr(self, "_prep_ticker") and self._prep_ticker is not None and self._prep_ticker.isActive():
+            self._prep_ticker.stop()
+
+    def prep_advance_phase(self, phase: str) -> None:
+        """Switch the prep ticker to a new message pool mid-flight.
+        Called by plugin.py when canvas export finishes -> upload phase starts.
+        """
+        if not hasattr(self, "_prep_ticker") or self._prep_ticker is None or not self._prep_ticker.isActive():
+            return
+        self._start_prep_ticker(phase)
+
+    def _tick_prep(self) -> None:
+        # Cycle messages
+        if self._prep_messages_pool:
+            self._prep_idx = (self._prep_idx + 1) % len(self._prep_messages_pool)
+            self._progress_label.setText(self._prep_messages_pool[self._prep_idx])
+        # Advance the bar by 1% per tick, capped at the phase ceiling. Stops
+        # naturally when the worker emits a real progress signal (>=5%) since
+        # set_progress_message stops the prep ticker.
+        cap = 5 if self._prep_phase == "canvas" else 10
+        current = self._progress_bar.value()
+        if current < cap:
+            self._progress_target = min(cap, current + 1)
+            if not hasattr(self, "_progress_timer") or self._progress_timer is None:
+                self._progress_timer = QTimer(self)
+                self._progress_timer.setInterval(30)
+                self._progress_timer.timeout.connect(self._animate_progress)
+            if not self._progress_timer.isActive():
+                self._progress_timer.start()
 
     def set_generate_loading(self, loading: bool):
         """Toggle loading state on the Generate button during canvas export."""
@@ -2042,6 +2202,9 @@ class AIEditDockWidget(QDockWidget):
 
     def set_progress_message(self, message: str, percentage: int = -1):
         """Update the progress label and bar during generation with smooth animation."""
+        # First real worker progress signal -> stop the prep ticker so it stops
+        # competing for the label + bar with the worker's own messages.
+        self._stop_prep_ticker()
         self._progress_label.setText(message)
         if percentage >= 0:
             self._progress_bar.setRange(0, 100)
@@ -2164,26 +2327,17 @@ class AIEditDockWidget(QDockWidget):
             )
         else:
             link_html = escaped_name
-        self._layer_saved_label.setText(
-            tr("✓ Saved as {name}").format(name=link_html))
+        self._layer_saved_label.setText(tr("Saved as {name}").format(name=link_html))
         self._layer_saved_label.setVisible(True)
 
         self._set_upgrade_cta_wanted(self._is_free_tier and self._activated)
 
     def show_trial_exhausted_info(self, message: str, subscribe_url: str):
         self._hide_limit_cta()
-        # Strip the trailing "Subscribe to continue" the server sometimes sends -
-        # the dedicated primary button below already carries that action.
+        # The CTA tail is suppressed server-side now (the dedicated primary
+        # button below carries that action). The previous English substring
+        # strip broke fr/es/pt_BR translations and is gone for that reason.
         title = (message or "").strip()
-        for tail in (
-            ". Subscribe to continue.",
-            ". Subscribe to continue",
-            " Subscribe to continue.",
-            " Subscribe to continue",
-        ):
-            if title.endswith(tail):
-                title = title[: -len(tail)].rstrip(" .")
-                break
         if not title:
             title = tr("You've used your free credits")
         self._trial_info_text.setText(title)
@@ -2200,13 +2354,9 @@ class AIEditDockWidget(QDockWidget):
         self._limit_cta_btn.setVisible(True)
 
     def set_checking_credits(self, checking: bool):
-        """Show/hide a loading state while credits are being fetched."""
+        # Silent: the credit refresh is fast enough that a flashed status box
+        # is more noise than signal. Flag kept in case callers need to query.
         self._checking_credits = checking
-        if checking:
-            self._trial_info_box.setVisible(False)
-            self._show_status_box(tr("Checking credits..."), "info")
-        else:
-            self._hide_status_box()
 
     def hide_trial_info(self):
         self._trial_info_box.setVisible(False)
@@ -2301,7 +2451,7 @@ class AIEditDockWidget(QDockWidget):
 
     def _on_cancel_change_key(self):
         """Cancel key change and restore the activated state."""
-        from ..core.activation_manager import get_activation_key
+        from ..core.auth.activation_manager import get_activation_key
         saved_key = get_activation_key()
         if saved_key:
             self._code_input.setText(saved_key)
@@ -2347,9 +2497,14 @@ class AIEditDockWidget(QDockWidget):
                 tr("Subscribe") + "</a>",
                 "warning"
             )
-            # 12 s gives users enough time to read the banner and click the
-            # Subscribe link before it auto-dismisses.
-            QTimer.singleShot(12000, self._hide_status_box)
+            # 12 s banner; parented timer dies with the dock.
+            if self._status_hide_timer is not None:
+                self._status_hide_timer.stop()
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(self._hide_status_box)
+            timer.start(12000)
+            self._status_hide_timer = timer
             return
 
         # Clear any existing status message if switching resolutions
@@ -2596,12 +2751,21 @@ class AIEditDockWidget(QDockWidget):
         p.end()
         return QIcon(pm)
 
+    def _make_swipe_glyph_icon(self) -> QIcon:
+        """Footer Before/after glyph - loads the bundled swipe.svg so the
+        stroke renders crisply at any DPI and matches the visual weight of
+        the other footer icons (image.svg, gear, question mark).
+        """
+        plugin_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        return QIcon(os.path.join(plugin_root, "resources", "icons", "swipe.svg"))
+
     # Public API consumed by the plugin layer ---------------------------
 
     def set_markup_state(self) -> None:
         """Swap the dock view to the Mark up panel."""
         self._stop_progress_animation()
         self._hide_status_box()
+        self._vectorize_panel.deactivate()
         self._main_widget.setVisible(False)
         self._vectorize_panel.setVisible(False)
         self._markup_panel.setVisible(True)
@@ -2615,6 +2779,11 @@ class AIEditDockWidget(QDockWidget):
         self._markup_panel.setVisible(False)
         self._vectorize_panel.setVisible(True)
         self._vectorize_panel.activate()
+        self._vectorize_btn.set_active(True)
+        # Swipe and Vectorize fight for the canvas; lock Swipe while the
+        # Vectorize panel is open.
+        self._swipe_panel_lock = True
+        self._refresh_swipe_enabled()
 
     def exit_tool_panel(self) -> None:
         """Hide whichever tool panel is showing and restore _main_widget."""
@@ -2622,6 +2791,53 @@ class AIEditDockWidget(QDockWidget):
         self._markup_panel.setVisible(False)
         self._vectorize_panel.setVisible(False)
         self._main_widget.setVisible(True)
+        self._vectorize_btn.set_active(False)
+        self._swipe_panel_lock = False
+        self._refresh_swipe_enabled()
+
+    def set_swipe_button_checked(self, checked: bool) -> None:
+        """Sync the Before/After button visual to the controller state.
+
+        Called by the plugin when the swipe is armed or disarmed by
+        anything other than a direct button click (Esc on the canvas,
+        layer removal, plugin shutdown). Blocks the toggled signal so we
+        don't recurse into the controller.
+        """
+        if self._swipe_btn.isChecked() == checked:
+            return
+        self._swipe_btn.blockSignals(True)
+        try:
+            self._swipe_btn.setChecked(checked)
+        finally:
+            self._swipe_btn.blockSignals(False)
+
+    def set_swipe_button_enabled(self, can_swipe: bool) -> None:
+        """Gate the Before/After button on whether a swipeable layer is
+        currently the active layer in the QGIS Layers panel. Stays
+        enabled while the swipe is on so the user can always click to
+        turn it off. Forced off while the Vectorize panel is open
+        (mutually exclusive tools).
+        """
+        self._swipe_eligible = can_swipe
+        self._refresh_swipe_enabled()
+
+    def _refresh_swipe_enabled(self) -> None:
+        is_checked = self._swipe_btn.isChecked()
+        enabled = (self._swipe_eligible or is_checked) and not self._swipe_panel_lock
+        self._swipe_btn.setEnabled(enabled)
+
+    def set_vectorize_button_active(self, active: bool) -> None:
+        """Light the green tint on the Vectorize footer icon while its
+        panel is open. Same visual language as the swipe button so the
+        user always knows which AI Edit action owns the canvas.
+        """
+        self._vectorize_btn.set_active(active)
+
+    def set_settings_button_active(self, active: bool) -> None:
+        """Light the green tint on the Settings (gear) footer icon while
+        the Account Settings dialog is open.
+        """
+        self._settings_btn.set_active(active)
 
     def set_markup_annotation_count(self, count: int) -> None:
         self._markup_panel.set_annotation_count(count)
@@ -2633,13 +2849,18 @@ class AIEditDockWidget(QDockWidget):
         return self._markup_panel.get_color()
 
     def set_vectorize_suggestion(
-        self, layer_id: str | None, color_hex: str | None
+        self,
+        layer_id: str | None,
+        color_hex: str | None,
+        class_label: str = "",
     ) -> None:
         """Inject (or clear) the post-generation Vectorize CTA.
 
         Called by the plugin orchestrator after a successful generation
         when the template carried a vector_color in the catalog. Hidden
         the moment the user navigates away from the result section.
+        ``class_label`` (when known) flows down to the vectorize panel
+        so the produced polygons land with a sensible class_name value.
         """
         if not layer_id or not color_hex:
             self._vectorize_cta_section.setVisible(False)
@@ -2658,15 +2879,15 @@ class AIEditDockWidget(QDockWidget):
         )
         # The swatch communicates the pre-filled color already; the label
         # stays generic so it works for every template.
-        self._vectorize_cta_btn.setText(tr("Vectorize this result →"))
-        self._vectorize_cta_pending = (layer_id, normalised)
+        self._vectorize_cta_btn.setText(tr("Vectorize this result") + " →")
+        self._vectorize_cta_pending = (layer_id, normalised, class_label or "")
         self._vectorize_cta_section.setVisible(True)
 
     def _on_vectorize_cta_clicked(self) -> None:
         if self._vectorize_cta_pending is None:
             return
-        layer_id, color_hex = self._vectorize_cta_pending
-        self.vectorize_suggestion_clicked.emit(layer_id, color_hex)
+        layer_id, color_hex, class_label = self._vectorize_cta_pending
+        self.vectorize_suggestion_clicked.emit(layer_id, color_hex, class_label)
 
     def _on_contact_us(self, _link=None):
         """Show a dialog with email + Calendly options."""
@@ -2726,6 +2947,7 @@ class AIEditDockWidget(QDockWidget):
         launch_key = native("Ctrl+Alt+E")
         markup_key = native("Alt+M")
         vectorize_key = native("Alt+V")
+        swipe_key = native("Alt+B")
         key_style = (
             "background-color: rgba(128,128,128,0.18);"
             "border: 1px solid rgba(128,128,128,0.35);"
@@ -2745,6 +2967,7 @@ class AIEditDockWidget(QDockWidget):
             f"<tr><td>{k.format(undo_key)}</td><td>{tr('Undo')}</td></tr>"
             f"<tr><td>{k.format(markup_key)}</td><td>{tr('Mark up')}</td></tr>"
             f"<tr><td>{k.format(vectorize_key)}</td><td>{tr('Vectorize')}</td></tr>"
+            f"<tr><td>{k.format(swipe_key)}</td><td>{tr('Before / after')}</td></tr>"
             "</table>"
         )
 
@@ -2798,6 +3021,10 @@ class AIEditDockWidget(QDockWidget):
     def _on_escape_pressed(self):
         """Escape walks the flow back one step at a time.
 
+        SWIPE ACTIVE → disarm swipe (highest priority — the canvas-tool
+        Escape handler only fires when canvas has focus, but the swipe
+        button stays checked otherwise; route the dock-level Escape
+        through here so swipe always exits cleanly).
         ZONE_SELECTED → SELECTING_ZONE (drop the zone, keep the panel open).
         SELECTING_ZONE / LAUNCH / RESULT → exit to LAUNCH.
         A generation in progress is never cancelable by Escape - credits are
@@ -2813,6 +3040,12 @@ class AIEditDockWidget(QDockWidget):
         # the dock itself) so we don't steal Escape from QGIS digitizing,
         # measure tool, identify panel, etc.
         if not self._is_escape_for_us():
+            return
+        # Swipe takes priority: clicking the (already-checked) button
+        # toggles it off, which routes through swipe_toggled → plugin →
+        # swipe_controller.stop().
+        if self._swipe_btn.isChecked():
+            self._swipe_btn.click()
             return
         if self._zone_selected and self._prompt_section.isVisible():
             self.zone_clear_requested.emit()
@@ -2844,26 +3077,49 @@ class AIEditDockWidget(QDockWidget):
             return False
         if tool is None:
             return False
-        from .markup_tools import _MarkupBaseMapTool
-        from .selection_map_tool import RectangleSelectionTool
-        return isinstance(tool, (RectangleSelectionTool, _MarkupBaseMapTool))
+        from .panels.swipe_panel import _SwipeMapTool
+        from .tools.markup_tools import _MarkupBaseMapTool
+        from .tools.selection_map_tool import RectangleSelectionTool
+        return isinstance(
+            tool, (RectangleSelectionTool, _MarkupBaseMapTool, _SwipeMapTool)
+        )
 
     def closeEvent(self, event):
-        """Cancel generation and disconnect signals on close."""
+        """Visibility-only teardown. Persistent disconnects live in cleanup()."""
         self._stop_progress_animation()
         if self._progress_widget.isVisible():
             self.stop_clicked.emit()
-        # Drop the iface.currentLayerChanged listener so the Vectorize panel
-        # doesn't keep firing into a dock that just got destroyed.
         self._vectorize_panel.deactivate()
+        super().closeEvent(event)
+
+    def cleanup(self):
+        """Called once from plugin.unload() before the dock is removed."""
         try:
             QgsProject.instance().layersAdded.disconnect(self._update_layer_warning)
+        except (TypeError, RuntimeError):
+            pass
+        try:
             QgsProject.instance().layersRemoved.disconnect(self._update_layer_warning)
+        except (TypeError, RuntimeError):
+            pass
+        try:
             QgsProject.instance().layerTreeRoot().visibilityChanged.disconnect(
                 self._update_layer_warning
             )
+        except (TypeError, RuntimeError):
+            pass
+        try:
             QgsProject.instance().readProject.disconnect(self._on_project_loaded)
+        except (TypeError, RuntimeError):
+            pass
+        try:
             QgsProject.instance().cleared.disconnect(self._on_project_loaded)
         except (TypeError, RuntimeError):
             pass
-        super().closeEvent(event)
+        # LayerTreeComboBox hooks its own QgsProject signals; nothing else cleans it.
+        try:
+            combo = getattr(self._vectorize_panel, "_layer_combo", None)
+            if combo is not None and hasattr(combo, "cleanup"):
+                combo.cleanup()
+        except Exception:  # nosec B110
+            pass

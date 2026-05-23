@@ -124,7 +124,7 @@ class _ThumbWidget(QFrame):
         # Only swallow the click for the remove button when it is actually
         # visible - otherwise the top-right corner would silently eat preview
         # clicks even though there is no button there.
-        pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
+        pos = QtC.event_pos(event)
         if (
             self._remove_btn.isVisible()
             and self._remove_btn.geometry().contains(pos)  # noqa: W503
@@ -184,6 +184,9 @@ class ReferenceImagesWidget(QWidget):
         super().__init__(parent)
         self._store = store
         self._readonly = False
+        # Parented QTimer for the 4 s "error cleared" auto-dismiss. Holding a
+        # ref so we can stop it when the widget is destroyed first.
+        self._error_clear_timer: QTimer | None = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -325,9 +328,17 @@ class ReferenceImagesWidget(QWidget):
             self._refresh()
 
     def _show_temp_error(self, msg: str) -> None:
-        """Emit an error that auto-clears after 4 seconds."""
+        """Emit an error that auto-clears after 4 seconds. Timer is parented
+        to ``self`` so it dies with the widget instead of firing on a
+        deleted C++ object."""
         self.error_occurred.emit(msg)
-        QTimer.singleShot(4000, self.error_cleared.emit)
+        if self._error_clear_timer is not None:
+            self._error_clear_timer.stop()
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.timeout.connect(self.error_cleared.emit)
+        timer.start(4000)
+        self._error_clear_timer = timer
 
     def _on_remove(self, ref_id: str) -> None:
         self._store.remove(ref_id)

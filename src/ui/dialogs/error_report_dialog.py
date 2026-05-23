@@ -81,7 +81,7 @@ def _collect_diagnostic_info(error_message: str) -> str:
     lines.append("--- Plugin ---")
     try:
         plugin_dir = os.path.dirname(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         )
         metadata_path = os.path.join(plugin_dir, "metadata.txt")
         if os.path.exists(metadata_path):

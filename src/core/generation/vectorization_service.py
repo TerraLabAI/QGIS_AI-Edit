@@ -7,19 +7,45 @@ QgsGeometry objects.
 """
 from __future__ import annotations
 
+import colorsys
+import math
 import os
+import time
 
 import numpy as np
 from osgeo import gdal, ogr, osr
 from qgis.core import (
+    QgsDefaultValue,
+    QgsDistanceArea,
+    QgsEditorWidgetSetup,
     QgsFeature,
     QgsFillSymbol,
     QgsGeometry,
+    QgsProject,
     QgsRasterLayer,
     QgsVectorLayer,
 )
+from qgis.PyQt.QtCore import Qt
 
-from .logger import log_debug
+from ..errors import AIEditError, ErrorCode
+from ..i18n import tr
+from ..logger import log_debug
+
+
+def complementary_rgb(target_rgb: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Return the HSV-complementary colour (hue rotated 180°) of target_rgb.
+
+    Picks a saturated, full-brightness contrast so the vector outline reads
+    cleanly over the raster's flat-colour zones (target #FF0000 -> #00FFFF,
+    #00FF00 -> #FF00FF, etc.). Achromatic inputs (grey) fall back to a
+    fixed cyan so the contour is never invisible.
+    """
+    r, g, b = (max(0, min(255, c)) / 255.0 for c in target_rgb)
+    h, s, _v = colorsys.rgb_to_hsv(r, g, b)
+    if s < 0.05:
+        return (0, 200, 255)
+    cr, cg, cb = colorsys.hsv_to_rgb((h + 0.5) % 1.0, 1.0, 1.0)
+    return (int(round(cr * 255)), int(round(cg * 255)), int(round(cb * 255)))
 
 
 def vectorize_by_color(
@@ -34,6 +60,7 @@ def vectorize_by_color(
     round_corners: bool = False,
     expand_value: int = 0,
     fill_holes: bool = False,
+    class_label: str = "",
 ) -> QgsVectorLayer:
     """Extract pixels matching ``target_rgb`` (±tolerance per channel) as polygons.
 
@@ -44,42 +71,67 @@ def vectorize_by_color(
     """
     raster_path = raster_layer.source()
     if not raster_path or not os.path.exists(raster_path):
-        raise RuntimeError("Raster layer has no on-disk source file")
+        raise AIEditError(
+            ErrorCode.INVALID_RASTER,
+            tr("Raster layer has no on-disk source file"),
+        )
 
     log_debug(f"Vectorize: src={raster_path} rgb={target_rgb} tol={tolerance}")
 
     src = gdal.Open(raster_path)
     if src is None:
-        raise RuntimeError("Could not open raster")
+        raise AIEditError(ErrorCode.INVALID_RASTER, tr("Could not open raster"))
     if src.RasterCount < 3:
-        raise RuntimeError("Raster must have at least 3 bands (RGB)")
+        raise AIEditError(
+            ErrorCode.INVALID_RASTER,
+            tr("Raster must have at least 3 bands (RGB)"),
+        )
 
     width, height = src.RasterXSize, src.RasterYSize
+    # Defensive memory ceiling: a 30000 x 30000 single-band uint8 raster is
+    # ~900 MB and would OOM the QGIS process on most machines. Refuse early
+    # with a clear, localized message.
+    px_count = float(width) * float(height) * 3.0 * 4.0
+    if px_count > 1_000_000_000:
+        raise AIEditError(
+            ErrorCode.RASTER_TOO_LARGE,
+            tr(
+                "Raster is too large for in-memory vectorize ({mp:.0f} megapixels). "
+                "Crop the layer first or run a tiled workflow."
+            ).format(mp=(width * height) / 1_000_000),
+        )
+
     gt = src.GetGeoTransform()
     proj = src.GetProjection()
     if not proj:
-        raise RuntimeError("Raster has no CRS")
+        raise AIEditError(ErrorCode.INVALID_RASTER, tr("Raster has no CRS"))
 
     r = src.GetRasterBand(1).ReadAsArray()
     g = src.GetRasterBand(2).ReadAsArray()
     b = src.GetRasterBand(3).ReadAsArray()
     src = None
 
-    tr, tg, tb = target_rgb
+    tr_r, tg_g, tb_b = target_rgb
     mask = (
-        (np.abs(r.astype(np.int16) - tr) <= tolerance)
-        & (np.abs(g.astype(np.int16) - tg) <= tolerance)  # noqa: W503
-        & (np.abs(b.astype(np.int16) - tb) <= tolerance)  # noqa: W503
+        (np.abs(r.astype(np.int16) - tr_r) <= tolerance)
+        & (np.abs(g.astype(np.int16) - tg_g) <= tolerance)  # noqa: W503
+        & (np.abs(b.astype(np.int16) - tb_b) <= tolerance)  # noqa: W503
     ).astype(np.uint8)
     if int(mask.sum()) == 0:
-        raise RuntimeError("No pixels matched the selected color")
+        raise AIEditError(
+            ErrorCode.NO_PIXELS_MATCHED,
+            tr("No pixels matched the selected color"),
+        )
 
     # Mask-level morphological refinement (expand/contract then fill holes).
     # Same order as AI Segmentation's apply_mask_refinement so behavior matches.
     if expand_value != 0 or fill_holes:
         mask = _refine_mask(mask, expand_value=expand_value, fill_holes=fill_holes)
         if int(mask.sum()) == 0:
-            raise RuntimeError("No pixels matched the selected color")
+            raise AIEditError(
+                ErrorCode.NO_PIXELS_MATCHED,
+                tr("No pixels matched the selected color"),
+            )
 
     # Erase a thin border of pixels so Polygonize can never trace the AI Edit
     # zone's bounding rectangle. Without this, dilate or fill_holes pushes the
@@ -125,11 +177,22 @@ def vectorize_by_color(
     simplify_tol = (pixel_area ** 0.5) * simplify_factor
 
     name = layer_name or "Vector"
-    # Build the memory layer with a CRS-agnostic URI, then set the real CRS
-    # via setCrs(): a stale EPSG:4326 fallback when authid() is empty
-    # (custom / user-defined CRS) would silently corrupt spatial alignment.
+    # CRS-agnostic URI + explicit setCrs() — EPSG:4326 fallback would corrupt alignment.
     mem_layer = QgsVectorLayer(
-        "Polygon?field=value:integer",
+        (
+            "Polygon"
+            "?field=feature_id:integer"
+            "&field=class_id:integer"
+            "&field=class_name:string(64)"
+            "&field=class_color:string(7)"
+            "&field=area_m2:double"
+            "&field=area_ha:double"
+            "&field=perimeter_m:double"
+            "&field=compactness:double"
+            "&field=source_raster:string(120)"
+            "&field=source_raster_id:string(40)"
+            "&field=created_at:string(25)"
+        ),
         name,
         "memory",
     )
@@ -138,7 +201,22 @@ def vectorize_by_color(
         mem_layer.setCrs(raster_crs)
     mem_provider = mem_layer.dataProvider()
 
+    # Geodesic measurer: true metres even when the layer CRS is in degrees.
+    measurer = QgsDistanceArea()
+    project = QgsProject.instance()
+    if raster_crs.isValid():
+        measurer.setSourceCrs(raster_crs, project.transformContext())
+    measurer.setEllipsoid(project.ellipsoid() or "EPSG:7030")
+
+    class_color_hex = "#{:02X}{:02X}{:02X}".format(*target_rgb)
+    # int(hex24, 16) — stable across re-runs on the same color.
+    class_id_int = (target_rgb[0] << 16) | (target_rgb[1] << 8) | target_rgb[2]
+    source_raster_name = raster_layer.name() or ""
+    source_raster_id = raster_layer.id() or ""
+    created_at_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
     feats: list[QgsFeature] = []
+    next_fid = 1
     ogr_layer.ResetReading()
     for ogr_feat in ogr_layer:
         if ogr_feat.GetField("value") != 1:
@@ -158,33 +236,53 @@ def vectorize_by_color(
             smoothed = geom.smooth(5, 0.25)
             if not smoothed.isEmpty():
                 geom = smoothed
+        area_m2 = float(measurer.measureArea(geom))
+        perimeter_m = float(measurer.measurePerimeter(geom))
+        area_ha = area_m2 / 10000.0
+        # Polsby-Popper shape index: 1.0 = perfect circle, ~0 = sliver. Useful
+        # in remote sensing to separate compact features (buildings) from
+        # elongated ones (roads) on the same vectorized layer.
+        compactness = (
+            (4.0 * math.pi * area_m2) / (perimeter_m * perimeter_m)
+            if perimeter_m > 0 else 0.0
+        )
         feat = QgsFeature()
         feat.setGeometry(geom)
-        feat.setAttributes([1])
+        feat.setAttributes([
+            next_fid,
+            class_id_int,
+            class_label,
+            class_color_hex,
+            area_m2,
+            area_ha,
+            perimeter_m,
+            compactness,
+            source_raster_name,
+            source_raster_id,
+            created_at_iso,
+        ])
         feats.append(feat)
+        next_fid += 1
 
     mask_ds = None
     ogr_ds = None
 
     if not feats:
-        raise RuntimeError(
-            "No polygons remained after filtering "
-            "(try a wider tolerance or smaller min size)"
+        raise AIEditError(
+            ErrorCode.NO_PIXELS_MATCHED,
+            tr(
+                "No polygons remained after filtering "
+                "(try a wider tolerance or smaller min size)"
+            ),
         )
 
     mem_provider.addFeatures(feats)
     mem_layer.updateExtents()
-    style_rgb = output_rgb if output_rgb is not None else DEFAULT_OUTPUT_RGB
+    _configure_attribute_table(mem_layer, class_label)
+    style_rgb = output_rgb if output_rgb is not None else complementary_rgb(target_rgb)
     _apply_style(mem_layer, style_rgb)
     log_debug(f"Vectorize done: {len(feats)} polygons (min_area={min_area:.2f} map_units²)")
     return mem_layer
-
-
-# Vivid green that reads clearly over any AI-Edit class color (the source
-# raster will most often be red/orange/blue). Matches QGIS's "Standard"
-# style-library green tone with a thick outline so the polygon perimeter
-# survives at any zoom level.
-DEFAULT_OUTPUT_RGB: tuple[int, int, int] = (0, 200, 83)
 
 
 def _refine_mask(
@@ -265,6 +363,34 @@ def _numpy_fill_holes(mask: np.ndarray) -> np.ndarray:
     result = padded.copy()
     result[(padded == 0) & (~exterior)] = 1
     return result[1:-1, 1:-1]
+
+
+def _configure_attribute_table(layer: QgsVectorLayer, class_label: str) -> None:
+    """Set displayExpression, default value, editor widget and default sort
+    so the user gets a readable attribute table out of the box.
+
+    - displayExpression makes the form-view feature list show
+      `<id> - <class> (<area> ha)` instead of repeating the same color hex.
+    - QgsDefaultValue gives rows added manually via the table a sensible default.
+    - TextEdit widget on class_name unlocks QGIS's per-column unique-values
+      autocomplete so the user types once then picks from prior values.
+    - Default sort by area_ha descending puts large polygons at the top.
+    """
+    layer.setDisplayExpression(
+        "format('%1 - %2 (%3 ha)', \"feature_id\","
+        " coalesce(\"class_name\", ''), round(\"area_ha\", 2))"
+    )
+
+    idx = layer.fields().indexOf("class_name")
+    if idx >= 0:
+        escaped = (class_label or "").replace("'", "''")
+        layer.setDefaultValueDefinition(idx, QgsDefaultValue(f"'{escaped}'"))
+        layer.setEditorWidgetSetup(idx, QgsEditorWidgetSetup("TextEdit", {}))
+
+    config = layer.attributeTableConfig()
+    config.setSortExpression('"area_ha"')
+    config.setSortOrder(Qt.SortOrder.DescendingOrder)
+    layer.setAttributeTableConfig(config)
 
 
 def _apply_style(layer: QgsVectorLayer, output_rgb: tuple[int, int, int]) -> None:

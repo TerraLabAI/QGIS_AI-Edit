@@ -29,6 +29,7 @@ RightDockWidgetArea = _resolve(Qt, "DockWidgetArea", "RightDockWidgetArea")
 PointingHandCursor = _resolve(Qt, "CursorShape", "PointingHandCursor")
 CrossCursor = _resolve(Qt, "CursorShape", "CrossCursor")
 WaitCursor = _resolve(Qt, "CursorShape", "WaitCursor")
+ArrowCursor = _resolve(Qt, "CursorShape", "ArrowCursor")
 
 # Qt.AlignmentFlag
 AlignCenter = _resolve(Qt, "AlignmentFlag", "AlignCenter")

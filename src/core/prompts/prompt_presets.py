@@ -13,7 +13,7 @@ from typing import Any
 
 from qgis.PyQt.QtCore import QSettings
 
-from .i18n import tr
+from ..i18n import tr
 
 
 def _normalize_for_match(s: str) -> str:

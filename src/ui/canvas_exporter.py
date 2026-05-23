@@ -8,8 +8,10 @@ from qgis.core import (
     QgsCoordinateTransform,
     QgsDataSourceUri,
     QgsDistanceArea,
+    QgsGeometry,
     QgsMapLayer,
     QgsMapRendererCustomPainterJob,
+    QgsMapRendererParallelJob,
     QgsMapSettings,
     QgsPointXY,
     QgsProject,
@@ -20,17 +22,104 @@ from qgis.PyQt.QtCore import QBuffer, QSize
 from qgis.PyQt.QtGui import QImage, QPainter
 
 from ..core import qt_compat as QtC
+from ..core.errors import AIEditError, ErrorCode
+from ..core.i18n import tr
 from ..core.logger import log_warning
+
+# Maximum on-the-ground area accepted by the AI Edit pipeline. Above this the
+# model dilutes details to the point of uselessness. Surfaces as a clean
+# refusal at draw time rather than wasting a generation credit.
+_MAX_AREA_KM2 = 10000.0
+
+# Above this absolute latitude the Mercator world distortion makes
+# ground_resolution estimates unreliable and most basemaps stop. Refuse to
+# avoid silent corruption of the output GeoTIFF.
+_POLAR_ABS_LAT_DEG = 85.0
+
+
+def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> None:
+    """Raise AIEditError if the zone can't be exported safely (CRS, rotation, antimeridian, polar, area)."""
+    if map_crs is None or not map_crs.isValid():
+        raise AIEditError(
+            ErrorCode.INVALID_CRS,
+            tr("This project's CRS is invalid. Set a project CRS before drawing a zone."),
+        )
+    if not map_crs.authid():
+        raise AIEditError(
+            ErrorCode.INVALID_CRS,
+            tr(
+                "AI Edit needs a standard CRS (EPSG code). "
+                "Your project uses a custom CRS without an authority ID."
+            ),
+        )
+    if abs(float(map_rotation)) > 0.01:
+        raise AIEditError(
+            ErrorCode.MAP_ROTATED,
+            tr(
+                "Map rotation is not supported. "
+                "Reset rotation to 0 in the map navigation controls and try again."
+            ),
+        )
+
+    geographic_extent = extent
+    if not map_crs.isGeographic():
+        try:
+            to_wgs = QgsCoordinateTransform(
+                map_crs,
+                QgsCoordinateReferenceSystem("EPSG:4326"),
+                QgsProject.instance(),
+            )
+            geographic_extent = to_wgs.transformBoundingBox(extent)
+        except Exception:
+            geographic_extent = None
+
+    if geographic_extent is not None:
+        xmin = geographic_extent.xMinimum()
+        xmax = geographic_extent.xMaximum()
+        if xmax < xmin or (xmax - xmin) > 180.0:
+            raise AIEditError(
+                ErrorCode.ANTIMERIDIAN,
+                tr(
+                    "This zone crosses the antimeridian (180 deg longitude). "
+                    "AI Edit does not support that yet. Split your zone into two."
+                ),
+            )
+        max_abs_lat = max(abs(geographic_extent.yMinimum()), abs(geographic_extent.yMaximum()))
+        if max_abs_lat > _POLAR_ABS_LAT_DEG:
+            raise AIEditError(
+                ErrorCode.POLAR,
+                tr(
+                    "Zone is too close to a pole (above {limit} degrees latitude). "
+                    "AI Edit cannot estimate ground resolution there."
+                ).format(limit=int(_POLAR_ABS_LAT_DEG)),
+            )
+
+    try:
+        area = QgsDistanceArea()
+        area.setSourceCrs(map_crs, QgsProject.instance().transformContext())
+        area.setEllipsoid(QgsProject.instance().ellipsoid() or "WGS84")
+        m2 = area.measureArea(QgsGeometry.fromRect(extent))
+        if area.lengthUnits() != QgsUnitTypes.DistanceMeters:
+            m2 = area.convertAreaMeasurement(m2, QgsUnitTypes.AreaSquareMeters)
+        km2 = m2 / 1_000_000.0
+    except Exception:
+        km2 = 0.0
+
+    if km2 > _MAX_AREA_KM2:
+        raise AIEditError(
+            ErrorCode.TOO_LARGE,
+            tr(
+                "This zone covers {area:.0f} km², which is larger than "
+                "the {limit:.0f} km² max. Pick a smaller area."
+            ).format(area=km2, limit=_MAX_AREA_KM2),
+        )
+
 
 # Optional in QGIS < 3.14; vector tile sizing falls back to "unconstrained" if missing.
 try:
     from qgis.core import QgsVectorTileLayer
 except ImportError:
     QgsVectorTileLayer = None
-
-# Global server config (set by plugin.py at startup)
-# Plugin cannot export without server config
-_server_config: dict | None = None
 
 # Map user-facing resolution labels to target pixel counts (longest side)
 _RESOLUTION_TARGET_PX = {"1K": 1024, "2K": 2048, "4K": 4096}
@@ -45,37 +134,39 @@ _CAPPED_WARN_RATIO = 1.1
 
 def set_server_config(config: dict):
     """Set server export config fetched at plugin startup."""
-    global _server_config
-    _server_config = config
+    from ..core.config_store import get_store
+    store = get_store()
+    if store is not None:
+        store.set_server_export_config(config)
 
 
 def has_server_config() -> bool:
     """Check if server config has been loaded."""
-    return _server_config is not None
+    from ..core.config_store import get_store
+    store = get_store()
+    return store is not None and store.has_server_export_config()
+
+
+def _get_server_config() -> dict | None:
+    from ..core.config_store import get_store
+    store = get_store()
+    return store.get_server_export_config() if store is not None else None
 
 
 def _get_max_dimension() -> int | None:
     """Get max dimension from server config. Returns None if unavailable."""
-    if _server_config:
-        return _server_config.get("max_dimension")
-    return None
+    cfg = _get_server_config()
+    return cfg.get("max_dimension") if cfg else None
 
 
 def _get_align() -> int | None:
     """Get pixel alignment from server config. Returns None if unavailable."""
-    if _server_config:
-        return _server_config.get("align")
-    return None
+    cfg = _get_server_config()
+    return cfg.get("align") if cfg else None
 
 
 class ExportPrep:
-    """Snapshot of everything the render+encode step needs.
-
-    Built on the main thread (cheap), passed to a worker thread which can
-    safely render off-screen and PNG-encode without touching the UI. Keeps
-    references to layers via the cloned map settings; layers stay alive
-    because QgsMapSettings holds them and the project owns them.
-    """
+    """Render+encode snapshot. Built on main thread, consumed by a worker."""
 
     __slots__ = (
         "settings",
@@ -84,15 +175,18 @@ class ExportPrep:
         "actual_extent",
         "background_color",
         "map_crs",
+        "xyz_cap_warning",
     )
 
-    def __init__(self, settings, out_w, out_h, actual_extent, background_color, map_crs):
+    def __init__(self, settings, out_w, out_h, actual_extent, background_color, map_crs,
+                 xyz_cap_warning: str | None = None):
         self.settings = settings
         self.out_w = out_w
         self.out_h = out_h
         self.actual_extent = actual_extent
         self.background_color = background_color
         self.map_crs = map_crs
+        self.xyz_cap_warning = xyz_cap_warning
 
 
 def prepare_export(
@@ -100,11 +194,7 @@ def prepare_export(
     extent: QgsRectangle,
     target_resolution: str | None = None,
 ) -> ExportPrep:
-    """Cheap main-thread prep: pick output size, clone settings, log warnings.
-
-    Returns an ExportPrep that ``render_export`` can consume from a worker
-    thread. Raises ValueError / RuntimeError on bad input or missing config.
-    """
+    """Pick output size, clone settings, warn on caps. Cheap, main-thread."""
     if extent.width() <= 0 or extent.height() <= 0:
         raise ValueError("Invalid extent: width and height must be positive")
 
@@ -132,7 +222,9 @@ def prepare_export(
     settings.setExtent(adjusted_extent)
     settings.setOutputSize(QSize(out_w, out_h))
 
-    _warn_if_xyz_capped(map_settings.layers(), adjusted_extent, map_crs, out_w)
+    xyz_warning = _warn_if_xyz_capped(
+        map_settings.layers(), adjusted_extent, map_crs, out_w
+    )
 
     return ExportPrep(
         settings=settings,
@@ -141,22 +233,36 @@ def prepare_export(
         actual_extent=settings.visibleExtent(),
         background_color=map_settings.backgroundColor(),
         map_crs=map_crs,
+        xyz_cap_warning=xyz_warning,
     )
 
 
-def render_export(prep: ExportPrep) -> tuple[str, int, QgsRectangle]:
-    """Heavy work: render off-screen + PNG encode + base64.
-
-    Thread-safe; intended to run on a worker thread. Returns
-    ``(base64_png, byte_size, actual_extent)``.
-    """
-    image = QImage(QSize(prep.out_w, prep.out_h), QtC.FormatARGB32)
-    image.fill(prep.background_color)
-    painter = QPainter(image)
-    job = QgsMapRendererCustomPainterJob(prep.settings, painter)
+def render_export(
+    prep: ExportPrep,
+    progress_cb=None,
+) -> tuple[str, int, QgsRectangle]:
+    """Render off-screen + PNG encode + base64. Worker-thread safe. Returns (b64, bytes, extent)."""
+    job = QgsMapRendererParallelJob(prep.settings)
+    if progress_cb is not None:
+        try:
+            job.renderingLayersFinished.connect(lambda: progress_cb(80))
+        except Exception:  # nosec B110
+            pass
     job.start()
     job.waitForFinished()
-    painter.end()
+
+    image = job.renderedImage()
+    if image is None or image.isNull():
+        # CustomPainter fallback for layer providers ParallelJob can't handle.
+        image = QImage(QSize(prep.out_w, prep.out_h), QtC.FormatARGB32)
+        image.fill(prep.background_color)
+        painter = QPainter(image)
+        try:
+            fallback = QgsMapRendererCustomPainterJob(prep.settings, painter)
+            fallback.start()
+            fallback.waitForFinished()
+        finally:
+            painter.end()
 
     buffer = QBuffer()
     buffer.open(QtC.WriteOnly)
@@ -172,11 +278,7 @@ def apply_export_context(
     actual_extent: QgsRectangle,
     image_size_bytes: int,
 ) -> None:
-    """Populate the PipelineContext with extent + CRS + size metadata.
-
-    Split out so the worker thread can hand the result back to the main
-    thread which then mutates the ctx (PipelineContext isn't designed to be
-    written from multiple threads)."""
+    """Main-thread ctx mutation after the worker returns extent + size."""
     if ctx is None:
         return
     ctx.extent = {
@@ -258,7 +360,10 @@ def _clone_map_settings(src: QgsMapSettings) -> QgsMapSettings:
     ):
         try:
             getattr(dst, setter)(getattr(src, getter)())
-        except Exception:  # nosec B112
+        except Exception as err:  # nosec B112
+            # Surface skipped setters so missing temporal/DPI don't silently
+            # corrupt the rendered export on older QGIS versions.
+            log_warning(f"_clone_map_settings skipped {setter}: {err}")
             continue
     return dst
 
@@ -529,14 +634,14 @@ def _zone_dims_meters(
 
 def _warn_if_xyz_capped(
     layers, zone_extent: QgsRectangle, map_crs, out_w: int
-) -> None:
-    """Log when an XYZ layer's zmax forces softer output than the selection allows."""
+) -> str | None:
+    """Returns a localized message when an XYZ layer's zmax forces softer output."""
     zw_m, _ = _zone_dims_meters(zone_extent, map_crs)
     if not zw_m or out_w <= 0:
-        return
+        return None
     requested_mpp = zw_m / out_w
     if requested_mpp <= 0:
-        return
+        return None
 
     for layer in layers or []:
         if layer is None or layer.type() != QgsMapLayer.LayerType.RasterLayer:
@@ -555,4 +660,9 @@ def _warn_if_xyz_capped(
             f"output will be ~{int(loss * 100)}% softer than the selection allows. "
             "Re-add this XYZ layer with a higher zmax for full resolution."
         )
-        return
+        return tr(
+            "Basemap '{name}' is capped at zoom {z}. Output will be ~{loss}% softer "
+            "than the selection allows. Re-add the XYZ layer with a higher zmax for "
+            "full resolution."
+        ).format(name=layer.name(), z=zmax, loss=int(loss * 100))
+    return None

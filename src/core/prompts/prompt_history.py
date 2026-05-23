@@ -12,7 +12,7 @@ import time
 
 from qgis.core import QgsSettings
 
-from .activation_manager import SETTINGS_PREFIX
+from ..auth.activation_manager import SETTINGS_PREFIX
 
 _RECENT_KEY = f"{SETTINGS_PREFIX}prompt_history"
 _FAVORITES_KEY = f"{SETTINGS_PREFIX}favorite_prompts"

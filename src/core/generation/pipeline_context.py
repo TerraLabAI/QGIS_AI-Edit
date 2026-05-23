@@ -76,6 +76,11 @@ class PipelineContext:
     output_dimensions: tuple[int, int] | None = None
     crop_offsets: tuple[int, int, int, int] | None = None  # x, y, w, h
 
+    # Refund safety: set to True once the worker has asked the server to
+    # refund this generation, so download_failed + write_error paths can't
+    # double-refund.
+    refund_emitted: bool = False
+
     def validate(self) -> list[str]:
         """Check boundary consistency. Returns list of warning strings."""
         warnings = []

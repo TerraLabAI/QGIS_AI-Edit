@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import os
 
-from qgis.core import QgsFeature, QgsLayerTree, QgsProject, QgsRasterLayer
-from qgis.PyQt.QtCore import QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QColor
+from qgis.core import QgsFeature, QgsProject, QgsRasterLayer
+from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtGui import QColor, QKeySequence, QShortcut
 from qgis.PyQt.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -24,17 +24,29 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from ..core import qt_compat as QtC
-from ..core import telemetry
-from ..core.i18n import tr
-from ..core.vectorization_service import vectorize_by_color
-from .eyedropper_tool import EyedropperMapTool
-from .layer_groups import AI_EDIT_GROUP_NAME, get_or_create_ai_edit_group
-from .layer_tree_combobox import LayerTreeComboBox
-from .panel_helpers import apply_swatch_style, build_panel_header, panel_section_label
+from ...core import qt_compat as QtC
+from ...core import telemetry
+from ...core.errors import AIEditError
+from ...core.generation.vectorization_service import vectorize_by_color
+from ...core.i18n import tr
+from ..layer_groups import (
+    AI_EDIT_GROUP_NAME,
+    add_layer_to_ai_edit_top,
+    find_generation_subgroup_for_layer,
+    pick_default_layer,
+    promote_layer_to_own_subgroup,
+)
+from ..layer_tree_combobox import LayerTreeComboBox
+from ..panel_helpers import (
+    GROUP_BOX_QSS,
+    apply_swatch_style,
+    build_info_box,
+    build_panel_header,
+)
+from ..tools.eyedropper_tool import EyedropperMapTool
 
-BRAND_BLUE = "#1976d2"
-BRAND_BLUE_HOVER = "#1565c0"
+BRAND_BLUE = "#1e88e5"
+BRAND_BLUE_HOVER = "#1976d2"
 BRAND_DISABLED = "#b0bec5"
 DISABLED_TEXT = "#666666"
 ERROR_TEXT = "#ef5350"
@@ -80,15 +92,21 @@ def _is_ai_edit_output(layer) -> bool:
     return False
 
 
-class VectorizePanel(QWidget):
-    """Color-based raster-to-polygon workflow.
+def _is_visible_ai_edit_output(layer) -> bool:
+    """``_is_ai_edit_output`` plus tree visibility.
 
-    Step 1 (always visible): pick the active raster, pick the color to
-    extract, click Vectorize. Step 2 (revealed after the first successful
-    run): a collapsible Refine box wired to a 150 ms debounce that re-runs
-    the vectorization in place, replacing the previous polygon layer
-    instead of stacking duplicates.
+    The combo only lists visible layers, so the default pick must also be
+    visible — otherwise ``setLayer()`` silently fails and the combo lands
+    on whatever fallback it auto-picks.
     """
+    if not _is_ai_edit_output(layer):
+        return False
+    node = QgsProject.instance().layerTreeRoot().findLayer(layer.id())
+    return node is not None and node.isVisible()
+
+
+class VectorizePanel(QWidget):
+    """Color-based raster-to-polygon workflow. Refine box re-runs via debounce."""
 
     done_clicked = pyqtSignal()
 
@@ -104,25 +122,21 @@ class VectorizePanel(QWidget):
         self._last_layer_id: str | None = None
         self._last_raster_id: str | None = None
         self._last_target_rgb: tuple[int, int, int] | None = None
+        # Pre-fill written to the class_name attribute for every polygon.
+        # Set by preconfigure() from the template metadata; empty for
+        # manual runs so the user fills it inline in the attribute table.
+        self._class_label: str = ""
         self._eyedropper_tool: EyedropperMapTool | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        layout.addWidget(
-            build_panel_header(
-                tr("Vectorize"),
-                subtitle=tr(
-                    "Turn flat-color regions of a raster layer into vector "
-                    "polygons. Pick a source raster and a color, then run."
-                ),
-            )
-        )
+        layout.addWidget(build_panel_header(tr("Vectorize this layer:")))
 
-        # --- Source raster: layer-tree combo (AI Edit outputs only) ----
-        layout.addWidget(panel_section_label(tr("From")))
-
+        # Source raster combo sits directly under the header — the title
+        # already names the action ("Vectorize this layer:"), so wrapping
+        # the picker in a separate "From" group box would be visual noise.
         self._layer_combo = LayerTreeComboBox()
         self._layer_combo.setToolTip(
             tr("Pick an AI Edit output to vectorize.")
@@ -131,9 +145,8 @@ class VectorizePanel(QWidget):
         self._layer_combo.layerChanged.connect(self._refresh_panel_state)
         layout.addWidget(self._layer_combo)
 
-        # Empty-state hint when no AI Edit output exists yet. Shown in place
-        # of the From combo's "no valid raster" silence so users understand
-        # this tool needs a generated layer.
+        # Empty-state hint when no AI Edit output exists yet. Shown in
+        # place of the combo so users understand the tool needs one.
         self._empty_state_label = QLabel(
             tr(
                 "No AI Edit output available. Generate a map first to "
@@ -149,11 +162,11 @@ class VectorizePanel(QWidget):
         self._empty_state_label.setVisible(False)
         layout.addWidget(self._empty_state_label)
 
-        # --- Color row -------------------------------------------------
-        layout.addWidget(panel_section_label(tr("Color")))
-
-        color_row = QHBoxLayout()
-        color_row.setContentsMargins(0, 0, 0, 0)
+        # --- Color section --------------------------------------------
+        color_group = QGroupBox(tr("Color"))
+        color_group.setStyleSheet(GROUP_BOX_QSS)
+        color_row = QHBoxLayout(color_group)
+        color_row.setContentsMargins(8, 6, 8, 8)
         color_row.setSpacing(8)
         self._color_btn = QPushButton()
         self._color_btn.setToolTip(
@@ -165,7 +178,8 @@ class VectorizePanel(QWidget):
         self._color_btn.clicked.connect(self._on_color_clicked)
         color_row.addWidget(self._color_btn)
 
-        self._eyedropper_btn = QPushButton(tr("⌖ Pick on map"))
+        # Glyph outside tr() so translators see clean text.
+        self._eyedropper_btn = QPushButton("⌖ " + tr("Pick on map"))
         self._eyedropper_btn.setToolTip(
             tr("Sample a color directly from the source raster.")
         )
@@ -175,7 +189,7 @@ class VectorizePanel(QWidget):
         self._eyedropper_btn.clicked.connect(self._on_eyedropper_clicked)
         color_row.addWidget(self._eyedropper_btn)
         color_row.addStretch()
-        layout.addLayout(color_row)
+        layout.addWidget(color_group)
 
         # --- Refine box (hidden until first successful vectorization) ---
         # Refining only makes sense once polygons exist, so the whole group
@@ -207,7 +221,7 @@ class VectorizePanel(QWidget):
         action_row.setContentsMargins(0, 6, 0, 0)
         action_row.setSpacing(6)
 
-        exit_btn = QPushButton(tr("Exit"))
+        exit_btn = QPushButton(tr("Done"))
         exit_btn.setStyleSheet(_BTN_GHOST_QSS)
         exit_btn.setCursor(QtC.PointingHandCursor)
         exit_btn.setMinimumHeight(34)
@@ -220,10 +234,38 @@ class VectorizePanel(QWidget):
         self._run_btn.setStyleSheet(_BTN_BLUE_QSS)
         self._run_btn.setCursor(QtC.PointingHandCursor)
         self._run_btn.setMinimumHeight(34)
+        self._run_btn.setDefault(True)
+        self._run_btn.setAutoDefault(True)
         self._run_btn.clicked.connect(self._on_run_clicked)
         action_row.addWidget(self._run_btn)
         layout.addLayout(action_row)
         layout.addStretch()
+
+        # Tool description as a footer info box (mirrors the design
+        # system's blue tint pattern). Moved out of the panel header to
+        # keep the controls front-and-centre.
+        layout.addWidget(
+            build_info_box(
+                tr(
+                    "Turn flat-color regions of a raster layer into vector "
+                    "polygons. Pick a source raster and a color, then run."
+                )
+            )
+        )
+
+        # Esc → Done (close the panel), Enter → Run. WindowShortcut so
+        # Esc fires regardless of which child has focus while the panel
+        # is visible — the dock's own Escape handler bails out when the
+        # main widget is hidden, so there's no conflict.
+        esc = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
+        esc.setContext(Qt.ShortcutContext.WindowShortcut)
+        esc.activated.connect(self.done_clicked.emit)
+        enter = QShortcut(QKeySequence(Qt.Key.Key_Return), self)
+        enter.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        enter.activated.connect(self._on_run_clicked)
+        enter2 = QShortcut(QKeySequence(Qt.Key.Key_Enter), self)
+        enter2.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        enter2.activated.connect(self._on_run_clicked)
 
     # -- public API ------------------------------------------------------
 
@@ -232,31 +274,37 @@ class VectorizePanel(QWidget):
         button enabled-state from the current combo selection.
         """
         self._reset_state()
-        # If the combo auto-picked an online basemap (no on-disk source),
-        # prefer the most recent AI-Edit output or any file-backed RGB
-        # raster so the panel opens in a usable state instead of erroring.
-        if not self._current_layer_is_valid():
-            preferred = self._find_preferred_raster()
-            if preferred is not None:
-                self._layer_combo.setLayer(preferred)
+        # Cascade: the user's currently active AI-Edit raster wins, then
+        # the most recent AI-Edit output. Stricter predicate than the
+        # combo's filter (also requires visibility) so the default never
+        # falls on a hidden layer the combo wouldn't display anyway.
+        preferred = pick_default_layer(_is_visible_ai_edit_output)
+        if preferred is not None:
+            self._layer_combo.setLayer(preferred)
         self._refresh_panel_state()
 
     def preconfigure(
         self,
         layer_id: str | None = None,
         color_hex: str | None = None,
+        class_label: str | None = None,
     ) -> None:
-        """Pre-fill the source layer and target color before show.
+        """Pre-fill the source layer, target color, and class label before show.
 
         Used when the user enters the panel from the result-panel CTA so
         the swatch is already set to the template's vector_color and the
-        combo is locked on the just-generated raster. Call AFTER activate().
+        combo is locked on the just-generated raster. class_label seeds
+        the class_name attribute on every produced polygon so the table
+        opens with a meaningful semantic label instead of blank rows.
+        Call AFTER activate().
         """
         if color_hex:
             qc = QColor(color_hex)
             if qc.isValid():
                 self._color = QColor(qc.red(), qc.green(), qc.blue())
                 apply_swatch_style(self._color_btn, self._color)
+        if class_label is not None:
+            self._class_label = class_label
         if layer_id:
             layer = QgsProject.instance().mapLayer(layer_id)
             if layer is not None:
@@ -276,6 +324,7 @@ class VectorizePanel(QWidget):
         self._last_layer_id = None
         self._last_raster_id = None
         self._last_target_rgb = None
+        self._class_label = ""
         self._succeeded = False
         self._color = QColor(255, 0, 0)
         apply_swatch_style(self._color_btn, self._color)
@@ -413,6 +462,16 @@ class VectorizePanel(QWidget):
             tr("Fill interior holes in the selection"),
             default=False,
         )
+        self._min_pixels_spin = _spin_row(
+            content_layout,
+            tr("Min polygon size:"),
+            tr(
+                "Drop polygons smaller than this many pixels after tracing. "
+                "Useful for cleaning up speckle that the sieve missed."
+            ),
+            0, 100000, 50,
+        )
+        self._min_pixels_spin.setSuffix(" px")
 
         outer.addWidget(content)
 
@@ -421,6 +480,7 @@ class VectorizePanel(QWidget):
             self._sieve_spin,
             self._simplify_spin,
             self._expand_spin,
+            self._min_pixels_spin,
         ):
             spin.valueChanged.connect(self._on_refine_changed)
         for chk in (self._round_corners_check, self._fill_holes_check):
@@ -431,7 +491,10 @@ class VectorizePanel(QWidget):
     def _on_refine_changed(self, _value=None) -> None:
         if self._last_layer_id is None:
             return
-        self._refine_timer.start(150)
+        # 300 ms gives the user time to settle on a value when rapidly
+        # arrowing through a spinbox; 150 ms used to re-trigger vectorize
+        # mid-keystroke and made the panel feel sluggish.
+        self._refine_timer.start(300)
 
     def _reset_refine_spinboxes(self) -> None:
         for spin, default in (
@@ -439,6 +502,7 @@ class VectorizePanel(QWidget):
             (self._sieve_spin, 10),
             (self._simplify_spin, 1),
             (self._expand_spin, 0),
+            (self._min_pixels_spin, 50),
         ):
             spin.blockSignals(True)
             spin.setValue(default)
@@ -486,45 +550,6 @@ class VectorizePanel(QWidget):
                 is_hint=True,
             )
             self._run_btn.setEnabled(False)
-
-    def _current_layer_is_valid(self) -> bool:
-        layer = self._layer_combo.currentLayer()
-        if not isinstance(layer, QgsRasterLayer):
-            return False
-        src = layer.source()
-        return bool(src) and os.path.exists(src) and layer.bandCount() >= 3
-
-    def _find_preferred_raster(self) -> QgsRasterLayer | None:
-        """Pick the best raster to vectorize on cold panel open.
-
-        Order: most-recent AI-Edit output, then any other file-backed RGB
-        raster in the project. Returns None if no candidate exists.
-        """
-        project = QgsProject.instance()
-        root = project.layerTreeRoot()
-
-        def _is_valid(layer) -> bool:
-            if not isinstance(layer, QgsRasterLayer):
-                return False
-            src = layer.source()
-            return bool(src) and os.path.exists(src) and layer.bandCount() >= 3
-
-        # AI-Edit group: top child is the most recent output.
-        for child in root.children():
-            if (
-                child.name() == AI_EDIT_GROUP_NAME
-                and hasattr(child, "children")  # noqa: W503
-            ):
-                for sub in child.children():
-                    if QgsLayerTree.isLayer(sub) and _is_valid(sub.layer()):
-                        return sub.layer()
-                break
-
-        # Fallback: scan all project rasters in tree order.
-        for layer in project.mapLayers().values():
-            if _is_valid(layer):
-                return layer
-        return None
 
     def _on_color_clicked(self) -> None:
         chosen = QColorDialog.getColor(self._color, self, tr("Pick color"))
@@ -585,10 +610,7 @@ class VectorizePanel(QWidget):
         if self._busy:
             return
 
-        # After a successful run, the primary button morphs to "Done" and
-        # clicking it exits the panel. Refine spinboxes still trigger
-        # debounced re-runs for tuning, so the user can keep adjusting
-        # without re-clicking the button.
+        # After success, button reads "Done" and exits; refine spinboxes still re-run.
         if self._succeeded:
             self.done_clicked.emit()
             return
@@ -634,18 +656,22 @@ class VectorizePanel(QWidget):
         round_corners = bool(self._round_corners_check.isChecked())
         expand_value = int(self._expand_spin.value())
         fill_holes = bool(self._fill_holes_check.isChecked())
+        min_pixels = int(self._min_pixels_spin.value())
 
-        self._busy = True
-        self._run_btn.setEnabled(False)
-        self._color_btn.setEnabled(False)
-        self._run_btn.setText(tr("Vectorizing..."))
-        self._show_status(
-            tr("Vectorizing “{name}”...").format(name=raster.name()),
-            is_error=False,
-        )
-
-        QApplication.setOverrideCursor(QtC.WaitCursor)
-        QApplication.processEvents()  # let the UI repaint before the blocking call
+        # Only flip the action row into a "running" state on the initial
+        # click. Debounced refine re-runs keep the Done button, cursor and
+        # status line intact so spinbox ticks don't flicker the panel.
+        if is_initial:
+            self._busy = True
+            self._run_btn.setEnabled(False)
+            self._color_btn.setEnabled(False)
+            self._run_btn.setText(tr("Vectorizing..."))
+            self._show_status(
+                tr("Vectorizing “{name}”...").format(name=raster.name()),
+                is_error=False,
+            )
+            QApplication.setOverrideCursor(QtC.WaitCursor)
+            QApplication.processEvents()  # let the UI repaint before the blocking call
 
         try:
             new_layer = vectorize_by_color(
@@ -658,6 +684,8 @@ class VectorizePanel(QWidget):
                 round_corners=round_corners,
                 expand_value=expand_value,
                 fill_holes=fill_holes,
+                min_pixels=min_pixels,
+                class_label=self._class_label,
             )
 
             previous_id = self._last_layer_id
@@ -683,8 +711,19 @@ class VectorizePanel(QWidget):
                 final_layer = existing
             else:
                 QgsProject.instance().addMapLayer(new_layer, False)
-                group = get_or_create_ai_edit_group()
-                group.insertLayer(0, new_layer)
+                # Lazily promote the source raster into its own sub-group
+                # on the first vectorization, then drop the vector layer
+                # alongside it. Rasters that never get vectorized stay
+                # as flat AI-Edit children.
+                subgroup = find_generation_subgroup_for_layer(raster.id())
+                if subgroup is None:
+                    subgroup = promote_layer_to_own_subgroup(raster.id())
+                if subgroup is not None:
+                    subgroup.insertLayer(0, new_layer)
+                else:
+                    # Fallback: no sub-group, drop into the AI-Edit group
+                    # while leaving the shared Mark up layer on top.
+                    add_layer_to_ai_edit_top(new_layer)
                 final_layer = new_layer
 
             self._last_layer_id = final_layer.id()
@@ -693,15 +732,16 @@ class VectorizePanel(QWidget):
 
             polygon_count = final_layer.featureCount()
             self._show_status(
-                tr("✓ {n} polygons added").format(n=polygon_count),
+                "✓ " + tr("{n} polygons added").format(n=polygon_count),
                 is_error=False,
                 is_success=True,
             )
 
-            self._activate_layer_in_panel(final_layer)
             self._succeeded = True
-            self._refine_group.setVisible(True)
-            self._run_btn.setText(tr("Done"))
+            if is_initial:
+                self._activate_layer_in_panel(final_layer)
+                self._refine_group.setVisible(True)
+                self._run_btn.setText(tr("Done"))
             telemetry.track(
                 "vectorize_completed",
                 {
@@ -715,23 +755,22 @@ class VectorizePanel(QWidget):
                     "is_initial": is_initial,
                 },
             )
+        except AIEditError as err:
+            self._handle_run_error(err.message, err.code)
         except Exception as e:
-            self._handle_run_error(str(e))
+            self._handle_run_error(str(e), None)
         finally:
-            QApplication.restoreOverrideCursor()
-            self._reset_button()
+            if is_initial:
+                QApplication.restoreOverrideCursor()
+                self._reset_button()
 
-    def _handle_run_error(self, message: str) -> None:
+    def _handle_run_error(self, message: str, code=None) -> None:
         """Render a friendlier error and steer the user to the lever that
-        usually fixes it. Zero-match cases auto-expand the Refine box and
-        highlight the tolerance spinbox; other errors just show the raw
-        message in the status line.
+        usually fixes it. ``code`` lets us branch without parsing English
+        substrings (replaced lower().contains check).
         """
-        lower = message.lower()
-        is_zero_match = (
-            "no pixels matched" in lower
-            or "no polygons remained" in lower  # noqa: W503
-        )
+        from ...core.errors import ErrorCode as _EC
+        is_zero_match = code == _EC.NO_PIXELS_MATCHED
         if is_zero_match:
             self._show_status(
                 tr(
@@ -778,8 +817,10 @@ class VectorizePanel(QWidget):
         elif is_success:
             color = SUCCESS_TEXT
         elif is_hint:
-            # Soft grey: calm hint, distinct from red error / green success.
-            color = "rgba(160, 160, 160, 0.85)"
+            # Use palette(text) so the hint stays legible on both light and
+            # dark QGIS themes; the smaller font-size handles the visual
+            # distinction from error / success messages.
+            color = "palette(text)"
         else:
             color = "palette(text)"
         self._status_label.setStyleSheet(

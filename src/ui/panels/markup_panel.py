@@ -10,15 +10,18 @@ from qgis.PyQt.QtCore import QPointF, QSize, Qt, pyqtSignal
 from qgis.PyQt.QtGui import (
     QColor,
     QIcon,
+    QKeySequence,
     QPainter,
     QPalette,
     QPen,
     QPixmap,
     QPolygonF,
+    QShortcut,
 )
 from qgis.PyQt.QtWidgets import (
     QButtonGroup,
     QColorDialog,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -27,17 +30,18 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from ..core import qt_compat as QtC
-from ..core.i18n import tr
-from .panel_helpers import (
+from ...core import qt_compat as QtC
+from ...core.i18n import tr
+from ..panel_helpers import (
+    GROUP_BOX_QSS,
+    build_info_box,
     build_panel_header,
     is_dark_palette,
     make_color_dot_icon,
     make_custom_color_icon,
-    panel_section_label,
 )
 
-BRAND_BLUE = "#1976d2"
+BRAND_BLUE = "#1e88e5"
 BRAND_RED = "#d32f2f"
 DISABLED_TEXT = "#666666"
 
@@ -67,13 +71,19 @@ _TOOL_ICON_PX = 24
 _COLOR_DOT_PX = 22
 
 
+def _shortcut_tail() -> str:
+    import sys
+    undo_combo = "Cmd+Z" if sys.platform == "darwin" else "Ctrl+Z"
+    return tr(" (Esc to finish, {undo} to undo)").format(undo=undo_combo)
+
+
 def _tool_hint(tool_key: str) -> str:
     hints = {
         "pencil": tr("Drag on the map to sketch a freehand stroke."),
         "arrow": tr("Click and drag on the map to draw an arrow."),
         "circle": tr("Drag on the map to draw an ellipse."),
     }
-    return hints.get(tool_key, hints["pencil"])
+    return hints.get(tool_key, hints["pencil"]) + _shortcut_tail()
 
 
 def _make_tool_icon(shape: str, color: QColor) -> QIcon:
@@ -134,20 +144,13 @@ class MarkupPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        layout.addWidget(
-            build_panel_header(
-                tr("Mark up"),
-                subtitle=tr(
-                    "Visual cues to guide the AI inside your selected zone. "
-                    "Sent with your prompt, removed from the generated result."
-                ),
-            )
-        )
+        layout.addWidget(build_panel_header(tr("Mark up")))
 
-        # Tool section
-        layout.addWidget(panel_section_label(tr("Tool")))
-        tool_row = QHBoxLayout()
-        tool_row.setContentsMargins(0, 0, 0, 0)
+        # Tool section - wrapped in a native-feeling group box.
+        tool_group = QGroupBox(tr("Tool"))
+        tool_group.setStyleSheet(GROUP_BOX_QSS)
+        tool_row = QHBoxLayout(tool_group)
+        tool_row.setContentsMargins(8, 6, 8, 8)
         tool_row.setSpacing(6)
 
         self._tool_group = QButtonGroup(self)
@@ -208,7 +211,7 @@ class MarkupPanel(QWidget):
             self._tool_buttons[key] = btn
             tool_row.addWidget(btn)
         tool_row.addStretch()
-        layout.addLayout(tool_row)
+        layout.addWidget(tool_group)
 
         # Block signals: _status_label isn't built yet, and activate() will
         # re-emit tool_changed for us when the panel becomes visible.
@@ -216,10 +219,11 @@ class MarkupPanel(QWidget):
         self._tool_buttons["pencil"].setChecked(True)
         self._tool_buttons["pencil"].blockSignals(False)
 
-        # Color section
-        layout.addWidget(panel_section_label(tr("Color")))
-        color_row = QHBoxLayout()
-        color_row.setContentsMargins(0, 0, 0, 0)
+        # Color section - matching grouped container.
+        color_group = QGroupBox(tr("Color"))
+        color_group.setStyleSheet(GROUP_BOX_QSS)
+        color_row = QHBoxLayout(color_group)
+        color_row.setContentsMargins(8, 6, 8, 8)
         color_row.setSpacing(6)
 
         self._color_btns: dict[tuple[int, int, int], QToolButton] = {}
@@ -264,7 +268,7 @@ class MarkupPanel(QWidget):
         self._custom_color_btn.clicked.connect(self._on_custom_color_clicked)
         color_row.addWidget(self._custom_color_btn)
         color_row.addStretch()
-        layout.addLayout(color_row)
+        layout.addWidget(color_group)
 
         # Status hint
         self._status_label = QLabel("")
@@ -276,13 +280,12 @@ class MarkupPanel(QWidget):
         )
         layout.addWidget(self._status_label)
 
-        # "No zone drawn yet" hint - only visible when _has_zone is False.
-        # Tools stay enabled, so the user can pre-stage hints freely; the
-        # label just makes clear those hints will ride along with the next
-        # generation once a zone exists.
+        # Visible only when no zone exists; tools stay enabled to pre-stage hints.
         self._no_zone_hint = QLabel(
-            tr("ⓘ Draw a zone first to anchor your guides. They'll ride "
-               "along with the next generation inside that zone.")
+            "ⓘ " + tr(
+                "Draw a zone first to anchor your guides. They'll ride "
+                "along with the next generation inside that zone."
+            )
         )
         self._no_zone_hint.setWordWrap(True)
         self._no_zone_hint.setStyleSheet(
@@ -302,24 +305,27 @@ class MarkupPanel(QWidget):
 
         self._clear_btn = QPushButton(tr("Clear all"))
         self._clear_btn.setCursor(QtC.PointingHandCursor)
-        self._clear_btn.setFlat(True)
         self._clear_btn.setEnabled(False)
         self._clear_btn.setStyleSheet(
             "QPushButton {"
-            " background: transparent; border: none;"
-            " color: palette(text); padding: 8px 10px;"
+            " background: transparent; border: 1px solid rgba(211, 47, 47, 0.45);"
+            f" color: {BRAND_RED}; padding: 6px 12px;"
             " font-size: 12px; border-radius: 4px;"
             "}"
-            f"QPushButton:hover {{"
-            f" background: rgba(211, 47, 47, 0.10); color: {BRAND_RED};"
-            f"}}"
-            "QPushButton:disabled { color: rgba(128, 128, 128, 0.5); }"
+            "QPushButton:hover {"
+            " background: rgba(211, 47, 47, 0.18);"
+            " border: 1px solid rgba(211, 47, 47, 0.75);"
+            "}"
+            "QPushButton:disabled {"
+            " color: rgba(128, 128, 128, 0.5);"
+            " border: 1px solid rgba(128, 128, 128, 0.25);"
+            "}"
         )
         self._clear_btn.clicked.connect(self.clear_clicked.emit)
         action_row.addWidget(self._clear_btn)
         action_row.addStretch()
 
-        self._done_btn = QPushButton(tr("Finish"))
+        self._done_btn = QPushButton(tr("Done"))
         self._done_btn.setStyleSheet(_BTN_GHOST_QSS)
         self._done_btn.setCursor(QtC.PointingHandCursor)
         self._done_btn.setMinimumHeight(34)
@@ -329,11 +335,30 @@ class MarkupPanel(QWidget):
         layout.addLayout(action_row)
         layout.addStretch()
 
+        # Tool description as a footer info box (consistent with
+        # Vectorize). Sits below the controls instead of above so the
+        # first thing the user sees is the tool, not a paragraph.
+        layout.addWidget(
+            build_info_box(
+                tr(
+                    "Visual cues to guide the AI inside your selected zone. "
+                    "Sent with your prompt, removed from the generated result."
+                )
+            )
+        )
+
         # Initial state - default to no zone (the dock will refresh us as
         # soon as the user draws one). Visible from cold open.
         self._no_zone_hint.setVisible(True)
         self._update_color_indicators()
         self._refresh_status()
+
+        # Esc → Done. WindowShortcut so it fires no matter which child
+        # has focus while the panel is visible; the dock's global Esc
+        # handler bails out when the main widget is hidden, so no clash.
+        esc = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
+        esc.setContext(Qt.ShortcutContext.WindowShortcut)
+        esc.activated.connect(self.done_clicked.emit)
 
     # -- public API ------------------------------------------------------
 
