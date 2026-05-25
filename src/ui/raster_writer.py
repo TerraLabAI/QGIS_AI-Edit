@@ -381,18 +381,13 @@ def add_geotiff_to_project(
             counter += 1
         display_name = f"{display_name} ({counter})"
 
-    # Relative path keeps the .qgz portable when shared with a colleague.
+    # Build the layer from the absolute path so it is always valid. QGIS stores
+    # it relative to the project on save (the default), so the .qgz stays
+    # portable. Passing a project-relative path here instead would make
+    # QgsRasterLayer resolve it against the current working directory, not the
+    # project, and the layer would fail to load whenever they differ.
     project = QgsProject.instance()
-    source_path = geotiff_path
-    if project.absoluteFilePath():
-        try:
-            rel = project.writePath(geotiff_path)
-            if rel:
-                source_path = rel
-        except Exception:
-            source_path = geotiff_path
-
-    layer = QgsRasterLayer(source_path, display_name)
+    layer = QgsRasterLayer(geotiff_path, display_name)
     if not layer.isValid():
         layer = _reload_from_ascii_copy(geotiff_path, display_name)
     if layer is None or not layer.isValid():

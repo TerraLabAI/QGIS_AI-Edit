@@ -183,14 +183,19 @@ def vectorize_by_color(
             "Polygon"
             "?field=feature_id:integer"
             "&field=class_id:integer"
-            "&field=class_name:string(64)"
-            "&field=class_color:string(7)"
+            # Generous string lengths: the memory provider silently DROPS any
+            # feature whose value overflows a field, so a too-short field makes
+            # the whole layer come back empty. class_name is user-editable and
+            # source_raster_id holds a QGIS layer id (name + 36-char UUID, often
+            # 70-80 chars) - both must not clip.
+            "&field=class_name:string(254)"
+            "&field=class_color:string(9)"
             "&field=area_m2:double"
             "&field=area_ha:double"
             "&field=perimeter_m:double"
             "&field=compactness:double"
-            "&field=source_raster:string(120)"
-            "&field=source_raster_id:string(40)"
+            "&field=source_raster:string(254)"
+            "&field=source_raster_id:string(254)"
             "&field=created_at:string(25)"
         ),
         name,
@@ -278,6 +283,14 @@ def vectorize_by_color(
 
     mem_provider.addFeatures(feats)
     mem_layer.updateExtents()
+    # The memory provider drops features whose attributes overflow a field
+    # instead of raising. Guard against that so we never hand back an empty
+    # layer while reporting success ("Vectorize done: N" but 0 on the map).
+    if mem_layer.featureCount() != len(feats):
+        raise AIEditError(
+            ErrorCode.WRITE_ERROR,
+            tr("Could not store the vectorized polygons (internal field error)."),
+        )
     _configure_attribute_table(mem_layer, class_label)
     style_rgb = output_rgb if output_rgb is not None else complementary_rgb(target_rgb)
     _apply_style(mem_layer, style_rgb)

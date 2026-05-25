@@ -8,7 +8,6 @@ from qgis.core import (
     QgsCoordinateTransform,
     QgsDataSourceUri,
     QgsDistanceArea,
-    QgsGeometry,
     QgsMapLayer,
     QgsMapRendererCustomPainterJob,
     QgsMapRendererParallelJob,
@@ -25,11 +24,6 @@ from ..core import qt_compat as QtC
 from ..core.errors import AIEditError, ErrorCode
 from ..core.i18n import tr
 from ..core.logger import log_warning
-
-# Maximum on-the-ground area accepted by the AI Edit pipeline. Above this the
-# model dilutes details to the point of uselessness. Surfaces as a clean
-# refusal at draw time rather than wasting a generation credit.
-_MAX_AREA_KM2 = 10000.0
 
 # Above this absolute latitude the Mercator world distortion makes
 # ground_resolution estimates unreliable and most basemaps stop. Refuse to
@@ -94,26 +88,6 @@ def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> N
                 ).format(limit=int(_POLAR_ABS_LAT_DEG)),
             )
 
-    try:
-        area = QgsDistanceArea()
-        area.setSourceCrs(map_crs, QgsProject.instance().transformContext())
-        area.setEllipsoid(QgsProject.instance().ellipsoid() or "WGS84")
-        m2 = area.measureArea(QgsGeometry.fromRect(extent))
-        if area.lengthUnits() != QgsUnitTypes.DistanceMeters:
-            m2 = area.convertAreaMeasurement(m2, QgsUnitTypes.AreaSquareMeters)
-        km2 = m2 / 1_000_000.0
-    except Exception:
-        km2 = 0.0
-
-    if km2 > _MAX_AREA_KM2:
-        raise AIEditError(
-            ErrorCode.TOO_LARGE,
-            tr(
-                "This zone covers {area:.0f} km², which is larger than "
-                "the {limit:.0f} km² max. Pick a smaller area."
-            ).format(area=km2, limit=_MAX_AREA_KM2),
-        )
-
 
 # Optional in QGIS < 3.14; vector tile sizing falls back to "unconstrained" if missing.
 try:
@@ -126,10 +100,6 @@ _RESOLUTION_TARGET_PX = {"1K": 1024, "2K": 2048, "4K": 4096}
 
 # Web Mercator m/px at z=0 for a 256-px tile, at the equator.
 _WEBMERC_M_PX_Z0 = 156543.03392
-
-# Warn if a tile layer's zmax forces the rendered m/px to be this much coarser
-# than the m/px the selection would otherwise allow.
-_CAPPED_WARN_RATIO = 1.1
 
 
 def set_server_config(config: dict):
@@ -175,18 +145,15 @@ class ExportPrep:
         "actual_extent",
         "background_color",
         "map_crs",
-        "xyz_cap_warning",
     )
 
-    def __init__(self, settings, out_w, out_h, actual_extent, background_color, map_crs,
-                 xyz_cap_warning: str | None = None):
+    def __init__(self, settings, out_w, out_h, actual_extent, background_color, map_crs):
         self.settings = settings
         self.out_w = out_w
         self.out_h = out_h
         self.actual_extent = actual_extent
         self.background_color = background_color
         self.map_crs = map_crs
-        self.xyz_cap_warning = xyz_cap_warning
 
 
 def prepare_export(
@@ -194,7 +161,7 @@ def prepare_export(
     extent: QgsRectangle,
     target_resolution: str | None = None,
 ) -> ExportPrep:
-    """Pick output size, clone settings, warn on caps. Cheap, main-thread."""
+    """Pick output size and clone settings. Cheap, main-thread."""
     if extent.width() <= 0 or extent.height() <= 0:
         raise ValueError("Invalid extent: width and height must be positive")
 
@@ -209,22 +176,25 @@ def prepare_export(
 
     map_crs = map_settings.destinationCrs()
     if target_resolution and target_resolution in _RESOLUTION_TARGET_PX:
-        longest = min(_RESOLUTION_TARGET_PX[target_resolution], max_dim)
+        # Size by the tier's PIXEL BUDGET, not its longest side. The model
+        # (nano-banana-2) outputs ~ref^2 pixels with the input's aspect (1K ~=
+        # 1 MP, 2K ~= 4 MP, 4K ~= 16 MP). Sizing by longest side undershoots
+        # that budget on non-square zones (a 21:9 1K input would be ~0.45 MP vs
+        # a ~1.06 MP output), forcing the model to upscale and softening the
+        # result. Matching the budget keeps the input >= the output so it never
+        # upscales, while staying far smaller than the full native zone.
+        ref = min(_RESOLUTION_TARGET_PX[target_resolution], max_dim)
+        out_w, out_h = _budget_dims(extent, ref, align, max_dim)
     else:
         longest = _best_native_longest_px(
             map_settings.layers(), extent, map_crs, max_dim
         )
-
-    out_w, out_h = _aspect_dims(extent, longest, align, max_dim)
+        out_w, out_h = _aspect_dims(extent, longest, align, max_dim)
     adjusted_extent = _adjust_extent_to_aspect(extent, out_w, out_h)
 
     settings = _clone_map_settings(map_settings)
     settings.setExtent(adjusted_extent)
     settings.setOutputSize(QSize(out_w, out_h))
-
-    xyz_warning = _warn_if_xyz_capped(
-        map_settings.layers(), adjusted_extent, map_crs, out_w
-    )
 
     return ExportPrep(
         settings=settings,
@@ -233,7 +203,6 @@ def prepare_export(
         actual_extent=settings.visibleExtent(),
         background_color=map_settings.backgroundColor(),
         map_crs=map_crs,
-        xyz_cap_warning=xyz_warning,
     )
 
 
@@ -312,6 +281,40 @@ def _aspect_dims(
 
     out_w = max(align, (out_w // align) * align)
     out_h = max(align, (out_h // align) * align)
+    out_w = min(max_dim, out_w)
+    out_h = min(max_dim, out_h)
+    return out_w, out_h
+
+
+# A little more than the model's output budget so the input never ends up
+# smaller than the output (which would make the model upscale) after aspect
+# skew and pixel alignment. 1.2x linear ~= 1.44x area; still a small upload.
+_INPUT_BUDGET_HEADROOM = 1.2
+
+
+def _budget_dims(
+    extent: QgsRectangle, ref: int, align: int, max_dim: int
+) -> tuple[int, int]:
+    """Derive (out_w, out_h) targeting ~``ref``^2 total pixels (the model's
+    output budget for the tier), aspect-preserved, so the input matches the
+    output instead of undershooting it on non-square zones.
+
+    A small headroom keeps the input >= the output; the long side is capped at
+    ``max_dim`` proportionally so the aspect is preserved even when clamped.
+    """
+    ext_ratio = extent.width() / extent.height()
+    budget = (float(ref) * _INPUT_BUDGET_HEADROOM) ** 2
+    out_h = (budget / ext_ratio) ** 0.5
+    out_w = out_h * ext_ratio
+
+    longest = max(out_w, out_h)
+    if longest > max_dim:
+        scale = max_dim / longest
+        out_w *= scale
+        out_h *= scale
+
+    out_w = max(align, int(round(out_w / align)) * align)
+    out_h = max(align, int(round(out_h / align)) * align)
     out_w = min(max_dim, out_w)
     out_h = min(max_dim, out_h)
     return out_w, out_h
@@ -630,39 +633,3 @@ def _zone_dims_meters(
         return (width_m, height_m)
     except Exception:
         return (None, None)
-
-
-def _warn_if_xyz_capped(
-    layers, zone_extent: QgsRectangle, map_crs, out_w: int
-) -> str | None:
-    """Returns a localized message when an XYZ layer's zmax forces softer output."""
-    zw_m, _ = _zone_dims_meters(zone_extent, map_crs)
-    if not zw_m or out_w <= 0:
-        return None
-    requested_mpp = zw_m / out_w
-    if requested_mpp <= 0:
-        return None
-
-    for layer in layers or []:
-        if layer is None or layer.type() != QgsMapLayer.LayerType.RasterLayer:
-            continue
-        if "type=xyz" not in (layer.source() or "").lower():
-            continue
-        zmax = _xyz_zmax(layer)
-        if zmax is None:
-            continue
-        actual_mpp = _webmerc_mpp_at_lat(zone_extent, map_crs, zmax)
-        if actual_mpp is None or actual_mpp <= requested_mpp * _CAPPED_WARN_RATIO:
-            continue
-        loss = max(0.0, 1.0 - requested_mpp / actual_mpp)
-        log_warning(
-            f"Layer '{layer.name()}' is capped at zoom {zmax}; "
-            f"output will be ~{int(loss * 100)}% softer than the selection allows. "
-            "Re-add this XYZ layer with a higher zmax for full resolution."
-        )
-        return tr(
-            "Basemap '{name}' is capped at zoom {z}. Output will be ~{loss}% softer "
-            "than the selection allows. Re-add the XYZ layer with a higher zmax for "
-            "full resolution."
-        ).format(name=layer.name(), z=zmax, loss=int(loss * 100))
-    return None

@@ -1528,9 +1528,12 @@ class AIEditPlugin:
 
         try:
             map_settings = self._canvas.mapSettings()
-            target_res = suggested_res if not self._dock_widget._is_free_tier else None
+            # Always export the input at the chosen resolution (1K/2K/4K). The
+            # model only ever works at those sizes, so sending the full native
+            # zone is pointless: a big Google Satellite selection would balloon
+            # into tens of MB, stall the upload, and gain nothing.
             prep = prepare_export(
-                map_settings, self._selected_extent, target_resolution=target_res,
+                map_settings, self._selected_extent, target_resolution=suggested_res,
             )
         except Exception as e:
             self._dock_widget.set_generating(False)
@@ -1538,9 +1541,6 @@ class AIEditPlugin:
                 tr("Export error: {error}").format(error=e), is_error=True
             )
             return
-
-        if getattr(prep, "xyz_cap_warning", None):
-            self._dock_widget.set_status(prep.xyz_cap_warning, is_error=False)
 
         # Hand off everything the export-completed callback needs.
         self._pending_generation = {
