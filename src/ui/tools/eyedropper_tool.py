@@ -45,7 +45,7 @@ class EyedropperMapTool(QgsMapTool):
     def canvasReleaseEvent(self, event):  # noqa: N802 (Qt naming)
         if event.button() != QtC.LeftButton:
             return
-        map_point: QgsPointXY = self.toMapCoordinates(event.pos())
+        map_point: QgsPointXY = self.toMapCoordinates(QtC.event_pos(event))
         color = self._sample_color(map_point)
         # Restore the previous tool BEFORE firing the callback so the
         # panel re-renders against a stable canvas state.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import tempfile
 import time
 import unicodedata
@@ -45,6 +46,47 @@ def _detect_image_format(data: bytes) -> str | None:
     return None
 
 
+def _ascii_safe_dir(directory: str) -> str:
+    """Return a directory path both GDAL (write) and the QGIS GDAL provider
+    (read-back) accept on Windows.
+
+    Accented Windows usernames put non-ASCII characters in the output path.
+    GDAL writes the GeoTIFF without error, but the QGIS raster provider then
+    loads it as an invalid layer ("Failed to create valid raster layer").
+    Converting the directory to its 8.3 short name yields a pure-ASCII path
+    both accept. No-op on non-Windows, on already-ASCII paths, or when
+    conversion is unavailable. The directory must already exist.
+    """
+    if os.name != "nt" or directory.isascii():
+        return directory
+
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        get_short = ctypes.windll.kernel32.GetShortPathNameW
+        get_short.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+        get_short.restype = wintypes.DWORD
+        buf = ctypes.create_unicode_buffer(4096)
+        n = get_short(directory, buf, len(buf))
+        if 0 < n < len(buf) and buf.value.isascii():
+            return buf.value
+    except Exception as e:  # noqa: BLE001 - Windows-only, never block a write
+        log_warning(f"short-path conversion failed: {e}")
+
+    # 8.3 short names are disabled on this volume. C:\\Users\\Public is ASCII
+    # and writable by every user; fall back to it so the layer still loads.
+    public = os.environ.get("PUBLIC")
+    if public and public.isascii():
+        safe = os.path.join(public, "terralab_ai_edit")
+        try:
+            os.makedirs(safe, exist_ok=True)
+            return safe
+        except OSError:
+            pass
+    return directory
+
+
 def write_geotiff(
     image_data: bytes,
     extent_dict: dict,
@@ -63,17 +105,22 @@ def write_geotiff(
     # Fall back to tempdir if user's output_dir is read-only so a hostile
     # folder doesn't lose the paid generation.
     primary_generation_dir = os.path.join(output_dir, generation_folder_name)
-    primary_path = os.path.join(primary_generation_dir, filename)
     try:
         os.makedirs(primary_generation_dir, exist_ok=True)
-        output_path = primary_path
+        resolved_dir = primary_generation_dir
     except OSError as e:
         log_warning(f"output_dir not writable ({e}); using tempdir fallback")
-        fallback_dir = os.path.join(
+        resolved_dir = os.path.join(
             tempfile.gettempdir(), "terralab_ai_edit", generation_folder_name
         )
-        os.makedirs(fallback_dir, exist_ok=True)
-        output_path = os.path.join(fallback_dir, filename)
+        os.makedirs(resolved_dir, exist_ok=True)
+
+    # Reroute through an ASCII-safe path: a non-ASCII directory (accented
+    # Windows username) writes fine via GDAL but loads back as an invalid
+    # QGIS layer. The directory exists by now, so 8.3 short names resolve.
+    resolved_dir = _ascii_safe_dir(resolved_dir)
+    primary_path = os.path.join(resolved_dir, filename)
+    output_path = primary_path
 
     xmin = extent_dict["xmin"]
     ymin = extent_dict["ymin"]
@@ -122,6 +169,18 @@ def write_geotiff(
                 tr("Failed to open downloaded {fmt} image with GDAL").format(fmt=img_format)
             )
 
+        # Flat-color "semantic" maps (e.g. "2 colors in flat tints") usually
+        # come back as palette (PNG-8) images: GDAL opens them as a single
+        # indexed band. Writing that band as-is loses the true RGB colors,
+        # leaving a 1-band raster that displays wrong and can't be vectorized
+        # by color (the Vectorize panel needs >=3 bands). Expand the palette
+        # to real RGB so the output is always a 3-band color raster.
+        if src_ds.RasterCount == 1 and src_ds.GetRasterBand(1).GetColorTable() is not None:
+            log_debug("GeoTIFF: expanding palette image to RGB")
+            expanded = gdal.Translate("", src_ds, format="MEM", rgbExpand="rgb")
+            if expanded is not None:
+                src_ds = expanded
+
         recv_w = src_ds.RasterXSize
         recv_h = src_ds.RasterYSize
         src_bands = src_ds.RasterCount
@@ -149,7 +208,7 @@ def write_geotiff(
                 tempfile.gettempdir(), "terralab_ai_edit", generation_folder_name
             )
             os.makedirs(fallback_dir, exist_ok=True)
-            output_path = os.path.join(fallback_dir, filename)
+            output_path = os.path.join(_ascii_safe_dir(fallback_dir), filename)
             dst_ds = driver.Create(
                 output_path, recv_w, recv_h, bands, gdal.GDT_Byte
             )
@@ -202,6 +261,14 @@ def write_geotiff(
         src_ds = None
     finally:
         gdal.Unlink(vsimem_path)
+
+    # GDAL can return a dataset and still leave no file on disk (silent driver
+    # failure). Catch it here so the user gets a clear write error instead of a
+    # confusing "invalid layer" later.
+    if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+        raise RuntimeError(
+            tr("GeoTIFF write produced no file at {path}").format(path=output_path)
+        )
 
     # STAC-style sidecar mirrors the TIFF tags for tools that ignore GDAL metadata.
     try:
@@ -272,6 +339,34 @@ def _build_layer_name(prompt: str) -> str:
     return humanized or "AI Edit result"
 
 
+def _reload_from_ascii_copy(src_path: str, display_name: str) -> QgsRasterLayer | None:
+    """Last-ditch recovery when a GeoTIFF loads as an invalid layer.
+
+    Copies the file to an ASCII-safe temp path under a plain ASCII filename and
+    retries the load. This rescues files written to an accented directory
+    (older builds, or volumes where 8.3 short names are disabled), where the
+    QGIS GDAL provider refuses the original path.
+    """
+    try:
+        base = os.path.join(tempfile.gettempdir(), "terralab_ai_edit")
+        os.makedirs(base, exist_ok=True)
+        safe_dir = _ascii_safe_dir(base)
+        # Keep the original (ASCII, _slugify-guaranteed) name so two recoveries
+        # don't collide; only synthesize one if the basename isn't ASCII.
+        name = os.path.basename(src_path)
+        if not name.isascii():
+            name = f"ai_edit_{int(time.time())}.tif"
+        safe_path = os.path.join(safe_dir, name)
+        shutil.copyfile(src_path, safe_path)
+        layer = QgsRasterLayer(safe_path, display_name)
+        if layer.isValid():
+            log_warning("raster recovered via ASCII-safe copy after invalid path")
+            return layer
+    except Exception as e:  # noqa: BLE001 - best-effort recovery
+        log_warning(f"ASCII-safe reload failed: {e}")
+    return None
+
+
 def add_geotiff_to_project(
     geotiff_path: str,
     prompt: str = "",
@@ -299,9 +394,12 @@ def add_geotiff_to_project(
 
     layer = QgsRasterLayer(source_path, display_name)
     if not layer.isValid():
-        raise RuntimeError(
-            tr("Failed to create valid raster layer from {path}").format(path=geotiff_path)
-        )
+        layer = _reload_from_ascii_copy(geotiff_path, display_name)
+    if layer is None or not layer.isValid():
+        exists = os.path.exists(geotiff_path)
+        size = os.path.getsize(geotiff_path) if exists else -1
+        msg = tr("Failed to create valid raster layer from {path}").format(path=geotiff_path)
+        raise RuntimeError(f"{msg} (exists={exists}, size={size} bytes)")
 
     _apply_default_raster_style(layer)
 
