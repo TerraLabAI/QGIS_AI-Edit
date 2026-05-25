@@ -1512,8 +1512,13 @@ class AIEditDockWidget(QDockWidget):
         # button stays in sync when the user starts a new project or opens a
         # different one - those transitions replace the layerTreeRoot, which
         # invalidates any visibilityChanged binding made before.
-        QgsProject.instance().layersAdded.connect(self._update_layer_warning)
-        QgsProject.instance().layersRemoved.connect(self._update_layer_warning)
+        # layersAdded/layersRemoved fire before QGIS finishes syncing the layer
+        # tree, so the new node is not yet in layerTreeRoot().findLayers() when a
+        # synchronous handler runs. Defer the gate re-check by one event loop tick
+        # (same pattern as _on_project_loaded) so adding the first basemap on a
+        # fresh session actually enables the Launch button.
+        QgsProject.instance().layersAdded.connect(self._schedule_layer_warning_update)
+        QgsProject.instance().layersRemoved.connect(self._schedule_layer_warning_update)
         QgsProject.instance().layerTreeRoot().visibilityChanged.connect(
             self._update_layer_warning
         )
@@ -2381,6 +2386,16 @@ class AIEditDockWidget(QDockWidget):
 
     # --- Private methods ---
 
+    def _schedule_layer_warning_update(self, *_args):
+        """Re-check the Launch gate after the layer tree has settled.
+
+        Connected to ``layersAdded`` / ``layersRemoved``, which fire mid-sync:
+        the layer tree node for the new layer is not yet present in
+        ``layerTreeRoot().findLayers()`` at emit time. Deferring by one event
+        loop tick lets QGIS finish wiring the node before we evaluate visibility.
+        """
+        QTimer.singleShot(0, self._update_layer_warning)
+
     def _update_layer_warning(self, *_args):
         """Show/hide the 'no visible layer' notice and lock the Launch button
         until at least one layer is actually checked in the legend.
@@ -3102,11 +3117,11 @@ class AIEditDockWidget(QDockWidget):
     def cleanup(self):
         """Called once from plugin.unload() before the dock is removed."""
         try:
-            QgsProject.instance().layersAdded.disconnect(self._update_layer_warning)
+            QgsProject.instance().layersAdded.disconnect(self._schedule_layer_warning_update)
         except (TypeError, RuntimeError):
             pass
         try:
-            QgsProject.instance().layersRemoved.disconnect(self._update_layer_warning)
+            QgsProject.instance().layersRemoved.disconnect(self._schedule_layer_warning_update)
         except (TypeError, RuntimeError):
             pass
         try:

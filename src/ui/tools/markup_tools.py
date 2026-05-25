@@ -36,7 +36,7 @@ from qgis.PyQt.QtGui import QColor, QKeySequence
 
 from ...core import qt_compat as QtC
 from ...core.logger import log_debug
-from ..layer_groups import MARKUP_LAYER_PROPERTY, get_or_create_ai_edit_group
+from ..layer_groups import MARKUP_LAYER_PROPERTY
 
 MARKUP_LAYER_NAME = "AI Edit guidance markup"
 _MARKUP_PROPERTY = MARKUP_LAYER_PROPERTY
@@ -147,8 +147,10 @@ class MarkupLayerManager(QObject):
         # Pin at the bottom of the AI-Edit group; addMapLayer(False) blocks
         # auto-insertion at the root.
         QgsProject.instance().addMapLayer(layer, False)
-        group = get_or_create_ai_edit_group()
-        group.addLayer(layer)
+        # Markup sits at the very top of the tree, above the AI-Edit group, so
+        # its annotations always render over the generated rasters. Inside the
+        # group an opaque output layer would hide them.
+        QgsProject.instance().layerTreeRoot().insertLayer(0, layer)
         self._layer = layer
         log_debug(f"Mark up: layer created (crs={crs.authid()})")
         return layer

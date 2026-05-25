@@ -66,6 +66,9 @@ def get_or_create_ai_edit_group() -> QgsLayerTreeGroup:
             return child
     group = root.insertGroup(0, AI_EDIT_GROUP_NAME)
     group.setCustomProperty(_OWNERSHIP_PROPERTY, True)
+    # Creating the group at index 0 pushes the Mark up layer down; bounce it
+    # back to the very top so its annotations stay visible above the group.
+    pin_markup_to_top()
     return group
 
 
@@ -137,8 +140,8 @@ def promote_layer_to_own_subgroup(layer_id: str) -> QgsLayerTreeGroup | None:
 
 def add_layer_to_ai_edit_top(layer: QgsMapLayer) -> QgsLayerTreeLayer:
     """Insert ``layer`` at the top of the AI-Edit group. The Mark up
-    annotation layer lives at the bottom of the group so new outputs go
-    straight to index 0 without any pinning logic.
+    annotation layer lives at the tree root above the group (not inside it),
+    so new outputs go straight to index 0 without disturbing it.
     """
     group = get_or_create_ai_edit_group()
     return group.insertLayer(0, layer)
@@ -150,15 +153,16 @@ def add_subgroup_to_ai_edit_top(name: str) -> QgsLayerTreeGroup:
     return group.insertGroup(0, name)
 
 
-def pin_markup_to_bottom_of_ai_edit_group() -> None:
-    """Move the Mark up layer back to the last position of the AI-Edit group.
+def pin_markup_to_top() -> None:
+    """Keep the Mark up layer at the very top of the tree, above the AI-Edit
+    group, so its annotations always render over everything else.
 
-    Idempotent. Call defensively after a layer-tree mutation that might
-    have pushed a node below the Mark up layer. The Mark up layer is
-    found by ``MARKUP_LAYER_PROPERTY`` so it survives rename + reload.
+    Idempotent. The Mark up layer lives as a direct child of the tree root
+    (not inside the AI-Edit group) and is found by ``MARKUP_LAYER_PROPERTY``
+    so it survives rename + reload.
     """
-    group = get_or_create_ai_edit_group()
-    children = list(group.children())
+    root = QgsProject.instance().layerTreeRoot()
+    children = list(root.children())
     markup_node = None
     for child in children:
         if isinstance(child, QgsLayerTreeLayer):
@@ -166,14 +170,14 @@ def pin_markup_to_bottom_of_ai_edit_group() -> None:
             if layer is not None and layer.customProperty(MARKUP_LAYER_PROPERTY):
                 markup_node = child
                 break
-    if markup_node is None or children.index(markup_node) == len(children) - 1:
+    if markup_node is None or children.index(markup_node) == 0:
         return
     # Clone-then-remove keeps at least one tree reference alive at all
     # times, otherwise QgsLayerTreeRegistryBridge would wipe the layer
     # from the project (same gotcha as promote_layer_to_own_subgroup).
     clone = markup_node.clone()
-    group.addChildNode(clone)
-    group.removeChildNode(markup_node)
+    root.insertChildNode(0, clone)
+    root.removeChildNode(markup_node)
 
 
 def most_recent_ai_edit_output(
