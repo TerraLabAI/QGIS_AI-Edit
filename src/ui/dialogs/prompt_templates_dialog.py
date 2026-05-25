@@ -711,6 +711,20 @@ class _FavoriteSyncWorker(QThread):
             log_warning(f"Favorite sync failed (silent): {e}")
 
 
+# In-flight background workers, held independently of any dialog. A running
+# QThread that loses its last Python reference can be garbage-collected and
+# destroyed mid-run, which aborts the QGIS process. Keeping the worker here
+# until it emits finished lets the dialog be closed or deleted at any time
+# while the blocking fetch is still going, without crashing.
+_INFLIGHT_WORKERS: set = set()
+
+
+def _detach_worker(worker: QThread) -> None:
+    _INFLIGHT_WORKERS.add(worker)
+    worker.finished.connect(lambda: _INFLIGHT_WORKERS.discard(worker))
+    worker.finished.connect(worker.deleteLater)
+
+
 # ---------------------------------------------------------------------------
 # Dialog
 # ---------------------------------------------------------------------------
@@ -773,7 +787,6 @@ class PromptTemplatesDialog(QDialog):
         # not their empty Recent/Favorites.
         self._active_tab: str = "favorites"
         self._sync_worker: _LibrarySyncWorker | None = None
-        self._fav_workers: list[_FavoriteSyncWorker] = []
 
         # Recent pagination - rebuilt fresh every time the Recent page renders.
         self._recent_layout: QVBoxLayout | None = None
@@ -1317,23 +1330,15 @@ class PromptTemplatesDialog(QDialog):
         auth = self._auth_provider() or {}
         if not auth.get("Authorization"):
             return
-        # No parent: if the dialog closes mid-fetch, the worker keeps running to
-        # completion (POST/DELETE is read-write-safe to abandon) and self-deletes
-        # via finished -> deleteLater. Parenting to the dialog would destroy the
+        # Unparented + detached: if the dialog closes mid-fetch, the worker keeps
+        # running to completion (POST/DELETE is read-write-safe to abandon) and
+        # self-deletes via finished. Parenting to the dialog would destroy the
         # parent while the worker is still alive, which crashes on Qt6.
         worker = _FavoriteSyncWorker(
             self._client, auth, prompt, label, source_cat, now_fav, parent=None
         )
-        worker.finished.connect(lambda: self._on_fav_worker_done(worker))
-        self._fav_workers.append(worker)
+        _detach_worker(worker)
         worker.start()
-
-    def _on_fav_worker_done(self, worker: _FavoriteSyncWorker):
-        try:
-            self._fav_workers.remove(worker)
-        except ValueError:
-            pass
-        worker.deleteLater()
 
     def _reload_dynamic_pages(self, keys=("recent", "user_favorites")):
         """Rebuild the named dynamic tabs from current cache. Callers pass
@@ -1380,11 +1385,16 @@ class PromptTemplatesDialog(QDialog):
         auth = self._auth_provider() or {}
         if not auth.get("Authorization"):
             return
-        worker = _LibrarySyncWorker(self._client, auth, parent=self)
+        # Unparented + detached: the dialog can be closed or deleted while this
+        # blocking fetch is still in flight without destroying a running QThread
+        # (which aborts QGIS on Qt6). The data slots below are bound methods, so
+        # Qt drops them automatically when the dialog is destroyed and a late
+        # result never lands on a dead object.
+        worker = _LibrarySyncWorker(self._client, auth, parent=None)
         worker.history_fetched.connect(self._on_history_fetched)
         worker.favorites_fetched.connect(self._on_favorites_fetched)
         worker.failed.connect(self._on_sync_failed)
-        worker.finished.connect(lambda: self._on_sync_worker_done(worker))
+        _detach_worker(worker)
         self._sync_worker = worker
         worker.start()
 
@@ -1398,11 +1408,6 @@ class PromptTemplatesDialog(QDialog):
 
     def _on_sync_failed(self, msg: str):
         log_debug(f"Prompt library sync failed (local cache stays): {msg}")
-
-    def _on_sync_worker_done(self, worker: _LibrarySyncWorker):
-        if self._sync_worker is worker:
-            self._sync_worker = None
-        worker.deleteLater()
 
     # -- Search ----------------------------------------------------------
 
@@ -1433,13 +1438,9 @@ class PromptTemplatesDialog(QDialog):
     # -- Cleanup ---------------------------------------------------------
 
     def closeEvent(self, event):  # noqa: N802
-        # Workers run in QThreads; ask them to quit cleanly and wait. We never
-        # call terminate(): Qt docs warn it can corrupt the Python state on the
-        # target thread, which has been linked to QGIS crashes in the wild.
-        # _LibrarySyncWorker is owned by the dialog and parented - quit + wait
-        # is enough. _FavoriteSyncWorker has no parent (see _sync_favorite) so
-        # if it's still running we just let it finish in the background.
-        if self._sync_worker is not None and self._sync_worker.isRunning():
-            self._sync_worker.quit()
-            self._sync_worker.wait(2000)
+        # Do NOT block here. Background workers are unparented and detached (see
+        # _detach_worker): they finish on their own and self-delete, and their
+        # data slots are bound methods Qt drops when this dialog is destroyed, so
+        # nothing lands on a dead object. The old quit()+wait() froze the UI and
+        # did nothing useful (a run()-override QThread has no event loop to quit).
         super().closeEvent(event)

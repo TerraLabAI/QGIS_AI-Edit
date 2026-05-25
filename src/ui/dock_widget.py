@@ -1827,19 +1827,26 @@ class AIEditDockWidget(QDockWidget):
             server_catalog=self._server_catalog,
             browse_only=browse_only,
         )
-        if dlg.exec():
-            preset = dlg.get_selected_preset()
-            if (
-                preset
-                and not preset.get("from_recent")  # noqa: W503
-                and not preset.get("from_favorites")  # noqa: W503
-            ):
-                self.template_selected.emit(
-                    str(preset.get("id") or ""),
-                    str(preset.get("label") or ""),
-                )
-            return preset
-        return None
+        # deleteLater after exec so each open doesn't leak a dialog (it's
+        # parented to the main window, so Python GC alone never frees it).
+        # Safe now that the dialog's background workers are detached and never
+        # destroyed mid-run.
+        try:
+            if dlg.exec():
+                preset = dlg.get_selected_preset()
+                if (
+                    preset
+                    and not preset.get("from_recent")  # noqa: W503
+                    and not preset.get("from_favorites")  # noqa: W503
+                ):
+                    self.template_selected.emit(
+                        str(preset.get("id") or ""),
+                        str(preset.get("label") or ""),
+                    )
+                return preset
+            return None
+        finally:
+            dlg.deleteLater()
 
     # --- Public methods ---
 

@@ -132,7 +132,7 @@ class MarkupLayerManager(QObject):
         uri = (
             f"MultiLineString?crs={crs.authid()}"
             "&field=id:integer"
-            "&field=color:string(7)"
+            "&field=color:string(20)"
             "&field=shape:string(20)"
             "&field=created_at:string(25)"
             "&field=notes:string(255)"
