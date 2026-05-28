@@ -25,7 +25,7 @@ MAX_SOURCE_BYTES = 50 * 1024 * 1024  # 50 MB on disk before compression
 TARGET_LONGEST_SIDE_PX = 1024
 JPEG_QUALITY = 98
 _TMP_PREFIX = "qgis-ai-edit-refs-"
-_SUPPORTED_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"}
+_SUPPORTED_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
 
 @dataclass(frozen=True)
@@ -68,7 +68,7 @@ class ReferenceImageStore:
         ext = os.path.splitext(source_path)[1].lower()
         if ext not in _SUPPORTED_EXTS:
             raise ReferenceImageStoreError(
-                tr("Unsupported format. Use PNG, JPG, WEBP, BMP or TIFF.")
+                tr("Unsupported format. Use PNG, JPG, WEBP or BMP, or drop a QGIS layer.")
             )
 
         try:
@@ -122,6 +122,57 @@ class ReferenceImageStore:
             f"Reference image added: id={ref_id}, "
             f"src_size={src_size}, final_size={final_size}, "
             f"count={len(self._refs)}"
+        )
+        return record
+
+    def add_from_qimage(self, image: QImage, source_name: str) -> ReferenceImage:
+        """Store a pre-rendered QImage as a lossless PNG reference.
+
+        Used for QGIS-layer renders (hillshade, vector linework, contours)
+        where JPEG ringing would visibly degrade synthetic detail. Shares the
+        MAX_REFERENCES budget and the session temp dir with add().
+        """
+        if len(self._refs) >= MAX_REFERENCES:
+            raise ReferenceImageStoreError(
+                tr("Maximum {n} reference images reached").format(n=MAX_REFERENCES)
+            )
+        if image is None or image.isNull():
+            raise ReferenceImageStoreError(tr("Failed to render layer"))
+
+        longest = max(image.width(), image.height())
+        if longest > TARGET_LONGEST_SIDE_PX:
+            if image.width() >= image.height():
+                new_w = TARGET_LONGEST_SIDE_PX
+                new_h = max(1, round(image.height() * TARGET_LONGEST_SIDE_PX / image.width()))
+            else:
+                new_h = TARGET_LONGEST_SIDE_PX
+                new_w = max(1, round(image.width() * TARGET_LONGEST_SIDE_PX / image.height()))
+            image = image.scaled(
+                QSize(new_w, new_h),
+                QtC.KeepAspectRatio,
+                QtC.SmoothTransformation,
+            )
+
+        ref_id = uuid.uuid4().hex[:12]
+        dest_path = os.path.join(self._tmp_dir, f"{ref_id}.png")
+        if not image.save(dest_path, "PNG"):
+            raise ReferenceImageStoreError(tr("Failed to write rendered image"))
+
+        try:
+            final_size = os.path.getsize(dest_path)
+        except OSError:
+            final_size = 0
+
+        record = ReferenceImage(
+            id=ref_id,
+            path=dest_path,
+            source_filename=source_name,
+            size_bytes=final_size,
+        )
+        self._refs[ref_id] = record
+        log_debug(
+            f"Reference image added from render: id={ref_id}, "
+            f"final_size={final_size}, count={len(self._refs)}"
         )
         return record
 

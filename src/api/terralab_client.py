@@ -198,14 +198,20 @@ class TerraLabClient:
             timeout_ms=_get_submit_timeout_ms(resolution),
         )
 
-    def request_upload_url(self, auth: dict) -> dict:
+    def request_upload_url(self, auth: dict, image_format: str = "png") -> dict:
         """Ask the server for a presigned PUT URL to upload the input image.
+
+        ``image_format`` ('webp' | 'jpeg' | 'png') tells the server which
+        content-type and extension to sign the upload with, so the stored
+        object is labeled to match the bytes we PUT. The PUT then echoes the
+        server's ``required_headers``, keeping the content-type authoritative
+        server-side.
 
         Response shape on success:
             {"upload_token": str, "upload_url": str, "expires_at": int,
              "max_bytes": int, "required_headers": {"Content-Type": str, ...}}
         """
-        body = json.dumps({}).encode("utf-8")
+        body = json.dumps({"format": image_format}).encode("utf-8")
         return self._request(
             "POST",
             "/api/ai-edit/upload-url",

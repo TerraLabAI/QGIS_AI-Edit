@@ -6,7 +6,7 @@ import random
 import re
 import tempfile
 
-from qgis.core import QgsProject
+from qgis.core import QgsMimeDataUtils, QgsProject, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt.QtCore import (
     QPoint,
     QRectF,
@@ -60,10 +60,12 @@ from ..core.auth.activation_manager import (
     has_consent,
 )
 from ..core.i18n import tr
+from ..core.logger import log_debug, log_warning
 from ..core.prompts.loading_messages import get_phase_messages
 from ..core.prompts.prompt_presets import format_template_prompt
 from ..core.reference_image_store import ReferenceImageStore
 from .credit_ring import CreditRing
+from .dialogs.error_report_dialog import SUPPORT_EMAIL, show_error_report
 from .panel_helpers import (
     apply_swatch_style,
     build_panel_header,
@@ -98,7 +100,7 @@ TERRALAB_URL = (
     "https://terra-lab.ai/ai-edit"
     "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=dock_branding"
 )
-SUPPORT_EMAIL = "yvann.barbot@terra-lab.ai"
+# SUPPORT_EMAIL is imported from .dialogs.error_report_dialog (single source).
 
 # Design-system QSS constants. border: none kills the native frame on dark themes.
 _BTN_GREEN = (
@@ -196,15 +198,36 @@ _INSTRUCTION_BOX = (
 )
 
 
-def _picture_icon() -> QIcon:
-    """Return the 'attach reference image' glyph as a vector icon.
+def _tinted_svg_icon(filename: str, ink: QColor) -> QIcon:
+    """Render a bundled footer SVG and recolour every opaque pixel to ``ink``.
 
-    Loads the bundled SVG (resources/icons/image.svg) so QIcon's built-in
-    SVG renderer re-rasterises it crisply at whatever size the QToolButton
-    requests - matching the visual weight of the ⚙ / ? footer glyphs.
+    The gear and help glyphs are palette-text-coloured button text, so on a
+    dark theme they read as bright near-white. The SVG icons (attach image,
+    Before/after) ship with a fixed mid-grey stroke, which next to them looks
+    dim - almost transparent. Tinting them to the same palette text colour
+    (SourceIn keeps the glyph shape, swaps the colour) lines their weight up
+    with the rest and keeps them legible on light themes too.
     """
     plugin_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    return QIcon(os.path.join(plugin_root, "resources", "icons", "image.svg"))
+    path = os.path.join(plugin_root, "resources", "icons", filename)
+    # Let QIcon's SVG engine rasterise at 2x for a crisp 20px button, then
+    # recolour the pixmap IN PLACE. Copying it into a fresh QPixmap dropped
+    # the device-pixel-ratio QIcon had baked in, which shrank the glyph to a
+    # quarter of its size on Retina displays.
+    pm = QIcon(path).pixmap(QSize(40, 40))
+    p = QPainter(pm)
+    p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    p.fillRect(pm.rect(), ink)
+    p.end()
+    return QIcon(pm)
+
+
+def _picture_icon(ink: QColor) -> QIcon:
+    """'Attach reference image' glyph, tinted to ``ink`` so it matches the
+    palette-text weight of the gear / help footer glyphs instead of looking
+    washed out next to them.
+    """
+    return _tinted_svg_icon("image.svg", ink)
 
 
 def _pencil_icon(ink: QColor) -> QIcon:
@@ -240,10 +263,18 @@ def _pencil_icon(ink: QColor) -> QIcon:
 _make_section_header = make_section_header  # backward-compat alias
 
 
-_IMAGE_DROP_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"}
+_IMAGE_DROP_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+_GEODATA_DROP_EXTS = {
+    ".tif", ".tiff", ".asc", ".img", ".vrt", ".dem", ".pdf",
+    ".shp", ".gpkg", ".geojson", ".kml", ".kmz",
+}
+_URI_MIME = "application/x-vnd.qgis.qgis.uri"
+_LAYERTREE_MIME = "application/qgis.layertreemodeldata"
 
 
-def _image_paths_from_mime(mime) -> list[str]:
+def _file_paths_from_mime(mime) -> list[str]:
+    """Local file paths we can turn into a reference (plain image OR geodata).
+    Image-vs-geodata routing happens downstream in the widget."""
     if not mime.hasUrls():
         return []
     out: list[str] = []
@@ -252,9 +283,72 @@ def _image_paths_from_mime(mime) -> list[str]:
             continue
         path = url.toLocalFile()
         ext = os.path.splitext(path)[1].lower()
-        if ext in _IMAGE_DROP_EXTS:
+        if ext in _IMAGE_DROP_EXTS or ext in _GEODATA_DROP_EXTS:
             out.append(path)
     return out
+
+
+def _mime_has_droppable(mime) -> bool:
+    """Cheap predicate for dragEnter/dragMove - no layer objects built here."""
+    if _file_paths_from_mime(mime):
+        return True
+    return mime.hasFormat(_URI_MIME) or mime.hasFormat(_LAYERTREE_MIME)
+
+
+def _layers_from_mime(mime) -> list:
+    """Resolve QGIS layers dragged from the Layers panel (or a data-source
+    drag) to QgsMapLayer objects. Only called on drop."""
+    layers: list = []
+    seen: set = set()
+
+    # 1. QgsMimeDataUtils URI list: already-loaded layers via layerId,
+    #    not-yet-loaded data sources via uri/providerKey. Gate on the URI MIME
+    #    format rather than an isUriList() helper (not present on all versions).
+    if mime.hasFormat(_URI_MIME):
+        try:
+            for uri in QgsMimeDataUtils.decodeUriList(mime):
+                lid = getattr(uri, "layerId", "") or ""
+                if lid:
+                    lyr = QgsProject.instance().mapLayer(lid)
+                    if lyr is not None:
+                        if id(lyr) not in seen:
+                            layers.append(lyr)
+                            seen.add(id(lyr))
+                        continue
+                provider = getattr(uri, "providerKey", "") or "ogr"
+                name = getattr(uri, "name", "") or "ref"
+                if getattr(uri, "layerType", "") == "raster":
+                    lyr = QgsRasterLayer(uri.uri, name, provider)
+                else:
+                    lyr = QgsVectorLayer(uri.uri, name, provider)
+                if lyr.isValid() and id(lyr) not in seen:
+                    layers.append(lyr)
+                    seen.add(id(lyr))
+        except Exception as err:  # nosec B110
+            log_warning(f"URI-list layer decode failed: {err}")
+
+    if layers:
+        return layers
+
+    # 2. Layer-tree-model MIME: parse layer ids, look up in the project.
+    if mime.hasFormat(_LAYERTREE_MIME):
+        try:
+            from qgis.PyQt.QtXml import QDomDocument
+            doc = QDomDocument()
+            doc.setContent(bytes(mime.data(_LAYERTREE_MIME)))
+            nodes = doc.elementsByTagName("layer-tree-layer")
+            for i in range(nodes.count()):
+                lid = nodes.at(i).toElement().attribute("id", "")
+                if not lid:
+                    continue
+                lyr = QgsProject.instance().mapLayer(lid)
+                if lyr is not None and id(lyr) not in seen:
+                    layers.append(lyr)
+                    seen.add(id(lyr))
+        except Exception as err:  # nosec B110
+            log_warning(f"Layer-tree MIME decode failed: {err}")
+
+    return layers
 
 
 class _FooterIconButton(QToolButton):
@@ -343,7 +437,7 @@ class _SubmitTextEdit(QTextEdit):
     """Borderless QTextEdit used inside _PromptContainer.
 
     - Enter submits, Shift+Enter inserts newline.
-    - Image file paths in the clipboard or raw image data (e.g. a screenshot
+    - Image or geodata file paths in the clipboard or raw image data (e.g. a screenshot
       copied from Preview) are routed to the references store via
       ``images_pasted`` instead of being inserted as an emoji-doc icon.
     - Drag-drop is delegated to the parent container by disabling
@@ -398,12 +492,12 @@ class _SubmitTextEdit(QTextEdit):
         super().keyPressEvent(event)
 
     def canInsertFromMimeData(self, source):  # noqa: N802
-        if source.hasImage() or _image_paths_from_mime(source):
+        if source.hasImage() or _file_paths_from_mime(source):
             return False
         return super().canInsertFromMimeData(source)
 
     def insertFromMimeData(self, source):  # noqa: N802
-        paths = _image_paths_from_mime(source)
+        paths = _file_paths_from_mime(source)
         if paths:
             self.images_pasted.emit(paths)
             return
@@ -528,6 +622,7 @@ class _PromptContainer(QFrame):
     """
 
     files_dropped = pyqtSignal(list)
+    layers_dropped = pyqtSignal(list)
     attach_clicked = pyqtSignal()
     templates_clicked = pyqtSignal()
     resolution_changed = pyqtSignal(str)
@@ -651,7 +746,7 @@ class _PromptContainer(QFrame):
         footer_row.addWidget(self._markup_chip)
 
         self._attach_btn = QToolButton(self)
-        self._attach_btn.setIcon(_picture_icon())
+        self._attach_btn.setIcon(_picture_icon(ink))
         self._attach_btn.setIconSize(QSize(20, 20))
         self._attach_btn.setToolTip(tr("Add reference image"))
         self._attach_btn.setCursor(QtC.PointingHandCursor)
@@ -770,26 +865,47 @@ class _PromptContainer(QFrame):
     def dragEnterEvent(self, event):  # noqa: N802
         if self._readonly:
             return
-        if _image_paths_from_mime(event.mimeData()):
-            event.acceptProposedAction()
+        mime = event.mimeData()
+        if _mime_has_droppable(mime):
+            # Force Copy: a Layers-panel drag proposes MoveAction, which makes
+            # QGIS remove the layer from the tree once we accept. We only want a
+            # copy as a reference, never to move the user's layer.
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
             self._set_glow(True)
+        else:
+            # Diagnostic for drags we reject (e.g. some Finder file types):
+            # surface the MIME formats and URLs so we can see what arrived.
+            urls = [u.toString() for u in mime.urls()] if mime.hasUrls() else []
+            log_debug(f"Drag rejected: formats={list(mime.formats())} urls={urls}")
 
     def dragMoveEvent(self, event):  # noqa: N802
         if self._readonly:
             return
-        if _image_paths_from_mime(event.mimeData()):
-            event.acceptProposedAction()
+        if _mime_has_droppable(event.mimeData()):
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
 
     def dragLeaveEvent(self, event):  # noqa: N802
         self._set_glow(False)
         event.accept()
 
     def dropEvent(self, event):  # noqa: N802
-        paths = _image_paths_from_mime(event.mimeData())
         self._set_glow(False)
-        if paths and not self._readonly:
+        if self._readonly:
+            event.ignore()
+            return
+        mime = event.mimeData()
+        paths = _file_paths_from_mime(mime)
+        layers = _layers_from_mime(mime)
+        if paths:
             self.files_dropped.emit(paths)
-            event.acceptProposedAction()
+        if layers:
+            self.layers_dropped.emit(layers)
+        if paths or layers:
+            # Copy, not move - never let the source remove the user's layer.
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
             return
         event.ignore()
 
@@ -887,6 +1003,9 @@ class AIEditDockWidget(QDockWidget):
         layout = QVBoxLayout(main_widget)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
+
+        # --- Update notification (hidden until a newer version is published) ---
+        self._setup_update_notification(layout)
 
         # --- Activation section ---
         self._activation_widget = self._build_activation_section()
@@ -999,6 +1118,7 @@ class AIEditDockWidget(QDockWidget):
             # Forward container actions: drop on container + paste in textbox +
             # paperclip click all funnel into the reference widget.
             self._prompt_container.files_dropped.connect(self._reference_widget.add_paths)
+            self._prompt_container.layers_dropped.connect(self._reference_widget.add_layers)
             self._prompt_container.attach_clicked.connect(
                 self._reference_widget.open_file_picker
             )
@@ -1169,6 +1289,9 @@ class AIEditDockWidget(QDockWidget):
         if self._reference_widget is not None:
             self._result_prompt_container.files_dropped.connect(
                 self._reference_widget.add_paths
+            )
+            self._result_prompt_container.layers_dropped.connect(
+                self._reference_widget.add_layers
             )
             self._result_prompt_container.attach_clicked.connect(
                 self._reference_widget.open_file_picker
@@ -1462,6 +1585,7 @@ class AIEditDockWidget(QDockWidget):
         help_menu.addAction(tr("Tutorial"), self._on_open_tutorial)
         help_menu.addAction(tr("Shortcuts"), self._on_show_shortcuts)
         help_menu.addAction(tr("Contact us"), self._on_contact_us)
+        help_menu.addAction(tr("Report a problem"), self._on_report_problem)
         self._help_btn.setMenu(help_menu)
         # Force the hover tint off when the popup closes - Qt does not
         # synthesise a Leave event in this case. Also light the green
@@ -1709,6 +1833,73 @@ class AIEditDockWidget(QDockWidget):
         super().resizeEvent(event)
         self._apply_credits_visibility()
 
+    def _setup_update_notification(self, parent_layout: QVBoxLayout) -> None:
+        """Build the 'update available' banner, hidden until check_for_updates finds one.
+
+        Inserted at the top of the dock as a sibling of the activation and main
+        sections so it stays visible even while ``_main_widget`` is hidden
+        (unactivated state, tool panels), which is exactly when a first-run user
+        should still see the prompt to upgrade.
+        """
+        # Container only exists to right-align the badge.
+        self._update_notif_container = QWidget()
+        container_layout = QHBoxLayout(self._update_notif_container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
+        container_layout.addStretch()
+
+        self._update_notification_label = QLabel("")
+        self._update_notification_label.setStyleSheet(
+            "background-color: rgba(25, 118, 210, 0.15); "
+            "border: 2px solid rgba(25, 118, 210, 0.4); border-radius: 6px; "
+            "padding: 6px 12px; font-size: 12px; font-weight: bold; color: palette(text);"
+        )
+        self._update_notification_label.setOpenExternalLinks(False)
+        self._update_notification_label.linkActivated.connect(self._on_open_plugin_manager)
+        container_layout.addWidget(self._update_notification_label)
+
+        self._update_notif_container.setVisible(False)
+        parent_layout.insertWidget(0, self._update_notif_container)
+
+    def check_for_updates(self) -> bool:
+        """Show the update banner if QGIS reports a newer plugin version.
+
+        Reads QGIS's cached plugin-repository metadata (the plugin itself makes
+        no network call). Returns True once a newer version is detected so the
+        caller can stop polling.
+        """
+        try:
+            from pyplugin_installer.installer_data import plugins
+
+            # The pyplugin_installer key is the installed plugin's folder name,
+            # which equals this package's root directory name. In a dev install
+            # the folder name differs from the published id, so no banner shows.
+            plugin_id = os.path.basename(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            )
+            plugin_data = plugins.all().get(plugin_id)
+            if plugin_data and plugin_data.get("status") == "upgradeable":
+                available_version = plugin_data.get("version_available", "?")
+                text = '{} <a href="#update" style="color: #1976d2; font-weight: bold;">{}</a>'.format(
+                    tr("New version available: v{version}").format(version=available_version),
+                    tr("Update now"),
+                )
+                self._update_notification_label.setText(text)
+                self._update_notif_container.setVisible(True)
+                return True
+        except Exception:
+            pass  # nosec B110  No repo metadata yet, dev install, etc.
+        return False
+
+    def _on_open_plugin_manager(self, _link: str = "") -> None:
+        """Open QGIS's Plugin Manager on the Upgradeable tab (index 3)."""
+        try:
+            from qgis.utils import iface
+
+            iface.pluginManagerInterface().showPluginManager(3)
+        except Exception:
+            pass  # nosec B110
+
     def _build_warning_widget(self) -> QWidget:
         """Build yellow warning widget for when no layers are available."""
         widget = QWidget()
@@ -1866,8 +2057,12 @@ class AIEditDockWidget(QDockWidget):
         self._activation_widget.setVisible(not activated)
         self._main_widget.setVisible(activated)
         self._settings_btn.setVisible(activated)
+        # Vectorize + Before/after both work on any existing AI-Edit raster
+        # (not just a fresh result), so they are revealed the moment the dock
+        # is activated. Their per-click eligibility is gated by the active
+        # layer (set_swipe_button_enabled, vectorize_btn enable refresh).
         self._vectorize_btn.setVisible(activated)
-        self._swipe_btn.setVisible(activated)
+        self._set_swipe_button_visible(activated)
         if activated:
             self.hide_trial_info()
             self._update_layer_warning()
@@ -2750,15 +2945,16 @@ class AIEditDockWidget(QDockWidget):
 
     def _make_polygon_glyph_icon(self) -> QIcon:
         """Footer Vectorize button glyph - same square-in-square shape as the
-        Prompt Library 'Segment' tab (Unicode ▣), drawn in black so it reads
-        clearly on the footer regardless of theme.
+        Prompt Library 'Segment' tab (Unicode ▣). Painted in the palette text
+        colour (like the pencil chip) so it stays legible on dark themes and
+        Windows instead of rendering as an invisible black-on-black square.
         """
         size = 40  # 2x for crisp rendering at 20px
         pm = QPixmap(size, size)
         pm.fill(Qt.GlobalColor.transparent)
         p = QPainter(pm)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        ink = QColor("#000000")
+        ink = self.palette().color(QPalette.ColorRole.WindowText)
         pen = QPen(ink)
         pen.setWidthF(2.4)
         pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
@@ -2774,12 +2970,12 @@ class AIEditDockWidget(QDockWidget):
         return QIcon(pm)
 
     def _make_swipe_glyph_icon(self) -> QIcon:
-        """Footer Before/after glyph - loads the bundled swipe.svg so the
-        stroke renders crisply at any DPI and matches the visual weight of
-        the other footer icons (image.svg, gear, question mark).
+        """Footer Before/after glyph - swipe.svg tinted to the palette text
+        colour so it carries the same weight as the gear / help glyphs rather
+        than looking dim and half-transparent on a dark theme.
         """
-        plugin_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        return QIcon(os.path.join(plugin_root, "resources", "icons", "swipe.svg"))
+        ink = self.palette().color(QPalette.ColorRole.WindowText)
+        return _tinted_svg_icon("swipe.svg", ink)
 
     # Public API consumed by the plugin layer ---------------------------
 
@@ -2860,6 +3056,20 @@ class AIEditDockWidget(QDockWidget):
         the Account Settings dialog is open.
         """
         self._settings_btn.set_active(active)
+
+    def _set_swipe_button_visible(self, visible: bool) -> None:
+        """Show or hide the Before/after footer button.
+
+        Mirrors the Vectorize visibility rule: revealed whenever the dock is
+        activated, hidden otherwise. The button operates on whichever AI-Edit
+        raster the user has active in the QGIS Layers panel, not just on a
+        fresh generation - per-click eligibility (greyed-out vs clickable)
+        is driven separately by set_swipe_button_enabled.
+
+        The ``and self._activated`` guard is a safety net: it keeps the button
+        hidden if a caller fires this before set_activated has run.
+        """
+        self._swipe_btn.setVisible(visible and self._activated)
 
     def set_markup_annotation_count(self, count: int) -> None:
         self._markup_panel.set_annotation_count(count)
@@ -2955,6 +3165,10 @@ class AIEditDockWidget(QDockWidget):
         lay.addWidget(call_btn)
 
         dlg.exec()
+
+    def _on_report_problem(self, _link=None):
+        """User-initiated report: copy the session logs and email support."""
+        show_error_report(self._main_window_for_dialog())
 
     def _on_show_shortcuts(self, _link=None):
         from qgis.PyQt.QtWidgets import QDialog

@@ -8,7 +8,7 @@ from ..ui.canvas_exporter import ExportPrep, render_export
 
 
 class ExportWorker(QgsTask):
-    completed = pyqtSignal(str, int, int, object, int)  # b64, out_w, out_h, extent, bytes
+    completed = pyqtSignal(str, int, int, object, int, str)  # b64, out_w, out_h, extent, bytes, format
     failed = pyqtSignal(str)
 
     def __init__(self, prep: ExportPrep):
@@ -31,7 +31,7 @@ class ExportWorker(QgsTask):
         if self.isCanceled():
             return False
         try:
-            b64, size_bytes, actual_extent = render_export(self._prep)
+            b64, size_bytes, actual_extent, fmt = render_export(self._prep)
         except Exception as err:  # noqa: BLE001
             self._failure = str(err)
             return False
@@ -43,6 +43,7 @@ class ExportWorker(QgsTask):
             self._prep.out_h,
             actual_extent,
             size_bytes,
+            fmt,
         )
         return True
 

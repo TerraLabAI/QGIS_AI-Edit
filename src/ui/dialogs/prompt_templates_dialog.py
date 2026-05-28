@@ -1,8 +1,11 @@
 """Prompt Library dialog.
 
 Tab-style navigation: clicking a sidebar entry swaps the right pane.
-Tabs in order: Menu → Top Picks → Clean → Add → Style → Detect → Simulate
-→ (separator) → Favorites → Recent.
+Sidebar order: Favorites → Recent → (separator) → Top Picks → themed
+categories. The user's own lists (Favorites, Recent) sit at the top; the
+curated catalog follows. The themed categories are long (13 métiers), so only
+the first few show by default and the rest collapse behind a "show more"
+toggle. The dialog still opens on Top Picks regardless of sidebar order.
 
 Recent and Favorites sync with the server: on open the dialog renders local
 cache instantly, then fetches /api/plugin/history + /api/plugin/favorites in
@@ -25,7 +28,7 @@ except ImportError:  # pragma: no cover - defensive only
     _sip = None
 
 from qgis.PyQt.QtCore import QSize, QThread, QTimer, QUrl, pyqtSignal
-from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtGui import QIcon, QPixmap
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QFrame,
@@ -98,6 +101,50 @@ _STAR_OUTLINE_SVG = os.path.join(_ICONS_DIR, "star.svg")
 _STAR_FILLED_SVG = os.path.join(_ICONS_DIR, "star-filled.svg")
 _TROPHY_SVG = os.path.join(_ICONS_DIR, "trophy.svg")
 
+# Bundled demo assets. Each Top Picks card reads its before/after preview
+# from src/ui/demo_assets/<preset_id>/{before,after}.jpg, falling back to the
+# server-hosted URL (or a text-only card) when no local image is shipped.
+# JPEG keeps the bundle under ~900 KB for the 12 files combined.
+_DEMO_ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "demo_assets")
+
+# Curated Top Picks shown when local demo assets exist. Empty/no assets ->
+# the server's top_picks list is used as-is.
+_LOCAL_TOP_PICKS_ORDER = [
+    "detect_buildings",
+    "detect_field_parcels",
+    "simulate_flood_extent",
+    "enhance_aerial",
+    "detect_landcover_simple",
+    "add_solar_panels",
+]
+
+
+def _local_demo_pixmap_paths(preset_id: str) -> tuple[str | None, str | None]:
+    """Return (before_path, after_path) under demo_assets/<id>/, or (None, None)."""
+    if not preset_id:
+        return None, None
+    folder = os.path.join(_DEMO_ASSETS_DIR, preset_id)
+    before = os.path.join(folder, "before.jpg")
+    after = os.path.join(folder, "after.jpg")
+    return (
+        before if os.path.isfile(before) else None,
+        after if os.path.isfile(after) else None,
+    )
+
+
+def _has_any_local_demo() -> bool:
+    """True when at least one preset folder lives under demo_assets/.
+    Triggers both the local Top Picks filter and the local-pixmap path on cards."""
+    if not os.path.isdir(_DEMO_ASSETS_DIR):
+        return False
+    try:
+        for name in os.listdir(_DEMO_ASSETS_DIR):
+            if os.path.isdir(os.path.join(_DEMO_ASSETS_DIR, name)):
+                return True
+    except OSError:
+        return False
+    return False
+
 
 # ---------------------------------------------------------------------------
 # QSS
@@ -113,6 +160,18 @@ _SIDEBAR_ITEM_ACTIVE = (
     "QPushButton { text-align: left; border: none; border-radius: 4px; "
     "padding: 10px 10px; font-size: 13px; font-weight: bold; "
     "color: palette(text); background: rgba(128,128,128,0.18); }"
+)
+
+# The category expander is deliberately NOT styled like a sidebar item: it sits
+# at a smaller size in muted grey with the chevron inline next to the text (no
+# icon-column glyph), so it reads as a "show more" control rather than another
+# category in the list (#128).
+_CATEGORY_TOGGLE_BTN = (
+    "QPushButton { text-align: left; border: none; border-radius: 4px; "
+    "padding: 8px 12px; font-size: 11px; color: rgba(128,128,128,0.9); "
+    "background: transparent; }"
+    "QPushButton:hover { background: rgba(128,128,128,0.10); "
+    "color: palette(text); }"
 )
 
 _SEARCH_BOX = (
@@ -162,37 +221,46 @@ _LOAD_MORE_BTN = (
     "border-color: rgba(128,128,128,0.5); }"
 )
 
-# Amber-tinted button + header used for the experimental disclosure so the
-# fragile-templates section reads as "proceed with caution" without flagging
-# every individual card.
-_EXPERIMENTAL_BTN = (
-    "QPushButton { background: rgba(255,193,7,0.10); "
-    "border: 1px solid rgba(255,152,0,0.55); border-radius: 4px; "
-    "padding: 8px 14px; font-size: 12px; color: palette(text); }"
-    "QPushButton:hover { background: rgba(255,193,7,0.18); "
-    "border-color: rgba(255,152,0,0.85); }"
-)
+# Neutral disclosure button + header for the experimental section. It used to
+# be amber/goldenrod, which read as an error or warning and undercut trust in
+# the whole library (#128). The reveal is just an "advanced" affordance, so it
+# now matches the Load-more button's calm grey; the word "experimental" carries
+# the caution on its own.
+_EXPERIMENTAL_BTN = _LOAD_MORE_BTN
 
 _EXPERIMENTAL_HEADER = (
-    "QLabel { color: #B8860B; font-size: 11px; font-weight: 600; "
+    "QLabel { color: rgba(128,128,128,0.9); font-size: 11px; font-weight: 600; "
     "background: transparent; border: none; padding: 4px 2px 0px 2px; "
     "letter-spacing: 0.5px; }"
 )
 
+# Small rounded pill marking a Favorites entry's origin (curated template vs
+# the user's own saved prompt). Matches the design-system "Category Pill".
+_ORIGIN_PILL = (
+    "QLabel { background: rgba(128,128,128,0.10); border-radius: 9px; "
+    "padding: 1px 8px; font-size: 10px; color: palette(text); }"
+)
+
 # Sidebar tab order. Themed tabs are sourced from `_CATEGORY_ORDER` so the
 # data facade and the sidebar can't drift; the dialog only owns the synthetic
-# wrapper (Top Picks, separator, Favorites, Recent). "__separator__" inserts
-# a visual divider.
+# wrapper (Favorites, Recent, separator, Top Picks). "__separator__" inserts
+# a visual divider. The user's own lists lead; the curated catalog follows.
 _TAB_ORDER = [
-    "favorites",      # Top Picks (curated)
-    *_CATEGORY_ORDER,
+    "user_favorites",   # Favorites (personal)
+    "recent",           # Recent (personal)
     "__separator__",
-    "user_favorites",
-    "recent",
+    "favorites",        # Top Picks (curated)
+    *_CATEGORY_ORDER,   # 13 themed métiers - first few shown, rest collapsed
 ]
 
 # Tabs whose count is shown as "(N)" next to the label.
 _TABS_WITH_COUNT = {"recent", "user_favorites"}
+
+# Themed category keys (the long "métiers" list). The sidebar shows only the
+# first _SIDEBAR_VISIBLE_CATEGORIES of these up front and tucks the rest behind
+# a "show more" toggle so the 13-deep list doesn't overwhelm the panel (#128).
+_CATEGORY_KEYS = set(_CATEGORY_ORDER)
+_SIDEBAR_VISIBLE_CATEGORIES = 5
 
 # Sidebar glyph: Recent + Top Picks use an SVG image, others use Unicode with a tint.
 # Mirror `prompt_presets._CATEGORY_META` so every category in _TAB_ORDER has a glyph.
@@ -233,6 +301,22 @@ def _first_sentence(text: str) -> str:
         return text
     end = m.start() + 1 if text[m.start()] == "." else m.start()
     return text[:end].rstrip()
+
+
+# Cap for the muted prompt snippet that sits permanently under each Top Picks
+# card title. Big enough for the first sentence's intent, small enough that
+# the snippet wraps to 2-3 lines max inside a 250-px card.
+_CARD_SNIPPET_MAX_CHARS = 100
+
+
+def _prompt_snippet(prompt: str) -> str:
+    """Flatten whitespace, truncate to ``_CARD_SNIPPET_MAX_CHARS`` and end
+    in an ellipsis. Used as the always-visible subtitle line under the
+    Top Picks card title - hints at what the prompt actually outputs."""
+    flat = " ".join((prompt or "").split())
+    if len(flat) <= _CARD_SNIPPET_MAX_CHARS:
+        return flat
+    return flat[:_CARD_SNIPPET_MAX_CHARS].rstrip() + "..."
 
 
 def _preset_matches(preset: dict, query: str) -> bool:
@@ -368,6 +452,18 @@ def _build_prompt_disclosure(parent, prompt_text: str) -> tuple[QToolButton, QLa
     return btn, body
 
 
+def _build_origin_pill(parent, has_template: bool) -> QLabel:
+    """Plain text pill marking a Favorites entry's origin so curated TerraLab
+    templates and the user's own saved prompts are told apart at a glance
+    (#128). Text only, no color coding - the box + word carry the meaning.
+    """
+    pill = QLabel(tr("Template") if has_template else tr("Your prompt"), parent)
+    pill.setStyleSheet(_ORIGIN_PILL)
+    # Let clicks fall through to the card so the pill never blocks selection.
+    pill.setAttribute(QtC.WA_TransparentForMouseEvents)
+    return pill
+
+
 class _ClickableCard(QFrame):
     """One preset card: title + star + optional prompt disclosure + optional date."""
 
@@ -379,25 +475,43 @@ class _ClickableCard(QFrame):
         self.setCursor(QtC.PointingHandCursor)
         self.setStyleSheet(_CARD_NORMAL)
 
+        from_favorites = bool(preset.get("from_favorites"))
+        has_template = bool(preset.get("source_category"))
+
         outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 10, 8, 10)
         outer.setSpacing(6)
+
+        # Favorites mix curated templates and the user's own prompts; a small
+        # origin pill at the top-left tells them apart (#128). Other tabs don't
+        # need it: Top Picks and themed pages are all templates, Recent shows a
+        # date.
+        if from_favorites:
+            pill_row = QHBoxLayout()
+            pill_row.setContentsMargins(0, 0, 0, 0)
+            pill_row.addWidget(_build_origin_pill(self, has_template))
+            pill_row.addStretch()
+            outer.addLayout(pill_row)
 
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
 
-        # Three rendering modes:
-        # - Named template (curated, themed, or a Favorite saved from one):
-        #   short bold label + chevron to reveal the full formatted prompt.
-        # - Recent entry: first sentence as the title + chevron for the rest -
-        #   keeps the list scannable instead of stacking walls of text.
-        # - User-typed prompt with no source: render plain wrapped body text.
-        from_recent = preset.get("from_recent")
-        has_template = bool(preset.get("source_category"))
+        # Two rendering modes:
+        # - Title card (curated/themed templates, Top Picks, and every Recent
+        #   or Favorites entry): a short title + chevron revealing the full
+        #   formatted prompt. A named template shows its label; a user-typed
+        #   prompt shows its first sentence so the list stays scannable instead
+        #   of stacking walls of run-on text. Before #128, favorited user
+        #   prompts skipped this and rendered the entire prompt with no title.
+        # - Plain body: a bare user-typed prompt with no template and no
+        #   Recent/Favorites context (fallback only).
+        title_card = bool(preset.get("from_recent")) or from_favorites or has_template
         disclosure_body: QLabel | None = None
-        if from_recent:
+        if title_card:
             disclosure_btn, disclosure_body = _build_prompt_disclosure(self, preset["prompt"])
+            # Chevron at the left edge so the revealed prompt sits directly
+            # under the affordance that opened it.
             row.addWidget(disclosure_btn, 0, QtC.AlignTop)
             title_text = (
                 _truncate(preset["label"]) if has_template
@@ -411,23 +525,12 @@ class _ClickableCard(QFrame):
                 "background: transparent; border: none;"
             )
             row.addWidget(text, 1)
-        elif not has_template:
+        else:
             text = QLabel(preset["prompt"])
             text.setWordWrap(True)
             text.setTextFormat(QtC.PlainText)
             text.setStyleSheet(
                 "color: palette(text); font-size: 12px; font-weight: 400; "
-                "background: transparent; border: none;"
-            )
-            row.addWidget(text, 1)
-        else:
-            disclosure_btn, disclosure_body = _build_prompt_disclosure(self, preset["prompt"])
-            # Chevron lives at the left edge so the revealed prompt below sits
-            # directly under the affordance that opened it.
-            row.addWidget(disclosure_btn, 0, QtC.AlignTop)
-            text = QLabel(_truncate(preset["label"]))
-            text.setStyleSheet(
-                "color: palette(text); font-size: 13px; font-weight: 600; "
                 "background: transparent; border: none;"
             )
             row.addWidget(text, 1)
@@ -486,6 +589,13 @@ class _BeforeAfterCard(QFrame):
     trigger selection - the user must click + release without dragging.
     """
 
+    # Compact grid cell dimensions used by every Top Picks card. Sized so a
+    # 3-col grid fits the default dialog content width (~880px) with breathing
+    # room, and a 2-row grid never triggers a scrollbar.
+    CARD_WIDTH = 250
+    SLIDER_WIDTH = 250
+    SLIDER_HEIGHT = 140  # ~16:9 cinematic crop
+
     def __init__(
         self,
         preset: dict,
@@ -500,9 +610,7 @@ class _BeforeAfterCard(QFrame):
         self._on_click = on_click
         self.setCursor(QtC.PointingHandCursor)
         self.setStyleSheet(_CARD_NORMAL)
-        # Fixed card width matches the slider - every Top Pick cell ends up
-        # the same size in the grid regardless of label length.
-        self.setFixedWidth(380)
+        self.setFixedWidth(self.CARD_WIDTH)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -512,32 +620,35 @@ class _BeforeAfterCard(QFrame):
         # Late import to avoid Qt initialisation order issues at module load.
         from ..before_after_slider import BeforeAfterSlider
 
-        self._slider = BeforeAfterSlider(self)
-        # Square preview - keeps the Top Picks grid visually uniform.
-        self._slider.setFixedSize(380, 380)
+        # auto_loop=False keeps the divider parked at 50/50 by default - vital
+        # when 6 cards share the page so the eye doesn't get pulled in 6
+        # different directions. Each card animates only while the cursor is
+        # over it (the slider already pauses on hover and respects drags).
+        self._slider = BeforeAfterSlider(self, auto_loop=False)
+        self._slider.setFixedSize(self.SLIDER_WIDTH, self.SLIDER_HEIGHT)
         self._slider.clicked.connect(self._emit_click)
         outer.addWidget(self._slider)
 
-        # --- footer block: label + chevron + star, plus collapsible prompt ---
+        # --- footer block: title + star, with a permanent prompt snippet ---
+        # No chevron, no popup: the prompt snippet is shown muted under the
+        # title at all times. Card height is fixed (slider + footer + snippet)
+        # so every cell in the grid is the same size; nothing ever pushes a
+        # sibling around when the user interacts with one card.
         footer_wrap = QWidget(self)
         footer_outer = QVBoxLayout(footer_wrap)
-        footer_outer.setContentsMargins(12, 10, 8, 10)
-        footer_outer.setSpacing(6)
+        footer_outer.setContentsMargins(10, 6, 8, 8)
+        footer_outer.setSpacing(4)
 
-        footer = QHBoxLayout()
-        footer.setContentsMargins(0, 0, 0, 0)
-        footer.setSpacing(8)
-
-        disclosure_btn, disclosure_body = _build_prompt_disclosure(self, preset["prompt"])
-        # Chevron on the left, before the title - same ordering as list cards.
-        footer.addWidget(disclosure_btn, 0, QtC.AlignTop)
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(6)
 
         label = QLabel(_truncate(preset["label"]))
         label.setStyleSheet(
-            "color: palette(text); font-size: 13px; font-weight: 600; "
+            "color: palette(text); font-size: 12px; font-weight: 600; "
             "background: transparent; border: none;"
         )
-        footer.addWidget(label, 1)
+        title_row.addWidget(label, 1, QtC.AlignVCenter)
 
         self._star = _StarButton(
             preset["prompt"],
@@ -545,28 +656,55 @@ class _BeforeAfterCard(QFrame):
             preset.get("source_category"),
             self,
         )
-        footer.addWidget(self._star, 0, QtC.AlignTop)
+        title_row.addWidget(self._star, 0, QtC.AlignVCenter)
+        footer_outer.addLayout(title_row)
 
-        footer_outer.addLayout(footer)
-        footer_outer.addWidget(disclosure_body)
+        # Permanent muted snippet. Word-wraps inside the 250-px card; the
+        # 100-char cap keeps it under 3 lines regardless of font metrics.
+        snippet_text = _prompt_snippet(preset.get("prompt") or "")
+        if snippet_text:
+            snippet = QLabel(snippet_text)
+            snippet.setWordWrap(True)
+            snippet.setTextFormat(QtC.PlainText)
+            snippet.setStyleSheet(
+                "color: rgba(170,170,170,0.75); font-size: 11px; "
+                "background: transparent; border: none;"
+            )
+            footer_outer.addWidget(snippet)
+
         outer.addWidget(footer_wrap)
 
         # --- demo image loading ---
-        # `demo_loader` is a TemplateDemoLoader instance shared across cards;
-        # `absolute_url` resolves a relative path like
-        # "/api/ai-edit/template-demos/<id>/before" to the full terra-lab.ai URL.
+        # Two parallel sources, tried in order so the slider ends up populated
+        # either way:
+        #   1. Local on-disk pixmaps under .demo_assets/<preset_id>/ - dev path,
+        #      lets us iterate before the server has the demo URLs seeded.
+        #   2. Server-hosted demos via `demo_loader` + `absolute_url` - prod
+        #      path; the loader caches bytes so the second open is instant.
+        self._demo_loader = None
+        tid = preset.get("id", "")
+        local_before, local_after = _local_demo_pixmap_paths(tid)
+        if local_before:
+            pm = QPixmap(local_before)
+            if not pm.isNull():
+                self._slider.set_before(pm)
+        if local_after:
+            pm = QPixmap(local_after)
+            if not pm.isNull():
+                self._slider.set_after(pm)
+
         if demo_loader is not None and absolute_url is not None:
-            tid = preset.get("id", "")
             url_before = preset.get("demo_url_before")
             url_after = preset.get("demo_url_after")
+            # Only wire the loader for sides that are NOT already covered by a
+            # local pixmap - avoids an unnecessary network fetch when devs have
+            # the asset on disk.
             self._demo_loader = demo_loader
             demo_loader.loaded.connect(self._on_demo_loaded)
-            if tid and url_before:
+            if tid and url_before and not local_before:
                 demo_loader.request(tid, "before", absolute_url(url_before))
-            if tid and url_after:
+            if tid and url_after and not local_after:
                 demo_loader.request(tid, "after", absolute_url(url_after))
-        else:
-            self._demo_loader = None
 
     def _on_demo_loaded(self, template_id: str, which: str, pixmap) -> None:
         if template_id != self._preset.get("id"):
@@ -778,6 +916,11 @@ class PromptTemplatesDialog(QDialog):
         self._selected_preset: dict | None = None
         self._categories_by_key: dict[str, dict] = {}
         self._sidebar_buttons: dict[str, _SidebarButton] = {}
+        # Collapsed themed-category sidebar buttons (beyond the visible few) and
+        # the toggle that reveals them. Populated in _build_ui.
+        self._collapsed_category_btns: list[_SidebarButton] = []
+        self._category_toggle_btn: QPushButton | None = None
+        self._categories_expanded: bool = False
         self._pages: dict[str, QWidget] = {}
         # Cards mix _ClickableCard and _BeforeAfterCard - store as generic
         # widgets keyed by the page they live on. Star refresh uses
@@ -811,6 +954,44 @@ class PromptTemplatesDialog(QDialog):
         returns empty themed shells when neither is available."""
         cats = get_all_categories(self._server_catalog)
         self._categories_by_key = {c["key"]: c for c in cats}
+        self._apply_local_top_picks_filter()
+
+    def _apply_local_top_picks_filter(self):
+        """Override Top Picks with a curated local list when .demo_assets/
+        is present. Dev-only - lets us preview the trimmed grid layout
+        before the server's top_picks list is curated. Prod (no folder) keeps
+        the server's order untouched.
+
+        Looks up presets across EVERY themed category, not just the server's
+        Top Picks list - so we can promote a preset (e.g. detect_landcover_simple)
+        that the server has not yet flagged as top_pick."""
+        if not _has_any_local_demo():
+            return
+        fav = self._categories_by_key.get("favorites")
+        if fav is None:
+            return
+        # Index every preset in every themed category by id so any local
+        # override target can be found regardless of where it lives in the
+        # server catalog.
+        by_id: dict[str, dict] = {}
+        for cat_key, cat in self._categories_by_key.items():
+            if cat_key in ("favorites", "user_favorites", "recent"):
+                continue
+            for p in cat.get("presets", []) or []:
+                pid = p.get("id")
+                if isinstance(pid, str) and pid and pid not in by_id:
+                    by_id[pid] = p
+        # Fallback: include the server's own Top Picks entries too, since
+        # those normalized presets aren't necessarily mirrored in their
+        # themed category (e.g. recent server-only experimental flagging).
+        for p in fav.get("presets", []) or []:
+            pid = p.get("id")
+            if isinstance(pid, str) and pid and pid not in by_id:
+                by_id[pid] = p
+
+        ordered = [by_id[pid] for pid in _LOCAL_TOP_PICKS_ORDER if pid in by_id]
+        if ordered:
+            fav["presets"] = ordered
 
     # -- Layout ----------------------------------------------------------
 
@@ -836,7 +1017,12 @@ class PromptTemplatesDialog(QDialog):
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(2)
+        # Kept so the category toggle can relocate to the bottom when expanded.
+        self._sidebar_layout = sidebar_layout
 
+        # Themed categories are long (13 deep); show only the first few and
+        # collapse the rest behind a toggle so the sidebar stays scannable.
+        themed_seen = 0
         for key in _TAB_ORDER:
             if key == "__separator__":
                 sep_wrap = QWidget()
@@ -857,6 +1043,22 @@ class PromptTemplatesDialog(QDialog):
             btn = self._build_sidebar_button(key, cat)
             sidebar_layout.addWidget(btn)
             self._sidebar_buttons[key] = btn
+
+            if key in _CATEGORY_KEYS:
+                themed_seen += 1
+                if themed_seen == _SIDEBAR_VISIBLE_CATEGORIES:
+                    # Insert the toggle right after the last always-visible
+                    # category; the categories added after it start hidden.
+                    self._category_toggle_btn = self._build_category_toggle()
+                    sidebar_layout.addWidget(self._category_toggle_btn)
+                elif themed_seen > _SIDEBAR_VISIBLE_CATEGORIES:
+                    btn.setVisible(False)
+                    self._collapsed_category_btns.append(btn)
+
+        # No toggle needed when there are fewer categories than the cap.
+        if self._category_toggle_btn is not None and not self._collapsed_category_btns:
+            self._category_toggle_btn.setVisible(False)
+        self._update_category_toggle_text()
 
         sidebar_layout.addStretch()
         body.addWidget(sidebar)
@@ -900,6 +1102,56 @@ class PromptTemplatesDialog(QDialog):
         btn.clicked.connect(lambda checked, k=key: self._on_sidebar_click(k))
         return btn
 
+    def _build_category_toggle(self) -> QPushButton:
+        """Expander that reveals/hides the extra themed categories. Styled as a
+        muted 'show more' control (not a _SidebarButton) so it doesn't read as
+        another category. Text is set by _update_category_toggle_text."""
+        btn = QPushButton()
+        btn.setStyleSheet(_CATEGORY_TOGGLE_BTN)
+        btn.setCursor(QtC.PointingHandCursor)
+        btn.setSizePolicy(QtC.SizePolicyExpanding, QtC.SizePolicyFixed)
+        btn.clicked.connect(self._on_toggle_categories)
+        return btn
+
+    def _update_category_toggle_text(self):
+        """Refresh the toggle chevron + label to match the expanded state. The
+        chevron sits inline with the text (not in an icon column) so the row
+        stays distinct from the category entries above it."""
+        btn = self._category_toggle_btn
+        if btn is None:
+            return
+        hidden = len(self._collapsed_category_btns)
+        if self._categories_expanded:
+            btn.setText("▴  " + tr("Show fewer categories"))
+        else:
+            btn.setText("▾  " + tr("Show {n} more categories").format(n=hidden))
+
+    def _on_toggle_categories(self):
+        """Reveal or hide the collapsed themed categories."""
+        self._categories_expanded = not self._categories_expanded
+        for btn in self._collapsed_category_btns:
+            if _is_alive(btn):
+                btn.setVisible(self._categories_expanded)
+        self._reposition_category_toggle()
+        self._update_category_toggle_text()
+
+    def _reposition_category_toggle(self):
+        """Keep the toggle next to the boundary it controls: tucked under the
+        last always-visible category when collapsed, and pushed to the very
+        bottom (under the last revealed category) once expanded."""
+        layout = getattr(self, "_sidebar_layout", None)
+        toggle = self._category_toggle_btn
+        if layout is None or toggle is None or not self._collapsed_category_btns:
+            return
+        layout.removeWidget(toggle)
+        if self._categories_expanded:
+            # Just before the trailing stretch (last layout item).
+            layout.insertWidget(layout.count() - 1, toggle)
+        else:
+            # Back above the first collapsed category.
+            idx = layout.indexOf(self._collapsed_category_btns[0])
+            layout.insertWidget(idx if idx >= 0 else layout.count() - 1, toggle)
+
     def _on_sidebar_click(self, key: str):
         """Sidebar click is an explicit "leave search" - clear the box."""
         if self._search_input.text().strip():
@@ -938,22 +1190,34 @@ class PromptTemplatesDialog(QDialog):
         category = self._categories_by_key[key]
 
         if key == "favorites":
-            # Wrap the grid in a vbox so the cards anchor at the top of the
-            # scrollable page instead of stretching to fill all the height.
+            # Minimal grid: 3-col x 2-row of compact slider cards (6 total).
+            # Each slider sits idle at 50/50 (auto_loop disabled) so the page
+            # reads as a calm launcher; the divider animates only on hover.
+            # Whole page tops out around 400px tall and fits the default
+            # 1100x720 dialog without any scrollbar.
             outer_v = QVBoxLayout(content)
-            outer_v.setContentsMargins(6, 4, 6, 10)
-            outer_v.setSpacing(0)
-            grid_host = QWidget()
-            grid = QGridLayout(grid_host)
-            grid.setContentsMargins(0, 0, 0, 0)
-            grid.setHorizontalSpacing(10)
-            grid.setVerticalSpacing(10)
-            self._populate_grid_cards(grid, category["presets"], key, columns=2)
-            if not category["presets"]:
+            outer_v.setContentsMargins(6, 4, 6, 8)
+            outer_v.setSpacing(8)
+            presets = category["presets"]
+            if not presets:
                 empty = self._build_empty_state(key)
                 if empty is not None:
-                    grid.addWidget(empty, 0, 0, 1, 2)
-            outer_v.addWidget(grid_host)
+                    outer_v.addWidget(empty)
+            else:
+                grid_host = QWidget()
+                grid = QGridLayout(grid_host)
+                grid.setContentsMargins(0, 0, 0, 0)
+                grid.setHorizontalSpacing(10)
+                grid.setVerticalSpacing(10)
+                self._populate_grid_cards(grid, presets, key, columns=3)
+                # Center the grid horizontally so it sits like a poster on the
+                # page rather than hugging the left edge of the scroll area.
+                grid_row = QHBoxLayout()
+                grid_row.setContentsMargins(0, 0, 0, 0)
+                grid_row.addStretch()
+                grid_row.addWidget(grid_host)
+                grid_row.addStretch()
+                outer_v.addLayout(grid_row)
             outer_v.addStretch()
         elif key == "recent":
             layout = QVBoxLayout(content)
@@ -1121,32 +1385,44 @@ class PromptTemplatesDialog(QDialog):
     def _populate_grid_cards(
         self, grid: QGridLayout, presets: list[dict], page_key: str, columns: int = 3
     ):
-        """Top Picks layout: square BeforeAfterCard cells in a grid.
+        """Top Picks layout: compact BeforeAfterCard cells in a 3x2 grid.
 
-        Falls back to a text card when the demo loader or client isn't wired
-        (offline / pre-auth dialog open) so the grid still renders."""
+        Renders the slider card when ANY demo source is available - either a
+        local pixmap under .demo_assets/<id>/ OR a server-hosted demo URL.
+        Falls back to a text card when neither is present so the grid still
+        renders even before any before/after asset exists."""
         for idx, preset in enumerate(presets):
             row, col = divmod(idx, columns)
-            # TEMP: preview images aren't ready yet, force the text-card path
-            # for Top Picks until the before/after assets land. Restore the
-            # _BeforeAfterCard branch below once demo URLs are wired.
-            # if self._demo_loader is not None and self._client is not None:
-            #     from ...core.prompts.prompt_presets_client import absolute_demo_url
-            #
-            #     def _abs(rel, _client=self._client):
-            #         return absolute_demo_url(_client, rel)
-            #
-            #     card = _BeforeAfterCard(
-            #         preset,
-            #         self._on_card_clicked,
-            #         demo_loader=self._demo_loader,
-            #         absolute_url=_abs,
-            #     )
-            # else:
-            card = _ClickableCard(preset, self._on_card_clicked)
-            card.star_button().toggled_state.connect(self._on_star_toggled)
+            card = self._build_top_pick_card(preset)
             grid.addWidget(card, row, col)
             self._card_widgets.append((card, page_key))
+
+    def _build_top_pick_card(self, preset: dict) -> QFrame:
+        """One Top Picks card: compact slider when a demo is available, plain
+        text card otherwise. Same fallback rules for every cell so the grid
+        stays uniform even when some prompts lack assets."""
+        tid = preset.get("id", "")
+        local_before, local_after = _local_demo_pixmap_paths(tid)
+        has_local = bool(local_before or local_after)
+        has_url = bool(preset.get("demo_url_before") or preset.get("demo_url_after"))
+        # Slider needs SOMETHING to show; without either source the rich card
+        # would render an empty placeholder, so we drop back to the text card.
+        if has_local or (has_url and self._demo_loader is not None and self._client is not None):
+            from ...core.prompts.prompt_presets_client import absolute_demo_url
+
+            def _abs(rel, _client=self._client):
+                return absolute_demo_url(_client, rel)
+
+            card = _BeforeAfterCard(
+                preset,
+                self._on_card_clicked,
+                demo_loader=self._demo_loader,
+                absolute_url=_abs,
+            )
+        else:
+            card = _ClickableCard(preset, self._on_card_clicked)
+        card.star_button().toggled_state.connect(self._on_star_toggled)
+        return card
 
     def _populate_list_cards(self, layout: QVBoxLayout, presets: list[dict], page_key: str):
         """All non-Top-Picks tabs: vertical list of plain text cards."""
@@ -1283,6 +1559,14 @@ class PromptTemplatesDialog(QDialog):
         responsibility (see _on_sidebar_click)."""
         if key not in self._pages:
             return
+        # If the target is a collapsed category, expand the section first so its
+        # highlighted button is actually visible (e.g. selected via search).
+        if (
+            not self._categories_expanded
+            and key in self._sidebar_buttons  # noqa: W503
+            and self._sidebar_buttons[key] in self._collapsed_category_btns  # noqa: W503
+        ):
+            self._on_toggle_categories()
         self._active_tab = key
         self._previous_tab = key
         self._stack.setCurrentWidget(self._pages[key])

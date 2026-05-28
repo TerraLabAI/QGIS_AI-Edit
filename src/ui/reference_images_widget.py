@@ -7,6 +7,8 @@ whenever the store is empty.
 """
 from __future__ import annotations
 
+import os
+
 from qgis.PyQt.QtCore import QSize, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QFont, QPixmap
 from qgis.PyQt.QtWidgets import (
@@ -30,8 +32,27 @@ from ..core.reference_image_store import (
     ReferenceImageStore,
     ReferenceImageStoreError,
 )
+from .layer_renderer import is_remote_layer, load_transient_layers, render_layers_to_qimage
 
 THUMB_PX = 56
+_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+# Companions a shapefile needs alongside the .shp to load. .prj is technically
+# optional (no CRS = degraded render via the fallback CRS), so we don't gate on
+# it. Keep the two mandatory ones only.
+_SHP_REQUIRED_COMPANIONS = (".shx", ".dbf")
+
+
+def _missing_shapefile_companions(shp_path: str) -> list[str]:
+    """Return the list of required companion extensions missing next to a .shp
+    file. The check is case-insensitive (Windows ships .SHX uppercase
+    sometimes); we look up either casing on disk."""
+    base, _ = os.path.splitext(shp_path)
+    missing: list[str] = []
+    for ext in _SHP_REQUIRED_COMPANIONS:
+        if not (os.path.isfile(base + ext) or os.path.isfile(base + ext.upper())):
+            missing.append(ext)
+    return missing
+
 
 _THUMB_STYLE = (
     "QFrame { background: rgba(0, 0, 0, 0.0);"
@@ -276,9 +297,14 @@ class ReferenceImagesWidget(QWidget):
         # picker to silently fail to show up on Windows.
         paths, _ = QFileDialog.getOpenFileNames(
             self.window(),
-            tr("Select reference images"),
+            tr("Select reference images or layers"),
             "",
-            tr("Images (*.png *.jpg *.jpeg *.webp *.tif *.tiff *.bmp)"),
+            tr(
+                "Supported files (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff "
+                "*.asc *.img *.vrt *.dem *.pdf *.shp *.gpkg *.geojson *.kml *.kmz)"
+            )
+            + ";;"
+            + tr("All files (*)"),
         )
         if paths:
             self._add_paths(paths)
@@ -307,6 +333,29 @@ class ReferenceImagesWidget(QWidget):
 
         self.images_changed.emit()
 
+    def add_layers(self, layers: list) -> None:
+        """Entry point for layers dragged from the QGIS Layers panel."""
+        if self._readonly:
+            return
+        added = 0
+        error_shown = False
+        for layer in layers:
+            if self._store.count() >= MAX_REFERENCES:
+                if not error_shown:
+                    self._show_temp_error(
+                        tr("Maximum {n} reference images reached").format(n=MAX_REFERENCES)
+                    )
+                    error_shown = True
+                break
+            try:
+                self._render_and_store([layer], layer.name())
+                added += 1
+            except ReferenceImageStoreError as err:
+                self._show_temp_error(str(err))
+                error_shown = True
+        if added > 0:
+            self._refresh()
+
     def _add_paths(self, paths: list[str]) -> None:
         added = 0
         error_shown = False
@@ -318,14 +367,67 @@ class ReferenceImagesWidget(QWidget):
                     )
                     error_shown = True
                 break
+            ext = os.path.splitext(path)[1].lower()
             try:
-                self._store.add(path)
+                if ext in _IMAGE_EXTS:
+                    self._store.add(path)
+                else:
+                    if ext == ".shp":
+                        missing = _missing_shapefile_companions(path)
+                        if missing:
+                            raise ReferenceImageStoreError(
+                                tr(
+                                    "Shapefile {name} is missing required "
+                                    "companion files ({missing}). Drop the "
+                                    "whole set together."
+                                ).format(
+                                    name=os.path.basename(path),
+                                    missing=", ".join(missing),
+                                )
+                            )
+                    layers = load_transient_layers(path)
+                    if not layers:
+                        raise ReferenceImageStoreError(
+                            tr("Could not load {name} as a layer").format(
+                                name=os.path.basename(path)
+                            )
+                        )
+                    self._render_and_store(layers, os.path.basename(path))
                 added += 1
             except ReferenceImageStoreError as err:
                 self._show_temp_error(str(err))
                 error_shown = True
         if added > 0:
             self._refresh()
+
+    def _render_and_store(self, layers: list, source_name: str) -> None:
+        if any(is_remote_layer(lyr) for lyr in layers):
+            raise ReferenceImageStoreError(
+                tr(
+                    "{name} is an online layer (WMS, WMTS, WFS, ArcGIS) and "
+                    "cannot be used as a reference image. Export the area to a "
+                    "file first."
+                ).format(name=source_name)
+            )
+        extent, crs = self._current_view_extent()
+        image = render_layers_to_qimage(
+            layers, fallback_extent=extent, fallback_crs=crs
+        )
+        if image is None:
+            raise ReferenceImageStoreError(
+                tr("Could not render {name}").format(name=source_name)
+            )
+        self._store.add_from_qimage(image, source_name)
+
+    def _current_view_extent(self):
+        try:
+            from qgis.utils import iface
+            canvas = iface.mapCanvas() if iface is not None else None
+            if canvas is not None:
+                return canvas.extent(), canvas.mapSettings().destinationCrs()
+        except Exception:  # nosec B110 - no canvas is a valid (no-fallback) state.
+            pass
+        return None, None
 
     def _show_temp_error(self, msg: str) -> None:
         """Emit an error that auto-clears after 4 seconds. Timer is parented

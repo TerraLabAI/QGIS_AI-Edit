@@ -163,9 +163,12 @@ class VectorizePanel(QWidget):
         layout.addWidget(self._empty_state_label)
 
         # --- Color section --------------------------------------------
-        color_group = QGroupBox(tr("Color"))
-        color_group.setStyleSheet(GROUP_BOX_QSS)
-        color_row = QHBoxLayout(color_group)
+        # Picking a colour only matters before the first run; once polygons
+        # exist the refine spinboxes re-run automatically, so this whole
+        # group is hidden on success (issue #125 follow-up).
+        self._color_group = QGroupBox(tr("Color"))
+        self._color_group.setStyleSheet(GROUP_BOX_QSS)
+        color_row = QHBoxLayout(self._color_group)
         color_row.setContentsMargins(8, 6, 8, 8)
         color_row.setSpacing(8)
         self._color_btn = QPushButton()
@@ -189,7 +192,7 @@ class VectorizePanel(QWidget):
         self._eyedropper_btn.clicked.connect(self._on_eyedropper_clicked)
         color_row.addWidget(self._eyedropper_btn)
         color_row.addStretch()
-        layout.addWidget(color_group)
+        layout.addWidget(self._color_group)
 
         # --- Refine box (hidden until first successful vectorization) ---
         # Refining only makes sense once polygons exist, so the whole group
@@ -221,13 +224,16 @@ class VectorizePanel(QWidget):
         action_row.setContentsMargins(0, 6, 0, 0)
         action_row.setSpacing(6)
 
-        exit_btn = QPushButton(tr("Done"))
-        exit_btn.setStyleSheet(_BTN_GHOST_QSS)
-        exit_btn.setCursor(QtC.PointingHandCursor)
-        exit_btn.setMinimumHeight(34)
-        exit_btn.setMinimumWidth(80)
-        exit_btn.clicked.connect(self.done_clicked.emit)
-        action_row.addWidget(exit_btn)
+        # Ghost "Done" to bail out before running. Hidden once a run
+        # succeeds: the blue run button then relabels itself to "Done", and
+        # two "Done" buttons side by side just confuse (issue #125).
+        self._exit_btn = QPushButton(tr("Done"))
+        self._exit_btn.setStyleSheet(_BTN_GHOST_QSS)
+        self._exit_btn.setCursor(QtC.PointingHandCursor)
+        self._exit_btn.setMinimumHeight(34)
+        self._exit_btn.setMinimumWidth(80)
+        self._exit_btn.clicked.connect(self.done_clicked.emit)
+        action_row.addWidget(self._exit_btn)
         action_row.addStretch()
 
         self._run_btn = QPushButton(tr("Vectorize"))
@@ -239,11 +245,10 @@ class VectorizePanel(QWidget):
         self._run_btn.clicked.connect(self._on_run_clicked)
         action_row.addWidget(self._run_btn)
         layout.addLayout(action_row)
-        layout.addStretch()
 
         # Tool description as a footer info box (mirrors the design
-        # system's blue tint pattern). Moved out of the panel header to
-        # keep the controls front-and-centre.
+        # system's blue tint pattern). Sits right under the action row -
+        # the stretch goes below it so it never floats far from the buttons.
         layout.addWidget(
             build_info_box(
                 tr(
@@ -252,6 +257,7 @@ class VectorizePanel(QWidget):
                 )
             )
         )
+        layout.addStretch()
 
         # Esc → Done (close the panel), Enter → Run. WindowShortcut so
         # Esc fires regardless of which child has focus while the panel
@@ -332,6 +338,8 @@ class VectorizePanel(QWidget):
         self._reset_refine_spinboxes()
         self._refine_group.setVisible(False)
         self._run_btn.setText(tr("Vectorize"))
+        self._exit_btn.setVisible(True)
+        self._color_group.setVisible(True)
         # LayerTreeComboBox auto-refreshes via project signals; no manual
         # repopulation needed here.
 
@@ -742,6 +750,12 @@ class VectorizePanel(QWidget):
                 self._activate_layer_in_panel(final_layer)
                 self._refine_group.setVisible(True)
                 self._run_btn.setText(tr("Done"))
+                # The blue run button is now the single "Done"; drop the
+                # redundant ghost one (issue #125).
+                self._exit_btn.setVisible(False)
+                # Colour is locked in now - refine spinboxes drive re-runs,
+                # so the swatch and "Pick on map" are dead weight. Hide them.
+                self._color_group.setVisible(False)
             telemetry.track(
                 "vectorize_completed",
                 {

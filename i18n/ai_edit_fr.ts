@@ -4,6 +4,10 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>{name} is an online layer (WMS, WMTS, WFS, ArcGIS) and cannot be used as a reference image. Export the area to a file first.</source>
+        <translation>{name} est une couche en ligne (WMS, WMTS, WFS, ArcGIS) et ne peut pas servir d'image de référence. Exportez d'abord la zone vers un fichier.</translation>
+    </message>
+    <message>
         <source>0 matches. Widen the tolerance below or pick a closer color above.</source>
         <translation>0 correspondance. Élargissez la tolérance ci-dessous ou choisissez une couleur plus proche au-dessus.</translation>
     </message>
@@ -480,6 +484,10 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Taille minimale (tamis) :</translation>
     </message>
     <message>
+        <source>New version available: v{version}</source>
+        <translation>Nouvelle version disponible : v{version}</translation>
+    </message>
+    <message>
         <source>No AI Edit output available. Generate a map first to vectorize it.</source>
         <translation>Aucune sortie AI Edit disponible. Générez d'abord une carte pour la vectoriser.</translation>
     </message>
@@ -688,6 +696,10 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Paramètres</translation>
     </message>
     <message>
+        <source>Shapefile {name} is missing required companion files ({missing}). Drop the whole set together.</source>
+        <translation>Le shapefile {name} n'a pas tous ses fichiers compagnons obligatoires ({missing}). Glissez l'ensemble du jeu en une fois.</translation>
+    </message>
+    <message>
         <source>Shortcuts</source>
         <translation>Raccourcis</translation>
     </message>
@@ -706,6 +718,22 @@ Nous serions ravis d'avoir votre retour !</translation>
     <message>
         <source>Show {n} experimental templates</source>
         <translation>Afficher {n} modèles expérimentaux</translation>
+    </message>
+    <message>
+        <source>Show {n} more categories</source>
+        <translation>Afficher {n} catégories de plus</translation>
+    </message>
+    <message>
+        <source>Show fewer categories</source>
+        <translation>Afficher moins de catégories</translation>
+    </message>
+    <message>
+        <source>Template</source>
+        <translation>Modèle</translation>
+    </message>
+    <message>
+        <source>Your prompt</source>
+        <translation>Votre prompt</translation>
     </message>
     <message>
         <source>Sign up or sign in to receive your activation key</source>
@@ -830,6 +858,10 @@ Nous serions ravis d'avoir votre retour !</translation>
     <message>
         <source>Unsupported format. Use PNG, JPG, WEBP, BMP or TIFF.</source>
         <translation>Format non supporté. Utilisez PNG, JPG, WEBP, BMP ou TIFF.</translation>
+    </message>
+    <message>
+        <source>Update now</source>
+        <translation>Mettre à jour</translation>
     </message>
     <message>
         <source>Upload session does not match your account.</source>

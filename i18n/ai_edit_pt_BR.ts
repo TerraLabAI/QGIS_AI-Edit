@@ -4,6 +4,10 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>{name} is an online layer (WMS, WMTS, WFS, ArcGIS) and cannot be used as a reference image. Export the area to a file first.</source>
+        <translation>{name} é uma camada online (WMS, WMTS, WFS, ArcGIS) e não pode ser usada como imagem de referência. Exporte a área para um arquivo primeiro.</translation>
+    </message>
+    <message>
         <source>0 matches. Widen the tolerance below or pick a closer color above.</source>
         <translation>0 correspondências. Aumente a tolerância abaixo ou escolha uma cor mais próxima acima.</translation>
     </message>
@@ -480,6 +484,10 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Tamanho mínimo (peneira):</translation>
     </message>
     <message>
+        <source>New version available: v{version}</source>
+        <translation>Nova versão disponível: v{version}</translation>
+    </message>
+    <message>
         <source>No AI Edit output available. Generate a map first to vectorize it.</source>
         <translation>Nenhuma saída do AI Edit disponível. Gere primeiro um mapa para vetorizá-lo.</translation>
     </message>
@@ -688,6 +696,10 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Configurações</translation>
     </message>
     <message>
+        <source>Shapefile {name} is missing required companion files ({missing}). Drop the whole set together.</source>
+        <translation>O shapefile {name} está sem arquivos complementares obrigatórios ({missing}). Solte o conjunto inteiro de uma vez.</translation>
+    </message>
+    <message>
         <source>Shortcuts</source>
         <translation>Atalhos</translation>
     </message>
@@ -706,6 +718,22 @@ Adoraríamos receber seu retorno!</translation>
     <message>
         <source>Show {n} experimental templates</source>
         <translation>Mostrar {n} modelos experimentais</translation>
+    </message>
+    <message>
+        <source>Show {n} more categories</source>
+        <translation>Mostrar mais {n} categorias</translation>
+    </message>
+    <message>
+        <source>Show fewer categories</source>
+        <translation>Mostrar menos categorias</translation>
+    </message>
+    <message>
+        <source>Template</source>
+        <translation>Modelo</translation>
+    </message>
+    <message>
+        <source>Your prompt</source>
+        <translation>Seu prompt</translation>
     </message>
     <message>
         <source>Sign up or sign in to receive your activation key</source>
@@ -830,6 +858,10 @@ Adoraríamos receber seu retorno!</translation>
     <message>
         <source>Unsupported format. Use PNG, JPG, WEBP, BMP or TIFF.</source>
         <translation>Formato não suportado. Use PNG, JPG, WEBP, BMP ou TIFF.</translation>
+    </message>
+    <message>
+        <source>Update now</source>
+        <translation>Atualizar agora</translation>
     </message>
     <message>
         <source>Upload session does not match your account.</source>

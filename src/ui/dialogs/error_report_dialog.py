@@ -1,6 +1,8 @@
-"""Log collector for the AI Edit plugin.
+"""Error report dialog + log collector for the AI Edit plugin.
 
-Captures QGIS log messages for diagnostics.
+Captures QGIS log messages and surfaces a "copy logs, send email" dialog so
+users report genuine failures with diagnostics attached instead of only seeing
+a red inline message.
 """
 from __future__ import annotations
 
@@ -10,6 +12,22 @@ import re
 import sys
 from collections import deque
 from datetime import datetime
+from urllib.parse import quote
+
+from qgis.PyQt.QtCore import Qt, QTimer, QUrl
+from qgis.PyQt.QtGui import QDesktopServices
+from qgis.PyQt.QtWidgets import (
+    QApplication,
+    QDialog,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+)
+
+from ...core.i18n import tr
+
+# Single source of truth for the support address. dock_widget imports it here.
+SUPPORT_EMAIL = "yvann.barbot@terra-lab.ai"
 
 _log_buffer = deque(maxlen=100)
 _log_collector_connected = False
@@ -66,8 +84,12 @@ def _get_recent_logs() -> str:
     return _anonymize_paths(logs)
 
 
-def _collect_diagnostic_info(error_message: str) -> str:
-    """Collect system diagnostic info for error reporting."""
+def _collect_diagnostic_info(error_message: str, request_id: str = "") -> str:
+    """Collect system diagnostic info for error reporting.
+
+    `request_id` is the server correlation key returned by a generation; when
+    present it is the fastest way for support to find the matching backend logs.
+    """
     lines = []
     lines.append("=== AI Edit - Error Report ===")
     lines.append("")
@@ -75,6 +97,11 @@ def _collect_diagnostic_info(error_message: str) -> str:
     if error_message:
         lines.append("--- Error ---")
         lines.append(error_message)
+        lines.append("")
+
+    if request_id:
+        lines.append("--- Request ---")
+        lines.append(f"Request ID: {request_id}")
         lines.append("")
 
     # Plugin version
@@ -122,3 +149,88 @@ def _collect_diagnostic_info(error_message: str) -> str:
     lines.append("=== End of Report ===")
     report = "\n".join(lines)
     return _anonymize_paths(report)
+
+
+class ErrorReportDialog(QDialog):
+    """Copy-logs-then-email dialog.
+
+    With an `error_message` it frames a genuine failure; without one it reads as
+    a friendly user-initiated bug report. Either way the copy button puts the
+    anonymized diagnostic bundle on the clipboard and the email button opens the
+    user's mail client addressed to support.
+    """
+
+    def __init__(self, error_message: str = "", request_id: str = "", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(tr("Report a problem"))
+        self.setModal(True)
+        self.setMinimumWidth(400)
+        self.setMaximumWidth(500)
+
+        self._error_message = error_message
+        self._diagnostic_info = _collect_diagnostic_info(error_message, request_id)
+
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        if self._error_message:
+            error_label = QLabel(self._error_message[:500])
+            error_label.setWordWrap(True)
+            error_label.setTextFormat(Qt.TextFormat.PlainText)
+            layout.addWidget(error_label)
+            help_text = "{}\n\n{}".format(
+                tr("Copy your logs with the button below and send them to our support email."),
+                tr("We'll get this fixed for you :)"),
+            )
+        else:
+            help_text = "{}\n\n{}".format(
+                tr("Something not working?"),
+                tr("Copy your logs and send them to us, we'll look into it :)"),
+            )
+
+        help_label = QLabel(help_text)
+        help_label.setWordWrap(True)
+        layout.addWidget(help_label)
+
+        self._copy_btn = QPushButton(tr("1. Copy logs"))
+        self._copy_btn.clicked.connect(self._on_copy)
+        layout.addWidget(self._copy_btn)
+
+        arrow_label = QLabel("▼")
+        arrow_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(arrow_label)
+
+        self._email_btn = QPushButton(tr("2. Send to {email}").format(email=SUPPORT_EMAIL))
+        self._email_btn.setToolTip(tr("Open email client"))
+        self._email_btn.clicked.connect(self._on_open_email)
+        layout.addWidget(self._email_btn)
+
+    def _on_copy(self):
+        QApplication.clipboard().setText(self._diagnostic_info)
+        self._copy_btn.setText(tr("Copied!"))
+        # Guard against the dialog closing before the timer fires (the C++
+        # button would be gone), which would raise inside the slot.
+        QTimer.singleShot(2000, self._restore_copy_label)
+
+    def _restore_copy_label(self):
+        try:
+            self._copy_btn.setText(tr("1. Copy logs"))
+        except RuntimeError:
+            pass
+
+    def _on_open_email(self):
+        subject = quote("AI Edit - Bug Report")
+        QDesktopServices.openUrl(QUrl(f"mailto:{SUPPORT_EMAIL}?subject={subject}"))
+
+
+def show_error_report(parent, error_message: str = "", request_id: str = "") -> None:
+    """Open the error report dialog. Never lets a UI error mask the original one."""
+    try:
+        dialog = ErrorReportDialog(error_message, request_id, parent)
+        dialog.exec()
+    except Exception:
+        pass  # nosec B110

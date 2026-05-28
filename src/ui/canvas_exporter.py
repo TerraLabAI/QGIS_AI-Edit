@@ -18,12 +18,12 @@ from qgis.core import (
     QgsUnitTypes,
 )
 from qgis.PyQt.QtCore import QBuffer, QSize
-from qgis.PyQt.QtGui import QImage, QPainter
+from qgis.PyQt.QtGui import QImage, QImageWriter, QPainter
 
 from ..core import qt_compat as QtC
 from ..core.errors import AIEditError, ErrorCode
 from ..core.i18n import tr
-from ..core.logger import log_warning
+from ..core.logger import log_debug, log_warning
 
 # Above this absolute latitude the Mercator world distortion makes
 # ground_resolution estimates unreliable and most basemaps stop. Refuse to
@@ -163,6 +163,60 @@ def _get_align() -> int | None:
     return cfg.get("align") if cfg else None
 
 
+# Input image encoding. The canvas render is photographic/satellite content;
+# encoding it lossless runs tens of MB at 4K and inflates a further ~33% as
+# base64, which slows uploads for users and runs up egress on our side. We
+# encode a high-quality lossy format instead: the input is only a reference the
+# model re-renders, so quality 90 is visually indistinguishable while ~15-25x
+# smaller. Format and quality come from server config so they stay tunable
+# without a plugin re-release; WebP is preferred (smaller than JPEG at equal
+# quality) with a JPEG fallback when the Qt WebP codec is absent (it is not
+# bundled on every platform).
+_DEFAULT_INPUT_FORMAT = "webp"
+_DEFAULT_INPUT_QUALITY = 90
+_supported_write_formats_cache: set[str] | None = None
+
+
+def _supported_write_formats() -> set[str]:
+    """Lowercased set of image formats this Qt build can write. Cached."""
+    global _supported_write_formats_cache
+    if _supported_write_formats_cache is None:
+        try:
+            _supported_write_formats_cache = {
+                bytes(f).decode("ascii", "ignore").lower()
+                for f in QImageWriter.supportedImageFormats()
+            }
+        except Exception:
+            _supported_write_formats_cache = set()
+    return _supported_write_formats_cache
+
+
+def chosen_input_format() -> tuple[str, str, int]:
+    """Pick the encode format for the canvas input as ``(qt_name, token, quality)``.
+
+    ``token`` is the wire identifier ('webp' | 'jpeg' | 'png') the server uses
+    to sign the upload with a matching content-type. Reads server config
+    ``input_format`` / ``input_quality`` with safe defaults so an older config
+    (or none) never breaks a generation. Falls back webp -> jpeg when the WebP
+    codec is unavailable in this Qt build (JPEG is always present in Qt).
+    """
+    cfg = _get_server_config() or {}
+    pref = str(cfg.get("input_format") or _DEFAULT_INPUT_FORMAT).lower()
+    try:
+        quality = int(cfg.get("input_quality") or _DEFAULT_INPUT_QUALITY)
+    except (TypeError, ValueError):
+        quality = _DEFAULT_INPUT_QUALITY
+    quality = max(1, min(100, quality))
+
+    supported = _supported_write_formats()
+    if pref == "webp" and "webp" in supported:
+        return ("WEBP", "webp", quality)
+    if pref == "png":
+        return ("PNG", "png", quality)
+    # 'jpeg'/'jpg', or 'webp' requested without the codec, or an unknown token.
+    return ("JPEG", "jpeg", quality)
+
+
 class ExportPrep:
     """Render+encode snapshot. Built on main thread, consumed by a worker."""
 
@@ -237,8 +291,13 @@ def prepare_export(
 def render_export(
     prep: ExportPrep,
     progress_cb=None,
-) -> tuple[str, int, QgsRectangle]:
-    """Render off-screen + PNG encode + base64. Worker-thread safe. Returns (b64, bytes, extent)."""
+) -> tuple[str, int, QgsRectangle, str]:
+    """Render off-screen, encode, base64. Worker-thread safe.
+
+    Returns ``(b64, raw_bytes, extent, format_token)`` where ``format_token`` is
+    the actual format written ('webp' | 'jpeg' | 'png'), used so the upload is
+    labeled with a matching content-type.
+    """
     job = QgsMapRendererParallelJob(prep.settings)
     if progress_cb is not None:
         try:
@@ -261,12 +320,29 @@ def render_export(
         finally:
             painter.end()
 
+    fmt_qt, fmt_token, quality = chosen_input_format()
     buffer = QBuffer()
     buffer.open(QtC.WriteOnly)
-    image.save(buffer, "PNG")
+    ok = image.save(buffer, fmt_qt, quality)
+    if not ok and fmt_qt != "PNG":
+        # Encoder failed despite a positive capability check (rare). PNG is
+        # always available; fall back so the generation still goes out, and
+        # report PNG so the upload's content-type matches the bytes.
+        log_warning(f"{fmt_token} encode failed; falling back to PNG")
+        buffer.close()
+        buffer = QBuffer()
+        buffer.open(QtC.WriteOnly)
+        image.save(buffer, "PNG")
+        fmt_token = "png"  # nosec B105 - format token, not a credential
     raw = buffer.data().data()
     b64 = base64.b64encode(raw).decode("ascii")
-    return b64, len(raw), prep.actual_extent
+    # Diagnostic, production-safe (dimensions + sizes only). Always logged so a
+    # bloated input is visible in the Log Messages panel without DEBUG.
+    log_debug(
+        f"Input export encoded: format={fmt_token} q={quality} "
+        f"dims={prep.out_w}x{prep.out_h} raw_bytes={len(raw)} b64_bytes={len(b64)}"
+    )
+    return b64, len(raw), prep.actual_extent, fmt_token
 
 
 def apply_export_context(
@@ -274,6 +350,7 @@ def apply_export_context(
     prep: ExportPrep,
     actual_extent: QgsRectangle,
     image_size_bytes: int,
+    input_format: str | None = None,
 ) -> None:
     """Main-thread ctx mutation after the worker returns extent + size."""
     if ctx is None:
@@ -293,6 +370,7 @@ def apply_export_context(
     ctx.export_width = prep.out_w
     ctx.export_height = prep.out_h
     ctx.image_size_bytes = image_size_bytes
+    ctx.input_format = input_format
 
 
 def _aspect_dims(

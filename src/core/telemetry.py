@@ -80,7 +80,7 @@ class TelemetryCollector:
         except Exception:
             qgis_version = "unknown"
 
-        return {
+        props = {
             "plugin_version": self._plugin_version,
             "os": platform.system(),
             "os_version": platform.release(),
@@ -88,6 +88,14 @@ class TelemetryCollector:
             "python_version": sys.version.split()[0],
             "qgis_version": qgis_version,
         }
+        # Anonymous per-machine hash: lets the backend count distinct machines per
+        # activation key (measurement only). Best-effort; never break telemetry.
+        try:
+            from .device_id import get_device_hash
+            props["device_hash"] = get_device_hash()
+        except Exception:  # nosec B110
+            pass
+        return props
 
     def _has_auth(self) -> bool:
         auth = self._auth_manager.get_auth_header()

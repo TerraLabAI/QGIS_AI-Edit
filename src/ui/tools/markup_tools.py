@@ -144,8 +144,10 @@ class MarkupLayerManager(QObject):
         layer.setCustomProperty("skipMemoryLayersCheck", 1)
         layer.setCustomProperty(_MARKUP_PROPERTY, True)
         self._apply_style(layer)
-        # Pin at the bottom of the AI-Edit group; addMapLayer(False) blocks
-        # auto-insertion at the root.
+        # Show the guidance markup on top of the AI-Edit group so the user
+        # sees their strokes immediately instead of having them hidden under
+        # the opaque rasters; addMapLayer(False) blocks auto-insertion at the
+        # root.
         QgsProject.instance().addMapLayer(layer, False)
         # Markup sits at the very top of the tree, above the AI-Edit group, so
         # its annotations always render over the generated rasters. Inside the

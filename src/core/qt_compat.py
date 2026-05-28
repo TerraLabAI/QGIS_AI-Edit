@@ -34,6 +34,8 @@ ArrowCursor = _resolve(Qt, "CursorShape", "ArrowCursor")
 # Qt.AlignmentFlag
 AlignCenter = _resolve(Qt, "AlignmentFlag", "AlignCenter")
 AlignTop = _resolve(Qt, "AlignmentFlag", "AlignTop")
+AlignLeft = _resolve(Qt, "AlignmentFlag", "AlignLeft")
+AlignVCenter = _resolve(Qt, "AlignmentFlag", "AlignVCenter")
 
 # Qt.Key
 Key_Return = _resolve(Qt, "Key", "Key_Return")

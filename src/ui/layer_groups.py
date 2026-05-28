@@ -139,9 +139,10 @@ def promote_layer_to_own_subgroup(layer_id: str) -> QgsLayerTreeGroup | None:
 
 
 def add_layer_to_ai_edit_top(layer: QgsMapLayer) -> QgsLayerTreeLayer:
-    """Insert ``layer`` at the top of the AI-Edit group. The Mark up
-    annotation layer lives at the tree root above the group (not inside it),
-    so new outputs go straight to index 0 without disturbing it.
+    """Insert ``layer`` at the top of the AI-Edit group so the newest output
+    is always the topmost child. The Mark up annotation layer lives at the
+    tree root above the group (not inside it), so new outputs go straight to
+    index 0 without disturbing it.
     """
     group = get_or_create_ai_edit_group()
     return group.insertLayer(0, layer)

@@ -48,7 +48,7 @@ class BeforeAfterSlider(QWidget):
 
     clicked = pyqtSignal()
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None, auto_loop: bool = True):
         super().__init__(parent)
         self.setMinimumHeight(140)
         self.setMouseTracking(False)
@@ -64,10 +64,16 @@ class BeforeAfterSlider(QWidget):
         # treated as a slider adjustment and no click fires.
         self._press_x: float | None = None
         self._moved_far = False
+        # Auto-loop drives a calm idle animation when the slider is the only
+        # thing the user looks at (hero, detail view). On a Top Picks grid the
+        # caller passes auto_loop=False so 6 sliders don't all wiggle at once;
+        # the divider stays at 50/50 until the user drags.
+        self._auto_loop = auto_loop
         self._timer = QTimer(self)
         self._timer.setInterval(_FRAME_INTERVAL_MS)
         self._timer.timeout.connect(self._on_tick)
-        self._timer.start()
+        if auto_loop:
+            self._timer.start()
 
     # ---- lifecycle -------------------------------------------------------
 
@@ -98,7 +104,7 @@ class BeforeAfterSlider(QWidget):
     # ---- animation tick --------------------------------------------------
 
     def _on_tick(self) -> None:
-        if self._hovering or self._dragging:
+        if not self._auto_loop or self._hovering or self._dragging:
             return  # paused while user is engaging
         self._elapsed_ms = (self._elapsed_ms + _FRAME_INTERVAL_MS) % _AUTO_LOOP_PERIOD_MS
         # Triangle wave normalised to 0..1.

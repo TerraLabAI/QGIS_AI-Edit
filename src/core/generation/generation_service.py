@@ -69,17 +69,22 @@ class GenerationService:
 
     # Below this base64 size we send the image inline in the submit body -
     # a single round-trip looks cleaner from outside and avoids an extra API
-    # call for the common-case small generations (1 K resolution typically
-    # encodes to <2 MB of PNG). Above it, we'd risk the serverless body cap,
-    # so we switch to the presigned-upload path.
+    # call for the common-case small generations (most zones encode well under
+    # this once compressed). Above it, we'd risk the serverless body cap, so we
+    # switch to the presigned-upload path.
     _INLINE_BASE64_THRESHOLD = 4 * 1024 * 1024  # 4 MB of base64 ≈ 3 MB raw
 
-    def _try_upload_token_flow(self, image_b64: str, auth: dict) -> str | None:
+    def _try_upload_token_flow(
+        self, image_b64: str, auth: dict, image_format: str | None = None
+    ) -> str | None:
         """Attempt the presigned-upload path. Returns the upload token on
         success, or None to signal the caller to fall back to inline base64.
 
         Skipped entirely when the image is small enough to inline so we don't
         burn an extra round-trip on small generations.
+
+        ``image_format`` ('webp' | 'jpeg' | 'png') is the format the canvas was
+        encoded as; the server signs the upload with a matching content-type.
 
         Failures here are silent (logged but not surfaced) - we'd rather pay
         the inline body cost than show a network error for a path we control
@@ -89,7 +94,7 @@ class GenerationService:
             return None
 
         try:
-            resp = self._client.request_upload_url(auth)
+            resp = self._client.request_upload_url(auth, image_format or "png")
         except Exception as e:
             log_warning(f"Upload URL request raised: {e}")
             return None
@@ -101,6 +106,24 @@ class GenerationService:
         headers = resp.get("required_headers") or {}
         max_bytes = resp.get("max_bytes")
         if not upload_url or not token:
+            return None
+
+        # Guard against an older server that ignores the 'format' field and
+        # signs the upload as PNG. We PUT echoing the server's Content-Type, so
+        # uploading non-PNG bytes under a PNG-signed URL would store a
+        # mislabeled object (fal still sniffs it, but the archive + image proxy
+        # would serve it with the wrong type). If the signed content-type
+        # doesn't match what we encoded, skip the upload path and fall back to
+        # inline, where the server detects the format from the bytes.
+        expected_ct = {
+            "webp": "image/webp", "jpeg": "image/jpeg", "png": "image/png",
+        }.get((image_format or "png").lower(), "image/png")
+        signed_ct = (headers.get("Content-Type") or headers.get("content-type") or "").lower()
+        if signed_ct and signed_ct != expected_ct:
+            log_warning(
+                f"Upload URL signed for {signed_ct}, expected {expected_ct}; "
+                "falling back to inline so the bytes aren't mislabeled"
+            )
             return None
 
         try:
@@ -148,10 +171,12 @@ class GenerationService:
 
         # Preferred path: upload the image straight to remote storage via a
         # short-lived presigned URL, then submit only a tiny token. Skips the
-        # serverless body-size cap entirely so multi-MB lossless PNG inputs
-        # go through without truncation. Falls back to inline base64 if any
-        # step fails so an outage on the storage path doesn't break edits.
-        upload_token = self._try_upload_token_flow(image_b64, auth)
+        # serverless body-size cap entirely so multi-MB inputs go through
+        # without truncation. Falls back to inline base64 if any step fails so
+        # an outage on the storage path doesn't break edits.
+        upload_token = self._try_upload_token_flow(
+            image_b64, auth, ctx.input_format if ctx is not None else None
+        )
 
         # Pull geospatial + iteration context off the pipeline ctx so the
         # backend can use it. All fields optional - old backends ignore

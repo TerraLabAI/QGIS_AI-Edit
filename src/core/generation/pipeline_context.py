@@ -31,6 +31,9 @@ class PipelineContext:
     export_height: int | None = None
     aspect_ratio: str | None = None
     image_size_bytes: int | None = None
+    # Wire format the input was encoded as ('webp' | 'jpeg' | 'png'). Sent to
+    # the upload endpoint so the object is signed with a matching content-type.
+    input_format: str | None = None
 
     # Iteration chain: set by plugin.py when the user iterates on a previous
     # result, so the server can silently attach the original input as a
@@ -153,7 +156,10 @@ def save_debug_artifacts(
     os.makedirs(run_dir, exist_ok=True)
 
     if sent_png:
-        with open(os.path.join(run_dir, "sent.png"), "wb") as f:
+        # The sent input is now a compressed format (webp/jpeg), not PNG; name
+        # the artifact by its real format so it opens correctly.
+        sent_ext = {"webp": "webp", "jpeg": "jpg"}.get(ctx.input_format or "", "png")
+        with open(os.path.join(run_dir, f"sent.{sent_ext}"), "wb") as f:
             f.write(sent_png)
     if received_png:
         with open(os.path.join(run_dir, "received.png"), "wb") as f:

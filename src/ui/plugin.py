@@ -160,6 +160,20 @@ def _localize_server_error(error: str, code: str) -> str:
     return mapping.get(code, error)
 
 
+# Error codes the user fixes themselves (their network, their key, their zone)
+# or a deliberate cancel. These stay as a plain inline message. Every other
+# failure that reaches the generic-failure branch is a genuine bug worth a log
+# report, so it opens the report dialog.
+_INLINE_ONLY_ERROR_CODES = frozenset({
+    "NO_NETWORK", "DNS_ERROR", "SSL_ERROR", "TIMEOUT",
+    "PROXY_ERROR", "CONNECTION_REFUSED",
+    "NO_KEY", "INVALID_KEY", "KEY_REVOKED", "AUTH_LOCKED",
+    "INVALID_CRS", "ANTIMERIDIAN", "POLAR", "TOO_LARGE",
+    "MAP_ROTATED", "ZONE_TOO_SMALL",
+    "GENERATION_CANCELLED",
+})
+
+
 def _enrich_error_message(error: str, code: str = "") -> str:
     """Translate the server-supplied error (via code), then append actionable
     guidance (deep links, network hints) based on the same code."""
@@ -270,6 +284,8 @@ class AIEditPlugin:
         self._catalog_loader = None
         # Preserved for retry (re-generate from original, not from AI result)
         self._last_image_b64 = None
+        self._last_input_format = None
+        self._last_input_bytes = None
         self._last_extent_dict = None
         self._last_crs_wkt = None
         self._last_aspect_ratio = None
@@ -475,6 +491,12 @@ class AIEditPlugin:
             self._dock_widget.raise_()
         else:
             self._dock_widget.hide()
+        # Check for a newer plugin version once QGIS has fetched repo metadata.
+        # That cache is often empty just after startup, so retry on a backoff.
+        self._update_check_done = False
+        self._update_check_delays = [5000, 30000, 60000, 120000]
+        self._update_check_index = 0
+        QTimer.singleShot(self._update_check_delays[0], self._check_for_plugin_update)
         self._dock_widget.stop_clicked.connect(self._on_stop)
         self._dock_widget.generate_clicked.connect(self._on_generate)
         self._dock_widget.retry_clicked.connect(self._on_retry)
@@ -1020,6 +1042,21 @@ class AIEditPlugin:
         if self._swipe_controller is not None and self._swipe_controller.is_active():
             self._swipe_controller.stop()
 
+    def _check_for_plugin_update(self):
+        """Poll QGIS's plugin metadata for a newer version, retrying on a backoff.
+
+        Early-returns if the dock was unloaded so a stale QTimer fire can't crash.
+        """
+        if not self._dock_widget or self._update_check_done:
+            return
+        if self._dock_widget.check_for_updates():
+            self._update_check_done = True
+            return
+        self._update_check_index += 1
+        if self._update_check_index < len(self._update_check_delays):
+            delay = self._update_check_delays[self._update_check_index]
+            QTimer.singleShot(delay, self._check_for_plugin_update)
+
     def _on_exit_clicked(self):
         """User clicked Exit / Done: cancel work and return to LAUNCH."""
         self._disarm_swipe()
@@ -1083,6 +1120,9 @@ class AIEditPlugin:
 
         ctx = PipelineContext()
         ctx.aspect_ratio = self._last_aspect_ratio
+        # Reuse the original export's encoded bytes, so the upload must be
+        # labeled with the same format the canvas was encoded as.
+        ctx.input_format = self._last_input_format
         # Retry on the same zone = iteration. Anchor on the previous result's
         # original input so the model keeps style coherence.
         ctx.parent_request_id = self._last_completed_request_id
@@ -1115,6 +1155,8 @@ class AIEditPlugin:
             "prompt_length": len(prompt),
             "aspect_ratio": self._last_aspect_ratio or "",
             "resolution": self._last_suggested_res or "",
+            "input_image_bytes": self._last_input_bytes,
+            "input_image_format": self._last_input_format,
             "is_retry": True,
             "template_id": ctx.template_id,
             "template_name": ctx.template_name,
@@ -1537,9 +1579,9 @@ class AIEditPlugin:
             )
         except Exception as e:
             self._dock_widget.set_generating(False)
-            self._dock_widget.set_status(
-                tr("Export error: {error}").format(error=e), is_error=True
-            )
+            msg = tr("Export error: {error}").format(error=e)
+            self._dock_widget.set_status(msg, is_error=True)
+            self._show_error_report(msg)
             return
 
         # Hand off everything the export-completed callback needs.
@@ -1564,9 +1606,9 @@ class AIEditPlugin:
     def _on_export_failed(self, error_msg: str):
         self._pending_generation = None
         self._dock_widget.set_generating(False)
-        self._dock_widget.set_status(
-            tr("Export error: {error}").format(error=error_msg), is_error=True
-        )
+        msg = tr("Export error: {error}").format(error=error_msg)
+        self._dock_widget.set_status(msg, is_error=True)
+        self._show_error_report(msg)
 
     def _on_export_completed(
         self,
@@ -1575,6 +1617,7 @@ class AIEditPlugin:
         img_h: int,
         actual_extent,
         size_bytes: int,
+        input_format: str,
     ):
         pending = self._pending_generation
         self._pending_generation = None
@@ -1588,7 +1631,7 @@ class AIEditPlugin:
         suggested_res = pending["suggested_res"]
         crs_wkt = pending["crs_wkt"]
 
-        apply_export_context(ctx, prep, actual_extent, size_bytes)
+        apply_export_context(ctx, prep, actual_extent, size_bytes, input_format)
 
         # Canvas captured: advance the prep ticker to the upload phase so the
         # message pool reflects what's actually happening next (sending bytes).
@@ -1616,6 +1659,8 @@ class AIEditPlugin:
 
         # Preserve original zone for retry (never chain from AI result)
         self._last_image_b64 = image_b64
+        self._last_input_format = input_format
+        self._last_input_bytes = size_bytes
         self._last_extent_dict = extent_dict
         self._last_crs_wkt = crs_wkt
         self._last_aspect_ratio = aspect_ratio
@@ -1633,6 +1678,8 @@ class AIEditPlugin:
             "resolution": suggested_res,
             "zone_width_px": img_w,
             "zone_height_px": img_h,
+            "input_image_bytes": size_bytes,
+            "input_image_format": input_format,
             "is_retry": False,
             "template_id": ctx.template_id,
             "template_name": ctx.template_name,
@@ -1724,6 +1771,7 @@ class AIEditPlugin:
             telemetry.track("trial_exhausted_viewed", {"error_type": code or "QUOTA_EXCEEDED"})
         else:
             enriched = _enrich_error_message(message, code)
+            softened = False
             # When a generic model failure happens after a long run, almost
             # every time it's because the target the prompt described is not
             # visible in the selected zone (e.g. asking for mangroves on a
@@ -1734,8 +1782,23 @@ class AIEditPlugin:
                     "It often means what your prompt describes is not visible "
                     "in the selected area. Try a different zone or rephrase."
                 )
+                softened = True
             self._dock_widget.set_status(enriched, is_error=True)
+            # Push genuine technical failures into the log-report dialog. The
+            # softened "rephrase" hint is user guidance, not a bug, so it (and
+            # the user-fixable codes) stay inline.
+            if not softened and normalized_code not in _INLINE_ONLY_ERROR_CODES:
+                self._show_error_report(enriched, snap.get("request_id") or "")
         log_warning(f"Generation failed: {message} (code={code})")
+
+    def _show_error_report(self, error_message: str, request_id: str = "") -> None:
+        """Open the copy-logs/email report dialog. A failure here must never
+        mask the original error, so it is swallowed (and logged)."""
+        try:
+            from .dialogs.error_report_dialog import show_error_report
+            show_error_report(self._iface.mainWindow(), error_message, request_id)
+        except Exception as err:  # nosec B110
+            log_warning(f"Could not open error report dialog: {err}")
 
     def _on_generation_finished(self, result_info: dict):
         if self._map_tool:
@@ -1782,9 +1845,9 @@ class AIEditPlugin:
             })
             telemetry.flush()
             self._dock_widget.set_generating(False)
-            self._dock_widget.set_status(
-                tr("Error adding layer: {error}").format(error=e), is_error=True
-            )
+            msg = tr("Error adding layer: {error}").format(error=e)
+            self._dock_widget.set_status(msg, is_error=True)
+            self._show_error_report(msg, result_info.get("request_id") or "")
             log_warning(f"Failed to add layer: {e}")
 
     def _refresh_credits(self):
