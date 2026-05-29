@@ -76,9 +76,18 @@ def _ascii_safe_dir(directory: str) -> str:
 
     # 8.3 short names are disabled on this volume. C:\\Users\\Public is ASCII
     # and writable by every user; fall back to it so the layer still loads.
+    # Keep the last path component (the per-generation folder, already ASCII via
+    # _slugify + timestamp) as a subdirectory so each generation gets its own
+    # output path. A flat fallback would route every generation to the same
+    # raster.tif; once QGIS holds the first result open, the next GDAL Create on
+    # that path returns None -> write_error.
     public = os.environ.get("PUBLIC")
     if public and public.isascii():
-        safe = os.path.join(public, "terralab_ai_edit")
+        tail = os.path.basename(directory.rstrip(os.sep))
+        if tail and tail.isascii():
+            safe = os.path.join(public, "terralab_ai_edit", tail)
+        else:
+            safe = os.path.join(public, "terralab_ai_edit")
         try:
             os.makedirs(safe, exist_ok=True)
             return safe
