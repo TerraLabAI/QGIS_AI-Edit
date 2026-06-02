@@ -576,6 +576,9 @@ class _ResolutionMenuItem(QWidget):
         row.setContentsMargins(8, 4, 16, 4)
         row.setSpacing(8)
 
+        # Leading column: checkmark on the selected row, empty otherwise.
+        # Locked rows carry no icon - the muted text + tooltip already signal
+        # the locked state, and a padlock glyph read as cheap.
         check = QLabel("✓" if selected else "", self)
         check.setFixedWidth(12)
         check.setStyleSheet(
@@ -1462,13 +1465,17 @@ class AIEditDockWidget(QDockWidget):
         # Spacer to push footer to bottom
         layout.addStretch()
 
-        # Footer section - single row: ring + count + Subscribe pill on the
-        # left, gear/help menus on the right. The Subscribe pill auto-hides
-        # via resizeEvent when the dock is too narrow to fit everything.
+        # Footer section - single row: ring + count + upgrade pill on the
+        # left, gear/help menus on the right. As the dock narrows,
+        # _apply_footer_responsive collapses the count then shortens the pill
+        # so the right-side icons are never clipped.
         footer_widget = QWidget()
         footer_row = QHBoxLayout(footer_widget)
         footer_row.setContentsMargins(0, 4, 0, 4)
         footer_row.setSpacing(6)
+        # Kept so resizeEvent can measure the row's natural width and collapse
+        # low-priority items (count, then pill text) until it fits.
+        self._footer_row = footer_row
 
         self._credit_ring = CreditRing(diameter=16, parent=footer_widget)
         self._credit_ring.setVisible(False)
@@ -1484,7 +1491,9 @@ class AIEditDockWidget(QDockWidget):
 
         # "&&" so Qt renders a literal ampersand instead of consuming "&" as
         # a mnemonic accelerator (which would underline the next character).
-        self._upgrade_cta = QPushButton(tr("Upgrade to 2K & 4K"))
+        # Text is (re)set by _apply_footer_responsive, which shortens it to
+        # "Upgrade" when the dock is too narrow for the full label.
+        self._upgrade_cta = QPushButton(tr("Upgrade to 2K && 4K"))
         self._upgrade_cta.setToolTip(
             tr("Subscribe to unlock 2K and 4K outputs, 150 edits per month, cancel anytime.")
         )
@@ -1612,6 +1621,9 @@ class AIEditDockWidget(QDockWidget):
         scroll_area.setFrameShape(QtC.FrameNoFrame)
         scroll_area.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
         self.setWidget(scroll_area)
+        # Kept so the footer responsive logic reads the true available width
+        # (the viewport excludes the vertical scrollbar), not the dock width.
+        self._scroll_area = scroll_area
 
         # State
         self._zone_selected = False
@@ -1809,29 +1821,64 @@ class AIEditDockWidget(QDockWidget):
 
         return widget
 
-    # Below ~360px the inline footer (ring + count + pill + 3 icons) starts
-    # clipping the right-aligned Help button; hide the credit counter to free
-    # room so the Help, Settings and Vectorize icons stay reachable.
-    _CREDITS_MIN_WIDTH = 360
-
     def _set_upgrade_cta_wanted(self, wanted: bool) -> None:
         self._upgrade_cta_wanted = wanted
         self._upgrade_cta.setVisible(wanted)
+        self._apply_footer_responsive()
 
     def _set_credits_wanted(self, wanted: bool) -> None:
         self._credits_wanted = wanted
-        self._apply_credits_visibility()
+        self._apply_footer_responsive()
 
-    def _apply_credits_visibility(self) -> None:
-        """Hide the credit ring + count when the dock is too narrow."""
-        wide_enough = self.width() >= self._CREDITS_MIN_WIDTH
-        show = self._credits_wanted and wide_enough
-        self._credits_label.setVisible(show)
-        self._credit_ring.setVisible(show)
+    def _set_upgrade_cta_text(self, full: bool) -> None:
+        """Full label vs the short "Upgrade" fallback. Guarded so resizeEvent
+        (which fires often) only relayouts when the text actually changes."""
+        # "&&" renders a literal ampersand (single "&" is a Qt mnemonic).
+        text = tr("Upgrade to 2K && 4K") if full else tr("Upgrade")
+        if self._upgrade_cta.text() != text:
+            self._upgrade_cta.setText(text)
+
+    def _apply_footer_responsive(self) -> None:
+        """Collapse low-priority footer items, by priority, until the row fits
+        the dock width. Measured (not threshold-based) so it stays correct
+        across font size, DPI and translated pill length.
+
+        The right-side icons (vectorize / swipe / settings / help) are never
+        touched - they always stay reachable. Kept longest -> dropped first:
+          1. usage count label ("100 / 200")
+          2. upgrade pill text shortened to "Upgrade" (the CTA stays visible)
+          3. credit ring (last resort only)
+        """
+        scroll = getattr(self, "_scroll_area", None)
+        if scroll is None:
+            return
+        # Viewport excludes the vertical scrollbar; subtract the main layout's
+        # 8px left/right margins to get the width the footer row actually gets.
+        avail = scroll.viewport().width() - 16
+        if avail <= 0:
+            return
+
+        # Start from the fullest state the current data allows, then collapse.
+        self._credits_label.setVisible(self._credits_wanted)
+        self._credit_ring.setVisible(self._credits_wanted)
+        self._set_upgrade_cta_text(full=True)
+
+        def fits() -> bool:
+            # invalidate() drops the layout's cached hint so the measurement
+            # reflects the visibility / text changes made just above.
+            self._footer_row.invalidate()
+            return self._footer_row.sizeHint().width() <= avail
+
+        if not fits() and self._credits_wanted:
+            self._credits_label.setVisible(False)
+        if not fits() and self._upgrade_cta_wanted:
+            self._set_upgrade_cta_text(full=False)
+        if not fits() and self._credits_wanted:
+            self._credit_ring.setVisible(False)
 
     def resizeEvent(self, event):  # noqa: N802
         super().resizeEvent(event)
-        self._apply_credits_visibility()
+        self._apply_footer_responsive()
 
     def _setup_update_notification(self, parent_layout: QVBoxLayout) -> None:
         """Build the 'update available' banner, hidden until check_for_updates finds one.
@@ -2519,6 +2566,11 @@ class AIEditDockWidget(QDockWidget):
         self._result_prompt_input.setPlainText(last_prompt)
         self._result_prompt_input.moveCursor(QtC.CursorEnd)
         self._result_prompt_container.set_readonly(False)
+        # Generation is done: clear the (now hidden) prompt container's readonly
+        # flag too. set_generating(True) set it and the success path never calls
+        # set_generating(False), so without this the prompt library stays in
+        # view-only mode (browse_only) and template clicks are ignored.
+        self._prompt_container.set_readonly(False)
         self._result_section.setVisible(True)
         self._refresh_resolution_triggers()
 
