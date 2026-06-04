@@ -142,9 +142,18 @@ class TerraLabClient:
         image_b64: str | None = None,
         upload_token: str | None = None,
         context_images: list[str] | None = None,
+        guidance_image: str | None = None,
+        guidance_upload_token: str | None = None,
         centroid_lat: float | None = None,
         centroid_lon: float | None = None,
         ground_resolution_m: float | None = None,
+        bbox_wgs84: dict | None = None,
+        bbox: dict | None = None,
+        crs_authid: str | None = None,
+        crs_wkt: str | None = None,
+        export_width: int | None = None,
+        export_height: int | None = None,
+        basemap: str | None = None,
         parent_request_id: str | None = None,
         template_id: str | None = None,
         template_name: str | None = None,
@@ -159,9 +168,11 @@ class TerraLabClient:
         ``context_images`` is an optional list of base64-encoded reference
         images. Sent only when non-empty so older backends ignore the field.
 
-        Geospatial context (``bbox``, ``crs_code``, ``ground_resolution_m``)
-        and iteration tracking (``parent_request_id``) are sent only when
-        present, so older backends silently ignore them.
+        Geospatial capture context (``centroid``, ``bbox_wgs84``, native
+        ``bbox`` + ``crs_authid``/``crs_wkt``, ``ground_resolution_m``,
+        ``export_width``/``export_height``) and iteration tracking
+        (``parent_request_id``) are sent only when present, so older backends
+        silently ignore them.
         """
         if (image_b64 is None) == (upload_token is None):
             raise ValueError(
@@ -178,11 +189,30 @@ class TerraLabClient:
             payload["image"] = image_b64
         if context_images:
             payload["context_images"] = context_images
+        # Markup-overlay guidance image (separate from user reference images).
+        # Sent only when present so older backends ignore the field.
+        if guidance_upload_token:
+            payload["guidance_upload_token"] = guidance_upload_token
+        elif guidance_image:
+            payload["guidance_image"] = guidance_image
         if centroid_lat is not None and centroid_lon is not None:
             payload["centroid_lat"] = centroid_lat
             payload["centroid_lon"] = centroid_lon
         if ground_resolution_m is not None:
             payload["ground_resolution_m"] = ground_resolution_m
+        if bbox_wgs84 is not None:
+            payload["bbox_wgs84"] = bbox_wgs84
+        if bbox is not None:
+            payload["bbox"] = bbox
+        if crs_authid:
+            payload["crs_authid"] = crs_authid
+        elif crs_wkt:
+            payload["crs_wkt"] = crs_wkt
+        if export_width and export_height:
+            payload["export_width"] = export_width
+            payload["export_height"] = export_height
+        if basemap:
+            payload["basemap"] = basemap
         if parent_request_id:
             payload["parent_request_id"] = parent_request_id
         if template_id:

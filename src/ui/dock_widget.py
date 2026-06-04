@@ -74,7 +74,7 @@ from .panel_helpers import (
 )
 from .panels.markup_panel import MarkupPanel
 from .panels.vectorize_panel import VectorizePanel
-from .reference_images_widget import ReferenceImagesWidget
+from .reference_images_widget import FREE_TIER_MAX_REFERENCES, ReferenceImagesWidget
 
 # ---------------------------------------------------------------------------
 # Brand colors (Material Design 2 - shared with AI Segmentation)
@@ -684,7 +684,7 @@ class _PromptContainer(QFrame):
 
         # Resolution state mirrored from the dock widget so the popup can be
         # rebuilt locally without re-reaching into the parent.
-        self._selected_resolution = "2K"
+        self._selected_resolution = "1K"
         self._resolution_costs: dict[str, int] = {"1K": 20, "2K": 30, "4K": 40}
         self._free_tier = False
 
@@ -1118,6 +1118,7 @@ class AIEditDockWidget(QDockWidget):
             )
             self._reference_widget.error_cleared.connect(self._hide_status_box)
             self._reference_widget.images_changed.connect(self._sync_attach_buttons)
+            self._reference_widget.upsell_requested.connect(self._show_reference_upsell)
             # Forward container actions: drop on container + paste in textbox +
             # paperclip click all funnel into the reference widget.
             self._prompt_container.files_dropped.connect(self._reference_widget.add_paths)
@@ -1269,7 +1270,7 @@ class AIEditDockWidget(QDockWidget):
         # Editable prompt (edit and retry)
         self._result_prompt_input = _SubmitTextEdit()
         self._result_prompt_input.setPlaceholderText(
-            tr("Edit the prompt above and retry, or pick a new action below")
+            tr("Type a new prompt to retry, or pick an action below")
         )
         self._result_prompt_input.document().setDocumentMargin(0)
         self._result_prompt_input.setMinimumHeight(50)
@@ -1634,10 +1635,10 @@ class AIEditDockWidget(QDockWidget):
         self._is_free_tier = True  # default hidden until confirmed Pro
         self._cached_used: int | None = None
         self._cached_limit: int | None = None
-        # Seeded paid-tier default. `set_credits` downgrades to "1K" the first
-        # time a free-tier user is confirmed, so the dock never lands on a
-        # locked resolution.
-        self._selected_resolution = "2K"
+        # Universal default. Every tier starts on "1K"; paid users can still
+        # bump to 2K/4K by hand, but the dock never opens on a higher tier by
+        # default. Free-tier confirmation keeps coercing to "1K" anyway.
+        self._selected_resolution = "1K"
         # Credit cost per resolution. Used to suffix the Generate/Regenerate
         # button text ("Generate (30 credits)"). Overwritten by
         # set_resolution_credit_costs once the server config loads.
@@ -2178,11 +2179,13 @@ class AIEditDockWidget(QDockWidget):
         Also drives the trial-exhausted upsell banner so it survives stray
         ``set_status`` calls that otherwise hide it.
         """
-        was_free = self._is_free_tier
         self._is_free_tier = is_free_tier
-        # Restore paid default on free→paid transition (overrides auto-downgrade).
-        if was_free and not is_free_tier and self._selected_resolution == "1K":
-            self._selected_resolution = "2K"
+        # Keep the reference-image gate in sync with the confirmed tier.
+        if self._reference_widget is not None:
+            self._reference_widget.set_free_tier(is_free_tier)
+        # No free→paid resolution bump: every tier defaults to "1K". Paid users
+        # raise it to 2K/4K by hand if they want, so we never override their
+        # current selection on a tier change.
         if used is not None and limit is not None:
             remaining = max(0, limit - used)
             self._credits_label.setText(f"{remaining} / {limit}")
@@ -2562,9 +2565,11 @@ class AIEditDockWidget(QDockWidget):
         self._exit_btn.setVisible(False)
         self._consent_widget.setVisible(False)
 
-        last_prompt = self._prompt_input.toPlainText().strip()
-        self._result_prompt_input.setPlainText(last_prompt)
-        self._result_prompt_input.moveCursor(QtC.CursorEnd)
+        # Start the next iteration from a blank prompt instead of replaying the
+        # one that produced this result. An empty field nudges the user to
+        # describe a fresh change rather than re-running the same instruction.
+        self._result_prompt_input.clear()
+        self._update_result_generate_enabled()
         self._result_prompt_container.set_readonly(False)
         # Generation is done: clear the (now hidden) prompt container's readonly
         # flag too. set_generating(True) set it and the success path never calls
@@ -2756,24 +2761,43 @@ class AIEditDockWidget(QDockWidget):
                 self._is_free_tier,
             )
 
+    def _show_subscribe_banner(self, message: str) -> None:
+        """Show a 12 s warning banner with a Subscribe link appended.
+
+        Shared by the free-tier resolution gate and the reference-image gate so
+        the upsell copy/styling stays in one place.
+        """
+        subscribe_url = get_subscribe_url()
+        self._show_status_box(
+            message +
+            f' <a href="{subscribe_url}" style="color: {BRAND_BLUE}; font-weight: bold;">' +
+            tr("Subscribe") + "</a>",
+            "warning"
+        )
+        # 12 s banner; parented timer dies with the dock.
+        if self._status_hide_timer is not None:
+            self._status_hide_timer.stop()
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.timeout.connect(self._hide_status_box)
+        timer.start(12000)
+        self._status_hide_timer = timer
+
+    def _show_reference_upsell(self) -> None:
+        """Free-tier user tried to add a second reference image: nudge to
+        subscribe instead of adding it."""
+        self._show_subscribe_banner(
+            tr("Free plan is limited to {n} reference image.").format(
+                n=FREE_TIER_MAX_REFERENCES
+            )
+        )
+
     def _on_resolution_selected(self, label: str):
         """Handle a click inside the resolution dropdown of either container."""
         if self._is_free_tier and label != "1K":
-            subscribe_url = get_subscribe_url()
-            self._show_status_box(
-                tr("{} outputs are unlocked with a subscription.").format(label) +
-                f' <a href="{subscribe_url}" style="color: {BRAND_BLUE}; font-weight: bold;">' +
-                tr("Subscribe") + "</a>",
-                "warning"
+            self._show_subscribe_banner(
+                tr("{} outputs are unlocked with a subscription.").format(label)
             )
-            # 12 s banner; parented timer dies with the dock.
-            if self._status_hide_timer is not None:
-                self._status_hide_timer.stop()
-            timer = QTimer(self)
-            timer.setSingleShot(True)
-            timer.timeout.connect(self._hide_status_box)
-            timer.start(12000)
-            self._status_hide_timer = timer
             return
 
         # Clear any existing status message if switching resolutions
@@ -2818,7 +2842,7 @@ class AIEditDockWidget(QDockWidget):
             self._result_prompt_input.blockSignals(False)
             self._result_prompt_input.moveCursor(QtC.CursorEnd)
             self._result_prompt_input.setFocus()
-            self._update_generate_enabled()
+            self._update_result_generate_enabled()
             self._adjust_result_prompt_height()
         else:
             self._prompt_input.blockSignals(True)
@@ -2836,6 +2860,7 @@ class AIEditDockWidget(QDockWidget):
 
     def _on_result_prompt_changed(self):
         self._enforce_prompt_max_length(self._result_prompt_input)
+        self._update_result_generate_enabled()
         self._clear_active_template_if_empty()
 
     def _clear_active_template_if_empty(self) -> None:
@@ -3305,6 +3330,17 @@ class AIEditDockWidget(QDockWidget):
             self._generate_btn.setStyleSheet(_BTN_GREEN)
         else:
             self._generate_btn.setStyleSheet(_BTN_DISABLED)
+
+    def _update_result_generate_enabled(self):
+        """Gate the result-section Generate button on a non-empty prompt.
+
+        The retry field now starts blank after each generation, so the button
+        would otherwise sit clickable but silently no-op. Greying it out tells
+        the user to type a fresh instruction first.
+        """
+        enabled = bool(self._result_prompt_input.toPlainText().strip())
+        self._result_regenerate_btn.setEnabled(enabled)
+        self._result_regenerate_btn.setStyleSheet(_BTN_GREEN if enabled else _BTN_DISABLED)
 
     def _on_escape_pressed(self):
         """Escape walks the flow back one step at a time.

@@ -53,6 +53,8 @@ class GenerationTask(QgsTask):
         plugin_dir="",
         skip_trial_check=False,
         context_images=None,
+        guidance_image=None,
+        guidance_format=None,
     ):
         super().__init__("AI Edit generation", QgsTask.Flag.CanCancel)
         self._client = client
@@ -70,6 +72,8 @@ class GenerationTask(QgsTask):
         self._skip_trial_check = skip_trial_check
         self._suggested_resolution = suggested_resolution
         self._context_images = context_images or []
+        self._guidance_image = guidance_image
+        self._guidance_format = guidance_format
 
         self._success_payload: dict | None = None
         self._failure_payload: tuple[str, str, dict] | None = None
@@ -217,6 +221,8 @@ class GenerationTask(QgsTask):
             ctx=self._ctx,
             suggested_resolution=self._suggested_resolution,
             context_images=self._context_images,
+            guidance_image=self._guidance_image,
+            guidance_format=self._guidance_format,
         )
 
         if self.isCanceled():
@@ -291,12 +297,19 @@ class GenerationTask(QgsTask):
             try:
                 sent_img = base64.b64decode(self._image_b64)
                 ctx_bytes = [base64.b64decode(b) for b in self._context_images]
+                guidance_img = (
+                    base64.b64decode(self._guidance_image)
+                    if self._guidance_image
+                    else None
+                )
                 save_debug_artifacts(
                     self._ctx,
                     sent_img,
                     image_data,
                     self._plugin_dir,
                     context_images=ctx_bytes,
+                    guidance_png=guidance_img,
+                    guidance_format=self._guidance_format,
                 )
             except Exception:  # nosec B110
                 pass

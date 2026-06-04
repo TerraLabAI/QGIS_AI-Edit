@@ -20,6 +20,10 @@ class PipelineContext:
     extent: dict | None = None
     crs_wkt: str | None = None
     crs_authid: str | None = None
+    # Rendered extent reprojected to WGS84 (EPSG:4326) client-side as
+    # {west, south, east, north}, so the backend stores an exact footprint
+    # without needing its own proj library.
+    bbox_wgs84: dict | None = None
     # Centroid of the rendered zone in WGS84, computed client-side via QGIS
     # so the server doesn't need its own reprojection library.
     centroid_lat: float | None = None
@@ -29,6 +33,10 @@ class PipelineContext:
     ground_resolution_m: float | None = None
     export_width: int | None = None
     export_height: int | None = None
+    # Sanitized basemap identity (provider + host only, never a file path or
+    # auth token) under the rendered zone. Pure context for the internal team
+    # map; safe to send.
+    basemap: str | None = None
     aspect_ratio: str | None = None
     image_size_bytes: int | None = None
     # Wire format the input was encoded as ('webp' | 'jpeg' | 'png'). Sent to
@@ -149,6 +157,8 @@ def save_debug_artifacts(
     plugin_dir: str,
     max_runs: int = 20,
     context_images: list[bytes] | None = None,
+    guidance_png: bytes | None = None,
+    guidance_format: str | None = None,
 ) -> str | None:
     """Save debug artifacts to .debug/{timestamp}/. Returns path or None."""
     debug_dir = os.path.join(plugin_dir, ".debug")
@@ -164,6 +174,14 @@ def save_debug_artifacts(
     if received_png:
         with open(os.path.join(run_dir, "received.png"), "wb") as f:
             f.write(received_png)
+
+    # The markup-overlay guidance image, when the user drew annotations. This
+    # is the original zone with the marks on top; the main image (sent.*) is
+    # clean. Saving both is the quickest way to confirm the split is correct.
+    if guidance_png:
+        guidance_ext = {"webp": "webp", "jpeg": "jpg"}.get(guidance_format or "", "png")
+        with open(os.path.join(run_dir, f"guidance.{guidance_ext}"), "wb") as f:
+            f.write(guidance_png)
 
     if context_images:
         for idx, data in enumerate(context_images, start=1):

@@ -153,6 +153,8 @@ class GenerationService:
         on_progress: Callable = None,
         ctx=None,
         context_images: list[str] | None = None,
+        guidance_image: str | None = None,
+        guidance_format: str | None = None,
     ) -> GenerationResult:
         """Submit image for generation and poll until complete."""
         if self._cancelled:
@@ -166,7 +168,8 @@ class GenerationService:
         log_debug(
             f"Submitting: resolution={suggested_resolution}, "
             f"aspect={aspect_ratio}, prompt_len={len(prompt)}, "
-            f"image_b64_len={len(image_b64)}, context_images={ctx_count}"
+            f"image_b64_len={len(image_b64)}, context_images={ctx_count}, "
+            f"guidance={'yes' if guidance_image else 'no'}"
         )
 
         # Preferred path: upload the image straight to remote storage via a
@@ -178,6 +181,25 @@ class GenerationService:
             image_b64, auth, ctx.input_format if ctx is not None else None
         )
 
+        # The markup-overlay guidance image rides the same upload path as the
+        # main image: presigned when large (keeps the submit body under the
+        # serverless cap), inline otherwise. Its own format token is used so a
+        # rare PNG encode fallback on the guidance alone stays correctly
+        # labeled. It never counts against the user's reference-image quota.
+        guidance_upload_token = None
+        guidance_inline = None
+        if guidance_image:
+            guidance_upload_token = self._try_upload_token_flow(
+                guidance_image, auth, guidance_format
+            )
+            if guidance_upload_token is None:
+                guidance_inline = guidance_image
+                log_debug(
+                    f"Guidance image: inline ({len(guidance_image)} b64 bytes)"
+                )
+            else:
+                log_debug("Guidance image: presigned upload")
+
         # Pull geospatial + iteration context off the pipeline ctx so the
         # backend can use it. All fields optional - old backends ignore
         # them, no plugin re-release needed for backwards compat.
@@ -188,6 +210,24 @@ class GenerationService:
                 geo_kwargs["centroid_lon"] = ctx.centroid_lon
             if ctx.ground_resolution_m is not None:
                 geo_kwargs["ground_resolution_m"] = ctx.ground_resolution_m
+            # Full capture context: exact footprint in WGS84 + native CRS so the
+            # backend can georeference each generation precisely later. All
+            # optional - old backends ignore unknown fields.
+            if ctx.bbox_wgs84 is not None:
+                geo_kwargs["bbox_wgs84"] = ctx.bbox_wgs84
+            if ctx.extent is not None:
+                geo_kwargs["bbox"] = ctx.extent
+            if ctx.crs_authid:
+                geo_kwargs["crs_authid"] = ctx.crs_authid
+            elif ctx.crs_wkt:
+                # Only when there is no EPSG authid (custom/project CRS): keeps
+                # payload and storage lean for the common 3857/4326 case.
+                geo_kwargs["crs_wkt"] = ctx.crs_wkt
+            if ctx.export_width and ctx.export_height:
+                geo_kwargs["export_width"] = ctx.export_width
+                geo_kwargs["export_height"] = ctx.export_height
+            if ctx.basemap:
+                geo_kwargs["basemap"] = ctx.basemap
             if ctx.parent_request_id:
                 geo_kwargs["parent_request_id"] = ctx.parent_request_id
             if ctx.template_id:
@@ -203,6 +243,8 @@ class GenerationService:
                 aspect_ratio=aspect_ratio,
                 auth=auth,
                 context_images=context_images,
+                guidance_image=guidance_inline,
+                guidance_upload_token=guidance_upload_token,
                 **geo_kwargs,
             )
         else:
@@ -213,6 +255,8 @@ class GenerationService:
                 aspect_ratio=aspect_ratio,
                 auth=auth,
                 context_images=context_images,
+                guidance_image=guidance_inline,
+                guidance_upload_token=guidance_upload_token,
                 **geo_kwargs,
             )
 

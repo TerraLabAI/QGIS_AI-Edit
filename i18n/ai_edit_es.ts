@@ -284,8 +284,8 @@ We'd love to hear from you!</source>
         <translation>EXPERIMENTAL (puede producir resultados inesperados)</translation>
     </message>
     <message>
-        <source>Edit the prompt above and retry, or pick a new action below</source>
-        <translation>Edita el prompt arriba y reintenta, o elige una nueva acción abajo</translation>
+        <source>Type a new prompt to retry, or pick an action below</source>
+        <translation>Escribe un nuevo prompt para reintentar, o elige una acción abajo</translation>
     </message>
     <message>
         <source>Editing</source>
@@ -974,6 +974,10 @@ We'd love to hear from you!</source>
     <message>
         <source>{} outputs are unlocked with a subscription.</source>
         <translation>Las salidas {} se desbloquean con una suscripción.</translation>
+    </message>
+    <message>
+        <source>Free plan is limited to {n} reference image.</source>
+        <translation>El plan gratuito está limitado a {n} imagen de referencia.</translation>
     </message>
     <message>
         <source>⌖ Pick on map</source>

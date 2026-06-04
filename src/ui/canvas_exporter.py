@@ -227,23 +227,45 @@ class ExportPrep:
         "actual_extent",
         "background_color",
         "map_crs",
+        "guidance_settings",
     )
 
-    def __init__(self, settings, out_w, out_h, actual_extent, background_color, map_crs):
+    def __init__(
+        self,
+        settings,
+        out_w,
+        out_h,
+        actual_extent,
+        background_color,
+        map_crs,
+        guidance_settings=None,
+    ):
         self.settings = settings
         self.out_w = out_w
         self.out_h = out_h
         self.actual_extent = actual_extent
         self.background_color = background_color
         self.map_crs = map_crs
+        # When markup annotations exist, a second QgsMapSettings rendering the
+        # SAME zone with the markup layer on top. None when there is no markup.
+        self.guidance_settings = guidance_settings
 
 
 def prepare_export(
     map_settings: QgsMapSettings,
     extent: QgsRectangle,
     target_resolution: str | None = None,
+    markup_layer: QgsMapLayer | None = None,
 ) -> ExportPrep:
-    """Pick output size and clone settings. Cheap, main-thread."""
+    """Pick output size and clone settings. Cheap, main-thread.
+
+    When ``markup_layer`` is given (the user drew guidance annotations), the
+    MAIN image excludes that layer so the model sees the original pixels
+    untouched, and a second ``guidance_settings`` is built that renders the
+    same zone WITH the markup on top. Both share the identical adjusted extent
+    and output size so the overlay registers pixel-for-pixel with the main
+    image.
+    """
     if extent.width() <= 0 or extent.height() <= 0:
         raise ValueError("Invalid extent: width and height must be positive")
 
@@ -278,6 +300,45 @@ def prepare_export(
     settings.setExtent(adjusted_extent)
     settings.setOutputSize(QSize(out_w, out_h))
 
+    guidance_settings = None
+    if markup_layer is not None:
+        try:
+            markup_id = markup_layer.id()
+        except RuntimeError:
+            markup_id = None
+        if markup_id is not None:
+            # Main image: drop the markup layer so the model gets clean pixels.
+            all_layers = settings.layers()
+            main_layers = [lyr for lyr in all_layers if lyr.id() != markup_id]
+            markup_in_canvas = len(main_layers) != len(all_layers)
+            settings.setLayers(main_layers)
+            # Guidance image: clone again from the same source (markup still in
+            # the layer list, on top) and apply the SAME adjusted_extent +
+            # out_w/out_h. Do not recompute these or the overlay would drift
+            # out of registration with the main image.
+            guidance_settings = _clone_map_settings(map_settings)
+            guidance_settings.setExtent(adjusted_extent)
+            guidance_settings.setOutputSize(QSize(out_w, out_h))
+            log_debug(
+                f"Markup guidance prep: markup_in_canvas={markup_in_canvas}, "
+                f"main_layers={len(main_layers)}, "
+                f"guidance_layers={len(guidance_settings.layers())}, "
+                f"out={out_w}x{out_h}"
+            )
+            if not markup_in_canvas:
+                # Markup drawn but its layer is not in the canvas render set
+                # (user hid it): the guidance overlay would be identical to the
+                # clean main image, so the feature silently no-ops.
+                log_warning(
+                    "Markup guidance: markup layer not in canvas render set "
+                    "(hidden?); guidance overlay matches the main image"
+                )
+        else:
+            log_warning(
+                "Markup guidance: markup layer reference is stale; "
+                "no guidance overlay rendered"
+            )
+
     return ExportPrep(
         settings=settings,
         out_w=out_w,
@@ -285,20 +346,19 @@ def prepare_export(
         actual_extent=settings.visibleExtent(),
         background_color=map_settings.backgroundColor(),
         map_crs=map_crs,
+        guidance_settings=guidance_settings,
     )
 
 
-def render_export(
-    prep: ExportPrep,
+def _render_settings_to_image(
+    settings: QgsMapSettings,
+    out_w: int,
+    out_h: int,
+    background_color,
     progress_cb=None,
-) -> tuple[str, int, QgsRectangle, str]:
-    """Render off-screen, encode, base64. Worker-thread safe.
-
-    Returns ``(b64, raw_bytes, extent, format_token)`` where ``format_token`` is
-    the actual format written ('webp' | 'jpeg' | 'png'), used so the upload is
-    labeled with a matching content-type.
-    """
-    job = QgsMapRendererParallelJob(prep.settings)
+) -> QImage:
+    """Render one QgsMapSettings off-screen to a QImage. Worker-thread safe."""
+    job = QgsMapRendererParallelJob(settings)
     if progress_cb is not None:
         try:
             job.renderingLayersFinished.connect(lambda: progress_cb(80))
@@ -310,16 +370,20 @@ def render_export(
     image = job.renderedImage()
     if image is None or image.isNull():
         # CustomPainter fallback for layer providers ParallelJob can't handle.
-        image = QImage(QSize(prep.out_w, prep.out_h), QtC.FormatARGB32)
-        image.fill(prep.background_color)
+        image = QImage(QSize(out_w, out_h), QtC.FormatARGB32)
+        image.fill(background_color)
         painter = QPainter(image)
         try:
-            fallback = QgsMapRendererCustomPainterJob(prep.settings, painter)
+            fallback = QgsMapRendererCustomPainterJob(settings, painter)
             fallback.start()
             fallback.waitForFinished()
         finally:
             painter.end()
+    return image
 
+
+def _encode_image(image: QImage, out_w: int, out_h: int) -> tuple[str, int, str]:
+    """Encode a rendered QImage to ``(b64, raw_bytes, format_token)``."""
     fmt_qt, fmt_token, quality = chosen_input_format()
     buffer = QBuffer()
     buffer.open(QtC.WriteOnly)
@@ -340,9 +404,47 @@ def render_export(
     # bloated input is visible in the Log Messages panel without DEBUG.
     log_debug(
         f"Input export encoded: format={fmt_token} q={quality} "
-        f"dims={prep.out_w}x{prep.out_h} raw_bytes={len(raw)} b64_bytes={len(b64)}"
+        f"dims={out_w}x{out_h} raw_bytes={len(raw)} b64_bytes={len(b64)}"
     )
-    return b64, len(raw), prep.actual_extent, fmt_token
+    return b64, len(raw), fmt_token
+
+
+def render_export(
+    prep: ExportPrep,
+    progress_cb=None,
+) -> tuple[str, int, QgsRectangle, str]:
+    """Render the MAIN input off-screen, encode, base64. Worker-thread safe.
+
+    Returns ``(b64, raw_bytes, extent, format_token)`` where ``format_token`` is
+    the actual format written ('webp' | 'jpeg' | 'png'), used so the upload is
+    labeled with a matching content-type.
+    """
+    image = _render_settings_to_image(
+        prep.settings, prep.out_w, prep.out_h, prep.background_color, progress_cb
+    )
+    b64, raw_len, fmt_token = _encode_image(image, prep.out_w, prep.out_h)
+    return b64, raw_len, prep.actual_extent, fmt_token
+
+
+def render_guidance(prep: ExportPrep) -> tuple[str, str] | None:
+    """Render the markup-overlay guidance image (original zone + markup on top).
+
+    Returns ``(b64, format_token)``, or ``None`` when there is no markup to
+    render. The format token is the guidance render's OWN actual format so the
+    upload content-type stays correct even if its encode falls back to PNG
+    independently of the main image.
+    """
+    if prep.guidance_settings is None:
+        return None
+    image = _render_settings_to_image(
+        prep.guidance_settings, prep.out_w, prep.out_h, prep.background_color
+    )
+    b64, raw_len, fmt_token = _encode_image(image, prep.out_w, prep.out_h)
+    log_debug(
+        f"Guidance image rendered: dims={prep.out_w}x{prep.out_h} "
+        f"format={fmt_token} raw_bytes={raw_len} b64_bytes={len(b64)}"
+    )
+    return b64, fmt_token
 
 
 def apply_export_context(
@@ -364,6 +466,8 @@ def apply_export_context(
     ctx.crs_wkt = prep.map_crs.toWkt()
     ctx.crs_authid = prep.map_crs.authid() or None
     ctx.centroid_lat, ctx.centroid_lon = _centroid_wgs84(actual_extent, prep.map_crs)
+    ctx.bbox_wgs84 = _bbox_wgs84(actual_extent, prep.map_crs)
+    ctx.basemap = _detect_basemap(prep.settings.layers())
     ctx.ground_resolution_m = _compute_ground_resolution_m(
         actual_extent, prep.out_w, prep.out_h, prep.map_crs
     )
@@ -490,6 +594,96 @@ def _centroid_wgs84(extent: QgsRectangle, src_crs) -> tuple[float | None, float 
         return pt.y(), pt.x()
     except Exception:
         return None, None
+
+
+def _bbox_wgs84(extent: QgsRectangle, src_crs) -> dict | None:
+    """Rendered extent reprojected to WGS84 (EPSG:4326) as W/S/E/N degrees.
+
+    Reprojected client-side so the backend stores an exact footprint without a
+    proj library. transformBoundingBox densifies the edges, so the envelope of
+    a rotated or conformal source CRS stays tight rather than clipping corners.
+    """
+    try:
+        wgs84 = QgsCoordinateReferenceSystem("EPSG:4326")
+        if src_crs == wgs84:
+            box = extent
+        else:
+            transform = QgsCoordinateTransform(src_crs, wgs84, QgsProject.instance())
+            box = transform.transformBoundingBox(extent)
+        return {
+            "west": box.xMinimum(),
+            "south": box.yMinimum(),
+            "east": box.xMaximum(),
+            "north": box.yMaximum(),
+        }
+    except Exception:
+        return None
+
+
+# Known basemap tile hosts -> friendly label, so a generation reads "Google" or
+# "IGN" rather than a raw tile URL. Substring match on the sanitized host.
+_BASEMAP_HOSTS = (
+    ("google", "Google"),
+    ("gstatic", "Google"),
+    ("virtualearth", "Bing"),
+    ("bing", "Bing"),
+    ("geopf.fr", "IGN"),
+    ("ign.fr", "IGN"),
+    ("geoportail", "IGN"),
+    ("arcgisonline", "Esri"),
+    ("esri", "Esri"),
+    ("mapbox", "Mapbox"),
+    ("openstreetmap", "OSM"),
+    ("tile.osm", "OSM"),
+    ("cartocdn", "Carto"),
+    ("swisstopo", "Swisstopo"),
+)
+
+
+def _basemap_label(layer) -> str | None:
+    """Sanitized identity of one raster basemap layer.
+
+    Friendly name for known tile hosts, else '<kind>:<host>' with the host only,
+    else the provider kind. Never returns a full source, file path, or URL query:
+    those can carry local disk paths or embedded auth tokens.
+    """
+    try:
+        provider = (layer.providerType() or "").lower()
+    except Exception:
+        return None
+    if provider == "gdal":
+        return "local raster"
+    if provider not in ("wms", "wmts", "arcgismapserver"):
+        return provider or None
+    try:
+        from urllib.parse import parse_qs, urlsplit
+
+        params = parse_qs(layer.source() or "")
+        url = (params.get("url") or [""])[0]
+        kind = "XYZ" if (params.get("type") or [""])[0] == "xyz" else "WMS"
+        host = (urlsplit(url).hostname or "").lower()
+        for needle, label in _BASEMAP_HOSTS:
+            if needle in host:
+                return label
+        return (f"{kind}:{host}" if host else kind)[:64]
+    except Exception:
+        return None
+
+
+def _detect_basemap(layers) -> str | None:
+    """Sanitized identity of the bottom-most raster basemap under the zone."""
+    try:
+        from qgis.core import QgsRasterLayer
+
+        # layers() is top-to-bottom; the basemap is normally the lowest raster.
+        for layer in reversed(list(layers)):
+            if isinstance(layer, QgsRasterLayer):
+                label = _basemap_label(layer)
+                if label:
+                    return label
+    except Exception:
+        return None
+    return None
 
 
 def _compute_ground_resolution_m(extent, out_w: int, out_h: int, crs) -> float | None:

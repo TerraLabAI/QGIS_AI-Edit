@@ -35,6 +35,11 @@ from ..core.reference_image_store import (
 from .layer_renderer import is_remote_layer, load_transient_layers, render_layers_to_qimage
 
 THUMB_PX = 56
+# Free-tier reference-image cap. This is a UX/entitlement gate, not a storage
+# limit: the store keeps enforcing MAX_REFERENCES as the hard ceiling, and the
+# backend rejects free-tier generations carrying more than this many context
+# images. Adding past this on free tier surfaces an upsell, not an error.
+FREE_TIER_MAX_REFERENCES = 1
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 # Companions a shapefile needs alongside the .shp to load. .prj is technically
 # optional (no CRS = degraded render via the fallback CRS), so we don't gate on
@@ -200,11 +205,18 @@ class ReferenceImagesWidget(QWidget):
     images_changed = pyqtSignal()
     error_occurred = pyqtSignal(str)
     error_cleared = pyqtSignal()
+    # Emitted when a free-tier user tries to add past FREE_TIER_MAX_REFERENCES.
+    # The dock shows the subscribe upsell; the widget stays out of presentation.
+    upsell_requested = pyqtSignal()
 
     def __init__(self, store: ReferenceImageStore, parent=None):
         super().__init__(parent)
         self._store = store
         self._readonly = False
+        # Default restrictive (free) until the dock confirms the tier via
+        # set_free_tier(), matching the dock's own _is_free_tier default. The
+        # server enforces the real cap, so a brief restrictive window is safe.
+        self._free_tier = True
         # Parented QTimer for the 4 s "error cleared" auto-dismiss. Holding a
         # ref so we can stop it when the widget is destroyed first.
         self._error_clear_timer: QTimer | None = None
@@ -264,7 +276,31 @@ class ReferenceImagesWidget(QWidget):
         return self._store.count()
 
     def at_capacity(self) -> bool:
+        # Hard ceiling only. Drives attach-button visibility in the dock: the
+        # free-tier gate deliberately does NOT hide the button, so clicking it
+        # surfaces the upsell instead of silently doing nothing.
         return self._store.count() >= MAX_REFERENCES
+
+    def set_free_tier(self, free_tier: bool) -> None:
+        """Tell the widget whether the current user is on the free tier.
+
+        Pushed by the dock on every set_credits() call. Non-destructive: never
+        removes images already added if the tier flips to free, only blocks
+        adding more.
+        """
+        self._free_tier = free_tier
+
+    def _check_can_add(self) -> str:
+        """Single source of truth for the add gate. Returns a reason:
+        ``"ok"``, ``"free_limit"`` (free tier nudge), or ``"hard_cap"`` (the
+        MAX_REFERENCES ceiling). Free-tier is checked first so a free user at
+        the limit always sees the upsell, never the generic cap message."""
+        count = self._store.count()
+        if self._free_tier and count >= FREE_TIER_MAX_REFERENCES:
+            return "free_limit"
+        if count >= MAX_REFERENCES:
+            return "hard_cap"
+        return "ok"
 
     def add_paths(self, paths: list[str]) -> None:
         """Public entry point for the container's drop zone and attach button."""
@@ -287,7 +323,11 @@ class ReferenceImagesWidget(QWidget):
         """Public entry point for the paperclip button on the prompt container."""
         if self._readonly:
             return
-        if self.at_capacity():
+        reason = self._check_can_add()
+        if reason == "free_limit":
+            self.upsell_requested.emit()
+            return
+        if reason == "hard_cap":
             self._show_temp_error(
                 tr("Maximum {n} reference images reached").format(n=MAX_REFERENCES)
             )
@@ -340,7 +380,11 @@ class ReferenceImagesWidget(QWidget):
         added = 0
         error_shown = False
         for layer in layers:
-            if self._store.count() >= MAX_REFERENCES:
+            reason = self._check_can_add()
+            if reason == "free_limit":
+                self.upsell_requested.emit()
+                break
+            if reason == "hard_cap":
                 if not error_shown:
                     self._show_temp_error(
                         tr("Maximum {n} reference images reached").format(n=MAX_REFERENCES)
@@ -360,7 +404,11 @@ class ReferenceImagesWidget(QWidget):
         added = 0
         error_shown = False
         for path in paths:
-            if self._store.count() >= MAX_REFERENCES:
+            reason = self._check_can_add()
+            if reason == "free_limit":
+                self.upsell_requested.emit()
+                break
+            if reason == "hard_cap":
                 if not error_shown:
                     self._show_temp_error(
                         tr("Maximum {n} reference images reached").format(n=MAX_REFERENCES)

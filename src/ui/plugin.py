@@ -284,6 +284,8 @@ class AIEditPlugin:
         self._catalog_loader = None
         # Preserved for retry (re-generate from original, not from AI result)
         self._last_image_b64 = None
+        self._last_guidance_b64 = None
+        self._last_guidance_format = None
         self._last_input_format = None
         self._last_input_bytes = None
         self._last_extent_dict = None
@@ -1006,6 +1008,8 @@ class AIEditPlugin:
         self._clear_selection_rectangle()
         self._selected_extent = None
         self._last_image_b64 = None
+        self._last_guidance_b64 = None
+        self._last_guidance_format = None
         if self._map_tool:
             self._map_tool.set_has_zone(False)
         self._deactivate_selection_tool()
@@ -1071,6 +1075,8 @@ class AIEditPlugin:
         self._clear_selection_rectangle()
         self._selected_extent = None
         self._last_image_b64 = None
+        self._last_guidance_b64 = None
+        self._last_guidance_format = None
         if self._map_tool:
             self._map_tool.set_has_zone(False)
         self._deactivate_selection_tool()
@@ -1161,6 +1167,7 @@ class AIEditPlugin:
             "template_id": ctx.template_id,
             "template_name": ctx.template_name,
             "used_template": bool(ctx.template_id),
+            "used_markup": bool(self._last_guidance_b64),
         }))
         log_debug(f"Retry generation: prompt_len={len(prompt)}")
 
@@ -1182,6 +1189,8 @@ class AIEditPlugin:
             skip_trial_check=self._skip_trial_check,
             suggested_resolution=self._last_suggested_res or "1K",
             context_images=self._reference_store.get_all_b64(),
+            guidance_image=self._last_guidance_b64,
+            guidance_format=self._last_guidance_format,
         )
         self._worker.succeeded.connect(self._on_generation_finished)
         self._worker.progress.connect(self._on_generation_progress)
@@ -1568,6 +1577,20 @@ class AIEditPlugin:
         self._dock_widget.set_generating(True)
         self._dock_widget.set_status("")
 
+        # When the user drew markup, send the clean zone as the main image and
+        # the same zone with markup on top as a separate guidance overlay, so
+        # the model sees the original pixels untouched and is only guided by the
+        # marks. With no markup, behave exactly as before (single clean render).
+        markup_layer = None
+        if (
+            self._markup_manager is not None
+            and self._markup_manager.annotation_count() > 0
+        ):
+            try:
+                markup_layer = self._markup_manager.layer()
+            except RuntimeError:
+                markup_layer = None
+
         try:
             map_settings = self._canvas.mapSettings()
             # Always export the input at the chosen resolution (1K/2K/4K). The
@@ -1575,7 +1598,10 @@ class AIEditPlugin:
             # zone is pointless: a big Google Satellite selection would balloon
             # into tens of MB, stall the upload, and gain nothing.
             prep = prepare_export(
-                map_settings, self._selected_extent, target_resolution=suggested_res,
+                map_settings,
+                self._selected_extent,
+                target_resolution=suggested_res,
+                markup_layer=markup_layer,
             )
         except Exception as e:
             self._dock_widget.set_generating(False)
@@ -1618,6 +1644,8 @@ class AIEditPlugin:
         actual_extent,
         size_bytes: int,
         input_format: str,
+        guidance_b64: str = "",
+        guidance_format: str = "",
     ):
         pending = self._pending_generation
         self._pending_generation = None
@@ -1630,6 +1658,13 @@ class AIEditPlugin:
         prompt = pending["prompt"]
         suggested_res = pending["suggested_res"]
         crs_wkt = pending["crs_wkt"]
+
+        log_debug(
+            f"Export completed: main_b64={len(image_b64)}, "
+            f"guidance_b64={len(guidance_b64)}, "
+            f"guidance_format={guidance_format or '-'}, "
+            f"used_markup={bool(guidance_b64)}"
+        )
 
         apply_export_context(ctx, prep, actual_extent, size_bytes, input_format)
 
@@ -1659,6 +1694,8 @@ class AIEditPlugin:
 
         # Preserve original zone for retry (never chain from AI result)
         self._last_image_b64 = image_b64
+        self._last_guidance_b64 = guidance_b64 or None
+        self._last_guidance_format = guidance_format or None
         self._last_input_format = input_format
         self._last_input_bytes = size_bytes
         self._last_extent_dict = extent_dict
@@ -1684,6 +1721,7 @@ class AIEditPlugin:
             "template_id": ctx.template_id,
             "template_name": ctx.template_name,
             "used_template": bool(ctx.template_id),
+            "used_markup": bool(guidance_b64),
         }))
         log(f"Generation started: prompt_len={len(prompt)}, resolution={suggested_res}, zone={img_w}x{img_h}px")
 
@@ -1705,6 +1743,8 @@ class AIEditPlugin:
             skip_trial_check=self._skip_trial_check,
             suggested_resolution=suggested_res,
             context_images=self._reference_store.get_all_b64(),
+            guidance_image=guidance_b64 or None,
+            guidance_format=guidance_format or None,
         )
         self._worker.succeeded.connect(self._on_generation_finished)
         self._worker.progress.connect(self._on_generation_progress)
