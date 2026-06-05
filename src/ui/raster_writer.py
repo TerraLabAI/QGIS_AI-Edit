@@ -261,9 +261,18 @@ def write_geotiff(
         )
         dst_ds.SetMetadataItem("TIFFTAG_IMAGEDESCRIPTION", prompt[:512])
 
+        # Copy bands via raw GDAL buffers, not ReadAsArray/WriteArray. The array
+        # path pulls in osgeo.gdal_array -> numpy; a broken numpy ABI (common on
+        # Windows when another package upgrades numpy in the QGIS env) throws
+        # "numpy.core.multiarray failed to import" here and the whole save fails
+        # even though GDAL itself works. ReadRaster/WriteRaster are pure C.
         for i in range(1, bands + 1):
-            band_data = src_ds.GetRasterBand(i).ReadAsArray()
-            dst_ds.GetRasterBand(i).WriteArray(band_data)
+            raw = src_ds.GetRasterBand(i).ReadRaster(
+                0, 0, recv_w, recv_h, recv_w, recv_h, gdal.GDT_Byte
+            )
+            dst_ds.GetRasterBand(i).WriteRaster(
+                0, 0, recv_w, recv_h, raw, recv_w, recv_h, gdal.GDT_Byte
+            )
 
         dst_ds.FlushCache()
         dst_ds = None
