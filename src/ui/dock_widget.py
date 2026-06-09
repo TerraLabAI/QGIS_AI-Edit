@@ -3,7 +3,6 @@ from __future__ import annotations
 import html
 import os
 import random
-import re
 import tempfile
 
 from qgis.core import QgsMimeDataUtils, QgsProject, QgsRasterLayer, QgsVectorLayer
@@ -45,6 +44,7 @@ from qgis.PyQt.QtWidgets import (
     QPushButton,
     QScrollArea,
     QShortcut,
+    QSizePolicy,
     QStyle,
     QTextEdit,
     QToolButton,
@@ -61,11 +61,16 @@ from ..core.auth.activation_manager import (
 )
 from ..core.i18n import tr
 from ..core.logger import log_debug, log_warning
+from ..core.prompts.hex_highlight import HEX_RX, contrast_text_for, expand_hex
 from ..core.prompts.loading_messages import get_phase_messages
-from ..core.prompts.prompt_presets import format_template_prompt
+from ..core.prompts.prompt_presets import detect_prompt_guidance, format_template_prompt
 from ..core.reference_image_store import ReferenceImageStore
 from .credit_ring import CreditRing
-from .dialogs.error_report_dialog import SUPPORT_EMAIL, show_error_report
+from .dialogs.error_report_dialog import (
+    REPORT_PROBLEM_HREF,
+    SUPPORT_EMAIL,
+    show_error_report,
+)
 from .panel_helpers import (
     apply_swatch_style,
     build_panel_header,
@@ -75,13 +80,23 @@ from .panel_helpers import (
 from .panels.markup_panel import MarkupPanel
 from .panels.vectorize_panel import VectorizePanel
 from .reference_images_widget import FREE_TIER_MAX_REFERENCES, ReferenceImagesWidget
+from .version_strip import VersionStrip
 
 # ---------------------------------------------------------------------------
 # Brand colors (Material Design 2 - shared with AI Segmentation)
 # ---------------------------------------------------------------------------
-BRAND_GREEN = "#43a047"
-BRAND_GREEN_HOVER = "#2e7d32"
-BRAND_GREEN_DISABLED = "#c8e6c9"
+# Primary CTA buttons (Generate / Regenerate / Launch / Login) keep the
+# original material green - it reads as THE action color and stays unchanged.
+# Every other green accent uses the QGIS lime below.
+BTN_GREEN = "#43a047"
+BTN_GREEN_HOVER = "#2e7d32"
+BTN_GREEN_DISABLED = "#c8e6c9"
+
+# Brand accent green = the QGIS green (terralab-website --qgis-green). Lime
+# fills use BRAND_GREEN; green text on light backgrounds uses BRAND_GREEN_TEXT
+# (#8bac27 only clears ~2.5:1 on white, the darker tone clears AA).
+BRAND_GREEN = "#8bac27"
+BRAND_GREEN_TEXT = "#4d7c0f"
 BRAND_BLUE = "#1e88e5"
 BRAND_BLUE_HOVER = "#1976d2"
 BRAND_RED = "#d32f2f"
@@ -104,17 +119,17 @@ TERRALAB_URL = (
 
 # Design-system QSS constants. border: none kills the native frame on dark themes.
 _BTN_GREEN = (
-    f"QPushButton {{ background-color: {BRAND_GREEN}; color: #000000;"
+    f"QPushButton {{ background-color: {BTN_GREEN}; color: #000000;"
     f" padding: 8px 16px; border: none; border-radius: 4px; }}"
-    f"QPushButton:hover {{ background-color: {BRAND_GREEN_HOVER}; color: #000000; }}"
-    f"QPushButton:disabled {{ background-color: {BRAND_GREEN_DISABLED};"
+    f"QPushButton:hover {{ background-color: {BTN_GREEN_HOVER}; color: #000000; }}"
+    f"QPushButton:disabled {{ background-color: {BTN_GREEN_DISABLED};"
     f" color: {DISABLED_TEXT}; }}"
 )
 
 _BTN_GREEN_AUTH = (
-    f"QPushButton {{ background-color: {BRAND_GREEN}; color: #000000;"
+    f"QPushButton {{ background-color: {BTN_GREEN}; color: #000000;"
     f" border: none; border-radius: 4px; }}"
-    f"QPushButton:hover {{ background-color: {BRAND_GREEN_HOVER}; }}"
+    f"QPushButton:hover {{ background-color: {BTN_GREEN_HOVER}; }}"
     f"QPushButton:disabled {{ background-color: {BRAND_DISABLED};"
     f" color: {DISABLED_TEXT}; }}"
 )
@@ -156,6 +171,9 @@ _BTN_GHOST = (
     f" border: 1px solid rgba(128, 128, 128, 0.15); color: {DISABLED_TEXT}; }}"
 )
 
+# Shared height for the prompt-row chips so text-only and icon chips align.
+_CHIP_HEIGHT = 30
+
 # Footer icon buttons (swipe / vectorize / gear / question mark).
 # Hover, active and disabled states are all driven by the dynamic
 # ``hover`` / ``active`` properties + Qt's :checked pseudo-state. The
@@ -169,10 +187,10 @@ _FOOTER_ICON_BTN_STYLE = (
     " font-size: 22px; font-weight: 600;"
     " color: palette(text); border-radius: 4px; }"
     'QToolButton[hover="true"] { background: rgba(128,128,128,0.15); }'
-    'QToolButton[active="true"] { background: rgba(46, 125, 50, 0.55); }'
-    'QToolButton[active="true"][hover="true"] { background: rgba(46, 125, 50, 0.75); }'
-    "QToolButton:checked { background: rgba(46, 125, 50, 0.55); }"
-    "QToolButton:checked:hover { background: rgba(46, 125, 50, 0.75); }"
+    'QToolButton[active="true"] { background: rgba(139, 172, 39, 0.55); }'
+    'QToolButton[active="true"][hover="true"] { background: rgba(139, 172, 39, 0.75); }'
+    "QToolButton:checked { background: rgba(139, 172, 39, 0.55); }"
+    "QToolButton:checked:hover { background: rgba(139, 172, 39, 0.75); }"
     "QToolButton:disabled { color: rgba(128, 128, 128, 0.4); }"
     "QToolButton::menu-indicator { image: none; width: 0; }"
 )
@@ -222,12 +240,41 @@ def _tinted_svg_icon(filename: str, ink: QColor) -> QIcon:
     return QIcon(pm)
 
 
-def _picture_icon(ink: QColor) -> QIcon:
-    """'Attach reference image' glyph, tinted to ``ink`` so it matches the
-    palette-text weight of the gear / help footer glyphs instead of looking
-    washed out next to them.
+def _picture_plus_icon(ink: QColor) -> QIcon:
+    """Reference-image glyph with a small accent ``+`` badge in the corner, so
+    it reads as 'add an image' at a glance (the Krea-style affordance). The
+    image stroke is tinted to ``ink`` to match the other footer glyphs; the
+    badge uses the brand green so the 'add' intent pops on both themes.
     """
-    return _tinted_svg_icon("image.svg", ink)
+    from qgis.PyQt.QtCore import QPointF, Qt
+    from qgis.PyQt.QtGui import QBrush, QPainter, QPen
+
+    pm = QIcon(
+        os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "resources", "icons", "image.svg",
+        )
+    ).pixmap(QSize(40, 40))
+    # Tint the image glyph to palette text weight.
+    p = QPainter(pm)
+    p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    p.fillRect(pm.rect(), ink)
+    p.end()
+    # Paint the green "+" badge on top, in the upper-right corner.
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    cx, cy, r = 30.0, 10.0, 9.0
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(QColor("#8BAC27")))
+    p.drawEllipse(QPointF(cx, cy), r, r)
+    pen = QPen(QColor("#14210A"))
+    pen.setWidthF(2.2)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    p.drawLine(QPointF(cx - 4, cy), QPointF(cx + 4, cy))
+    p.drawLine(QPointF(cx, cy - 4), QPointF(cx, cy + 4))
+    p.end()
+    return QIcon(pm)
 
 
 def _pencil_icon(ink: QColor) -> QIcon:
@@ -258,6 +305,53 @@ def _pencil_icon(ink: QColor) -> QIcon:
     p.drawLine(QPointF(24, 12), QPointF(29, 17))
     p.end()
     return QIcon(pm)
+
+
+class _ZoneGestureGlyph(QWidget):
+    """Vector 'draw a box' glyph: a dashed rounded box with a drag arrow across
+    it. Painted live in paintEvent so it stays crisp at any DPI (no rasterised
+    pixmap to pixelate). Blue, to echo the zone box drawn on the canvas.
+    """
+
+    def __init__(self, color: QColor, size: int = 56, parent=None):
+        super().__init__(parent)
+        self._color = color
+        self.setFixedSize(size, size)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+
+    def paintEvent(self, event):  # noqa: N802 - Qt signature
+        from qgis.PyQt.QtCore import QPointF, QRectF, Qt
+        from qgis.PyQt.QtGui import QPainter, QPen, QPolygonF
+        s = float(self.width())
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        # Dashed box (the zone being drawn), set to the upper-left so the cursor
+        # can grab its bottom-right corner without leaving the widget.
+        box = QPen(self._color)
+        box.setWidthF(s * 0.045)
+        box.setStyle(Qt.PenStyle.DashLine)
+        box.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        p.setPen(box)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        a, b = s * 0.10, s * 0.60
+        p.drawRoundedRect(QRectF(a, a, b - a, b - a), s * 0.05, s * 0.05)
+        # Solid handle on the corner being dragged.
+        hs = s * 0.05
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(self._color))
+        p.drawRect(QRectF(b - hs, b - hs, 2 * hs, 2 * hs))
+        # Mouse cursor (arrow) pulling that corner: tip on the handle, classic
+        # up-left pointer shape, blue fill with a white edge so it reads clearly.
+        f = s * 0.020
+        pts = [(0, 0), (0, 15), (3.5, 11.5), (6, 17), (8, 16), (5.5, 10.5), (10, 10)]
+        cursor = QPolygonF([QPointF(b + x * f, b + y * f) for (x, y) in pts])
+        edge = QPen(QColor(255, 255, 255, 235))
+        edge.setWidthF(s * 0.022)
+        edge.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        p.setPen(edge)
+        p.setBrush(QBrush(self._color))
+        p.drawPolygon(cursor)
+        p.end()
 
 
 _make_section_header = make_section_header  # backward-compat alias
@@ -396,26 +490,6 @@ class _FooterIconButton(QToolButton):
         super().leaveEvent(event)
 
 
-_HEX_RX = re.compile(r"#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})\b")
-
-
-def _expand_hex(hex_text: str) -> str:
-    """Expand `#RGB` to `#RRGGBB`. Returns input unchanged for 6-digit hex."""
-    h = hex_text.lstrip("#")
-    if len(h) == 3:
-        return "#" + "".join(c * 2 for c in h)
-    return "#" + h
-
-
-def _contrast_text_for(hex_text: str) -> str:
-    """Pick black or white text for readability against `hex_text` background.
-    Uses standard relative-luminance threshold."""
-    h = _expand_hex(hex_text).lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
-    return "#000000" if luminance > 0.55 else "#FFFFFF"
-
-
 class _PromptHighlighter(QSyntaxHighlighter):
     """Paints `#RRGGBB` / `#RGB` hex codes with their own color as background,
     text flipped to black or white per luminance. Makes a color list in a
@@ -424,11 +498,11 @@ class _PromptHighlighter(QSyntaxHighlighter):
     def highlightBlock(self, text: str) -> None:  # noqa: N802 (Qt API)
         if not text:
             return
-        for match in _HEX_RX.finditer(text):
+        for match in HEX_RX.finditer(text):
             hex_text = match.group(0)
             fmt = QTextCharFormat()
-            fmt.setBackground(QColor(_expand_hex(hex_text)))
-            fmt.setForeground(QColor(_contrast_text_for(hex_text)))
+            fmt.setBackground(QColor(expand_hex(hex_text)))
+            fmt.setForeground(QColor(contrast_text_for(hex_text)))
             fmt.setFontWeight(QFont.Weight.Bold)
             self.setFormat(match.start(), match.end() - match.start(), fmt)
 
@@ -618,10 +692,10 @@ class _PromptContainer(QFrame):
 
     Footer layout (bottom row):
 
-        [Templates]                              [ 2K  ⌄ ]   [ + ]
+        [Prompt library]                   [ 1K ⌄ ]  [ ✎ ]  [ +img Ref image ]
 
-    The whole frame is the drop target so dragging anywhere over it lights up
-    a single coherent area, matching the ChatGPT-style attachment flow.
+    The whole frame is the drop target so dragging a file or layer anywhere
+    over it lights up a single coherent area.
     """
 
     files_dropped = pyqtSignal(list)
@@ -639,31 +713,37 @@ class _PromptContainer(QFrame):
         "QFrame#promptContainer { border: 1px solid rgba(128,128,128,0.3);"
         " border-radius: 4px; background-color: rgba(128,128,128,0.10); }"
     )
-    _ATTACH_BTN_STYLE = (
-        "QToolButton { background: transparent; border: none; padding: 1px 8px;"
-        " font-size: 14px; font-weight: normal;"
-        " color: rgba(128,128,128,0.75); }"
-        "QToolButton:hover { color: palette(text);"
-        " background: rgba(128,128,128,0.15); border-radius: 4px; }"
-        "QToolButton:disabled { color: rgba(128,128,128,0.35); background: transparent; }"
+    # Unified footer chip: one look for the whole prompt row (Prompt library,
+    # resolution, markup, Reference). Neutral outlined pill at rest (no bold,
+    # no green), leaf-green tint on hover, stronger green when pressed/active -
+    # the same TerraLab-green interaction language as the bottom footer icons.
+    _CHIP_REST = (
+        "QToolButton { background: rgba(128,128,128,0.08);"
+        " border: 1px solid rgba(128,128,128,0.40); border-radius: 6px;"
+        " padding: 4px 10px; font-size: 12px; color: palette(text); }"
     )
-    _FOOTER_TEXT_BTN_STYLE = (
-        "QToolButton { background: transparent; border: none; padding: 2px 6px;"
-        " font-size: 11px; color: palette(text); }"
-        "QToolButton:hover { color: palette(text);"
-        " background: rgba(128,128,128,0.15); border-radius: 4px; }"
-        "QToolButton:disabled { color: rgba(128,128,128,0.45); background: transparent; }"
+    _CHIP_HOVER = "background: rgba(139,172,39,0.18); border-color: rgba(139,172,39,0.65);"
+    _CHIP_PRESSED = "background: rgba(139,172,39,0.32); border-color: rgba(139,172,39,0.85);"
+    _CHIP_TAIL = (
+        "QToolButton:disabled { color: rgba(128,128,128,0.40);"
+        " background: transparent; border-color: rgba(128,128,128,0.20); }"
         "QToolButton::menu-indicator { image: none; width: 0; }"
     )
-    # Property-driven hover variant for buttons that pop a QMenu - see
-    # _FooterIconButton for the rationale (Qt eats the synthetic Leave
-    # event when a popup closes, leaving Qt's :hover stuck on).
-    _FOOTER_TEXT_BTN_HOVERPROP_STYLE = (
-        "QToolButton { background: transparent; border: none; padding: 2px 6px;"
-        " font-size: 11px; color: palette(text); border-radius: 4px; }"
-        'QToolButton[hover="true"] { background: rgba(128,128,128,0.15); }'
-        "QToolButton:disabled { color: rgba(128,128,128,0.45); background: transparent; }"
-        "QToolButton::menu-indicator { image: none; width: 0; }"
+    _CHIP_BTN_STYLE = (
+        _CHIP_REST +
+        f"QToolButton:hover {{ {_CHIP_HOVER} }}" +
+        f"QToolButton:pressed {{ {_CHIP_PRESSED} }}" +
+        f'QToolButton[active="true"] {{ {_CHIP_PRESSED} }}' +
+        _CHIP_TAIL
+    )
+    # Same chip, but property-driven hover for buttons that pop a QMenu - Qt
+    # eats the synthetic Leave event when a popup closes, leaving :hover stuck
+    # on (see _FooterIconButton).
+    _CHIP_BTN_HOVERPROP_STYLE = (
+        _CHIP_REST +
+        f'QToolButton[hover="true"] {{ {_CHIP_HOVER} }}' +
+        f'QToolButton[active="true"] {{ {_CHIP_PRESSED} }}' +
+        _CHIP_TAIL
     )
     _MENU_STYLE = (
         "QMenu { background: palette(base); border: 1px solid rgba(128,128,128,0.35);"
@@ -703,13 +783,14 @@ class _PromptContainer(QFrame):
 
         footer_row = QHBoxLayout()
         footer_row.setContentsMargins(0, 0, 0, 0)
-        footer_row.setSpacing(0)
+        footer_row.setSpacing(6)
 
         self._templates_btn = QToolButton(self)
         self._templates_btn.setText(tr("Prompt library"))
-        self._templates_btn.setToolTip(tr("Open the prompt library: recent, favorites, and templates"))
+        self._templates_btn.setToolTip(tr("Browse templates, your recent prompts, and favorites."))
         self._templates_btn.setCursor(QtC.PointingHandCursor)
-        self._templates_btn.setStyleSheet(self._FOOTER_TEXT_BTN_STYLE)
+        self._templates_btn.setStyleSheet(self._CHIP_BTN_STYLE)
+        self._templates_btn.setFixedHeight(_CHIP_HEIGHT)
         self._templates_btn.clicked.connect(self.templates_clicked.emit)
         footer_row.addWidget(self._templates_btn)
 
@@ -721,10 +802,12 @@ class _PromptContainer(QFrame):
         self._resolution_menu.setToolTipsVisible(True)
         self._resolution_btn = _FooterIconButton(self)
         self._resolution_btn.setToolTip(
-            tr("Output resolution. Higher = sharper, more precise edits.")
+            tr("<b>Resolution</b><br>Higher means a sharper, more detailed "
+               "result.")
         )
         self._resolution_btn.setCursor(QtC.PointingHandCursor)
-        self._resolution_btn.setStyleSheet(self._FOOTER_TEXT_BTN_HOVERPROP_STYLE)
+        self._resolution_btn.setStyleSheet(self._CHIP_BTN_HOVERPROP_STYLE)
+        self._resolution_btn.setFixedHeight(_CHIP_HEIGHT)
         self._resolution_btn.clicked.connect(self._show_resolution_menu)
         # Force the hover tint off when the popup closes - Qt does not
         # synthesise a Leave event in this case (same fix as the help menu).
@@ -735,32 +818,98 @@ class _PromptContainer(QFrame):
         self._rebuild_resolution_menu()
         self._update_resolution_label()
 
-        # Markup chip: icon-only, same visual weight as the attach button.
+        # Markup chip: outlined icon button, same boxed weight as resolution
+        # and Reference so the whole footer reads as a row of clear controls.
         ink = self.palette().color(QPalette.ColorRole.WindowText)
         self._markup_chip = QToolButton(self)
         self._markup_chip.setIcon(_pencil_icon(ink))
-        self._markup_chip.setIconSize(QSize(20, 20))
+        self._markup_chip.setIconSize(QSize(18, 18))
         self._markup_chip.setCursor(QtC.PointingHandCursor)
-        self._markup_chip.setStyleSheet(self._ATTACH_BTN_STYLE)
+        self._markup_chip.setStyleSheet(self._CHIP_BTN_STYLE)
+        self._markup_chip.setFixedHeight(_CHIP_HEIGHT)
         self._markup_chip.setToolTip(
-            tr("Mark up: sketch hints on the map for your next prompt.")
+            tr("<b>Mark up</b><br>Draw arrows, shapes, or labels on the map to "
+               "show the AI what to change and where. Your sketch is sent with "
+               "the prompt as visual guidance.")
         )
         self._markup_chip.clicked.connect(self.markup_clicked.emit)
         footer_row.addWidget(self._markup_chip)
 
+        # Reference: a labelled, outlined pill (Krea-style) so users discover
+        # they can feed an image or a project layer as guidance. The icon
+        # carries a "+" badge; the tooltip explains what it does.
         self._attach_btn = QToolButton(self)
-        self._attach_btn.setIcon(_picture_icon(ink))
-        self._attach_btn.setIconSize(QSize(20, 20))
-        self._attach_btn.setToolTip(tr("Add reference image"))
+        self._attach_btn.setIcon(_picture_plus_icon(ink))
+        self._attach_btn.setIconSize(QSize(18, 18))
+        self._attach_btn.setText(tr("Ref image"))
+        self._attach_btn.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        self._attach_btn.setToolTip(
+            tr("<b>Reference image</b><br>Click to pick an image or data file from "
+               "disk. To use a QGIS layer already in your project, drag it from the "
+               "Layers panel into the prompt box. Everything is cropped to your zone.")
+        )
         self._attach_btn.setCursor(QtC.PointingHandCursor)
-        self._attach_btn.setStyleSheet(self._ATTACH_BTN_STYLE)
+        self._attach_btn.setStyleSheet(self._CHIP_BTN_STYLE)
+        self._attach_btn.setFixedHeight(_CHIP_HEIGHT)
         self._attach_btn.clicked.connect(self.attach_clicked.emit)
         footer_row.addWidget(self._attach_btn)
 
+        # Reference counter: a small lime badge tucked INSIDE the right edge of
+        # the Ref image button (parented to the button so it reads as part of
+        # it, not a detached pill). Shown only when references are attached; the
+        # button then reserves extra right padding so the badge never overlaps
+        # the label. Dark text on the lime fill reads on both light and dark
+        # themes. Hidden with the button when it collapses at capacity.
+        self._attach_style_badged = self._CHIP_BTN_STYLE.replace(
+            "padding: 4px 10px", "padding: 4px 22px 4px 10px"
+        )
+        self._ref_count = QLabel("", self._attach_btn)
+        self._ref_count.setAttribute(QtC.WA_TransparentForMouseEvents)
+        self._ref_count.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._ref_count.setFixedHeight(14)
+        self._ref_count.setStyleSheet(
+            "QLabel { background: #8bac27; color: #14210a; font-size: 8px;"
+            " font-weight: 800; border-radius: 7px; padding: 0 3px; }"
+        )
+        self._ref_count.hide()
+
         layout.addLayout(footer_row)
+        self._footer_row = footer_row
         self.setStyleSheet(self._base_style)
 
     # -- public API --------------------------------------------------------
+
+    def _apply_footer_fit(self) -> None:
+        """Collapse footer labels when the dock is too narrow for the full row,
+        so it never forces a horizontal scrollbar. Reference drops to icon-only
+        first (its tooltip still explains it), then the library pill shortens.
+        Measured, not threshold-based, so it stays correct across font/DPI."""
+        avail = self.width() - 16
+        if avail <= 0:
+            return
+
+        def fits() -> bool:
+            self._footer_row.invalidate()
+            return self._footer_row.sizeHint().width() <= avail
+
+        # Start from the fullest state, then collapse by priority.
+        self._attach_btn.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        self._templates_btn.setText(tr("Prompt library"))
+        if not fits():
+            self._attach_btn.setToolButtonStyle(
+                Qt.ToolButtonStyle.ToolButtonIconOnly
+            )
+        if not fits():
+            self._templates_btn.setText(tr("Library"))
+
+    def resizeEvent(self, event):  # noqa: N802
+        super().resizeEvent(event)
+        self._apply_footer_fit()
+        self._position_ref_badge()
 
     def insert_refs_widget(self, widget: QWidget) -> None:
         """Move a shared refs widget into this container at the top slot."""
@@ -783,9 +932,9 @@ class _PromptContainer(QFrame):
         # mid-generation; the dialog itself opens in view-only mode.
         self._templates_btn.setEnabled(True)
         self._templates_btn.setToolTip(
-            tr("Browse the prompt library (view only while generating)")
+            tr("Browse the library (view only while generating).")
             if readonly
-            else tr("Open the prompt library: recent, favorites, and templates")
+            else tr("Browse templates, your recent prompts, and favorites.")
         )
         self._resolution_btn.setEnabled(not readonly)
         self._markup_chip.setEnabled(not readonly)
@@ -801,6 +950,34 @@ class _PromptContainer(QFrame):
         visible-but-disabled - do not gate visibility on readonly here.
         """
         self._attach_btn.setVisible(enabled)
+
+    def set_reference_count(self, count: int) -> None:
+        """Show a small lime badge inside the Ref image button with the number
+        of attached references, so the control is visibly tied to the
+        thumbnails above. Hidden at zero so the footer stays clean."""
+        if count > 0:
+            self._ref_count.setText(str(count))
+            self._ref_count.adjustSize()
+            self._attach_btn.setStyleSheet(self._attach_style_badged)
+            self._ref_count.show()
+            self._ref_count.raise_()
+            # Defer so the button has taken its padded width before we anchor.
+            QTimer.singleShot(0, self._position_ref_badge)
+        else:
+            self._ref_count.hide()
+            self._attach_btn.setStyleSheet(self._CHIP_BTN_STYLE)
+
+    def _position_ref_badge(self) -> None:
+        """Anchor the count badge to the inner right edge of the Ref button,
+        vertically centered in the padding reserved for it."""
+        if self._ref_count.isHidden():
+            return
+        btn = self._attach_btn
+        badge = self._ref_count
+        x = btn.width() - badge.width() - 4
+        y = (btn.height() - badge.height()) // 2
+        badge.move(max(0, x), max(0, y))
+        badge.raise_()
 
     def set_resolution_state(
         self,
@@ -825,6 +1002,24 @@ class _PromptContainer(QFrame):
 
     def _rebuild_resolution_menu(self) -> None:
         self._resolution_menu.clear()
+        # Title so it reads as "this picks the output resolution", not as
+        # another selectable row. Disabled action = non-clickable header.
+        header = QLabel(tr("Resolution"))
+        header.setStyleSheet(
+            "color: palette(text); font-size: 12px; font-weight: 600; "
+            "padding: 9px 14px 7px 14px; background: transparent;"
+        )
+        header_action = QWidgetAction(self._resolution_menu)
+        header_action.setDefaultWidget(header)
+        header_action.setEnabled(False)
+        self._resolution_menu.addAction(header_action)
+        sep = QFrame(self._resolution_menu)
+        sep.setFrameShape(QtC.FrameHLine)
+        sep.setStyleSheet("color: rgba(128,128,128,0.25); margin: 0 8px;")
+        sep_action = QWidgetAction(self._resolution_menu)
+        sep_action.setDefaultWidget(sep)
+        sep_action.setEnabled(False)
+        self._resolution_menu.addAction(sep_action)
         for res in ("1K", "2K", "4K"):
             locked = self._free_tier and res != "1K"
             selected = res == self._selected_resolution
@@ -923,6 +1118,10 @@ class AIEditDockWidget(QDockWidget):
 
     stop_clicked = pyqtSignal()
     generate_clicked = pyqtSignal(str)
+    # Post-generation base picked in the version strip (0 = Original, i = the
+    # i-th generated version). The plugin mirrors it on the canvas and uses it
+    # to pick the export base + parent for the next edit.
+    base_version_selected = pyqtSignal(int)
     retry_clicked = pyqtSignal(str)       # retry on same zone with (possibly edited) prompt
     activation_attempted = pyqtSignal(str)
     change_key_clicked = pyqtSignal()
@@ -953,6 +1152,14 @@ class AIEditDockWidget(QDockWidget):
     # state. Stale-while-revalidate: this open uses whatever the dock has
     # cached, the refetch updates `self._server_catalog` for next time.
     catalog_refresh_requested = pyqtSignal()
+    # A past generation (history row dict) the user wants re-added to the map
+    # as a georeferenced layer, or downloaded to disk. The plugin owns the
+    # download + write + layer-add orchestration.
+    history_add_to_map = pyqtSignal(dict)
+    history_download = pyqtSignal(dict)
+    # A past generation the user chose to fully reproduce: the plugin restores
+    # the prompt, the reference image(s), and the original zone on the map.
+    history_restore = pyqtSignal(dict)
     # Fired when the Help (?) menu opens (True) or closes (False). The
     # plugin uses this to light the green active tint on the help button
     # and to disarm the swipe map tool when the user opens another action.
@@ -971,6 +1178,21 @@ class AIEditDockWidget(QDockWidget):
         self._library_client = None
         self._library_auth_manager = None
         self._server_catalog: dict | None = None
+
+        # Cache of the prompt library's Recent + Favorites, so reopening the
+        # library is instant instead of refetching + blank-then-fill each time.
+        # Seeded from a persistent disk cache so even the FIRST open of a session
+        # renders immediately (then a background refresh picks up any changes);
+        # marked dirty so that refresh always runs once per session and after a
+        # new generation.
+        from ..core.prompts import history_cache as _history_cache
+
+        self._library_recent_cache: list = _history_cache.get_recent_jobs()
+        self._library_favorite_cache: list = _history_cache.get_favorite_jobs()
+        self._library_history_loaded = bool(
+            self._library_recent_cache or self._library_favorite_cache
+        )
+        self._library_history_dirty = True
 
         # Armed template: set when the user picks a preset from the prompt
         # library so edits to the prompt text don't drop the association
@@ -1007,9 +1229,6 @@ class AIEditDockWidget(QDockWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
 
-        # --- Update notification (hidden until a newer version is published) ---
-        self._setup_update_notification(layout)
-
         # --- Activation section ---
         self._activation_widget = self._build_activation_section()
         layout.addWidget(self._activation_widget)
@@ -1019,6 +1238,9 @@ class AIEditDockWidget(QDockWidget):
         main_layout = QVBoxLayout(self._main_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(8)
+        # Kept so the version strip can be re-homed under the progress bar while
+        # a generation runs (see _place_version_strip).
+        self._main_layout = main_layout
 
         # Warning widget (no visible layer) - above prompt
         self._warning_widget = self._build_warning_widget()
@@ -1042,35 +1264,48 @@ class AIEditDockWidget(QDockWidget):
         self._launch_section.setVisible(False)
         main_layout.addWidget(self._launch_section)
 
-        # --- Select-zone section (in-between state: invites user to draw on canvas) ---
+        # --- Select-zone section: centered empty-state hero inviting the user
+        # to draw the zone. The dock is otherwise blank in this state, so the
+        # design-system Empty State pattern (gesture glyph + short warm copy,
+        # centered) gives it a clear focal point instead of a lonely top box. ---
         self._select_zone_section = QWidget()
+        self._select_zone_section.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
+        )
         sz_layout = QVBoxLayout(self._select_zone_section)
-        sz_layout.setContentsMargins(0, 0, 0, 0)
-        sz_layout.setSpacing(6)
+        sz_layout.setContentsMargins(16, 0, 16, 0)
+        sz_layout.setSpacing(10)
+        sz_layout.addStretch(1)
+
+        self._select_zone_icon = _ZoneGestureGlyph(QColor(BRAND_BLUE))
+        sz_layout.addWidget(
+            self._select_zone_icon, 0, Qt.AlignmentFlag.AlignHCenter
+        )
 
         self._select_zone_header = _make_section_header(tr("Draw your zone"))
+        self._select_zone_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sz_layout.addWidget(self._select_zone_header)
 
+        # Full-width centered text: wrapping on the real width keeps the layout's
+        # heightForWidth correct, so the copy is never clipped (a maxWidth + an
+        # alignment flag would mis-size the height and cut the last lines off).
         self._select_zone_hint = QLabel(
-            tr("Click and drag on the map to outline what AI Edit will modify.")
+            tr("Hold the left mouse button and drag to draw a box on the map. Then describe the change you want.")
         )
         self._select_zone_hint.setWordWrap(True)
-        # Softer, more breathing-room variant of _INSTRUCTION_BOX - first impression
-        # of the plugin, so the hint reads as an invitation rather than a notice.
+        self._select_zone_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._select_zone_hint.setStyleSheet(
-            "QLabel {"
-            "  background-color: rgba(128, 128, 128, 0.08);"
-            "  border: 1px solid rgba(128, 128, 128, 0.18);"
-            "  border-radius: 6px;"
-            "  padding: 12px 14px;"
-            "  font-size: 11px;"
-            "  color: palette(text);"
-            "}"
+            "QLabel { font-size: 12px; color: palette(text);"
+            " background: transparent; border: none; }"
         )
         sz_layout.addWidget(self._select_zone_hint)
 
+        sz_layout.addStretch(1)
+
         self._select_zone_section.setVisible(False)
-        main_layout.addWidget(self._select_zone_section)
+        # Stretch factor so the section claims vertical room (competing with the
+        # trailing footer spacer) and its inner stretches can centre the hero.
+        main_layout.addWidget(self._select_zone_section, 1)
 
         # --- Prompt section (shown after zone selected) ---
         self._prompt_section = QWidget()
@@ -1078,6 +1313,19 @@ class AIEditDockWidget(QDockWidget):
         self._prompt_layout = QVBoxLayout(self._prompt_section)
         self._prompt_layout.setContentsMargins(0, 0, 0, 0)
         self._prompt_layout.setSpacing(6)
+
+        # Soft, non-blocking warning shown at the top when the drawn zone is so
+        # zoomed out the model can't resolve small features (set by the plugin
+        # on zone selection). Amber to read as "heads up", not an error.
+        self._zone_guidance_hint = QLabel()
+        self._zone_guidance_hint.setWordWrap(True)
+        self._zone_guidance_hint.setStyleSheet(
+            "QLabel { background-color: rgb(255, 230, 150); "
+            "border: 1px solid rgba(255, 152, 0, 0.6); border-radius: 4px; "
+            "padding: 6px 8px; font-size: 11px; color: #333333; }"
+        )
+        self._zone_guidance_hint.setVisible(False)
+        self._prompt_layout.addWidget(self._zone_guidance_hint)
 
         self._prompt_header = _make_section_header(tr("What should AI change?"))
         self._prompt_header.setVisible(True)
@@ -1100,6 +1348,21 @@ class AIEditDockWidget(QDockWidget):
         self._prompt_container.resolution_changed.connect(self._on_resolution_selected)
         self._prompt_container.markup_clicked.connect(self.markup_clicked.emit)
         self._prompt_layout.addWidget(self._prompt_container)
+
+        # Soft, non-blocking guidance hint shown live under the prompt when the
+        # text looks off-rails (asks for a vector file, or talks to the tool
+        # like a Q&A/counting bot). Steers the user without blocking Generate.
+        # Detection is high-precision (see detect_prompt_guidance); a valid
+        # edit/detect/segment instruction never shows this.
+        self._prompt_guidance_hint = QLabel()
+        self._prompt_guidance_hint.setWordWrap(True)
+        self._prompt_guidance_hint.setStyleSheet(
+            "QLabel { background-color: rgba(25, 118, 210, 0.08); "
+            "border: 1px solid rgba(25, 118, 210, 0.2); border-radius: 4px; "
+            "padding: 6px 8px; font-size: 11px; color: palette(text); }"
+        )
+        self._prompt_guidance_hint.setVisible(False)
+        self._prompt_layout.addWidget(self._prompt_guidance_hint)
 
         # Hidden by default: revealed by set_zone_selected() once the user
         # draws a rectangle. Initial dock state only shows the "Select your
@@ -1240,7 +1503,10 @@ class AIEditDockWidget(QDockWidget):
         )
         self._status_label = QLabel("")
         self._status_label.setWordWrap(True)
-        self._status_label.setOpenExternalLinks(True)
+        # Manual link routing (not setOpenExternalLinks): http links still open
+        # in the browser, but the "Report a problem" sentinel opens the in-app
+        # log-report dialog instead of being handed to the OS as a bad URL.
+        self._status_label.linkActivated.connect(self._on_status_link)
         self._status_label.setStyleSheet(
             "font-size: 11px; background: transparent; border: none;"
         )
@@ -1258,14 +1524,20 @@ class AIEditDockWidget(QDockWidget):
         self._limit_cta_url = ""
 
         # --- Result section (shown after generation complete, iteration flow) ---
+        # A single prompt screen. The version strip below the prompt is the base
+        # picker: Original is pinned left, each result appends to the right, and
+        # the selected tile is what the next edit builds on. Lives inside
+        # _result_section so every state transition that hides it hides together.
         self._result_section = QWidget()
         self._result_layout = QVBoxLayout(self._result_section)
         self._result_layout.setContentsMargins(0, 0, 0, 0)
         self._result_layout.setSpacing(6)
 
-        # "What's next?" header
-        result_header = _make_section_header(tr("What's next?"))
-        self._result_layout.addWidget(result_header)
+        # --- Prompt + version strip + Generate -----------------------------
+        self._result_prompt_widget = QWidget()
+        self._result_prompt_layout = QVBoxLayout(self._result_prompt_widget)
+        self._result_prompt_layout.setContentsMargins(0, 0, 0, 0)
+        self._result_prompt_layout.setSpacing(6)
 
         # Editable prompt (edit and retry)
         self._result_prompt_input = _SubmitTextEdit()
@@ -1303,7 +1575,25 @@ class AIEditDockWidget(QDockWidget):
             self._result_prompt_input.images_pasted.connect(
                 self._reference_widget.add_paths
             )
-        self._result_layout.addWidget(self._result_prompt_container)
+        self._result_prompt_layout.addWidget(self._result_prompt_container)
+
+        # Same soft off-rails hint as the first-run prompt, so iterating on a
+        # v1/v2 gets the same guidance (vector / measure / chatbot).
+        self._result_guidance_hint = QLabel()
+        self._result_guidance_hint.setWordWrap(True)
+        self._result_guidance_hint.setStyleSheet(
+            "QLabel { background-color: rgba(25, 118, 210, 0.08); "
+            "border: 1px solid rgba(25, 118, 210, 0.2); border-radius: 4px; "
+            "padding: 6px 8px; font-size: 11px; color: palette(text); }"
+        )
+        self._result_guidance_hint.setVisible(False)
+        self._result_prompt_layout.addWidget(self._result_guidance_hint)
+
+        # Version strip: the base picker. Original pinned left, results append
+        # right, selected tile drives the next edit. Hidden until seeded.
+        self._version_strip = VersionStrip()
+        self._version_strip.version_selected.connect(self._on_version_selected)
+        self._result_prompt_layout.addWidget(self._version_strip)
 
         # Action row: Generate (primary, flex) + Exit (ghost, fixed).
         result_actions_row = QHBoxLayout()
@@ -1330,7 +1620,7 @@ class AIEditDockWidget(QDockWidget):
         self._result_exit_btn.clicked.connect(self._on_exit_clicked)
         result_actions_row.addWidget(self._result_exit_btn, 0)
 
-        self._result_layout.addLayout(result_actions_row)
+        self._result_prompt_layout.addLayout(result_actions_row)
 
         # Minimal status line - shown under the action row after generation.
         # Submitting the prompt (Enter key) and the Generate button both
@@ -1347,7 +1637,7 @@ class AIEditDockWidget(QDockWidget):
         self._layer_saved_label.linkActivated.connect(self._on_layer_saved_link_clicked)
         self._layer_saved_label.setVisible(False)
         self._saved_layer_id: str | None = None
-        self._result_layout.addWidget(self._layer_saved_label)
+        self._result_prompt_layout.addWidget(self._layer_saved_label)
 
         # --- Vectorize suggestion row (template-driven, hidden by default) ---
         # Shown after a generation when the template carried a vector_color
@@ -1380,7 +1670,10 @@ class AIEditDockWidget(QDockWidget):
         cta_layout.addWidget(self._vectorize_cta_btn, 1)
         self._vectorize_cta_section.setVisible(False)
         self._vectorize_cta_pending: tuple[str, str, str] | None = None
-        self._result_layout.addWidget(self._vectorize_cta_section)
+        self._result_prompt_layout.addWidget(self._vectorize_cta_section)
+
+        self._result_layout.addWidget(self._result_prompt_widget)
+        self._result_prompt_widget.setVisible(False)
 
         self._result_section.setVisible(False)
         main_layout.addWidget(self._result_section)
@@ -1465,6 +1758,11 @@ class AIEditDockWidget(QDockWidget):
 
         # Spacer to push footer to bottom
         layout.addStretch()
+
+        # --- Update notification, pinned at the bottom (above the footer) so it
+        # stays visible in every state (idle, generating, result). Most users
+        # never check for plugin updates, so this is how they learn one exists.
+        self._setup_update_notification(layout)
 
         # Footer section - single row: ring + count + upgrade pill on the
         # left, gear/help menus on the right. As the dock narrows,
@@ -1884,10 +2182,11 @@ class AIEditDockWidget(QDockWidget):
     def _setup_update_notification(self, parent_layout: QVBoxLayout) -> None:
         """Build the 'update available' banner, hidden until check_for_updates finds one.
 
-        Inserted at the top of the dock as a sibling of the activation and main
-        sections so it stays visible even while ``_main_widget`` is hidden
-        (unactivated state, tool panels), which is exactly when a first-run user
-        should still see the prompt to upgrade.
+        Pinned at the bottom of the dock (above the footer) as a sibling of the
+        main sections, so it stays visible in every state (idle, generating,
+        result) and even while ``_main_widget`` is hidden (unactivated state,
+        tool panels). Most users never check for plugin updates, so this banner
+        is how they learn a newer version exists.
         """
         # Container only exists to right-align the badge.
         self._update_notif_container = QWidget()
@@ -1907,7 +2206,7 @@ class AIEditDockWidget(QDockWidget):
         container_layout.addWidget(self._update_notification_label)
 
         self._update_notif_container.setVisible(False)
-        parent_layout.insertWidget(0, self._update_notif_container)
+        parent_layout.addWidget(self._update_notif_container)
 
     def check_for_updates(self) -> bool:
         """Show the update banner if QGIS reports a newer plugin version.
@@ -2000,13 +2299,37 @@ class AIEditDockWidget(QDockWidget):
         self._reference_widget.set_readonly(False)
         self._sync_attach_buttons()
 
+    def _place_version_strip(self, target: str) -> None:
+        """Re-home the version strip so the lineage stays visible across states.
+
+        ``target`` is "result" (its home, under the result prompt and above the
+        Generate row) or "generating" (under the progress bar, so the user keeps
+        seeing the versions while the next edit renders). Moving between layouts
+        reparents the single strip instance - it is never rebuilt, so tiles and
+        selection survive the move.
+        """
+        self._main_layout.removeWidget(self._version_strip)
+        self._result_prompt_layout.removeWidget(self._version_strip)
+        if target == "generating":
+            # Sit between the prompt and the progress bar (above it), not below.
+            idx = self._main_layout.indexOf(self._progress_widget)
+            self._main_layout.insertWidget(idx, self._version_strip)
+        else:
+            # Index 1 = right after the result prompt container (index 0).
+            self._result_prompt_layout.insertWidget(1, self._version_strip)
+        self._version_strip.setVisible(self._version_strip.count() > 0)
+
     def _sync_attach_buttons(self) -> None:
-        """Hide paperclips when the refs store is at capacity."""
+        """Hide the + button at capacity, and mirror the reference count onto
+        both prompt containers so the Ref image control shows how many images
+        are attached (the link to the thumbnails above)."""
         if self._reference_widget is None:
             return
         enabled = not self._reference_widget.at_capacity()
-        self._prompt_container.set_attach_enabled(enabled)
-        self._result_prompt_container.set_attach_enabled(enabled)
+        count = self._reference_widget.count()
+        for container in (self._prompt_container, self._result_prompt_container):
+            container.set_attach_enabled(enabled)
+            container.set_reference_count(count)
 
     def set_library_dependencies(self, client, auth_manager):
         """Plugin hands us its TerraLabClient + AuthManager so the Prompt
@@ -2046,6 +2369,13 @@ class AIEditDockWidget(QDockWidget):
         template_selected fires only for curated picks (Top Picks / themed);
         Recent + Favorites have their own telemetry events that don't carry
         user prompt text."""
+        # Reentrancy guard: a fast double-click can emit `templates_clicked`
+        # twice before the first modal grabs input, stacking two nested exec()
+        # loops over the same widgets. The second teardown then races the first
+        # and crashes QGIS. One library at a time.
+        if getattr(self, "_library_open", False):
+            return None
+        self._library_open = True
         # Kick off a background catalog refetch so the NEXT open is fresh.
         # This open uses whatever catalog the dock currently has.
         self.catalog_refresh_requested.emit()
@@ -2064,19 +2394,35 @@ class AIEditDockWidget(QDockWidget):
             self._prompt_container.is_readonly()
             or self._result_prompt_container.is_readonly()  # noqa: W503
         )
-        dlg = PromptTemplatesDialog(
-            parent_window,
-            client=self._library_client,
-            auth_provider=auth_provider,
-            server_catalog=self._server_catalog,
-            browse_only=browse_only,
-        )
-        # deleteLater after exec so each open doesn't leak a dialog (it's
-        # parented to the main window, so Python GC alone never frees it).
-        # Safe now that the dialog's background workers are detached and never
-        # destroyed mid-run.
+        # Build inside the try so a failure here still clears _library_open
+        # (otherwise the guard above would wedge the library shut for good).
+        dlg = None
         try:
+            history_fresh = (
+                self._library_history_loaded and not self._library_history_dirty
+            )
+            dlg = PromptTemplatesDialog(
+                parent_window,
+                client=self._library_client,
+                auth_provider=auth_provider,
+                server_catalog=self._server_catalog,
+                browse_only=browse_only,
+                recent_jobs=self._library_recent_cache,
+                favorite_jobs=self._library_favorite_cache,
+                history_fresh=history_fresh,
+            )
+            # Add-to-map / download run in a background task while the modal
+            # stays open, so the user can act on several past generations in
+            # one visit.
+            dlg.generation_action.connect(self._on_history_generation_action)
+            dlg.history_synced.connect(self._on_library_history_synced)
             if dlg.exec():
+                # Full-restore beats prompt selection: the user wants the whole
+                # generation context (prompt + refs + zone) back, not just text.
+                restore = dlg.get_restore_job()
+                if restore:
+                    self.history_restore.emit(restore)
+                    return None
                 preset = dlg.get_selected_preset()
                 if (
                     preset
@@ -2090,7 +2436,37 @@ class AIEditDockWidget(QDockWidget):
                 return preset
             return None
         finally:
-            dlg.deleteLater()
+            self._library_open = False
+            if dlg is not None:
+                dlg.deleteLater()
+
+    def _on_library_history_synced(self, recent: list, favorites: list) -> None:
+        """Store the library's freshly fetched/edited Recent + Favorites so the
+        next open is instant. Fresh until a new generation marks it dirty. Also
+        persisted to disk so the next SESSION opens warm too."""
+        self._library_recent_cache = list(recent or [])
+        self._library_favorite_cache = list(favorites or [])
+        self._library_history_loaded = True
+        self._library_history_dirty = False
+        from ..core.prompts import history_cache
+
+        history_cache.save_recent_jobs(self._library_recent_cache)
+        history_cache.save_favorite_jobs(self._library_favorite_cache)
+
+    def mark_library_history_dirty(self) -> None:
+        """Force the next library open to refetch Recent/Favorites (e.g. after a
+        new generation completes so it shows up)."""
+        self._library_history_dirty = True
+
+    def _on_history_generation_action(self, action: str, job: dict):
+        """Route a past-generation action from the prompt library up to the
+        plugin, which owns the download + write + layer-add work."""
+        if action == "add_to_map":
+            self.history_add_to_map.emit(job)
+        elif action in ("download", "download_output"):
+            self.history_download.emit({**job, "download_side": "output"})
+        elif action == "download_input":
+            self.history_download.emit({**job, "download_side": "input"})
 
     # --- Public methods ---
 
@@ -2220,6 +2596,12 @@ class AIEditDockWidget(QDockWidget):
         if url:
             self._trial_info_url = url
 
+    def set_reference_target_extent(self, extent, crs) -> None:
+        """Align reference image renders to the generation zone extent (pushed
+        by the plugin when a zone is drawn). (None, None) reverts to the view."""
+        if self._reference_widget is not None:
+            self._reference_widget.set_target_extent(extent, crs)
+
     def set_zone_selected(self):
         """Zone drawn: show the prompt section and the Generate/Exit row."""
         self._zone_selected = True
@@ -2242,8 +2624,8 @@ class AIEditDockWidget(QDockWidget):
         # as the canvas finishes its own focus handling. We fire twice
         # (0ms + 50ms) because on some platforms the canvas reclaims focus
         # after the first setFocus call.
-        QTimer.singleShot(0, self._focus_prompt_input)
-        QTimer.singleShot(50, self._focus_prompt_input)
+        QtC.safe_single_shot(0, self, self._focus_prompt_input)
+        QtC.safe_single_shot(50, self, self._focus_prompt_input)
 
     def _focus_prompt_input(self):
         """Bring the dock forward and put the caret in the prompt textarea."""
@@ -2262,6 +2644,7 @@ class AIEditDockWidget(QDockWidget):
         the 'Select your zone' invitation rather than all the way to
         LAUNCH - the user is mid-flow, just redrawing.
         """
+        self.set_reference_target_extent(None, None)
         self.set_selecting_zone_state()
 
     def _stop_progress_animation(self):
@@ -2377,6 +2760,10 @@ class AIEditDockWidget(QDockWidget):
                 self._place_reference_widget("prompt")
                 if self._reference_widget is not None:
                     self._reference_widget.set_readonly(True)
+                # Keep the version lineage visible under the progress bar while
+                # the next edit renders, but locked (no base switch mid-run).
+                self._place_version_strip("generating")
+                self._version_strip.set_readonly(True)
                 self._consent_widget.setVisible(False)
                 self._generate_btn.setVisible(False)
                 # Hide Exit during generation: the user shouldn't be tempted to
@@ -2394,6 +2781,10 @@ class AIEditDockWidget(QDockWidget):
                 self._exit_btn.setVisible(True)
                 self._refresh_resolution_triggers()
                 self._prompt_section.setVisible(True)
+                # Cancelled / errored run: bring the strip back to its home and
+                # unlock it (the result screen may re-appear with it).
+                self._place_version_strip("result")
+                self._version_strip.set_readonly(False)
         finally:
             self.setUpdatesEnabled(True)
 
@@ -2493,8 +2884,8 @@ class AIEditDockWidget(QDockWidget):
                 QStyle.StandardPixmap.SP_MessageBoxCritical,
             ),
             "success": (
-                "QWidget { background-color: rgba(46, 125, 50, 0.25); "
-                "border: 1px solid rgba(46, 125, 50, 0.6); border-radius: 4px; }"
+                "QWidget { background-color: rgba(139, 172, 39, 0.25); "
+                "border: 1px solid rgba(139, 172, 39, 0.6); border-radius: 4px; }"
                 "QLabel { background: transparent; border: none; color: #66bb6a; }",
                 QStyle.StandardPixmap.SP_DialogApplyButton,
             ),
@@ -2543,6 +2934,25 @@ class AIEditDockWidget(QDockWidget):
             self._cached_used >= self._cached_limit
         )
 
+    def seed_version_strip(self, original_pixmap, prompt: str = "", meta: dict | None = None) -> None:
+        """Seed the strip with the Original tile (selected). Called once per
+        lineage when the clean base capture becomes available."""
+        self._version_strip.reset(original_pixmap, prompt, meta)
+        self._update_result_generate_label()
+
+    def add_version_thumb(self, pixmap, prompt: str = "", meta: dict | None = None) -> int:
+        """Append a generated version to the strip and auto-select it."""
+        index = self._version_strip.add_version(pixmap, prompt, meta)
+        self._update_result_generate_label()
+        return index
+
+    def reset_version_strip(self) -> None:
+        """Clear and hide the strip (new zone breaks the lineage)."""
+        self._version_strip.clear()
+
+    def set_version_strip_readonly(self, readonly: bool) -> None:
+        self._version_strip.set_readonly(readonly)
+
     def set_generation_complete(self, layer_name: str, layer_id: str | None = None):
         """Show RESULT state with iteration options (retry / done)."""
         self._stop_progress_animation()
@@ -2577,6 +2987,12 @@ class AIEditDockWidget(QDockWidget):
         # view-only mode (browse_only) and template clicks are ignored.
         self._prompt_container.set_readonly(False)
         self._result_section.setVisible(True)
+        # Single prompt screen: the version strip below it carries the base
+        # choice, so there is no separate choice step to land on first. Bring the
+        # strip back from the progress area (success skips set_generating(False)).
+        self._result_prompt_widget.setVisible(True)
+        self._place_version_strip("result")
+        self._version_strip.set_readonly(False)
         self._refresh_resolution_triggers()
 
         self._place_reference_widget("result")
@@ -2646,7 +3062,7 @@ class AIEditDockWidget(QDockWidget):
         ``layerTreeRoot().findLayers()`` at emit time. Deferring by one event
         loop tick lets QGIS finish wiring the node before we evaluate visibility.
         """
-        QTimer.singleShot(0, self._update_layer_warning)
+        QtC.safe_single_shot(0, self, self._update_layer_warning)
 
     def _update_layer_warning(self, *_args):
         """Show/hide the 'no visible layer' notice and lock the Launch button
@@ -2686,7 +3102,7 @@ class AIEditDockWidget(QDockWidget):
         QgsProject.instance().layerTreeRoot().visibilityChanged.connect(
             self._update_layer_warning
         )
-        QTimer.singleShot(0, self._update_layer_warning)
+        QtC.safe_single_shot(0, self, self._update_layer_warning)
 
     def _on_settings_btn_clicked(self):
         self.settings_clicked.emit()
@@ -2808,12 +3224,28 @@ class AIEditDockWidget(QDockWidget):
         self._update_generate_button_text()
 
     def _update_generate_button_text(self):
-        """Keep Generate label stable. The 'Select your zone' hint now lives
-        in the SELECTING_ZONE section, so the button always reads 'Generate'.
+        """Keep the first Generate label stable. The result-state button reflects
+        which version the next edit builds on (see _update_result_generate_label).
         """
         self._generate_btn.setText(tr("Generate"))
         self._generate_btn.setToolTip(tr("Run the AI edit on your selected zone"))
-        self._result_regenerate_btn.setText(tr("Generate"))
+        self._update_result_generate_label()
+
+    def _update_result_generate_label(self):
+        """Result button + prompt placeholder both name the selected base, so the
+        user sees that what they type generates FROM the selected version
+        ('Generate from Original' / 'Generate from V2')."""
+        base = self._version_strip.label_for(self._version_strip.selected_index())
+        self._result_regenerate_btn.setText(tr("Generate from {base}").format(base=base))
+        self._result_prompt_input.setPlaceholderText(
+            tr("Type a prompt to edit {base}…").format(base=base)
+        )
+
+    def _on_version_selected(self, index: int):
+        """A version tile was clicked: tell the plugin (canvas sync) and update
+        the result button label + prompt placeholder. Never touches the text."""
+        self.base_version_selected.emit(index)
+        self._update_result_generate_label()
 
     def set_resolution_credit_costs(self, costs: dict[str, int]):
         """Update per-resolution credit costs (server config). Costs are
@@ -2825,6 +3257,10 @@ class AIEditDockWidget(QDockWidget):
     def get_selected_resolution(self) -> str:
         """Return the user-selected resolution label."""
         return self._selected_resolution
+
+    def get_base_version_index(self) -> int:
+        """Strip index the next edit builds on (0 = Original)."""
+        return self._version_strip.selected_index()
 
     def _on_browse_templates_clicked(self):
         """Open templates dialog. Fill whichever prompt input is active."""
@@ -2853,15 +3289,116 @@ class AIEditDockWidget(QDockWidget):
             self._update_generate_enabled()
             self._adjust_prompt_height()
 
+    def restore_generation_context(
+        self, prompt_text: str, template_id=None, template_name=None
+    ) -> None:
+        """Fill the prompt for a generation being reproduced. The plugin has
+        already restored the zone (so the prompt section is visible)."""
+        self._active_template_id = str(template_id or "") or None
+        self._active_template_name = str(template_name or "") or None
+        self._prompt_input.blockSignals(True)
+        self._prompt_input.setPlainText(format_template_prompt(prompt_text or ""))
+        self._prompt_input.blockSignals(False)
+        self._prompt_input.moveCursor(QtC.CursorEnd)
+        self._update_generate_enabled()
+        self._adjust_prompt_height()
+
+    def clear_references(self) -> None:
+        """Drop every reference image (store + strip). Used when reusing a past
+        generation so its references replace, not stack onto, the current ones."""
+        if self._reference_widget is not None:
+            self._reference_widget.clear()
+
+    def restore_reference_images(self, items: list) -> None:
+        """Inject reloaded reference images (QImage, name) into the strip."""
+        if self._reference_widget is not None:
+            self._reference_widget.add_qimages(items)
+
+    def set_markup_reference(self, image) -> None:
+        """Show the rendered zone+marks as the (single) Mark up reference in the
+        strip. Replaces any previous one."""
+        if self._reference_widget is not None:
+            self._reference_widget.set_markup_image(image)
+
+    def clear_markup_reference(self) -> None:
+        """Drop the Mark up reference (e.g. strokes cleared)."""
+        if self._reference_widget is not None:
+            self._reference_widget.clear_markup_image()
+
     def _on_prompt_changed(self):
         self._enforce_prompt_max_length(self._prompt_input)
         self._update_generate_enabled()
         self._clear_active_template_if_empty()
+        self._update_prompt_guidance_hint()
+
+    def _guidance_message_for(self, text: str) -> str | None:
+        """Map an off-rails prompt to its soft hint, or None to stay silent.
+        Shared by the first-run prompt and the result/retry prompt."""
+        kind = detect_prompt_guidance(
+            text, has_template=bool(self._active_template_id)
+        )
+        if kind == "vector_file":
+            return tr(
+                "AI Edit outputs an image, not a vector file. For polygons "
+                "(SHP, GeoJSON), pick a Segment or Land cover template, then "
+                "‘Vectorize this result’."
+            )
+        if kind == "measure":
+            return tr(
+                "AI Edit can't measure or count. Pick a Segment template, then "
+                "‘Vectorize this result’: QGIS gives the area and count per "
+                "polygon."
+            )
+        if kind == "qa":
+            return tr(
+                "AI Edit edits the image, it doesn't answer questions or count. "
+                "Describe a visual change, e.g. colour the buildings red."
+            )
+        return None
+
+    @staticmethod
+    def _apply_guidance_hint(label, msg: str | None) -> None:
+        if not msg:
+            label.setVisible(False)
+            return
+        # Glyph kept outside tr() so translators see clean text.
+        label.setText("ⓘ  " + msg)
+        label.setVisible(True)
+
+    def _update_prompt_guidance_hint(self) -> None:
+        """Live off-rails hint under the first-run prompt. Non-blocking."""
+        self._apply_guidance_hint(
+            self._prompt_guidance_hint, self._guidance_message_for(self.get_prompt())
+        )
+
+    def _update_result_guidance_hint(self) -> None:
+        """Same hint under the result/retry prompt, so iterating on a v1/v2
+        gets the same guidance. Non-blocking."""
+        text = self._result_prompt_input.toPlainText().strip()
+        self._apply_guidance_hint(
+            self._result_guidance_hint, self._guidance_message_for(text)
+        )
+
+    def set_zone_guidance(self, ground_resolution_m: float | None) -> None:
+        """Soft, non-blocking heads-up when the drawn zone is so zoomed out the
+        model can't resolve small features. Called by the plugin on zone
+        selection. Threshold ~10 m/px: where the failure rate climbs sharply."""
+        coarse = ground_resolution_m is not None and ground_resolution_m >= 10.0
+        if not coarse:
+            self._zone_guidance_hint.setVisible(False)
+            return
+        msg = tr(
+            "Zoomed out: the AI won't see small features (buildings, cars, "
+            "trees) at this scale. Zoom in for object-level detail."
+        )
+        self._zone_guidance_hint.setText("ⓘ  " + msg)
+        self._zone_guidance_hint.setVisible(True)
 
     def _on_result_prompt_changed(self):
         self._enforce_prompt_max_length(self._result_prompt_input)
         self._update_result_generate_enabled()
         self._clear_active_template_if_empty()
+        self._update_result_guidance_hint()
 
     def _clear_active_template_if_empty(self) -> None:
         """Drop the armed template once both prompt inputs are empty.
@@ -3246,6 +3783,22 @@ class AIEditDockWidget(QDockWidget):
     def _on_report_problem(self, _link=None):
         """User-initiated report: copy the session logs and email support."""
         show_error_report(self._main_window_for_dialog())
+
+    def arm_report_context(self, request_id: str = "") -> None:
+        """Stash the request id for the next inline 'Report a problem' link so the
+        emailed log carries the server correlation key."""
+        self._pending_report_request_id = request_id or ""
+
+    def _on_status_link(self, href: str) -> None:
+        """Route a clicked link in the status box: the report sentinel opens the
+        in-app log dialog; any real URL opens in the browser."""
+        if href == REPORT_PROBLEM_HREF:
+            show_error_report(
+                self._main_window_for_dialog(),
+                request_id=getattr(self, "_pending_report_request_id", "") or "",
+            )
+            return
+        QDesktopServices.openUrl(QUrl(href))
 
     def _on_show_shortcuts(self, _link=None):
         from qgis.PyQt.QtWidgets import QDialog

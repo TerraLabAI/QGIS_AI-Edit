@@ -26,14 +26,21 @@ from ...core.auth.activation_manager import (
     get_terms_url,
 )
 from ...core.i18n import tr
-from ..dock_widget import BRAND_BLUE, BRAND_BLUE_HOVER, BRAND_GREEN, BRAND_RED
+from ..dock_widget import (
+    BRAND_BLUE,
+    BRAND_BLUE_HOVER,
+    BRAND_GREEN,
+    BRAND_GREEN_TEXT,
+    BRAND_RED,
+)
+from ..onboarding_hint import reset_hints
 from ..raster_writer import get_output_dir, set_output_dir
 
 PRODUCT_ID = "ai-edit"
 PRODUCT_NAME = "AI Edit"
 
 _STATUS_DISPLAY = {
-    "active": (tr("Active"), BRAND_GREEN),
+    "active": (tr("Active"), BRAND_GREEN_TEXT),
     "trialing": (tr("Free Trial"), "#f57c00"),
     "canceled": (tr("Canceled"), BRAND_RED),
 }
@@ -50,6 +57,14 @@ _CARD_STYLE = (
     " border-radius: 6px; }"
     "QLabel { background: transparent; border: none; }"
     "QPushButton { background: transparent; }"
+)
+
+# Quiet local-preference rows (output folder, guidance) sit below the account
+# cards. Aligned labels keep their controls on a shared left edge.
+_PREF_LABEL_W = 92
+_PREF_LABEL_STYLE = (
+    "font-size: 11px; color: palette(text);"
+    " background: transparent; border: none;"
 )
 
 
@@ -162,7 +177,18 @@ class AccountSettingsDialog(QDialog):
         if sub:
             self._content_layout.addWidget(self._build_subscription_card(sub))
 
-        self._content_layout.addWidget(self._build_output_folder_card())
+        # Hairline divider between the account cards and the quiet pref rows.
+        pref_sep = QFrame()
+        pref_sep.setObjectName("prefSep")
+        pref_sep.setStyleSheet(
+            "QFrame#prefSep { border: none;"
+            " border-top: 1px solid rgba(127,127,127,0.18); }"
+        )
+        pref_sep.setFixedHeight(1)
+        self._content_layout.addSpacing(2)
+        self._content_layout.addWidget(pref_sep)
+        self._content_layout.addWidget(self._build_output_folder_row())
+        self._content_layout.addWidget(self._build_guidance_row())
 
         # Discreet footer: thin top separator, small muted Terms / Privacy links.
         footer = QFrame()
@@ -191,39 +217,17 @@ class AccountSettingsDialog(QDialog):
         self._content_widget.setVisible(True)
         self.adjustSize()
 
-    def _build_output_folder_card(self) -> QFrame:
-        card = QFrame()
-        card.setObjectName("outputFolderCard")
-        # Scoped selector: only the card frame paints the border/background, so
-        # QLabel descendants (which inherit QFrame in Qt) don't pick up the box.
-        card.setStyleSheet(
-            "QFrame#outputFolderCard { background-color: rgba(127,127,127,0.05);"
-            " border: 1px solid rgba(127,127,127,0.15); border-radius: 6px; }"
-        )
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(4)
+    def _build_output_folder_row(self) -> QWidget:
+        w = QWidget()
+        row = QHBoxLayout(w)
+        row.setContentsMargins(2, 0, 2, 0)
+        row.setSpacing(8)
 
-        title = QLabel(tr("Output folder"))
-        title.setStyleSheet(
-            "font-weight: 600; color: palette(text); font-size: 11px;"
-            " background: transparent; border: none;"
-        )
-        layout.addWidget(title)
+        label = QLabel(tr("Output folder"))
+        label.setFixedWidth(_PREF_LABEL_W)
+        label.setStyleSheet(_PREF_LABEL_STYLE)
+        row.addWidget(label)
 
-        hint = QLabel(
-            tr("Empty = ~/Documents/AI Edit/ (or next to your saved project).")
-        )
-        hint.setWordWrap(True)
-        hint.setStyleSheet(
-            "color: palette(text); font-size: 10px;"
-            " background: transparent; border: none;"
-        )
-        layout.addWidget(hint)
-
-        row = QHBoxLayout()
-        row.setSpacing(6)
-        row.setContentsMargins(0, 2, 0, 0)
         self._output_dir_edit = QLineEdit()
         from qgis.core import QgsSettings
         current = QgsSettings().value("AIEdit/output_dir", "", type=str)
@@ -241,11 +245,39 @@ class AccountSettingsDialog(QDialog):
 
         browse_btn = QPushButton(tr("Browse..."))
         browse_btn.setFixedHeight(24)
+        browse_btn.setCursor(QtC.PointingHandCursor)
         browse_btn.clicked.connect(self._on_output_dir_browse)
         row.addWidget(browse_btn)
 
-        layout.addLayout(row)
-        return card
+        return w
+
+    def _build_guidance_row(self) -> QWidget:
+        w = QWidget()
+        row = QHBoxLayout(w)
+        row.setContentsMargins(2, 0, 2, 0)
+        row.setSpacing(8)
+
+        label = QLabel(tr("Guidance tips"))
+        label.setFixedWidth(_PREF_LABEL_W)
+        label.setStyleSheet(_PREF_LABEL_STYLE)
+        row.addWidget(label)
+        row.addStretch(1)
+
+        self._guidance_btn = QPushButton(tr("Show again"))
+        self._guidance_btn.setFixedHeight(24)
+        self._guidance_btn.setCursor(QtC.PointingHandCursor)
+        self._guidance_btn.setToolTip(
+            tr("Bring back the in-app tips you have closed (library, drawing, etc.).")
+        )
+        self._guidance_btn.clicked.connect(self._on_reset_guidance)
+        row.addWidget(self._guidance_btn)
+
+        return w
+
+    def _on_reset_guidance(self) -> None:
+        reset_hints()
+        self._guidance_btn.setText(tr("Restored") + " ✓")
+        self._guidance_btn.setEnabled(False)
 
     def _on_output_dir_edited(self) -> None:
         set_output_dir(self._output_dir_edit.text().strip())
@@ -365,13 +397,16 @@ class AccountSettingsDialog(QDialog):
         is_free = plan == "free" and status != "trialing"
 
         grid.addWidget(self._field_label(tr("Credits")), row, 0)
-        credits_color = BRAND_GREEN if remaining > 0 else BRAND_RED
+        # Lime fill for the bar; the darker text tone for the number so it stays
+        # AA-readable on the light dialog (the fill tone clears only ~2.5:1).
+        credits_fill = BRAND_GREEN if remaining > 0 else BRAND_RED
+        credits_text_color = BRAND_GREEN_TEXT if remaining > 0 else BRAND_RED
         if is_free:
             credits_text = f"{remaining} / {limit} {tr('free credits remaining')}"
         else:
             credits_text = f"{remaining} / {limit} {tr('credits remaining')}"
         credits_label = QLabel(credits_text)
-        credits_label.setStyleSheet(f"font-size: 12px; color: {credits_color};")
+        credits_label.setStyleSheet(f"font-size: 12px; color: {credits_text_color};")
         grid.addWidget(credits_label, row, 1)
 
         card_layout.addLayout(grid)
@@ -384,7 +419,7 @@ class AccountSettingsDialog(QDialog):
         progress.setStyleSheet(
             f"QProgressBar {{ background: rgba(128,128,128,0.15);"
             f" border: none; border-radius: 3px; }}"
-            f"QProgressBar::chunk {{ background: {credits_color};"
+            f"QProgressBar::chunk {{ background: {credits_fill};"
             f" border-radius: 3px; }}"
         )
         card_layout.addWidget(progress)

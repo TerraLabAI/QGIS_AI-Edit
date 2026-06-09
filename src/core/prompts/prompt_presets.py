@@ -463,6 +463,109 @@ def detect_freeform_vector_intent(prompt_text: str) -> str | None:
     return _FREEFORM_VECTOR_COLOR
 
 
+# Off-rails prompt guidance. Detects, with high precision, the ways users
+# misuse the tool so the UI can show a soft, non-blocking hint that steers
+# them back onto a path that produces a good result. Grounded in real user
+# prompts (Supabase ai_edit_jobs): ~11% ask for a vector file / digitization,
+# many ask for measurements or counts, some talk to it like a chatbot. All of
+# those disappoint as a plain image edit.
+#
+# Precision over recall on purpose: a false positive nags a user whose prompt
+# was actually fine, which is worse than staying silent. Valid instructions
+# (find / detect / segment / add / remove ...) must NEVER trigger a hint.
+
+# User wants a vector FILE / digitization, not an image. The redirect points
+# at the existing "Vectorize this result" CTA. Anchored on explicit format
+# names, digitize verbs, "... as polygons", and coordinate requests so plain
+# edit prompts ("draw buildings") never match.
+_GUIDANCE_VECTOR_FILE_RX = re.compile(
+    r"\.shp\b|\bshapefile|\bshape\s?file|\bshape\s?data|"
+    r"\bgeojson\b|\bgeo-?json\b|\.kml\b|\bkml\b|\.dxf\b|\bdxf\b|"
+    r"\bvector\s+file\b|fichier\s+vecteur|archivo\s+vectorial|arquivo\s+vetorial|"
+    r"\bdigiti[sz]\w*|\bdigitali[sz]\w*|\bnum[ée]ris\w*|"
+    # transform verb (any en/fr/es/pt conjugation) ... to ... vector/shapefile/polygons
+    r"(?:convert\w*|export\w*|turn|transform\w*|change|passer|convert[ai]\w*|"
+    r"exporta\w*|converter|converte\w*|converti\w*|cambiar|cambia\w*|mudar)"
+    r"[^.\n]{0,30}\b(?:to|into|in|en|a|para|num?)\s+"
+    r"(?:an?\s+|un[ae]?\s+|um[a]?\s+|des\s+|los\s+|las\s+)?"
+    r"(?:vect|shapefile|pol[yíi]gon\w*)|"
+    r"\b(?:to|into)\s+(?:an?\s+)?(?:[\w-]+\s+){0,3}vectors?\b|"
+    r"\bvector\s+pol[yíi]gon\w*|(?:as|into|to|en|a|em)\s+pol[yíi]gon\w*|"
+    # create/draw/produce ... polygons / point|line dataset
+    r"(?:create|need|want|draw|make|generate|trace|produce|cr[ée]\w*|"
+    r"g[ée]n[ée]r\w*|trac\w*|produi\w*|dibuj\w*|desenh\w*)"
+    r"[^.\n]{0,30}\b(?:pol[yíi]gon\w*|point\s+(?:feature|dataset|layer)|"
+    r"line\s+(?:feature|dataset|layer))|"
+    r"(?:generate|give|return|get|extract|export|create|need)"
+    r"[^.\n]{0,30}\bcoordinates?\b|\bcoordonn[ée]es\b|\bcoordenadas\b",
+    re.IGNORECASE,
+)
+
+# User wants a measurement or a count of features. The model can't measure or
+# count, but segment -> Vectorize -> QGIS gives area and feature count per
+# polygon. Restricted to unambiguous counting words and measurement units, so
+# location phrasing ("this area", "area of interest") never matches.
+_GUIDANCE_MEASURE_RX = re.compile(
+    # counting words across en / fr / es / pt / it / id, with conjugations.
+    r"\bhow\s+many\b|\bhow\s+much\b|\bnumber\s+of\b|\bcounts?\b|\bcounting\b|"   # en
+    r"\bcombien\b|\bnombre\s+d|\bcompt(?:er|ez|e-|age|é)|\bd[ée]nombr|"          # fr
+    r"\bcu[áa]nt[oa]s?\b|\bn[úu]mero\s+de\b|\bcantidad\s+de\b|\bcuent[ao]s?\b|"  # es
+    r"\bcont(?:ar|eo|ad[oa]s?)\b|"                                              # es contar/conteo
+    r"\bquant[oa]s?\b|\bquantidade\s+de\b|\bcontagem\b|\bcont(?:ar|e[-\s])|"     # pt
+    r"\bquant[ie]\b|\bnumero\s+di\b|\bjumlah\b|\bberapa\b|"                      # it / id
+    # explicit measurement: units and area phrasing.
+    r"\b(?:acreages?|acres|hectares?|superfic\w*)\b|"
+    r"\bsquare\s+(?:met\w+|kilomet\w+)\b|\b[mk]m2\b|m²|km²|"
+    r"\btotal\s+area\b|\bhow\s+much\s+area\b|\barea\s+in\s+(?:ha|m2|km2|hectares|acres)\b|"
+    r"\bquelle\s+(?:est\s+)?la\s+(?:surface|superfic\w*)\b",
+    re.IGNORECASE,
+)
+
+# User talks to the tool like a chatbot / GIS agent: asks about files, asks
+# why it did something, asks where data came from. These phrasings essentially
+# never appear in a genuine image-edit instruction, so matching is safe.
+_GUIDANCE_META_QA_RX = re.compile(
+    r"\b(can\s+you\s+see|do\s+you\s+see|are\s+you\s+able\s+to\s+see|"
+    r"puedes\s+ver|peux-tu\s+voir|"
+    r"why\s+did|why\s+is|why\s+does|pourquoi|por\s+qu[ée]|perch[ée]|"
+    r"where\s+did|where\s+do\s+you|da\s+dove|de\s+d[oó]nde|"
+    r"trovami|find\s+me\s+the\s+(?:file|certificate|document|name)|"
+    r"what\s+is\s+the\s+name|qu'est-ce\s+que)\b",
+    re.IGNORECASE,
+)
+
+
+def detect_prompt_guidance(prompt_text: str, has_template: bool = False) -> str | None:
+    """Classify an off-rails free-form prompt for the soft guidance hint.
+
+    Returns one of:
+      "vector_file" - user asked for a shapefile / vector / digitization; the
+                      tool outputs an image, so point them at Vectorize.
+      "measure"     - user wants an area or a feature count; segment then
+                      Vectorize, and QGIS measures/counts the polygons.
+      "qa"          - user talks to the tool like a chatbot; the model paints,
+                      it can't answer questions.
+      None          - prompt looks like a legitimate edit instruction, or a
+                      template drives it; stay silent.
+
+    High precision by design: never returns non-None for a valid edit /
+    detect / segment instruction. Used only for a non-blocking inline hint;
+    generation is never blocked.
+    """
+    if has_template:
+        return None
+    text = (prompt_text or "").strip()
+    if len(text) < 4:
+        return None
+    if _GUIDANCE_VECTOR_FILE_RX.search(text):
+        return "vector_file"
+    if _GUIDANCE_MEASURE_RX.search(text):
+        return "measure"
+    if _GUIDANCE_META_QA_RX.search(text):
+        return "qa"
+    return None
+
+
 def _build_prompt_lookup(catalog: dict | None) -> dict[str, dict]:
     """Map raw prompt text -> {label, category} for re-attaching template
     metadata to Recent/Favorites entries the user saved from a template.
@@ -477,6 +580,20 @@ def _build_prompt_lookup(catalog: dict | None) -> dict[str, dict]:
             if not key:
                 continue
             lookup[key] = {"label": label, "category": cat_key}
+    return lookup
+
+
+def _build_preset_lookup(catalog: dict | None) -> dict[str, dict]:
+    """Map raw prompt text -> the full normalized preset (id + label + demo
+    image URLs). Lets a saved favorite re-render as the template's before/after
+    preview card instead of a bare text card. Indexes every language variant."""
+    lookup: dict[str, dict] = {}
+    for cat_key, p in _iter_server_presets(catalog):
+        norm = _normalize_preset(p, cat_key)
+        for variant in _iter_prompt_variants(p.get("prompt")):
+            key = variant.strip()
+            if key and key not in lookup:
+                lookup[key] = norm
     return lookup
 
 
@@ -515,45 +632,37 @@ def _build_recent_presets(catalog: dict | None) -> list[dict]:
 
 
 def _build_user_favorites_presets(catalog: dict | None) -> list[dict]:
-    """User-managed Favorites from prompt_history. Saved entries carry their
-    own label/source_category; if missing we look them up against the server
-    catalog so the pill still shows the right category."""
+    """User-managed Favorites from prompt_history. A favorite that matches a
+    curated template re-renders as that template's before/after preview card
+    (full preset: id + demo images); a freeform saved prompt with no template
+    match stays a text card. Both carry from_favorites for the origin pill."""
     from . import prompt_history
 
-    lookup = _build_prompt_lookup(catalog)
+    lookup = _build_preset_lookup(catalog)
     out: list[dict] = []
     for i, entry in enumerate(prompt_history.get_favorites()):
         prompt = (entry.get("prompt") or "").strip()
         if not prompt:
             continue
-        stored_label = entry.get("label")
-        stored_cat = entry.get("source_category")
-        if stored_label and stored_cat:
-            out.append({
-                "id": f"fav_{i}",
-                "label": tr(stored_label),
-                "prompt": prompt,
-                "source_category": stored_cat,
-                "from_favorites": True,
-            })
+        full = lookup.get(prompt)
+        if full is not None:
+            preset = dict(full)
+            preset["id"] = full.get("id") or f"fav_{i}"
+            preset["prompt"] = prompt
+            preset["from_favorites"] = True
+            out.append(preset)
             continue
-        meta = lookup.get(prompt)
-        if meta:
-            out.append({
-                "id": f"fav_{i}",
-                "label": meta["label"],
-                "prompt": prompt,
-                "source_category": meta["category"],
-                "from_favorites": True,
-            })
-        else:
-            out.append({
-                "id": f"fav_{i}",
-                "label": prompt,
-                "prompt": prompt,
-                "source_category": None,
-                "from_favorites": True,
-            })
+        # No matching template: the user's own saved prompt -> text card. Keep
+        # any stored label/category so the pill still reads right; otherwise
+        # show the prompt itself as the card title.
+        stored_label = entry.get("label")
+        out.append({
+            "id": f"fav_{i}",
+            "label": tr(stored_label) if stored_label else prompt,
+            "prompt": prompt,
+            "source_category": entry.get("source_category"),
+            "from_favorites": True,
+        })
     return out
 
 

@@ -44,10 +44,16 @@ def build_panel_header(title: str, subtitle: str | None = None) -> QWidget:
     col = QVBoxLayout(bar)
     col.setContentsMargins(0, 0, 0, 0)
     col.setSpacing(2)
-    col.addWidget(make_section_header(title))
+    # setIndent(0) on both: a styled QLabel otherwise picks up a small
+    # automatic text indent on the bold title only, leaving it a few px
+    # right of the subtitle below it.
+    title_lbl = make_section_header(title)
+    title_lbl.setIndent(0)
+    col.addWidget(title_lbl)
     if subtitle:
         sub = QLabel(subtitle)
         sub.setWordWrap(True)
+        sub.setIndent(0)
         sub.setStyleSheet(
             "font-size: 11px; color: palette(text);"
             " background: transparent; border: none; padding: 0px;"

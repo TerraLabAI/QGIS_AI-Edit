@@ -7,9 +7,9 @@ awkwardly, so each locale has idiomatic phrasing of the same spirit.
 Five phases pace the rotation across the full lifetime:
     CANVAS (click -> export done)        - bar 1-5%, capture the zone
     UPLOAD (export -> /generate returns) - bar 5-10%, send bytes to AI
-    EARLY  (t < 0.3 of fal estimate)     - warming up
-    MID    (0.3-0.75 of fal estimate)    - working
-    LATE   (>= 0.75 of fal estimate)     - finishing
+    EARLY  (t < 0.3 of server estimate)     - warming up
+    MID    (0.3-0.75 of server estimate)    - working
+    LATE   (>= 0.75 of server estimate)     - finishing
 
 CANVAS + UPLOAD are paced by a UI ticker (dock_widget). EARLY/MID/LATE
 are picked by the generation worker from elapsed/estimated ratio.

@@ -88,9 +88,21 @@ def _classify_network_error(
             "Authentication failed. Check your activation key.",
         )
 
-    # Fallback
+    # An oversized request body is rejected by the platform (often before our
+    # handler runs) as 413. Without this branch it falls through to the generic
+    # "check your connection" message, which misleads the user into blaming
+    # their network instead of removing a reference image.
+    if http_status == 413:
+        return (
+            "PAYLOAD_TOO_LARGE",
+            "Too much image data to send. Remove a reference image or lower the resolution, then try again.",
+        )
+
+    # Fallback. Canonical code is NO_NETWORK (ErrorCode enum) so every consumer
+    # (inline-only set, retry list, message localizer) treats it as a handled
+    # network failure instead of opening the bug-report dialog.
     return (
-        "NO_INTERNET",
+        "NO_NETWORK",
         "Network error. Check your internet connection.",
     )
 
@@ -282,16 +294,17 @@ class TerraLabClient:
 
     def poll_status(self, request_id: str, auth: dict, force_fallback: bool = False) -> dict:
         """Poll generation status. force_fallback=True bypasses the server's
-        grace window and asks it to hit fal queue immediately. Used as a last
+        grace window and asks it to hit the provider queue immediately. Used as a last
         attempt right before the plugin gives up polling."""
         path = f"/api/ai-edit/generate/status?request_id={request_id}"
         if force_fallback:
             path += "&force_fallback=true"
         return self._request("GET", path, auth=auth)
 
-    def get_usage(self, auth: dict) -> dict:
-        """Get usage info."""
-        return self._request("GET", "/api/plugin/usage", auth=auth)
+    def get_usage(self, auth: dict, timeout_ms: int = _TIMEOUT_API) -> dict:
+        """Get usage info. The pre-generation pre-flight passes a shorter timeout
+        so an offline/stalled link fails fast instead of blocking the user."""
+        return self._request("GET", "/api/plugin/usage", auth=auth, timeout_ms=timeout_ms)
 
     def get_history(self, auth: dict) -> dict:
         """Get the user's past prompts (deduped server-side, newest first)."""
@@ -300,6 +313,28 @@ class TerraLabClient:
     def get_favorites(self, auth: dict) -> dict:
         """Get the user's starred prompts."""
         return self._request("GET", "/api/plugin/favorites", auth=auth)
+
+    def get_generation_history(
+        self, auth: dict, limit: int = 24, favorites_only: bool = False
+    ) -> dict:
+        """Get the user's past generations (before/after + prompt + location).
+        Newest first. Each job carries short-lived signed input/output URLs.
+        favorites_only filters to starred generations."""
+        path = f"/api/ai-edit/history?limit={limit}"
+        if favorites_only:
+            path += "&favorites_only=true"
+        return self._request("GET", path, auth=auth)
+
+    def set_generation_favorite(
+        self, auth: dict, request_id: str, is_favorite: bool
+    ) -> dict:
+        """Star or unstar a past generation. Idempotent."""
+        body = json.dumps(
+            {"request_id": request_id, "is_favorite": is_favorite}
+        ).encode("utf-8")
+        return self._request(
+            "POST", "/api/ai-edit/history/favorite", auth=auth, body=body, timeout_ms=10_000
+        )
 
     def add_favorite(
         self,
@@ -398,6 +433,21 @@ class TerraLabClient:
         log_debug(
             f"Downloaded {len(data)} bytes, content-type={ct_str}, head={head_hex}"
         )
+        # A flaky/slow link can drop the connection after the 200 headers arrive,
+        # leaving a truncated or empty body that QgsBlockingNetworkRequest still
+        # reports as success. Raise so the caller's retry loop re-downloads
+        # instead of writing a corrupt GeoTIFF.
+        if not data:
+            raise RuntimeError(tr("Server returned an empty response (0 bytes)"))
+        declared = reply.rawHeader(b"Content-Length")
+        if declared:
+            expected = _safe_int(bytes(declared).decode("ascii", errors="replace"))
+            if expected and len(data) < expected:
+                raise RuntimeError(
+                    tr("Download incomplete: received {got} of {total} bytes").format(
+                        got=len(data), total=expected
+                    )
+                )
         return data
 
     # -- internal ----------------------------------------------------------

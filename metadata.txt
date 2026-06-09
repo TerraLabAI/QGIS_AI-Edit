@@ -1,28 +1,28 @@
 [general]
 name=AI Edit by TerraLab
-description=AI-powered image editing for geospatial (Nano Banana 2). Select a zone, describe the change, get a georeferenced result.
+description=Edit aerial & satellite imagery with AI. Map land cover, extract building footprints, upscale low-res scenes, simulate floods, erase objects, all from a text prompt. Georeferenced output.
 qgisMinimumVersion=3.0
 qgisMaximumVersion=4.99
-version=0.7.4
+version=1.0.0
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 
 about=
-    • Select & transform: draw a rectangle on your map, describe the change to AI with a prompt
+    Select an area, write what you want -> get the result back as a georeferenced layer
 
-    • Works on any layer: local rasters (GeoTIFF, JPG, PNG) & online layers (WMS, XYZ tiles)
+    • Works on any data on your map: rasters (GeoTIFF, JPG, PNG), vector layers, OpenStreetMap, and online basemaps (WMS, XYZ tiles)
 
-    • Georeferenced output: results are saved as GeoTIFF with full spatial metadata
+    • Guide the result: add reference images or layers, sketch directly on the map, and compare before/after with a slider
 
-    • Prompt templates: clouds removal, vegetation, urban planning, flood simulation & more
+    • Vectorize results: turn a generated map into clean vector polygons (buildings, parcels, land cover) ready for SHP or GeoJSON
 
-    • Smart resolution: automatically adapts to your map's zoom level
+    • 100+ ready-made prompt templates, or write your own
 
-    • Universal: Windows, macOS, Linux
+    • One AI model for almost anything: describe a task and it handles it, from urban planning and solar studies to crop mapping, archaeology, or restoring old maps
 
-    Requires an internet connection. Selected zones are sent to TerraLab's EU infrastructure for AI processing. See https://terra-lab.ai/privacy-policy for details.
+    • Universal: Windows, macOS, Linux. Powered by the Best Generative AI Edit model (From Google)
 
 tracker=https://github.com/TerraLabAI/QGIS_AI-Edit/issues
 repository=https://github.com/TerraLabAI/QGIS_AI-Edit
@@ -30,7 +30,7 @@ homepage=https://terra-lab.ai/ai-edit
 
 hasProcessingProvider=no
 
-tags=ai, artificial intelligence, machine learning, deep learning, image editing, image generation, raster, satellite, satellite imagery, remote sensing, drone, geotiff, generative ai, nano banana, cloud removal, vegetation, urban planning, flood simulation, terrain, automatic, automation, interactive, python, ia
+tags=ai, artificial intelligence, machine learning, deep learning, image editing, image generation, raster, satellite, satellite imagery, remote sensing, drone, geotiff, generative ai, nano banana, land cover, land use, building footprints, building extraction, upscaling, super resolution, vectorization, digitizing, cloud removal, vegetation, urban planning, flood simulation, terrain, automatic, automation, interactive, python, ia
 
 category=Raster
 icon=resources/icons/icon.png

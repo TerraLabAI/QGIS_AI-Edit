@@ -13,7 +13,7 @@ from qgis.PyQt.QtWidgets import QWidget
 # Brand palette - mirrors dock_widget constants. Duplicated here so the
 # widget remains importable without circular dependency.
 _BRAND_BLUE = "#1e88e5"
-_BRAND_GREEN = "#43a047"
+_BRAND_GREEN = "#8bac27"
 _BRAND_RED = "#ef5350"
 _TRACK_RGBA = (128, 128, 128, 64)  # rgba(128,128,128,0.25)
 _LOW_THRESHOLD = 0.20

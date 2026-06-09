@@ -483,6 +483,44 @@ def get_output_dir() -> str:
     return _documents_default_dir()
 
 
+def extent_and_crs_from_job(job: dict) -> tuple[dict, str] | None:
+    """Map a history job's stored location back to (extent_dict, crs_wkt) so a
+    past output can be re-added as a georeferenced layer via write_geotiff.
+
+    Prefers the native capture CRS + bbox (pixel-faithful), falls back to the
+    WGS84 footprint. Returns None when the job carries no usable location
+    (legacy rows) so the caller can disable "Add to map".
+
+    Main-thread only: QgsCoordinateReferenceSystem reads the CRS database.
+    """
+    from qgis.core import QgsCoordinateReferenceSystem
+
+    authid = (job.get("crs_authid") or "").strip()
+    bbox = job.get("bbox")
+    if authid and isinstance(bbox, dict) and all(k in bbox for k in ("xmin", "ymin", "xmax", "ymax")):
+        crs = QgsCoordinateReferenceSystem(authid)
+        if crs.isValid():
+            return {
+                "xmin": float(bbox["xmin"]),
+                "ymin": float(bbox["ymin"]),
+                "xmax": float(bbox["xmax"]),
+                "ymax": float(bbox["ymax"]),
+            }, crs.toWkt()
+
+    wgs = job.get("bbox_wgs84")
+    if isinstance(wgs, dict) and all(k in wgs for k in ("west", "south", "east", "north")):
+        crs = QgsCoordinateReferenceSystem("EPSG:4326")
+        if crs.isValid():
+            return {
+                "xmin": float(wgs["west"]),
+                "ymin": float(wgs["south"]),
+                "xmax": float(wgs["east"]),
+                "ymax": float(wgs["north"]),
+            }, crs.toWkt()
+
+    return None
+
+
 def set_output_dir(path: str) -> None:
     from qgis.core import QgsSettings
 

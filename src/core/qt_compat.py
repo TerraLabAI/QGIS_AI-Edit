@@ -7,7 +7,7 @@ them once at import time so the rest of the codebase stays clean.
 from __future__ import annotations
 
 from qgis.core import QgsBlockingNetworkRequest
-from qgis.PyQt.QtCore import QIODevice, Qt
+from qgis.PyQt.QtCore import QIODevice, QObject, Qt, QTimer
 from qgis.PyQt.QtGui import QImage, QPalette, QTextCursor, QTextOption
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 from qgis.PyQt.QtWidgets import QFrame, QSizePolicy, QTextEdit
@@ -182,3 +182,22 @@ PROXY_ERRORS = {
 HttpStatusCodeAttribute = _resolve(
     QNetworkRequest, "Attribute", "HttpStatusCodeAttribute"
 )
+
+
+def safe_single_shot(msec: int, owner: QObject, callback) -> QTimer:
+    """A single-shot timer bound to ``owner``'s lifetime.
+
+    ``QTimer.singleShot(msec, lambda: widget.setText(...))`` keeps the lambda
+    (and the widget it captures) alive in the global event loop. If the widget
+    is destroyed before the timer fires, the deferred call lands on a freed C++
+    object and segfaults QGIS, the classic "closed the dialog too fast" crash.
+
+    Parenting the timer to ``owner`` makes Qt destroy the timer together with
+    ``owner``, so it can never fire into a dead widget. Returns the timer so the
+    caller can stop it early if needed.
+    """
+    timer = QTimer(owner)
+    timer.setSingleShot(True)
+    timer.timeout.connect(callback)
+    timer.start(max(0, int(msec)))
+    return timer

@@ -32,7 +32,7 @@ from ..core.reference_image_store import (
     ReferenceImageStore,
     ReferenceImageStoreError,
 )
-from .layer_renderer import is_remote_layer, load_transient_layers, render_layers_to_qimage
+from .layer_renderer import load_transient_layers, render_layers_to_qimage
 
 THUMB_PX = 56
 # Free-tier reference-image cap. This is a UX/entitlement gate, not a storage
@@ -90,7 +90,6 @@ class _ThumbWidget(QFrame):
         self._readonly = False
         self.setFixedSize(THUMB_PX + 2, THUMB_PX + 2)
         self.setStyleSheet(_THUMB_STYLE)
-        self.setToolTip(tr("Click to preview: {name}").format(name=record.source_filename))
         self.setCursor(QtC.PointingHandCursor)
 
         self._pixmap_label = QLabel(self)
@@ -164,9 +163,9 @@ class _ThumbWidget(QFrame):
 class _ImagePreviewDialog(QDialog):
     """Modal preview of a reference image, scaled to fit screen."""
 
-    def __init__(self, image_path: str, parent=None):
+    def __init__(self, image_path: str, parent=None, title: str | None = None):
         super().__init__(parent)
-        self.setWindowTitle(tr("Reference image preview"))
+        self.setWindowTitle(title or tr("Reference image"))
         self.setModal(True)
 
         pixmap = QPixmap(image_path)
@@ -213,6 +212,11 @@ class ReferenceImagesWidget(QWidget):
         super().__init__(parent)
         self._store = store
         self._readonly = False
+        # Generation zone extent (+ its CRS), pushed by the dock. When set, every
+        # reference is rendered at this exact extent so it aligns pixel-for-pixel
+        # with the input image instead of using the looser canvas view.
+        self._target_extent = None
+        self._target_crs = None
         # Default restrictive (free) until the dock confirms the tier via
         # set_free_tier(), matching the dock's own _is_free_tier default. The
         # server enforces the real cap, so a brief restrictive window is safe.
@@ -220,6 +224,9 @@ class ReferenceImagesWidget(QWidget):
         # Parented QTimer for the 4 s "error cleared" auto-dismiss. Holding a
         # ref so we can stop it when the widget is destroyed first.
         self._error_clear_timer: QTimer | None = None
+        # Store id of the current Mark up composite, if any. Tracked so a new
+        # drawing replaces the previous one instead of stacking.
+        self._markup_ref_id: str | None = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -267,7 +274,40 @@ class ReferenceImagesWidget(QWidget):
 
     def clear(self) -> None:
         self._store.clear()
+        self._markup_ref_id = None
         self._refresh()
+
+    def set_markup_image(self, image, name: str = "Mark up") -> None:
+        """Add (or replace) the single Mark up composite reference - the user's
+        zone with their marks on top. Re-drawing replaces the previous one so
+        only one Mark up reference exists at a time."""
+        if image is None or image.isNull():
+            return
+        if self._markup_ref_id is not None:
+            self._store.remove(self._markup_ref_id)
+            self._markup_ref_id = None
+        if self._store.count() >= MAX_REFERENCES:
+            self._show_temp_error(
+                tr("Maximum {n} reference images reached").format(n=MAX_REFERENCES)
+            )
+            self._refresh()
+            return
+        try:
+            record = self._store.add_from_qimage(image, name)
+            self._markup_ref_id = record.id
+            # Flag it so the store ships it via the guidance channel, not as a
+            # context image.
+            self._store.mark_as_markup(record.id)
+        except ReferenceImageStoreError as err:
+            self._show_temp_error(str(err))
+        self._refresh()
+
+    def clear_markup_image(self) -> None:
+        """Drop the Mark up composite reference, if present."""
+        if self._markup_ref_id is not None:
+            self._store.remove(self._markup_ref_id)
+            self._markup_ref_id = None
+            self._refresh()
 
     def get_all_b64(self) -> list[str]:
         return self._store.get_all_b64()
@@ -308,6 +348,27 @@ class ReferenceImagesWidget(QWidget):
             return
         self._add_paths(paths)
 
+    def add_qimages(self, items: list) -> None:
+        """Inject already-decoded reference images (e.g. reloaded from a past
+        generation). Items are (QImage, name) tuples. Respects the hard
+        MAX_REFERENCES ceiling but not the free-tier nudge, since these are the
+        user's own prior references being reproduced."""
+        if self._readonly or not items:
+            return
+        added = 0
+        for image, name in items:
+            if self._store.count() >= MAX_REFERENCES:
+                break
+            if image is None or image.isNull():
+                continue
+            try:
+                self._store.add_from_qimage(image, name or "reference")
+                added += 1
+            except ReferenceImageStoreError as err:
+                self._show_temp_error(str(err))
+        if added > 0:
+            self._refresh()
+
     def set_readonly(self, readonly: bool) -> None:
         """Lock the widget during generation: thumbnails stay clickable
         for preview but the remove buttons and the add-paths flow are
@@ -342,9 +403,9 @@ class ReferenceImagesWidget(QWidget):
             tr(
                 "Supported files (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff "
                 "*.asc *.img *.vrt *.dem *.pdf *.shp *.gpkg *.geojson *.kml *.kmz)"
-            )
-            + ";;"
-            + tr("All files (*)"),
+            ) +
+            ";;" +
+            tr("All files (*)"),
         )
         if paths:
             self._add_paths(paths)
@@ -448,18 +509,20 @@ class ReferenceImagesWidget(QWidget):
         if added > 0:
             self._refresh()
 
+    def set_target_extent(self, extent, crs) -> None:
+        """Set the generation-zone extent that references should align to. Pass
+        (None, None) to fall back to the canvas view."""
+        self._target_extent = extent
+        self._target_crs = crs
+
     def _render_and_store(self, layers: list, source_name: str) -> None:
-        if any(is_remote_layer(lyr) for lyr in layers):
-            raise ReferenceImageStoreError(
-                tr(
-                    "{name} is an online layer (WMS, WMTS, WFS, ArcGIS) and "
-                    "cannot be used as a reference image. Export the area to a "
-                    "file first."
-                ).format(name=source_name)
-            )
         extent, crs = self._current_view_extent()
         image = render_layers_to_qimage(
-            layers, fallback_extent=extent, fallback_crs=crs
+            layers,
+            fallback_extent=extent,
+            fallback_crs=crs,
+            force_extent=self._target_extent,
+            force_crs=self._target_crs,
         )
         if image is None:
             raise ReferenceImageStoreError(
@@ -491,8 +554,25 @@ class ReferenceImagesWidget(QWidget):
         self._error_clear_timer = timer
 
     def _on_remove(self, ref_id: str) -> None:
+        if ref_id == self._markup_ref_id:
+            self._markup_ref_id = None
         self._store.remove(ref_id)
         self._refresh()
+
+    def _build_preview_title(self, image_path: str) -> str:
+        """Window title for the preview: the source name, with a Mark up tag when
+        the image is the Mark up composite, so the user knows what they opened."""
+        record = next(
+            (r for r in self._store.list() if r.path == image_path), None
+        )
+        if record is None:
+            return tr("Reference image")
+        if record.id == self._markup_ref_id:
+            return tr("Mark up reference")
+        name = (record.source_filename or "").strip()
+        if name:
+            return tr("Reference image: {name}").format(name=name)
+        return tr("Reference image")
 
     def _open_preview(self, image_path: str) -> None:
         # Parent to QGIS main window, not to this widget. On macOS fullscreen,
@@ -507,5 +587,7 @@ class ReferenceImagesWidget(QWidget):
                 parent_window = mw
         except Exception:  # nosec B110 - fall back to self on any failure.
             pass
-        dlg = _ImagePreviewDialog(image_path, parent_window)
+        dlg = _ImagePreviewDialog(
+            image_path, parent_window, title=self._build_preview_title(image_path)
+        )
         dlg.exec()

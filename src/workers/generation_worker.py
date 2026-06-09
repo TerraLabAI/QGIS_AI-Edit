@@ -16,6 +16,10 @@ from ..core.prompts.loading_messages import get_phase_messages
 from ..ui.raster_writer import write_geotiff
 
 DEFAULT_ESTIMATED_TIME = 25
+# Only admit "taking a bit longer than usual" once elapsed is well past the
+# server's (p75-ish) estimate, so it shows for the genuinely slow tail rather
+# than on every run. Measured against the UNCAPPED elapsed/estimate ratio.
+_LONGER_THAN_USUAL_RATIO = 1.5
 
 
 def _ctx_snapshot(ctx) -> dict:
@@ -189,7 +193,8 @@ class GenerationTask(QgsTask):
             if self._poll_count % 2 == 1:
                 est = estimated_time or DEFAULT_ESTIMATED_TIME
                 t_elapsed = elapsed if elapsed is not None else (time.time() - self._start_time)
-                t = min(t_elapsed / est, 1.0) if est > 0 else 0
+                raw_ratio = (t_elapsed / est) if est > 0 else 0
+                t = min(raw_ratio, 1.0)
 
                 phase = 0 if t < 0.3 else (1 if t < 0.75 else 2)
                 msgs = self._phase_messages[phase]
@@ -203,7 +208,7 @@ class GenerationTask(QgsTask):
                 pct = min(pct, 92)
                 self._last_pct = pct
 
-                if t >= 1.0:
+                if raw_ratio >= _LONGER_THAN_USUAL_RATIO:
                     msg = tr("Taking a bit longer than usual...")
 
                 self.progress.emit(msg, pct)

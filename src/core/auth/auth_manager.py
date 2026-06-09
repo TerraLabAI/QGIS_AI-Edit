@@ -1,7 +1,12 @@
 from __future__ import annotations
 
-from ..errors import ErrorCode
+from ..errors import NETWORK_ERROR_CODES, ErrorCode
 from ..i18n import tr
+
+# Pre-generation usage check budget. A working link answers in well under a
+# second, so a short ceiling lets an offline/stalled connection surface the
+# network error fast instead of making the user wait the full API timeout.
+_PREFLIGHT_TIMEOUT_MS = 12_000
 
 
 class AuthManager:
@@ -44,16 +49,24 @@ class AuthManager:
 
         auth = self.get_auth_header()
         try:
-            usage = self._client.get_usage(auth=auth)
+            usage = self._client.get_usage(auth=auth, timeout_ms=_PREFLIGHT_TIMEOUT_MS)
         except Exception:
             return (
                 False,
-                tr("Connection error. Check your internet connection."),
+                tr("No internet connection. Check your network and try again."),
                 ErrorCode.NO_NETWORK.value,
             )
 
         if "error" in usage:
             code = usage.get("code", "")
+            if code in NETWORK_ERROR_CODES:
+                # Keep the specific network code so the UI shows the matching hint
+                # and stays inline (no bug-report dialog for a connectivity blip).
+                return (
+                    False,
+                    tr("No internet connection. Check your network and try again."),
+                    code,
+                )
             if code == "INVALID_KEY":
                 return False, tr("Invalid activation key."), ErrorCode.INVALID_KEY.value
             if code == "SUBSCRIPTION_INACTIVE":

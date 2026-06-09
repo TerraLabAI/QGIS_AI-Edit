@@ -83,8 +83,8 @@ def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> N
         # a narrow zone whose edges land in different 360-deg longitude cells.
         raw_width = extent.xMaximum() - extent.xMinimum()
         crosses_antimeridian = raw_width < 180.0 and (
-            math.floor((extent.xMinimum() + 180.0) / 360.0)
-            != math.floor((extent.xMaximum() + 180.0) / 360.0)
+            math.floor((extent.xMinimum() + 180.0) / 360.0) !=
+            math.floor((extent.xMaximum() + 180.0) / 360.0)
         )
 
     if geographic_extent is not None:
@@ -95,9 +95,9 @@ def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> N
         # +/-90 deg), neither concept applies - skip the guards and let the zone
         # through rather than block the user with a misleading refusal.
         coords_in_range = (
-            max_abs_lat <= 90.0
-            and geographic_extent.xMinimum() >= -540.0
-            and geographic_extent.xMaximum() <= 540.0
+            max_abs_lat <= 90.0 and
+            geographic_extent.xMinimum() >= -540.0 and
+            geographic_extent.xMaximum() <= 540.0
         )
         if coords_in_range and crosses_antimeridian:
             raise AIEditError(
@@ -256,6 +256,7 @@ def prepare_export(
     extent: QgsRectangle,
     target_resolution: str | None = None,
     markup_layer: QgsMapLayer | None = None,
+    exclude_layer_ids: set[str] | None = None,
 ) -> ExportPrep:
     """Pick output size and clone settings. Cheap, main-thread.
 
@@ -268,6 +269,15 @@ def prepare_export(
     """
     if extent.width() <= 0 or extent.height() <= 0:
         raise ValueError("Invalid extent: width and height must be positive")
+
+    # "Original" base: render without the AI-Edit result layers. Filter a
+    # CLONE so the live canvas's own settings (and on-screen layer
+    # visibility) are never touched - only the exported base image changes.
+    if exclude_layer_ids:
+        map_settings = _clone_map_settings(map_settings)
+        map_settings.setLayers(
+            [lyr for lyr in map_settings.layers() if lyr.id() not in exclude_layer_ids]
+        )
 
     max_dim = _get_max_dimension()
     align = _get_align()
@@ -700,6 +710,28 @@ def _compute_ground_resolution_m(extent, out_w: int, out_h: int, crs) -> float |
     except Exception:
         pass  # nosec B110
     return None
+
+
+def estimate_native_ground_resolution_m(map_settings, extent) -> float | None:
+    """Predicted meters-per-pixel of the export at its native sizing.
+
+    Used at zone-draw time to warn (softly) when the zone is so zoomed out the
+    model cannot resolve small features. Mirrors the default export sizing path
+    so the estimate matches what the user would actually get. Returns None when
+    the export config is not loaded yet or the estimate cannot be computed."""
+    try:
+        max_dim = _get_max_dimension()
+        align = _get_align()
+        if max_dim is None or align is None:
+            return None
+        if extent is None or extent.width() <= 0 or extent.height() <= 0:
+            return None
+        crs = map_settings.destinationCrs()
+        longest = _best_native_longest_px(map_settings.layers(), extent, crs, max_dim)
+        out_w, out_h = _aspect_dims(extent, longest, align, max_dim)
+        return _compute_ground_resolution_m(extent, out_w, out_h, crs)
+    except Exception:
+        return None
 
 
 def get_zone_pixel_size(

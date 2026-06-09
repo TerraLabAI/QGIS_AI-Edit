@@ -61,7 +61,9 @@ class EyedropperMapTool(QgsMapTool):
             self._restore_previous_tool()
             event.accept()
             return
-        super().keyPressEvent(event)
+        # Keys we don't handle: ignore so the canvas keeps its keyboard nav
+        # (hold-Space temporary pan). super() would leave the event accepted.
+        event.ignore()
 
     def _sample_color(self, map_point: QgsPointXY) -> QColor | None:
         if self._raster is None or not self._raster.isValid():

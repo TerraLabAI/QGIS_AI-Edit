@@ -72,6 +72,71 @@ def get_or_create_ai_edit_group() -> QgsLayerTreeGroup:
     return group
 
 
+def collect_ai_edit_layer_ids() -> set[str]:
+    """Layer IDs of everything under the AI-Edit group (generated rasters,
+    vectorize outputs), gathered recursively. Note the Mark up annotation layer
+    is NOT included: it lives at the layer-tree root, not in this group, and is
+    handled separately by the export's markup_layer path.
+
+    Does NOT create the group: returns an empty set when it is absent. Used to
+    render the "original" (pre-AI-edit) base for a retry - the caller drops
+    these layers from the export so the model sees the clean map.
+    """
+    root = QgsProject.instance().layerTreeRoot()
+    group = None
+    for child in _walk_groups(root):
+        if child.customProperty(_OWNERSHIP_PROPERTY) or child.name() == AI_EDIT_GROUP_NAME:
+            group = child
+            break
+    if group is None:
+        return set()
+
+    ids: set[str] = set()
+
+    def _collect(node) -> None:
+        for child in node.children():
+            if isinstance(child, QgsLayerTreeGroup):
+                _collect(child)
+            elif isinstance(child, QgsLayerTreeLayer):
+                layer_id = child.layerId()
+                if layer_id:
+                    ids.add(layer_id)
+
+    _collect(group)
+    return ids
+
+
+def set_ai_edit_layers_checked(checked: bool, except_ids: set[str] | None = None) -> None:
+    """Check or uncheck the visibility box of every layer under the AI-Edit group.
+
+    Drives the post-generation base choice on the canvas: picking "original"
+    unchecks the AI result layers so the map shows the clean base that will
+    actually be sent; picking the AI-edited base re-checks them so the layer the
+    user is about to edit stays visible. ``except_ids`` is left untouched - the
+    active Mark up layer is user guidance, not an AI edit, so the caller passes
+    it here. No-op when the group is absent.
+    """
+    root = QgsProject.instance().layerTreeRoot()
+    group = None
+    for child in _walk_groups(root):
+        if child.customProperty(_OWNERSHIP_PROPERTY) or child.name() == AI_EDIT_GROUP_NAME:
+            group = child
+            break
+    if group is None:
+        return
+    skip = except_ids or set()
+
+    def _apply(node) -> None:
+        for child in node.children():
+            if isinstance(child, QgsLayerTreeGroup):
+                _apply(child)
+            elif isinstance(child, QgsLayerTreeLayer):
+                if child.layerId() and child.layerId() not in skip:
+                    child.setItemVisibilityChecked(checked)
+
+    _apply(group)
+
+
 def find_generation_subgroup_for_layer(layer_id: str) -> QgsLayerTreeGroup | None:
     """Return the per-raster sub-group that contains ``layer_id``.
 

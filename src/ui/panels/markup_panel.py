@@ -32,9 +32,9 @@ from qgis.PyQt.QtWidgets import (
 
 from ...core import qt_compat as QtC
 from ...core.i18n import tr
+from ..onboarding_hint import HINT_MARKUP, DismissibleHint, is_hint_dismissed
 from ..panel_helpers import (
     GROUP_BOX_QSS,
-    build_info_box,
     build_panel_header,
     is_dark_palette,
     make_color_dot_icon,
@@ -71,19 +71,13 @@ _TOOL_ICON_PX = 24
 _COLOR_DOT_PX = 22
 
 
-def _shortcut_tail() -> str:
-    import sys
-    undo_combo = "Cmd+Z" if sys.platform == "darwin" else "Ctrl+Z"
-    return tr(" (Esc to finish, {undo} to undo)").format(undo=undo_combo)
-
-
 def _tool_hint(tool_key: str) -> str:
     hints = {
         "pencil": tr("Drag on the map to sketch a freehand stroke."),
         "arrow": tr("Click and drag on the map to draw an arrow."),
         "circle": tr("Drag on the map to draw an ellipse."),
     }
-    return hints.get(tool_key, hints["pencil"]) + _shortcut_tail()
+    return hints.get(tool_key, hints["pencil"])
 
 
 def _make_tool_icon(shape: str, color: QColor) -> QIcon:
@@ -145,6 +139,18 @@ class MarkupPanel(QWidget):
         layout.setSpacing(8)
 
         layout.addWidget(build_panel_header(tr("Mark up")))
+
+        # Dismissible tip at the top (same pattern as the prompt library):
+        # a concise, closeable note on what Mark up is for. Restorable from
+        # Account Settings; activate() re-checks its state.
+        self._markup_hint = DismissibleHint(
+            HINT_MARKUP,
+            "",
+            tr("Draw on your zone to show the AI what to change. On Done, your "
+               "drawing becomes a reference image - it never appears in the "
+               "result."),
+        )
+        layout.addWidget(self._markup_hint)
 
         # Tool section - wrapped in a native-feeling group box.
         tool_group = QGroupBox(tr("Tool"))
@@ -326,6 +332,10 @@ class MarkupPanel(QWidget):
         action_row.addStretch()
 
         self._done_btn = QPushButton(tr("Done"))
+        self._done_btn.setToolTip(
+            tr("Save your marks as a reference image (your zone with the marks "
+               "on top) and close Mark up")
+        )
         self._done_btn.setStyleSheet(_BTN_GHOST_QSS)
         self._done_btn.setCursor(QtC.PointingHandCursor)
         self._done_btn.setMinimumHeight(34)
@@ -334,18 +344,6 @@ class MarkupPanel(QWidget):
         action_row.addWidget(self._done_btn)
         layout.addLayout(action_row)
         layout.addStretch()
-
-        # Tool description as a footer info box (consistent with
-        # Vectorize). Sits below the controls instead of above so the
-        # first thing the user sees is the tool, not a paragraph.
-        layout.addWidget(
-            build_info_box(
-                tr(
-                    "Visual cues to guide the AI inside your selected zone. "
-                    "Sent with your prompt, removed from the generated result."
-                )
-            )
-        )
 
         # Initial state - default to no zone (the dock will refresh us as
         # soon as the user draws one). Visible from cold open.
@@ -390,6 +388,9 @@ class MarkupPanel(QWidget):
         tool_key = checked.property("markup_tool_key")
         if tool_key:
             self.tool_changed.emit(tool_key)
+        # Re-check the tip each time the panel opens so "Show again" (settings)
+        # brings it back without a plugin reload.
+        self._markup_hint.setVisible(not is_hint_dismissed(HINT_MARKUP))
 
     # -- internals -------------------------------------------------------
 
@@ -429,8 +430,8 @@ class MarkupPanel(QWidget):
             text = _tool_hint(tool_key or "pencil")
         else:
             text = tr(
-                "{n} guide drawn. Sent with your prompt, removed after."
+                "{n} mark. Click Done to save it as a reference image."
             ).format(n=count) if count == 1 else tr(
-                "{n} guides drawn. Sent with your prompt, removed after."
+                "{n} marks. Click Done to save them as a reference image."
             ).format(n=count)
         self._status_label.setText(text)

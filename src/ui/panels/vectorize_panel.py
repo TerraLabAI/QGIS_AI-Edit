@@ -12,9 +12,9 @@ from qgis.core import QgsFeature, QgsProject, QgsRasterLayer
 from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QKeySequence, QShortcut
 from qgis.PyQt.QtWidgets import (
-    QApplication,
     QCheckBox,
     QColorDialog,
+    QDoubleSpinBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -27,7 +27,6 @@ from qgis.PyQt.QtWidgets import (
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core.errors import AIEditError
-from ...core.generation.vectorization_service import vectorize_by_color
 from ...core.i18n import tr
 from ..layer_groups import (
     AI_EDIT_GROUP_NAME,
@@ -37,10 +36,10 @@ from ..layer_groups import (
     promote_layer_to_own_subgroup,
 )
 from ..layer_tree_combobox import LayerTreeComboBox
+from ..onboarding_hint import HINT_VECTORIZE, DismissibleHint, is_hint_dismissed
 from ..panel_helpers import (
     GROUP_BOX_QSS,
     apply_swatch_style,
-    build_info_box,
     build_panel_header,
 )
 from ..tools.eyedropper_tool import EyedropperMapTool
@@ -119,6 +118,7 @@ class VectorizePanel(QWidget):
         self._color = QColor(255, 0, 0)
         self._busy = False
         self._succeeded = False
+        self._vectorize_task = None
         self._last_layer_id: str | None = None
         self._last_raster_id: str | None = None
         self._last_target_rgb: tuple[int, int, int] | None = None
@@ -132,55 +132,62 @@ class VectorizePanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        layout.addWidget(build_panel_header(tr("Vectorize this layer:")))
+        layout.addWidget(build_panel_header(tr("Vectorize")))
 
-        # Source raster combo sits directly under the header — the title
-        # already names the action ("Vectorize this layer:"), so wrapping
-        # the picker in a separate "From" group box would be visual noise.
-        self._layer_combo = LayerTreeComboBox()
-        self._layer_combo.setToolTip(
-            tr("Pick an AI Edit output to vectorize.")
+        # Dismissible tip at the top (same pattern as Mark up / the prompt
+        # library): the "what does this do" explanation lives here, kept out
+        # of the controls. Restorable from Account Settings; activate()
+        # re-checks its state.
+        self._hint = DismissibleHint(
+            HINT_VECTORIZE,
+            "",
+            tr("After a Segment or Land cover template colors your zone "
+               "(buildings, parcels, classes...), Vectorize traces each color "
+               "into editable vector polygons - select, measure, style and "
+               "export them."),
         )
+        layout.addWidget(self._hint)
+
+        # Layer picker, grouped like Mark up's sections. The combo and the
+        # empty-state note swap inside the group; the whole group hides once a
+        # vectorization succeeds (refine mode locks the layer).
+        self._layer_group = QGroupBox(tr("Layer"))
+        self._layer_group.setStyleSheet(GROUP_BOX_QSS)
+        layer_box = QVBoxLayout(self._layer_group)
+        layer_box.setContentsMargins(8, 6, 8, 8)
+        layer_box.setSpacing(6)
+        self._layer_combo = LayerTreeComboBox()
+        self._layer_combo.setToolTip(tr("Pick an AI Edit output to vectorize."))
         self._layer_combo.set_layer_filter(_is_ai_edit_output)
         self._layer_combo.layerChanged.connect(self._refresh_panel_state)
-        layout.addWidget(self._layer_combo)
-
-        # Empty-state hint when no AI Edit output exists yet. Shown in
-        # place of the combo so users understand the tool needs one.
+        layer_box.addWidget(self._layer_combo)
         self._empty_state_label = QLabel(
-            tr(
-                "No AI Edit output available. Generate a map first to "
-                "vectorize it."
-            )
+            tr("No AI Edit output yet. Generate a map first, then vectorize it.")
         )
         self._empty_state_label.setWordWrap(True)
         self._empty_state_label.setStyleSheet(
             "font-size: 11px; color: palette(text); background: transparent;"
-            " border: 1px solid rgba(128, 128, 128, 0.25); border-radius: 4px;"
-            " padding: 10px;"
+            " border: none; padding: 2px;"
         )
         self._empty_state_label.setVisible(False)
-        layout.addWidget(self._empty_state_label)
+        layer_box.addWidget(self._empty_state_label)
+        layout.addWidget(self._layer_group)
 
-        # --- Color section --------------------------------------------
-        # Picking a colour only matters before the first run; once polygons
-        # exist the refine spinboxes re-run automatically, so this whole
-        # group is hidden on success (issue #125 follow-up).
-        self._color_group = QGroupBox(tr("Color"))
-        self._color_group.setStyleSheet(GROUP_BOX_QSS)
-        color_row = QHBoxLayout(self._color_group)
+        # Color picker, grouped like Mark up. Hidden on success (refine
+        # re-runs reuse the locked color). The swatch + eyedropper are the
+        # only controls; what the color means is explained in the tip above.
+        self._color_section = QGroupBox(tr("Color to extract"))
+        self._color_section.setStyleSheet(GROUP_BOX_QSS)
+        color_row = QHBoxLayout(self._color_section)
         color_row.setContentsMargins(8, 6, 8, 8)
         color_row.setSpacing(8)
         self._color_btn = QPushButton()
-        self._color_btn.setToolTip(
-            tr("Tap to pick a color from a dialog.")
-        )
+        self._color_btn.setToolTip(tr("Pick a color from a dialog."))
         self._color_btn.setCursor(QtC.PointingHandCursor)
         self._color_btn.setFixedSize(40, 40)
         apply_swatch_style(self._color_btn, self._color)
         self._color_btn.clicked.connect(self._on_color_clicked)
         color_row.addWidget(self._color_btn)
-
         # Glyph outside tr() so translators see clean text.
         self._eyedropper_btn = QPushButton("⌖ " + tr("Pick on map"))
         self._eyedropper_btn.setToolTip(
@@ -192,7 +199,7 @@ class VectorizePanel(QWidget):
         self._eyedropper_btn.clicked.connect(self._on_eyedropper_clicked)
         color_row.addWidget(self._eyedropper_btn)
         color_row.addStretch()
-        layout.addWidget(self._color_group)
+        layout.addWidget(self._color_section)
 
         # --- Refine box (hidden until first successful vectorization) ---
         # Refining only makes sense once polygons exist, so the whole group
@@ -216,6 +223,16 @@ class VectorizePanel(QWidget):
         )
         self._status_label.setVisible(False)
         layout.addWidget(self._status_label)
+
+        # Errors are transient feedback (wrong color, missed click, 0 match):
+        # they auto-clear after 4 s so the panel returns to its calm resting
+        # state instead of carrying a stale red line forever. Persistent
+        # messages (hints, in-flight progress) never arm this timer.
+        self._status_timer = QTimer(self)
+        self._status_timer.setSingleShot(True)
+        self._status_timer.timeout.connect(
+            lambda: self._status_label.setVisible(False)
+        )
 
         # Action row: Exit (left, ghost) and Vectorize (right, primary blue).
         # Mirrors the Mark up panel's bottom row so the two tool panels feel
@@ -246,17 +263,8 @@ class VectorizePanel(QWidget):
         action_row.addWidget(self._run_btn)
         layout.addLayout(action_row)
 
-        # Tool description as a footer info box (mirrors the design
-        # system's blue tint pattern). Sits right under the action row -
-        # the stretch goes below it so it never floats far from the buttons.
-        layout.addWidget(
-            build_info_box(
-                tr(
-                    "Turn flat-color regions of a raster layer into vector "
-                    "polygons. Pick a source raster and a color, then run."
-                )
-            )
-        )
+        # The dismissible tip at the top carries the tool description, so there
+        # is no footer info box mixed in with the controls.
         layout.addStretch()
 
         # Esc → Done (close the panel), Enter → Run. WindowShortcut so
@@ -287,6 +295,9 @@ class VectorizePanel(QWidget):
         preferred = pick_default_layer(_is_visible_ai_edit_output)
         if preferred is not None:
             self._layer_combo.setLayer(preferred)
+        # Re-check the tip each time the panel opens so "Show again" (settings)
+        # brings it back without a plugin reload.
+        self._hint.setVisible(not is_hint_dismissed(HINT_VECTORIZE))
         self._refresh_panel_state()
 
     def preconfigure(
@@ -318,10 +329,9 @@ class VectorizePanel(QWidget):
                 self._refresh_panel_state()
 
     def deactivate(self) -> None:
-        """Hook kept for symmetry; no-op now that the panel manages its
-        own layer selection via LayerTreeComboBox.
-        """
-        return
+        """Leaving the panel: cancel any in-flight vectorize task so its
+        completion callback never fires against a torn-down panel."""
+        self.cancel_pending_task()
 
     # -- internals -------------------------------------------------------
 
@@ -339,9 +349,11 @@ class VectorizePanel(QWidget):
         self._refine_group.setVisible(False)
         self._run_btn.setText(tr("Vectorize"))
         self._exit_btn.setVisible(True)
-        self._color_group.setVisible(True)
+        self._layer_group.setVisible(True)
+        self._color_section.setVisible(True)
         # LayerTreeComboBox auto-refreshes via project signals; no manual
-        # repopulation needed here.
+        # repopulation needed here. Combo visibility is re-asserted by
+        # _refresh_panel_state right after this in activate().
 
     def _build_refine_group(self) -> QGroupBox:
         """Refine group - always fully expanded, no disclosure arrow.
@@ -406,6 +418,28 @@ class VectorizePanel(QWidget):
             parent_layout.addLayout(row)
             return spin
 
+        def _dspin_row(parent_layout, label_text: str, tip: str,
+                       lo: float, hi: float, default: float, step: float) -> QDoubleSpinBox:
+            """Float spinbox for sub-integer (finer) control."""
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            lab = QLabel(label_text)
+            lab.setStyleSheet("font-size: 11px; color: palette(text);")
+            lab.setToolTip(tip)
+            spin = QDoubleSpinBox()
+            spin.setDecimals(1)
+            spin.setRange(lo, hi)
+            spin.setSingleStep(step)
+            spin.setValue(default)
+            spin.setMinimumWidth(55)
+            spin.setMaximumWidth(75)
+            spin.setToolTip(tip)
+            row.addWidget(lab)
+            row.addStretch()
+            row.addWidget(spin)
+            parent_layout.addLayout(row)
+            return spin
+
         def _check_row(parent_layout, label_text: str, tip: str,
                        default: bool) -> QCheckBox:
             row = QHBoxLayout()
@@ -422,29 +456,42 @@ class VectorizePanel(QWidget):
             parent_layout.addLayout(row)
             return chk
 
+        refine_hint = QLabel(
+            "ⓘ " + tr("Adjustments re-run instantly and update the same layer.")
+        )
+        refine_hint.setWordWrap(True)
+        refine_hint.setStyleSheet(
+            "font-size: 11px; color: rgba(128,128,128,0.95);"
+            " background: transparent; border: none; margin-bottom: 2px;"
+        )
+        content_layout.addWidget(refine_hint)
+
+        # Detection: how the color is matched. Tolerance is per-channel (0-255),
+        # so the range is bounded and every step is meaningful. The color itself
+        # is re-picked in the swatch above; changing it re-runs the same way.
         content_layout.addWidget(_section(tr("Detection")))
         self._tolerance_spin = _spin_row(
             content_layout,
             tr("Color tolerance:"),
-            tr("Per-channel ± distance when matching pixels."),
-            0, 10000, 40,
+            tr(
+                "How far a pixel's color can be from the picked color and still "
+                "match (per channel, 0-255). Higher catches more shades."
+            ),
+            0, 255, 40,
         )
         self._sieve_spin = _spin_row(
             content_layout,
-            tr("Min size (sieve):"),
-            tr(
-                "Drop tiny blobs before tracing: pre-polygonize filter "
-                "(connected pixel count)."
-            ),
-            0, 50000, 10,
+            tr("Remove speckle:"),
+            tr("Drop connected blobs smaller than this many pixels before tracing."),
+            0, 2000, 10,
         )
 
         content_layout.addWidget(_section(tr("Outline")))
-        self._simplify_spin = _spin_row(
+        self._simplify_spin = _dspin_row(
             content_layout,
             tr("Simplify outline:"),
-            tr("Reduce small variations in the outline (0 = no change)"),
-            0, 1000, 1,
+            tr("Reduce small variations in the outline (0 = no change)."),
+            0.0, 50.0, 1.0, 0.5,
         )
         self._round_corners_check = _check_row(
             content_layout,
@@ -483,6 +530,7 @@ class VectorizePanel(QWidget):
 
         outer.addWidget(content)
 
+        # Every refine control re-runs the vectorize (debounced) on change.
         for spin in (
             self._tolerance_spin,
             self._sieve_spin,
@@ -530,6 +578,11 @@ class VectorizePanel(QWidget):
         The combo is filtered to AI Edit outputs only; when the project has
         none, swap the combo for the empty-state hint and disable Vectorize.
         """
+        if self._succeeded:
+            # Refine mode: the layer + color are locked and their pickers are
+            # hidden. Bail so a project-signal refresh can't re-show the combo
+            # or fight the Done button's enabled state.
+            return
         has_any_output = self._layer_combo.count_layers() > 0
         self._empty_state_label.setVisible(not has_any_output)
         self._layer_combo.setVisible(has_any_output)
@@ -565,6 +618,9 @@ class VectorizePanel(QWidget):
             return
         self._color = QColor(chosen.red(), chosen.green(), chosen.blue())
         apply_swatch_style(self._color_btn, self._color)
+        # In refine mode a new color re-runs detection on the same layer.
+        if self._succeeded:
+            self._on_refine_changed()
 
     def _on_eyedropper_clicked(self) -> None:
         """Arm the canvas eyedropper bound to the currently-picked raster."""
@@ -606,6 +662,9 @@ class VectorizePanel(QWidget):
             is_error=False,
         )
         self._eyedropper_tool = None
+        # In refine mode, sampling a new color re-runs detection on the same layer.
+        if self._succeeded:
+            self._on_refine_changed()
 
     def _on_eyedropper_miss(self) -> None:
         self._show_status(
@@ -648,7 +707,10 @@ class VectorizePanel(QWidget):
                 tr("Source raster is no longer available."), is_error=True
             )
             return
-        self._run_vectorize(raster, self._last_target_rgb, is_initial=False)
+        # Use the CURRENT swatch color so re-picking the color (or the eyedropper)
+        # re-runs detection with the new target, not the originally locked one.
+        target_rgb = (self._color.red(), self._color.green(), self._color.blue())
+        self._run_vectorize(raster, target_rgb, is_initial=False)
 
     def _run_vectorize(
         self,
@@ -658,17 +720,47 @@ class VectorizePanel(QWidget):
     ) -> None:
         layer_name = f"{raster.name()} (vector)"
 
-        tolerance = int(self._tolerance_spin.value())
-        simplify_factor = float(self._simplify_spin.value())
-        sieve_threshold = int(self._sieve_spin.value())
-        round_corners = bool(self._round_corners_check.isChecked())
-        expand_value = int(self._expand_spin.value())
-        fill_holes = bool(self._fill_holes_check.isChecked())
-        min_pixels = int(self._min_pixels_spin.value())
+        # Supersede any in-flight run (e.g. a debounced refine tick) so the
+        # latest parameters win and runs never overlap.
+        self.cancel_pending_task()
 
-        # Only flip the action row into a "running" state on the initial
-        # click. Debounced refine re-runs keep the Done button, cursor and
-        # status line intact so spinbox ticks don't flicker the panel.
+        # Capture all QgsProject / main-thread context NOW. The heavy compute
+        # runs on a worker thread and must not touch QgsProject or the layer.
+        project = QgsProject.instance()
+        compute_kwargs = {
+            "raster_path": (raster.source() or "").split("|", 1)[0],
+            "raster_crs": raster.crs(),
+            "source_raster_name": raster.name() or "",
+            "source_raster_id": raster.id() or "",
+            "transform_context": project.transformContext(),
+            "ellipsoid": project.ellipsoid() or "EPSG:7030",
+            "target_rgb": target_rgb,
+            "tolerance": int(self._tolerance_spin.value()),
+            "sieve_threshold": int(self._sieve_spin.value()),
+            "min_pixels": int(self._min_pixels_spin.value()),
+            "simplify_factor": float(self._simplify_spin.value()),
+            "round_corners": bool(self._round_corners_check.isChecked()),
+            "expand_value": int(self._expand_spin.value()),
+            "fill_holes": bool(self._fill_holes_check.isChecked()),
+            "class_label": self._class_label,
+        }
+        params = {
+            "raster_id": raster.id(),
+            "raster_crs": raster.crs(),
+            "target_rgb": target_rgb,
+            "is_initial": is_initial,
+            "layer_name": layer_name,
+            "tolerance": compute_kwargs["tolerance"],
+            "sieve_threshold": compute_kwargs["sieve_threshold"],
+            "simplify_factor": compute_kwargs["simplify_factor"],
+            "round_corners": compute_kwargs["round_corners"],
+            "expand_value": compute_kwargs["expand_value"],
+            "fill_holes": compute_kwargs["fill_holes"],
+        }
+
+        # Only flip the action row into a "running" state on the initial click.
+        # Debounced refine re-runs keep the Done button + status line intact so
+        # spinbox ticks don't flicker the panel.
         if is_initial:
             self._busy = True
             self._run_btn.setEnabled(False)
@@ -678,36 +770,48 @@ class VectorizePanel(QWidget):
                 tr("Vectorizing “{name}”...").format(name=raster.name()),
                 is_error=False,
             )
-            QApplication.setOverrideCursor(QtC.WaitCursor)
-            QApplication.processEvents()  # let the UI repaint before the blocking call
 
+        from qgis.core import QgsApplication
+
+        from ...workers.vectorize_task import VectorizeTask
+
+        task = VectorizeTask(compute_kwargs, params)
+        task.succeeded.connect(self._on_vectorize_succeeded)
+        task.failed.connect(self._on_vectorize_failed)
+        self._vectorize_task = task
+        QgsApplication.taskManager().addTask(task)
+
+    def cancel_pending_task(self) -> None:
+        """Cancel any in-flight vectorize task (new run, panel exit, teardown)."""
+        task = self._vectorize_task
+        self._vectorize_task = None
+        if task is not None:
+            try:
+                if task.is_active():
+                    task.cancel()
+            except RuntimeError:
+                pass
+
+    def _on_vectorize_succeeded(self, feats, params) -> None:
+        """Main thread: build the layer from the computed features, then place
+        it and update the panel. Layer/project work must stay on this thread."""
+        self._vectorize_task = None
+        is_initial = params["is_initial"]
         try:
-            new_layer = vectorize_by_color(
-                raster,
-                target_rgb,
-                tolerance=tolerance,
-                sieve_threshold=sieve_threshold,
-                simplify_factor=simplify_factor,
-                layer_name=layer_name,
-                round_corners=round_corners,
-                expand_value=expand_value,
-                fill_holes=fill_holes,
-                min_pixels=min_pixels,
-                class_label=self._class_label,
+            from ...core.generation.vectorization_service import _build_vector_layer
+
+            new_layer = _build_vector_layer(
+                feats, params["raster_crs"], params["layer_name"],
+                params["target_rgb"], None, self._class_label,
             )
 
             previous_id = self._last_layer_id
             existing = (
-                QgsProject.instance().mapLayer(previous_id)
-                if previous_id
-                else None
+                QgsProject.instance().mapLayer(previous_id) if previous_id else None
             )
-
             if existing is not None:
-                # Re-run: transplant the new geometries into the existing
-                # layer so the user's symbology, name and layer id all
-                # survive. Avoids the "color resets to default on refine"
-                # bug entirely.
+                # Re-run: transplant the new geometries into the existing layer
+                # so the user's symbology, name and layer id all survive.
                 provider = existing.dataProvider()
                 old_ids = [f.id() for f in existing.getFeatures()]
                 if old_ids:
@@ -715,28 +819,39 @@ class VectorizePanel(QWidget):
                 fresh_feats = [QgsFeature(f) for f in new_layer.getFeatures()]
                 provider.addFeatures(fresh_feats)
                 existing.updateExtents()
+                # Re-pick of a different colour: restyle so the trace matches the
+                # new selection. Same colour keeps the user's symbology untouched.
+                if params["target_rgb"] != self._last_target_rgb:
+                    from ...core.generation.vectorization_service import _apply_style
+                    _apply_style(existing, params["target_rgb"])
                 existing.triggerRepaint()
                 final_layer = existing
             else:
                 QgsProject.instance().addMapLayer(new_layer, False)
-                # Lazily promote the source raster into its own sub-group
-                # on the first vectorization, then drop the vector layer
-                # alongside it. Rasters that never get vectorized stay
-                # as flat AI-Edit children.
-                subgroup = find_generation_subgroup_for_layer(raster.id())
+                # Lazily promote the source raster into its own sub-group on the
+                # first vectorization, then drop the vector layer alongside it.
+                raster_id = params["raster_id"]
+                subgroup = find_generation_subgroup_for_layer(raster_id)
                 if subgroup is None:
-                    subgroup = promote_layer_to_own_subgroup(raster.id())
+                    subgroup = promote_layer_to_own_subgroup(raster_id)
                 if subgroup is not None:
                     subgroup.insertLayer(0, new_layer)
                 else:
-                    # Fallback: no sub-group, drop into the AI-Edit group
-                    # while leaving the shared Mark up layer on top.
                     add_layer_to_ai_edit_top(new_layer)
                 final_layer = new_layer
 
+            # Hide the source raster so the freshly traced polygons read clearly
+            # on top. With the vector now in the picked colour, leaving the raster
+            # visible underneath would make the trace hard to see against it.
+            raster_id = params["raster_id"]
+            if raster_id:
+                node = QgsProject.instance().layerTreeRoot().findLayer(raster_id)
+                if node is not None:
+                    node.setItemVisibilityChecked(False)
+
             self._last_layer_id = final_layer.id()
-            self._last_raster_id = raster.id()
-            self._last_target_rgb = target_rgb
+            self._last_raster_id = params["raster_id"]
+            self._last_target_rgb = params["target_rgb"]
 
             polygon_count = final_layer.featureCount()
             self._show_status(
@@ -744,28 +859,26 @@ class VectorizePanel(QWidget):
                 is_error=False,
                 is_success=True,
             )
-
             self._succeeded = True
             if is_initial:
                 self._activate_layer_in_panel(final_layer)
                 self._refine_group.setVisible(True)
                 self._run_btn.setText(tr("Done"))
-                # The blue run button is now the single "Done"; drop the
-                # redundant ghost one (issue #125).
                 self._exit_btn.setVisible(False)
-                # Colour is locked in now - refine spinboxes drive re-runs,
-                # so the swatch and "Pick on map" are dead weight. Hide them.
-                self._color_group.setVisible(False)
+                # Color section stays visible so the user can re-pick the color
+                # / tolerance and refine without restarting. Only the source
+                # layer is locked in (you refine one raster at a time).
+                self._layer_group.setVisible(False)
             telemetry.track(
                 "vectorize_completed",
                 {
                     "polygon_count": polygon_count,
-                    "tolerance": tolerance,
-                    "sieve": sieve_threshold,
-                    "simplify": int(simplify_factor),
-                    "round_corners": round_corners,
-                    "expand": expand_value,
-                    "fill_holes": fill_holes,
+                    "tolerance": params["tolerance"],
+                    "sieve": params["sieve_threshold"],
+                    "simplify": int(params["simplify_factor"]),
+                    "round_corners": params["round_corners"],
+                    "expand": params["expand_value"],
+                    "fill_holes": params["fill_holes"],
                     "is_initial": is_initial,
                 },
             )
@@ -774,9 +887,20 @@ class VectorizePanel(QWidget):
         except Exception as e:
             self._handle_run_error(str(e), None)
         finally:
-            if is_initial:
-                QApplication.restoreOverrideCursor()
-                self._reset_button()
+            self._reset_button()
+
+    def _on_vectorize_failed(self, message: str, code: str) -> None:
+        self._vectorize_task = None
+        from ...core.errors import ErrorCode as _EC
+
+        code_enum = None
+        if code:
+            try:
+                code_enum = _EC(code)
+            except ValueError:
+                code_enum = None
+        self._handle_run_error(message, code_enum)
+        self._reset_button()
 
     def _handle_run_error(self, message: str, code=None) -> None:
         """Render a friendlier error and steer the user to the lever that
@@ -785,18 +909,33 @@ class VectorizePanel(QWidget):
         """
         from ...core.errors import ErrorCode as _EC
         is_zero_match = code == _EC.NO_PIXELS_MATCHED
-        if is_zero_match:
+        if is_zero_match and self._succeeded:
+            # Active refine: detection is fixed, so a re-run only zeroes out
+            # when the outline/selection filters drop everything. Steer the
+            # user to the lever that usually did it - min polygon size.
             self._show_status(
                 tr(
-                    "0 matches. Widen the tolerance below or pick a "
-                    "closer color above."
+                    "No shapes left after filtering. Lower 'Min polygon "
+                    "size' below."
                 ),
                 is_error=True,
             )
-            # Surface the Refine box (hidden on cold entry) and pull the
-            # user's eye to tolerance, which fixes ~90 % of zero-match cases.
             self._refine_group.setVisible(True)
-            self._tolerance_spin.setFocus()
+            self._min_pixels_spin.setFocus()
+        elif is_zero_match:
+            # Cold 0-match: nothing was vectorized yet, so the refine knobs
+            # would be editing polygons that don't exist. Keep them hidden
+            # and steer the user back to the color picker (their recovery
+            # path stays visible above). Showing 8 dead controls here just
+            # confuses (issue #164).
+            self._refine_group.setVisible(False)
+            self._show_status(
+                tr(
+                    "0 matches. Pick a closer color above, or use "
+                    "Pick on map to sample one from the raster."
+                ),
+                is_error=True,
+            )
         else:
             self._show_status(message, is_error=True)
 
@@ -843,3 +982,9 @@ class VectorizePanel(QWidget):
         )
         self._status_label.setText(message)
         self._status_label.setVisible(bool(message))
+        # Auto-dismiss errors after 4 s; cancel any pending dismiss when a
+        # non-error (or empty) message takes over so it isn't hidden early.
+        if message and is_error:
+            self._status_timer.start(4000)
+        else:
+            self._status_timer.stop()

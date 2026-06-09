@@ -14,7 +14,7 @@ from collections import deque
 from datetime import datetime
 from urllib.parse import quote
 
-from qgis.PyQt.QtCore import Qt, QTimer, QUrl
+from qgis.PyQt.QtCore import Qt, QUrl
 from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import (
     QApplication,
@@ -24,10 +24,16 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
 )
 
+from ...core import qt_compat as QtC
 from ...core.i18n import tr
 
 # Single source of truth for the support address. dock_widget imports it here.
 SUPPORT_EMAIL = "yvann.barbot@terra-lab.ai"
+
+# Sentinel href the inline status box uses to open this report dialog from a
+# link click (plugin.py builds the link, dock_widget._on_status_link routes it).
+# Not a real URL, so it must never be handed to QDesktopServices.openUrl.
+REPORT_PROBLEM_HREF = "terralab://report-problem"
 
 _log_buffer = deque(maxlen=100)
 _log_collector_connected = False
@@ -212,9 +218,9 @@ class ErrorReportDialog(QDialog):
     def _on_copy(self):
         QApplication.clipboard().setText(self._diagnostic_info)
         self._copy_btn.setText(tr("Copied!"))
-        # Guard against the dialog closing before the timer fires (the C++
-        # button would be gone), which would raise inside the slot.
-        QTimer.singleShot(2000, self._restore_copy_label)
+        # Timer parented to the button: if the dialog closes first, the timer
+        # dies with it and never fires into a freed C++ button.
+        QtC.safe_single_shot(2000, self._copy_btn, self._restore_copy_label)
 
     def _restore_copy_label(self):
         try:

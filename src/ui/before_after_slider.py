@@ -48,8 +48,21 @@ class BeforeAfterSlider(QWidget):
 
     clicked = pyqtSignal()
 
-    def __init__(self, parent: QWidget | None = None, auto_loop: bool = True):
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        auto_loop: bool = True,
+        show_badges: bool = True,
+        example_badge: str | None = None,
+    ):
         super().__init__(parent)
+        self._show_badges = show_badges
+        # Optional "Example" pill: marks a curated demo so the user reads the
+        # before/after as a sample, not the exact result they will get.
+        self._example_badge = example_badge or None
+        # Text shown over the tinted backdrop while the slider has no images.
+        # Owners flip it to "No preview" for cards that will never get one.
+        self._placeholder_text = tr("Loading…")
         self.setMinimumHeight(140)
         self.setMouseTracking(False)
         self._before: QPixmap | None = None
@@ -98,6 +111,12 @@ class BeforeAfterSlider(QWidget):
     def has_images(self) -> bool:
         return self._before is not None and self._after is not None
 
+    def set_placeholder_text(self, text: str) -> None:
+        """Override the empty-state caption (default 'Loading…')."""
+        self._placeholder_text = text or ""
+        if self._before is None and self._after is None:
+            self.update()
+
     def sizeHint(self) -> QSize:  # noqa: N802 - Qt signature
         return QSize(280, 160)
 
@@ -123,9 +142,13 @@ class BeforeAfterSlider(QWidget):
         super().enterEvent(ev)
 
     def leaveEvent(self, ev):  # noqa: N802 - Qt signature
+        # Keep an in-progress drag alive when the cursor leaves the widget: the
+        # implicit mouse grab from the press keeps delivering move events, so the
+        # divider stays draggable (and can be pulled back) until the button is
+        # released. Only the hover state ends here.
         self._hovering = False
-        self._dragging = False
-        self.setMouseTracking(False)
+        if not self._dragging:
+            self.setMouseTracking(False)
         super().leaveEvent(ev)
 
     # If the mouse moved more than this from the press point, treat the
@@ -146,6 +169,10 @@ class BeforeAfterSlider(QWidget):
             moved_far = self._moved_far
             self._dragging = False
             self._moved_far = False
+            # If the drag ended with the cursor outside the widget, drop the
+            # hover-tracking we kept alive during the drag.
+            if not self._hovering:
+                self.setMouseTracking(False)
             # Click only when the press barely moved; drag-to-adjust must
             # never accidentally select the preset.
             if was_dragging and not moved_far:
@@ -248,14 +275,18 @@ class BeforeAfterSlider(QWidget):
         painter.drawLine(split_x + 5, ay, split_x + 1, ay + 4)
 
         # --- badges ------------------------------------------------------
-        self._draw_badge(painter, "BEFORE", x=8, y=8, bg=_BADGE_BG_BEFORE)
-        self._draw_badge(
-            painter,
-            "AFTER",
-            x=rect.width() - 60,
-            y=8,
-            bg=_BADGE_BG_AFTER,
-        )
+        if self._show_badges:
+            self._draw_badge(painter, "BEFORE", x=8, y=8, bg=_BADGE_BG_BEFORE)
+            self._draw_badge(
+                painter,
+                "AFTER",
+                x=rect.width() - 60,
+                y=8,
+                bg=_BADGE_BG_AFTER,
+            )
+
+        if self._example_badge:
+            self._draw_example_badge(painter, rect, self._example_badge)
 
         painter.end()
 
@@ -281,6 +312,23 @@ class BeforeAfterSlider(QWidget):
             target = QRectF(0, -offset_y, rect.width(), scaled_h)
         painter.drawPixmap(target, pm, QRectF(0, 0, pw, ph))
 
+    def _draw_example_badge(self, painter: QPainter, rect, text: str) -> None:
+        """Small centered pill at the top marking the preview as a demo."""
+        f = painter.font()
+        f.setPointSize(8)
+        f.setBold(True)
+        painter.setFont(f)
+        tw = painter.fontMetrics().horizontalAdvance(text)
+        bw = tw + 20
+        bh = 20
+        bx = (rect.width() - bw) / 2.0
+        badge = QRectF(bx, 8, bw, bh)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor(0, 0, 0, 180)))
+        painter.drawRoundedRect(badge, 10, 10)
+        painter.setPen(QPen(_BADGE_TEXT))
+        painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, text)
+
     def _draw_badge(self, painter: QPainter, text: str, x: int, y: int, bg: QColor) -> None:
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(bg))
@@ -299,4 +347,4 @@ class BeforeAfterSlider(QWidget):
         f = painter.font()
         f.setPointSize(9)
         painter.setFont(f)
-        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, tr("Loading…"))
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self._placeholder_text)

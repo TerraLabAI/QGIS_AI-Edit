@@ -9,6 +9,26 @@ from ..errors import ErrorCode
 from ..i18n import tr
 from ..logger import log_debug, log_warning
 
+# Network-level error codes (from terralab_client._classify_network_error) that
+# are transient: a flaky/slow link can produce one mid-poll while the server is
+# still working. We must NOT abandon a paid generation on a single blip, so we
+# tolerate a few consecutive ones before giving up. Real server/app errors carry
+# other codes and still fail fast.
+_RETRYABLE_POLL_CODES = frozenset(
+    {"TIMEOUT", "NO_NETWORK", "DNS_ERROR", "CONNECTION_REFUSED", "PROXY_ERROR", "SSL_ERROR",
+     # A transient 429 from the read limiter must not abandon a paid generation.
+     "RATE_LIMITED"}
+)
+_MAX_CONSECUTIVE_POLL_ERRORS = 5
+
+# The inline submit body (main image + guidance + reference images that could
+# not be offloaded to presigned upload) is capped by the platform at ~4.5 MB,
+# rejected as 413 before our code runs. Reference images have no presigned path,
+# so when several large ones push the inline body over this safe ceiling we
+# refuse client-side with an actionable message instead of letting the upload
+# fail opaquely. Headroom left for JSON keys, the prompt and geo fields.
+_MAX_INLINE_BODY_BYTES = 4_200_000
+
 
 @dataclass
 class GenerationResult:
@@ -67,6 +87,17 @@ class GenerationService:
         self._active_request_id = None
         self._active_auth = None
 
+    def _sleep_or_cancelled(self, seconds: float) -> bool:
+        """Sleep in small chunks so a Cancel is picked up quickly. Returns True
+        if cancellation was requested during the wait (caller should bail)."""
+        if seconds <= 0:
+            return self._cancelled
+        for _ in range(int(seconds * 5)):
+            if self._cancelled:
+                return True
+            time.sleep(0.2)
+        return self._cancelled
+
     # Below this base64 size we send the image inline in the submit body -
     # a single round-trip looks cleaner from outside and avoids an extra API
     # call for the common-case small generations (most zones encode well under
@@ -75,13 +106,17 @@ class GenerationService:
     _INLINE_BASE64_THRESHOLD = 4 * 1024 * 1024  # 4 MB of base64 ≈ 3 MB raw
 
     def _try_upload_token_flow(
-        self, image_b64: str, auth: dict, image_format: str | None = None
+        self, image_b64: str, auth: dict, image_format: str | None = None,
+        reserved_bytes: int = 0,
     ) -> str | None:
         """Attempt the presigned-upload path. Returns the upload token on
         success, or None to signal the caller to fall back to inline base64.
 
         Skipped entirely when the image is small enough to inline so we don't
-        burn an extra round-trip on small generations.
+        burn an extra round-trip on small generations. ``reserved_bytes`` is
+        other inline payload that shares the submit body (reference images), so
+        a near-threshold main image still moves to the presigned path when the
+        combined body would overflow the serverless cap.
 
         ``image_format`` ('webp' | 'jpeg' | 'png') is the format the canvas was
         encoded as; the server signs the upload with a matching content-type.
@@ -90,7 +125,7 @@ class GenerationService:
         the inline body cost than show a network error for a path we control
         entirely and can retry as inline.
         """
-        if len(image_b64) <= self._INLINE_BASE64_THRESHOLD:
+        if len(image_b64) + reserved_bytes <= self._INLINE_BASE64_THRESHOLD:
             return None
 
         try:
@@ -111,7 +146,7 @@ class GenerationService:
         # Guard against an older server that ignores the 'format' field and
         # signs the upload as PNG. We PUT echoing the server's Content-Type, so
         # uploading non-PNG bytes under a PNG-signed URL would store a
-        # mislabeled object (fal still sniffs it, but the archive + image proxy
+        # mislabeled object (the server still sniffs it, but the archive + image proxy
         # would serve it with the wrong type). If the signed content-type
         # doesn't match what we encoded, skip the upload path and fall back to
         # inline, where the server detects the format from the bytes.
@@ -177,9 +212,23 @@ class GenerationService:
         # serverless body-size cap entirely so multi-MB inputs go through
         # without truncation. Falls back to inline base64 if any step fails so
         # an outage on the storage path doesn't break edits.
+        # Single shared inline budget. The submit body carries main + guidance +
+        # context together, and the serverless body cap applies to the WHOLE
+        # body, not to any one image. So every inline decision must reserve all
+        # the other payload that will stay inline: the main image reserves
+        # guidance + context up front. Without this, three individually
+        # sub-threshold images (e.g. a 1K main + a markup overlay + one
+        # reference) each look small alone yet together overflow the cap -> the
+        # edge rejects the POST with HTTP 413 before it reaches our function.
+        ctx_inline_bytes = sum(len(c) for c in (context_images or []))
+        guidance_bytes = len(guidance_image) if guidance_image else 0
         upload_token = self._try_upload_token_flow(
-            image_b64, auth, ctx.input_format if ctx is not None else None
+            image_b64, auth, ctx.input_format if ctx is not None else None,
+            reserved_bytes=ctx_inline_bytes + guidance_bytes,
         )
+        # If the main image stayed inline it still occupies the body, so the
+        # guidance decision below must reserve it too (alongside context).
+        main_inline_bytes = len(image_b64) if upload_token is None else 0
 
         # The markup-overlay guidance image rides the same upload path as the
         # main image: presigned when large (keeps the submit body under the
@@ -190,7 +239,8 @@ class GenerationService:
         guidance_inline = None
         if guidance_image:
             guidance_upload_token = self._try_upload_token_flow(
-                guidance_image, auth, guidance_format
+                guidance_image, auth, guidance_format,
+                reserved_bytes=ctx_inline_bytes + main_inline_bytes,
             )
             if guidance_upload_token is None:
                 guidance_inline = guidance_image
@@ -199,6 +249,27 @@ class GenerationService:
                 )
             else:
                 log_debug("Guidance image: presigned upload")
+
+        # Everything that stayed inline shares the platform body cap. Main and
+        # guidance offload to presigned when large, but reference images have no
+        # presigned path, so this is where a stack of big references is caught.
+        # Refuse early with a clear message rather than eat an opaque 413.
+        guidance_inline_bytes = len(guidance_inline) if guidance_inline else 0
+        total_inline_bytes = main_inline_bytes + guidance_inline_bytes + ctx_inline_bytes
+        if total_inline_bytes > _MAX_INLINE_BODY_BYTES:
+            log_warning(
+                f"Inline submit body too large ({total_inline_bytes} bytes): "
+                f"main={main_inline_bytes}, guidance={guidance_inline_bytes}, "
+                f"context={ctx_inline_bytes}"
+            )
+            return GenerationResult(
+                success=False,
+                error=tr(
+                    "Too much image data to send. Remove a reference image or "
+                    "lower the resolution, then try again."
+                ),
+                error_code=ErrorCode.TOO_LARGE.value,
+            )
 
         # Pull geospatial + iteration context off the pipeline ctx so the
         # backend can use it. All fields optional - old backends ignore
@@ -316,6 +387,7 @@ class GenerationService:
             )
 
         # Poll
+        consecutive_poll_errors = 0
         for i in range(max_polls):
             if self._cancelled:
                 return GenerationResult(
@@ -327,8 +399,28 @@ class GenerationService:
 
             status_resp = self._client.poll_status(request_id, auth=auth)
 
-            # Fail fast on server errors instead of silently retrying
             if "error" in status_resp and "status" not in status_resp:
+                code = status_resp.get("code", "")
+                # A transient network blip during polling must not abandon a
+                # paid generation: the job is already submitted and charged, and
+                # the server keeps working. Tolerate a few consecutive blips
+                # (with the normal poll wait between them) before giving up.
+                if code in _RETRYABLE_POLL_CODES:
+                    consecutive_poll_errors += 1
+                    if consecutive_poll_errors <= _MAX_CONSECUTIVE_POLL_ERRORS:
+                        log_warning(
+                            f"Transient poll error {code} "
+                            f"({consecutive_poll_errors}/{_MAX_CONSECUTIVE_POLL_ERRORS}), retrying"
+                        )
+                        if self._sleep_or_cancelled(poll_interval):
+                            return GenerationResult(
+                                success=False,
+                                error=tr("Generation cancelled"),
+                                error_code=ErrorCode.GENERATION_CANCELLED.value,
+                                request_id=request_id,
+                            )
+                        continue
+                # Non-retryable server/app error, or too many consecutive blips.
                 if ctx is not None:
                     ctx.poll_count = i + 1
                     ctx.total_wait_seconds = (i + 1) * poll_interval
@@ -336,10 +428,12 @@ class GenerationService:
                 return GenerationResult(
                     success=False,
                     error=status_resp.get("error") or tr("Status check failed"),
-                    error_code=status_resp.get("code", ""),
+                    error_code=code,
                     request_id=request_id,
                 )
 
+            # A good response clears the transient-error streak.
+            consecutive_poll_errors = 0
             status = status_resp.get("status", "unknown")
 
             if on_progress:
@@ -370,21 +464,17 @@ class GenerationService:
                     request_id=request_id,
                 )
 
-            if poll_interval > 0:
-                # Sleep in small chunks so cancellation is responsive
-                for _ in range(int(poll_interval * 5)):
-                    if self._cancelled:
-                        return GenerationResult(
-                            success=False,
-                            error=tr("Generation cancelled"),
-                            error_code=ErrorCode.GENERATION_CANCELLED.value,
-                            request_id=request_id,
-                        )
-                    time.sleep(0.2)
+            if self._sleep_or_cancelled(poll_interval):
+                return GenerationResult(
+                    success=False,
+                    error=tr("Generation cancelled"),
+                    error_code=ErrorCode.GENERATION_CANCELLED.value,
+                    request_id=request_id,
+                )
 
         # Last-ditch poll with force_fallback=true: the plugin exhausted its
         # poll budget but the server may have a terminal state cached, or can
-        # close it via fal queue now. Saves the user the round-trip to the
+        # close it via the provider queue now. Saves the user the round-trip to the
         # reconcile cron (which would otherwise take up to 2 min to resolve).
         try:
             final = self._client.poll_status(request_id, auth=auth, force_fallback=True)

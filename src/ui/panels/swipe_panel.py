@@ -219,7 +219,7 @@ class _SwipeOverlay(QgsMapCanvasItem):
 
     def paint(self, painter: QPainter, *args) -> None:  # noqa: ARG002
         # *args swallows the extra (option, widget) Qt6 passes; Qt5 omits them.
-        if self._image is None or self._x_pos < 0:
+        if self._x_pos < 0:
             return
         bounds = self._top_layer_pixel_bounds()
         if bounds is None:
@@ -231,31 +231,35 @@ class _SwipeOverlay(QgsMapCanvasItem):
         y_top = bounds.top()
         y_bot = bounds.bottom()
 
-        # Clip to (raster bbox + small edge pad) ∩ right of divider.
-        # The pad covers the canvas's anti-aliased edges of the top
-        # layer so they don't peek through. Outside the layer, the
-        # canvas's native render shows directly — no overlay anywhere
-        # else means no visual difference between "swipe on" and
-        # "swipe off" outside the raster area.
-        # No painter transform: the image is rendered for the canvas's
-        # current extent, drawn at the same widget coords the canvas
-        # uses. Stale during a transient render but never offset by an
-        # animation, so the user sees a momentarily out-of-date overlay
-        # rather than one that drifts around the layer.
-        edge_pad = 3
-        layer_clip = QRectF(
-            bounds.left() - edge_pad,
-            bounds.top() - edge_pad,
-            bounds.width() + 2 * edge_pad,
-            bounds.height() + 2 * edge_pad,
-        )
-        right_clip = QRectF(x_div, 0, canvas_w - x_div, canvas_h)
-        clip = layer_clip.intersected(right_clip)
-        if not clip.isEmpty():
-            painter.save()
-            painter.setClipRect(clip)
-            painter.drawImage(0, 0, self._image)
-            painter.restore()
+        # Paint the right-side reveal only once the underlying render has
+        # landed. The divider line below is drawn regardless, so pressing
+        # Compare shows the split immediately while the image fills in.
+        if self._image is not None:
+            # Clip to (raster bbox + small edge pad) ∩ right of divider.
+            # The pad covers the canvas's anti-aliased edges of the top
+            # layer so they don't peek through. Outside the layer, the
+            # canvas's native render shows directly — no overlay anywhere
+            # else means no visual difference between "swipe on" and
+            # "swipe off" outside the raster area.
+            # No painter transform: the image is rendered for the canvas's
+            # current extent, drawn at the same widget coords the canvas
+            # uses. Stale during a transient render but never offset by an
+            # animation, so the user sees a momentarily out-of-date overlay
+            # rather than one that drifts around the layer.
+            edge_pad = 3
+            layer_clip = QRectF(
+                bounds.left() - edge_pad,
+                bounds.top() - edge_pad,
+                bounds.width() + 2 * edge_pad,
+                bounds.height() + 2 * edge_pad,
+            )
+            right_clip = QRectF(x_div, 0, canvas_w - x_div, canvas_h)
+            clip = layer_clip.intersected(right_clip)
+            if not clip.isEmpty():
+                painter.save()
+                painter.setClipRect(clip)
+                painter.drawImage(0, 0, self._image)
+                painter.restore()
 
         # Divider line, scoped to the raster's vertical span only.
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -281,12 +285,18 @@ class _SwipeMapTool(QgsMapTool):
     QgsMapCanvas). Press Esc to exit swipe.
     """
 
-    def __init__(self, canvas, overlay: _SwipeOverlay):
+    def __init__(self, canvas, overlay: _SwipeOverlay, on_overlay_click=None):
         super().__init__(canvas)
         self._canvas = canvas
         self._overlay = overlay
         self._dragging = False
         self.signals = _SwipeSignals()
+        # Optional callback(canvas_point) -> bool. Lets the post-generation
+        # action pills (× / Compare / Vectorize) stay clickable while the
+        # swipe owns the canvas: the controller forwards every press here, and
+        # if the callback claims the point (a pill was hit) we skip the divider
+        # move. Returns True when handled.
+        self._on_overlay_click = on_overlay_click
 
     def activate(self) -> None:
         super().activate()
@@ -326,6 +336,15 @@ class _SwipeMapTool(QgsMapTool):
     def canvasPressEvent(self, e) -> None:  # noqa: N802 - Qt signature
         if e.button() != Qt.MouseButton.LeftButton:
             return
+        # Let the action pills claim the click before it moves the divider, so
+        # × / Compare / Vectorize stay live during a comparison.
+        if self._on_overlay_click is not None:
+            try:
+                if self._on_overlay_click(self._event_point(e)):
+                    e.accept()
+                    return
+            except Exception:  # nosec B110
+                pass
         self._dragging = True
         self._overlay.set_divider(self._event_x(e))
 
@@ -409,7 +428,7 @@ class SwipeController(QObject):
         else:
             self.start()
 
-    def start(self) -> None:
+    def start(self, on_overlay_click=None) -> None:
         if self.is_active():
             return
         try:
@@ -428,7 +447,7 @@ class SwipeController(QObject):
 
         self._overlay = _SwipeOverlay(canvas)
         self._overlay.set_top_layer(active)
-        self._tool = _SwipeMapTool(canvas, self._overlay)
+        self._tool = _SwipeMapTool(canvas, self._overlay, on_overlay_click)
         # Esc on the canvas disarms the swipe; the controller routes that
         # back into stop() so button state stays in sync.
         self._tool.signals.escape_pressed.connect(self.stop)

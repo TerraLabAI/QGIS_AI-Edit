@@ -7,12 +7,19 @@ QgsGeometry objects.
 """
 from __future__ import annotations
 
-import colorsys
 import math
 import os
 import time
 
-import numpy as np
+# numpy is guarded: a broken numpy ABI (common on Windows OSGeo4W after an
+# unrelated package upgrade) must NOT break this module's import (which would
+# take down the whole dock / plugin load). When None, the Vectorize entry point
+# fails that one click with a clean localized error instead.
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover
+    np = None
+
 from osgeo import gdal, ogr, osr
 from qgis.core import (
     QgsDefaultValue,
@@ -32,44 +39,42 @@ from ..i18n import tr
 from ..logger import log_debug
 
 
-def complementary_rgb(target_rgb: tuple[int, int, int]) -> tuple[int, int, int]:
-    """Return the HSV-complementary colour (hue rotated 180°) of target_rgb.
-
-    Picks a saturated, full-brightness contrast so the vector outline reads
-    cleanly over the raster's flat-colour zones (target #FF0000 -> #00FFFF,
-    #00FF00 -> #FF00FF, etc.). Achromatic inputs (grey) fall back to a
-    fixed cyan so the contour is never invisible.
-    """
-    r, g, b = (max(0, min(255, c)) / 255.0 for c in target_rgb)
-    h, s, _v = colorsys.rgb_to_hsv(r, g, b)
-    if s < 0.05:
-        return (0, 200, 255)
-    cr, cg, cb = colorsys.hsv_to_rgb((h + 0.5) % 1.0, 1.0, 1.0)
-    return (int(round(cr * 255)), int(round(cg * 255)), int(round(cb * 255)))
-
-
-def vectorize_by_color(
-    raster_layer: QgsRasterLayer,
+def _compute_vector_features(
+    *,
+    raster_path: str,
+    raster_crs,
+    source_raster_name: str,
+    source_raster_id: str,
+    transform_context,
+    ellipsoid: str,
     target_rgb: tuple[int, int, int],
-    tolerance: int = 40,
-    sieve_threshold: int = 10,
-    min_pixels: int = 50,
-    simplify_factor: float = 1.5,
-    layer_name: str | None = None,
-    output_rgb: tuple[int, int, int] | None = None,
-    round_corners: bool = False,
-    expand_value: int = 0,
-    fill_holes: bool = False,
-    class_label: str = "",
-) -> QgsVectorLayer:
-    """Extract pixels matching ``target_rgb`` (±tolerance per channel) as polygons.
+    tolerance: int,
+    sieve_threshold: int,
+    min_pixels: int,
+    simplify_factor: float,
+    round_corners: bool,
+    expand_value: int,
+    fill_holes: bool,
+    class_label: str,
+    is_cancelled=None,
+) -> list | None:
+    """Heavy, thread-safe core of Vectorize: GDAL read + mask + sieve +
+    polygonize + per-feature geometry build/measure.
 
-    ``output_rgb`` controls the outline colour of the resulting layer.
-    Defaults to a vivid green that contrasts with any AI-Edit class color.
+    Builds NO ``QgsVectorLayer`` and reads NO ``QgsProject`` (the CRS,
+    transform context and ellipsoid are passed in), so it is safe to run inside
+    a ``QgsTask`` off the main thread. ``QgsGeometry``/``QgsFeature``/
+    ``QgsDistanceArea`` are value classes, fine off-thread.
 
-    Returns a styled in-memory ``QgsVectorLayer`` not yet added to the project.
+    Returns a list of ``QgsFeature``, or ``None`` if ``is_cancelled()`` fired.
+    Raises ``AIEditError`` on invalid input or an empty result.
     """
-    raster_path = raster_layer.source()
+    if np is None:
+        raise AIEditError(
+            ErrorCode.INVALID_RASTER,
+            tr("Vectorize needs numpy, which failed to load. Please update QGIS or contact support."),
+        )
+
     if not raster_path or not os.path.exists(raster_path):
         raise AIEditError(
             ErrorCode.INVALID_RASTER,
@@ -88,11 +93,12 @@ def vectorize_by_color(
         )
 
     width, height = src.RasterXSize, src.RasterYSize
-    # Defensive memory ceiling: a 30000 x 30000 single-band uint8 raster is
-    # ~900 MB and would OOM the QGIS process on most machines. Refuse early
-    # with a clear, localized message.
-    px_count = float(width) * float(height) * 3.0 * 4.0
-    if px_count > 1_000_000_000:
+    # Defensive memory ceiling. We read 3 bands and build int16 + mask transients,
+    # so peak RAM is roughly width*height*12 bytes. Refuse above ~1 GB of that
+    # estimate (~83 megapixels) early, with a clear localized message, rather
+    # than OOM the QGIS process.
+    est_bytes = float(width) * float(height) * 3.0 * 4.0
+    if est_bytes > 1_000_000_000:
         raise AIEditError(
             ErrorCode.RASTER_TOO_LARGE,
             tr(
@@ -172,58 +178,32 @@ def vectorize_by_color(
 
     gdal.Polygonize(mask_band, None, ogr_layer, 0, ["8CONNECTED=8"])
 
+    # Cancellation checkpoint after the expensive GDAL polygonize.
+    if is_cancelled is not None and is_cancelled():
+        return None
+
     pixel_area = abs(gt[1] * gt[5])
     min_area = pixel_area * float(min_pixels)
     simplify_tol = (pixel_area ** 0.5) * simplify_factor
 
-    name = layer_name or "Vector"
-    # CRS-agnostic URI + explicit setCrs() — EPSG:4326 fallback would corrupt alignment.
-    mem_layer = QgsVectorLayer(
-        (
-            "Polygon"
-            "?field=feature_id:integer"
-            "&field=class_id:integer"
-            # Generous string lengths: the memory provider silently DROPS any
-            # feature whose value overflows a field, so a too-short field makes
-            # the whole layer come back empty. class_name is user-editable and
-            # source_raster_id holds a QGIS layer id (name + 36-char UUID, often
-            # 70-80 chars) - both must not clip.
-            "&field=class_name:string(254)"
-            "&field=class_color:string(9)"
-            "&field=area_m2:double"
-            "&field=area_ha:double"
-            "&field=perimeter_m:double"
-            "&field=compactness:double"
-            "&field=source_raster:string(254)"
-            "&field=source_raster_id:string(254)"
-            "&field=created_at:string(25)"
-        ),
-        name,
-        "memory",
-    )
-    raster_crs = raster_layer.crs()
-    if raster_crs.isValid():
-        mem_layer.setCrs(raster_crs)
-    mem_provider = mem_layer.dataProvider()
-
     # Geodesic measurer: true metres even when the layer CRS is in degrees.
+    # Built from the passed-in project context so this stays off-thread safe.
     measurer = QgsDistanceArea()
-    project = QgsProject.instance()
-    if raster_crs.isValid():
-        measurer.setSourceCrs(raster_crs, project.transformContext())
-    measurer.setEllipsoid(project.ellipsoid() or "EPSG:7030")
+    if raster_crs is not None and raster_crs.isValid():
+        measurer.setSourceCrs(raster_crs, transform_context)
+    measurer.setEllipsoid(ellipsoid or "EPSG:7030")
 
     class_color_hex = "#{:02X}{:02X}{:02X}".format(*target_rgb)
     # int(hex24, 16) — stable across re-runs on the same color.
     class_id_int = (target_rgb[0] << 16) | (target_rgb[1] << 8) | target_rgb[2]
-    source_raster_name = raster_layer.name() or ""
-    source_raster_id = raster_layer.id() or ""
     created_at_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
     feats: list[QgsFeature] = []
     next_fid = 1
     ogr_layer.ResetReading()
     for ogr_feat in ogr_layer:
+        if next_fid % 256 == 0 and is_cancelled is not None and is_cancelled():
+            return None
         if ogr_feat.GetField("value") != 1:
             continue
         geom_ref = ogr_feat.GetGeometryRef()
@@ -280,7 +260,49 @@ def vectorize_by_color(
                 "(try a wider tolerance or smaller min size)"
             ),
         )
+    log_debug(f"Vectorize computed {len(feats)} polygons (min_area={min_area:.2f} map_units²)")
+    return feats
 
+
+def _build_vector_layer(
+    feats: list,
+    raster_crs,
+    layer_name: str,
+    target_rgb: tuple[int, int, int],
+    output_rgb: tuple[int, int, int] | None,
+    class_label: str,
+) -> QgsVectorLayer:
+    """Build the styled in-memory polygon layer from precomputed features.
+
+    Creates a ``QgsVectorLayer`` and adds features, so it MUST run on the main
+    thread (call from a QgsTask's ``finished()``, never from ``run()``)."""
+    # CRS-agnostic URI + explicit setCrs() — EPSG:4326 fallback would corrupt alignment.
+    mem_layer = QgsVectorLayer(
+        (
+            "Polygon"
+            "?field=feature_id:integer"
+            "&field=class_id:integer"
+            # Generous string lengths: the memory provider silently DROPS any
+            # feature whose value overflows a field, so a too-short field makes
+            # the whole layer come back empty. class_name is user-editable and
+            # source_raster_id holds a QGIS layer id (name + 36-char UUID, often
+            # 70-80 chars) - both must not clip.
+            "&field=class_name:string(254)"
+            "&field=class_color:string(9)"
+            "&field=area_m2:double"
+            "&field=area_ha:double"
+            "&field=perimeter_m:double"
+            "&field=compactness:double"
+            "&field=source_raster:string(254)"
+            "&field=source_raster_id:string(254)"
+            "&field=created_at:string(25)"
+        ),
+        layer_name,
+        "memory",
+    )
+    if raster_crs is not None and raster_crs.isValid():
+        mem_layer.setCrs(raster_crs)
+    mem_provider = mem_layer.dataProvider()
     mem_provider.addFeatures(feats)
     mem_layer.updateExtents()
     # The memory provider drops features whose attributes overflow a field
@@ -292,10 +314,58 @@ def vectorize_by_color(
             tr("Could not store the vectorized polygons (internal field error)."),
         )
     _configure_attribute_table(mem_layer, class_label)
-    style_rgb = output_rgb if output_rgb is not None else complementary_rgb(target_rgb)
+    # Style the polygons in the colour the user picked, so a red selection traces
+    # red. The source raster is hidden after vectorizing, so a same-colour vector
+    # never blends into it.
+    style_rgb = output_rgb if output_rgb is not None else target_rgb
     _apply_style(mem_layer, style_rgb)
-    log_debug(f"Vectorize done: {len(feats)} polygons (min_area={min_area:.2f} map_units²)")
+    log_debug(f"Vectorize layer built: {mem_layer.featureCount()} polygons")
     return mem_layer
+
+
+def vectorize_by_color(
+    raster_layer: QgsRasterLayer,
+    target_rgb: tuple[int, int, int],
+    tolerance: int = 40,
+    sieve_threshold: int = 10,
+    min_pixels: int = 50,
+    simplify_factor: float = 1.5,
+    layer_name: str | None = None,
+    output_rgb: tuple[int, int, int] | None = None,
+    round_corners: bool = False,
+    expand_value: int = 0,
+    fill_holes: bool = False,
+    class_label: str = "",
+) -> QgsVectorLayer:
+    """Extract pixels matching ``target_rgb`` (±tolerance per channel) as polygons.
+
+    Synchronous (main-thread) convenience wrapper over the split compute/build
+    helpers, for callers not running inside a QgsTask. ``output_rgb`` controls
+    the outline colour (default: a vivid contrast). Returns a styled in-memory
+    ``QgsVectorLayer`` not yet added to the project.
+    """
+    project = QgsProject.instance()
+    feats = _compute_vector_features(
+        raster_path=(raster_layer.source() or "").split("|", 1)[0],
+        raster_crs=raster_layer.crs(),
+        source_raster_name=raster_layer.name() or "",
+        source_raster_id=raster_layer.id() or "",
+        transform_context=project.transformContext(),
+        ellipsoid=project.ellipsoid() or "EPSG:7030",
+        target_rgb=target_rgb,
+        tolerance=tolerance,
+        sieve_threshold=sieve_threshold,
+        min_pixels=min_pixels,
+        simplify_factor=simplify_factor,
+        round_corners=round_corners,
+        expand_value=expand_value,
+        fill_holes=fill_holes,
+        class_label=class_label,
+    )
+    return _build_vector_layer(
+        feats or [], raster_layer.crs(), layer_name or "Vector",
+        target_rgb, output_rgb, class_label,
+    )
 
 
 def _refine_mask(
@@ -407,14 +477,18 @@ def _configure_attribute_table(layer: QgsVectorLayer, class_label: str) -> None:
 
 
 def _apply_style(layer: QgsVectorLayer, output_rgb: tuple[int, int, int]) -> None:
-    """Outline-only style: 2 px green stroke, no fill so the raster shows through."""
+    """Filled style in the picked color: a strong fill plus a solid outline, so
+    each traced region reads as a complete (solid) polygon. The source raster is
+    hidden after vectorizing, so the fill is mostly opaque (~80%) for legibility
+    while still hinting at any basemap underneath."""
     r, g, b = output_rgb
     symbol = QgsFillSymbol.createSimple(
         {
-            "color": "0,0,0,0",  # transparent fill
+            "color": f"{r},{g},{b},205",  # ~80% so the polygons read clearly
+            "style": "solid",
             "outline_color": f"{r},{g},{b},255",
-            "outline_width": "2",
-            "outline_width_unit": "Pixel",
+            "outline_width": "0.4",
+            "outline_width_unit": "MM",
             "outline_style": "solid",
         }
     )

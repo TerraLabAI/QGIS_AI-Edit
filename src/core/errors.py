@@ -49,6 +49,21 @@ class ErrorCode(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+# Connectivity failures the user resolves themselves (their link, proxy, or
+# firewall). Single source of truth so the pre-flight check, the inline-only
+# message set, and the poll retry list all agree on what counts as "network".
+NETWORK_ERROR_CODES = frozenset(
+    {
+        ErrorCode.NO_NETWORK.value,
+        ErrorCode.DNS_ERROR.value,
+        ErrorCode.SSL_ERROR.value,
+        ErrorCode.TIMEOUT.value,
+        ErrorCode.PROXY_ERROR.value,
+        ErrorCode.CONNECTION_REFUSED.value,
+    }
+)
+
+
 class AIEditError(Exception):
     """Stable code + human message so callers can branch without substring matches."""
 

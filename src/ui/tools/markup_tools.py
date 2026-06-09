@@ -25,6 +25,7 @@ from qgis.core import (
     QgsPointXY,
     QgsProject,
     QgsProperty,
+    QgsRectangle,
     QgsSingleSymbolRenderer,
     QgsSymbolLayer,
     QgsVectorLayer,
@@ -73,12 +74,19 @@ class MarkupLayerManager(QObject):
     """
 
     annotation_count_changed = pyqtSignal(int)
+    # Emitted when a stroke lands entirely outside the selected zone, so the
+    # plugin can surface a "draw inside the zone" notice. The mark itself is
+    # dropped (markup is only meaningful inside the generated zone).
+    outside_zone_attempted = pyqtSignal()
 
     def __init__(self, canvas: QgsMapCanvas, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._canvas = canvas
         self._layer: QgsVectorLayer | None = None
         self._next_markup_id = 1
+        # Selected-zone rectangle (canvas/map CRS). When set, every committed
+        # mark is clipped to it; a mark fully outside is rejected.
+        self._clip_zone: QgsRectangle | None = None
         # Drop our layer reference whenever QGIS tears it down so we never
         # call methods on a dead C++ wrapper.
         project = QgsProject.instance()
@@ -189,8 +197,29 @@ class MarkupLayerManager(QObject):
 
     # --- commit / undo / clear -----------------------------------------
 
+    def set_clip_zone(self, rect: QgsRectangle | None) -> None:
+        """Constrain marks to the selected zone (canvas/map CRS). Pass None to
+        lift the constraint (no zone selected)."""
+        self._clip_zone = QgsRectangle(rect) if rect is not None else None
+
+    def _clip_to_zone(self, geometry: QgsGeometry) -> QgsGeometry | None:
+        """Clip a mark to the selected zone: overflow is cut at the zone edge.
+        Returns None when the mark lies entirely outside the zone."""
+        if self._clip_zone is None or self._clip_zone.isEmpty():
+            return geometry
+        clipped = geometry.intersection(QgsGeometry.fromRect(self._clip_zone))
+        if clipped is None or clipped.isEmpty():
+            return None
+        # The store layer is MultiLineString; keep the clipped result that type.
+        clipped.convertToMultiType()
+        return clipped
+
     def commit(self, geometry: QgsGeometry, color: QColor, shape: str) -> None:
         if geometry.isEmpty():
+            return
+        geometry = self._clip_to_zone(geometry)
+        if geometry is None:
+            self.outside_zone_attempted.emit()
             return
         import time as _time
         layer = self._ensure_layer()
@@ -329,7 +358,10 @@ class _MarkupBaseMapTool(QgsMapTool):
             self._manager.undo_last()
             event.accept()
             return
-        super().keyPressEvent(event)
+        # Keys we don't handle: ignore so the canvas keeps its keyboard nav
+        # (hold-Space temporary pan, arrow-key scroll). Calling super() leaves
+        # the event accepted and suppresses that.
+        event.ignore()
 
 
 class PencilMapTool(_MarkupBaseMapTool):

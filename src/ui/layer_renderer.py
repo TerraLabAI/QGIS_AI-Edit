@@ -9,8 +9,10 @@ as context. We let QGIS do the rasterization so the layer's own symbology
 from __future__ import annotations
 
 import os
+import time
 
 from qgis.core import (
+    QgsApplication,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsMapRendererCustomPainterJob,
@@ -28,13 +30,27 @@ from qgis.PyQt.QtGui import QColor, QImage, QPainter
 
 from ..core.logger import log_warning
 
-MAX_RENDER_PX = 1024
+# Matches the reference store's 1536 px target (the model's effective per-image
+# input budget at default media resolution). Online basemaps fetch higher-zoom,
+# more legible tiles at this size.
+MAX_RENDER_PX = 1536
+# Higher DPI makes QGIS request higher-zoom tiles from online providers (more
+# labels, sharper roads) and renders vector symbols/labels larger, so a map
+# reference stays readable after downscaling.
+_RENDER_DPI = 192
 _FALLBACK_CRS = "EPSG:3857"
 
-# Providers that do blocking network I/O during render. Rendering one on the
-# main thread freezes QGIS until the remote request times out, so we refuse
-# these as reference images. "wms" covers WMS, WMTS and XYZ tiles (they share
-# the wms provider). Local layers (gdal/ogr/etc.) are never in this set.
+# Online tile/WMS providers fetch tiles asynchronously: the first render comes
+# back blank because replies arrive on the main event loop after the render
+# returns. We render, pump the event loop, reload, and re-render until two
+# consecutive frames match (tiles settled) or we exhaust the attempts.
+_SETTLE_MAX_ATTEMPTS = 8
+_SETTLE_PUMP_SECONDS = 0.6
+
+# Providers that fetch their data over the network during render. We render
+# these with the settling loop (tiles arrive async) and use the view extent
+# instead of their world-sized one. "wms" covers WMS, WMTS and XYZ tiles (they
+# share the wms provider). Local layers (gdal/ogr/etc.) are never in this set.
 _REMOTE_PROVIDERS = frozenset(
     {"wms", "wfs", "wcs", "arcgismapserver", "arcgisfeatureserver", "oapif"}
 )
@@ -55,18 +71,20 @@ def is_remote_layer(layer) -> bool:
     if name.lower() in _REMOTE_PROVIDERS:
         return True
     try:
-        source = (layer.source() or "").lower()
+        raw_source = layer.source() or ""
     except Exception:  # nosec B110 - no readable source means nothing to flag.
-        source = ""
+        raw_source = ""
+    source = raw_source.lower()
     if source.startswith(("http://", "https://")) or "url=http" in source:
         return True
     # A VRT loads as a local "gdal" provider with a local-path source, so the
     # checks above miss VRTs whose XML references remote rasters. Render would
     # block on the network. Read the first 64 KB of the VRT and flag if it
-    # contains an http(s) URL.
-    if source.endswith(".vrt") and os.path.isfile(source):
+    # contains an http(s) URL. Use the original-case path for the filesystem so
+    # detection still works on case-sensitive volumes (Linux, case-sensitive APFS).
+    if source.endswith(".vrt") and os.path.isfile(raw_source):
         try:
-            with open(source, encoding="utf-8", errors="replace") as f:
+            with open(raw_source, encoding="utf-8", errors="replace") as f:
                 head = f.read(64 * 1024).lower()
             if "http://" in head or "https://" in head:
                 return True
@@ -163,27 +181,17 @@ def _usable(extent: QgsRectangle) -> bool:
     return not (hasattr(extent, "isFinite") and not extent.isFinite())
 
 
-def render_layers_to_qimage(
-    layers: list,
-    *,
-    max_px: int = MAX_RENDER_PX,
-    fallback_extent: QgsRectangle | None = None,
-    fallback_crs: QgsCoordinateReferenceSystem | None = None,
-) -> QImage | None:
-    """Render one or more layers, isolated, on white, to a single QImage.
+def _combined_layer_extent(layers: list, dest_crs) -> QgsRectangle | None:
+    """Combined extent of the local layers, reprojected to ``dest_crs``.
 
-    Uses the combined extent of all layers (each reprojected into the render
-    CRS). Falls back to ``fallback_extent`` (given in ``fallback_crs``) when no
-    layer has a usable extent (typical WMS/XYZ). Multiple layers are drawn
-    stacked, the first on top. Returns None on failure.
+    Online basemaps report a world-sized extent that is useless as a reference,
+    so they are skipped here and handled via the view-extent fallback instead.
+    Returns None when no layer has a usable extent.
     """
-    layers = [lyr for lyr in layers if lyr is not None]
-    if not layers:
-        return None
-
-    dest_crs = _resolve_crs(layers[0])
     extent = None
     for lyr in layers:
+        if is_remote_layer(lyr):
+            continue
         layer_extent = QgsRectangle(lyr.extent())
         if not _usable(layer_extent):
             continue
@@ -194,6 +202,52 @@ def render_layers_to_qimage(
             extent = QgsRectangle(layer_extent)
         else:
             extent.combineExtentWith(layer_extent)
+    return extent
+
+
+def render_layers_to_qimage(
+    layers: list,
+    *,
+    max_px: int = MAX_RENDER_PX,
+    fallback_extent: QgsRectangle | None = None,
+    fallback_crs: QgsCoordinateReferenceSystem | None = None,
+    force_extent: QgsRectangle | None = None,
+    force_crs: QgsCoordinateReferenceSystem | None = None,
+    settle: bool = True,
+) -> QImage | None:
+    """Render one or more layers, isolated, on white, to a single QImage.
+
+    ``force_extent`` (in ``force_crs``) renders every layer at exactly that
+    extent, so a reference lines up pixel-for-pixel with the generation zone.
+    Without it, the combined extent of all layers is used, falling back to
+    ``fallback_extent`` (typical WMS/XYZ). Layers are drawn stacked, first on
+    top. ``settle=False`` skips the online-tile settling loop (a multi-second
+    main-thread block); pass it when the tiles are already warm on the canvas.
+    Returns None on failure.
+    """
+    layers = [lyr for lyr in layers if lyr is not None]
+    if not layers:
+        return None
+
+    if force_extent is not None and _usable(force_extent):
+        dest_crs = force_crs if (force_crs is not None and force_crs.isValid()) else _resolve_crs(layers[0])
+        extent = _reproject_extent(QgsRectangle(force_extent), force_crs, dest_crs)
+        if extent is None or not _usable(extent):
+            log_warning("Forced extent could not be reprojected to the render CRS")
+            return None
+        # Cropping to the zone only makes sense when the layer actually covers
+        # it. A layer dropped from elsewhere (e.g. a past generation in another
+        # area) doesn't intersect the zone, so the forced crop renders pure
+        # white. Detect that and render the layer at its own extent instead, so
+        # it still works as a standalone reference image.
+        own = _combined_layer_extent(layers, dest_crs)
+        if own is not None and not own.intersects(extent):
+            log_warning("Dropped layer is outside the zone; rendering at its own extent")
+            extent = own
+        return _render_at_extent(layers, extent, dest_crs, max_px, settle=settle)
+
+    dest_crs = _resolve_crs(layers[0])
+    extent = _combined_layer_extent(layers, dest_crs)
 
     if extent is None or not _usable(extent):
         if fallback_extent is not None and _usable(fallback_extent):
@@ -205,6 +259,17 @@ def render_layers_to_qimage(
             log_warning("Layers have no usable extent and no fallback was provided")
             return None
 
+    return _render_at_extent(layers, extent, dest_crs, max_px, settle=settle)
+
+
+def _render_at_extent(
+    layers: list,
+    extent: QgsRectangle,
+    dest_crs: QgsCoordinateReferenceSystem,
+    max_px: int,
+    settle: bool = True,
+) -> QImage | None:
+    """Build the map settings and render `layers` at `extent` to a QImage."""
     settings = QgsMapSettings()
     settings.setLayers(layers)
     settings.setDestinationCrs(dest_crs)
@@ -212,13 +277,72 @@ def render_layers_to_qimage(
     settings.setOutputSize(_output_size(extent, max_px))
     settings.setBackgroundColor(QColor(255, 255, 255))
     settings.setFlag(QgsMapSettings.Flag.Antialiasing, True)
-    settings.setOutputDpi(96)
+    # Cross-version guard: the flag was renamed/added across QGIS releases.
+    _hq_flag = getattr(QgsMapSettings.Flag, "HighQualityImageTransforms", None)
+    if _hq_flag is not None:
+        settings.setFlag(_hq_flag, True)
+    settings.setOutputDpi(_RENDER_DPI)
 
-    image = _run_render(settings)
+    if settle and any(is_remote_layer(lyr) for lyr in layers):
+        _enable_online_resampling(layers)
+        image = _run_settling_render(settings, layers)
+    else:
+        image = _run_render(settings)
     if image is None or image.isNull():
         log_warning("Layer render produced no image")
         return None
     return image
+
+
+def _enable_online_resampling(layers: list) -> None:
+    """Turn on bilinear resampling for online raster layers so downscaled tiles
+    stay smooth instead of blocky. Best-effort: silently skips layers whose
+    provider doesn't support it."""
+    for lyr in layers:
+        try:
+            provider = lyr.dataProvider()
+            if provider is None or not hasattr(provider, "enableProviderResampling"):
+                continue
+            provider.enableProviderResampling(True)
+            method = provider.ResamplingMethod.Bilinear
+            provider.setZoomedInResamplingMethod(method)
+            provider.setZoomedOutResamplingMethod(method)
+        except Exception:  # nosec B112 - resampling is a quality nicety, never fatal.
+            continue
+
+
+def _pump_events(seconds: float) -> None:
+    """Run the event loop briefly so async tile network replies are delivered."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        QgsApplication.processEvents()
+        time.sleep(0.03)
+
+
+def _run_settling_render(settings: QgsMapSettings, layers: list) -> QImage | None:
+    """Render online layers, waiting for tiles to settle.
+
+    Online providers fetch tiles on the main event loop, so a single blocking
+    render returns blank. We render, pump events, reload the providers, and
+    repeat until two consecutive frames are identical (tiles in) or attempts run
+    out. Returns the last frame either way so a slow network degrades to a
+    partial reference rather than an error."""
+    prev: QImage | None = None
+    for _attempt in range(_SETTLE_MAX_ATTEMPTS):
+        image = _run_render(settings)
+        _pump_events(_SETTLE_PUMP_SECONDS)
+        if image is not None and not image.isNull():
+            if prev is not None and image == prev:
+                return image
+            prev = image
+        for lyr in layers:
+            try:
+                provider = lyr.dataProvider()
+                if provider is not None:
+                    provider.reloadData()
+            except Exception:  # nosec B110 - reload is best-effort per layer.
+                pass
+    return prev
 
 
 def _run_render(settings: QgsMapSettings) -> QImage | None:
