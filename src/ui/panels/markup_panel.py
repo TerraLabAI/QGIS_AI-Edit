@@ -14,7 +14,6 @@ from qgis.PyQt.QtGui import (
     QPainter,
     QPalette,
     QPen,
-    QPixmap,
     QPolygonF,
     QShortcut,
 )
@@ -39,6 +38,7 @@ from ..panel_helpers import (
     is_dark_palette,
     make_color_dot_icon,
     make_custom_color_icon,
+    make_hidpi_pixmap,
 )
 
 BRAND_BLUE = "#1e88e5"
@@ -83,8 +83,7 @@ def _tool_hint(tool_key: str) -> str:
 def _make_tool_icon(shape: str, color: QColor) -> QIcon:
     """Render a clean 24px line icon for a Mark up tool (theme-aware)."""
     size = _TOOL_ICON_PX
-    pm = QPixmap(size, size)
-    pm.fill(Qt.GlobalColor.transparent)
+    pm = make_hidpi_pixmap(size)
     p = QPainter(pm)
     p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     pen = QPen(color)

@@ -556,8 +556,8 @@ class GenerationDetailDialog(QDialog):
             return tr("Your result")
         src = self._preset or {}
         return (
-            str(src.get("category_label") or src.get("category") or "").strip() or
-            tr("Template")
+            str(src.get("category_label") or src.get("category") or "").strip()
+            or tr("Template")
         )
 
     def _image_sources_present(self) -> bool:

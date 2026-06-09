@@ -83,8 +83,8 @@ def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> N
         # a narrow zone whose edges land in different 360-deg longitude cells.
         raw_width = extent.xMaximum() - extent.xMinimum()
         crosses_antimeridian = raw_width < 180.0 and (
-            math.floor((extent.xMinimum() + 180.0) / 360.0) !=
-            math.floor((extent.xMaximum() + 180.0) / 360.0)
+            math.floor((extent.xMinimum() + 180.0) / 360.0)
+            != math.floor((extent.xMaximum() + 180.0) / 360.0)
         )
 
     if geographic_extent is not None:
@@ -95,9 +95,9 @@ def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> N
         # +/-90 deg), neither concept applies - skip the guards and let the zone
         # through rather than block the user with a misleading refusal.
         coords_in_range = (
-            max_abs_lat <= 90.0 and
-            geographic_extent.xMinimum() >= -540.0 and
-            geographic_extent.xMaximum() <= 540.0
+            max_abs_lat <= 90.0
+            and geographic_extent.xMinimum() >= -540.0
+            and geographic_extent.xMaximum() <= 540.0
         )
         if coords_in_range and crosses_antimeridian:
             raise AIEditError(

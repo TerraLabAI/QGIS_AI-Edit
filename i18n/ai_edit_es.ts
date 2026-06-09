@@ -24,6 +24,14 @@
         <translation>Tu prueba gratuita ha terminado.</translation>
     </message>
     <message>
+        <source>This license is already in use on the maximum number of computers. Free one in your account, or wait for an inactive one to expire.</source>
+        <translation>Esta licencia ya se está usando en el número máximo de ordenadores. Libera uno en tu cuenta, o espera a que uno inactivo caduque.</translation>
+    </message>
+    <message>
+        <source>Manage your computers</source>
+        <translation>Gestionar tus ordenadores</translation>
+    </message>
+    <message>
         <source>No internet connection. Check your network and try again.</source>
         <translation>Sin conexión a internet. Comprueba tu red e inténtalo de nuevo.</translation>
     </message>
@@ -838,6 +846,10 @@ We'd love to hear from you!</source>
     <message>
         <source>Manage on terra-lab.ai</source>
         <translation>Administrar en terra-lab.ai</translation>
+    </message>
+    <message>
+        <source>Manage account on terra-lab.ai</source>
+        <translation>Gestionar mi cuenta en terra-lab.ai</translation>
     </message>
     <message>
         <source>Manage plan</source>
@@ -1660,6 +1672,10 @@ We'd love to hear from you!</source>
         <translation>La generación falló: la IA no pudo crear una imagen para esta solicitud. No se te ha cobrado. Reformula tu prompt o elige otra zona.</translation>
     </message>
     <message>
+        <source>Our image servers are busy right now. You have not been charged. Please wait a moment and try again.</source>
+        <translation>Nuestros servidores de imágenes están saturados en este momento. No se te ha cobrado. Espera un momento e inténtalo de nuevo.</translation>
+    </message>
+    <message>
         <source>Copy prompt</source>
         <translation>Copiar el prompt</translation>
     </message>
@@ -1718,6 +1734,114 @@ We'd love to hear from you!</source>
     <message>
         <source>Water &amp; hydrology</source>
         <translation>Agua e hidrología</translation>
+    </message>
+    <message>
+        <source>Activate AI Edit</source>
+        <translation>Activar AI Edit</translation>
+    </message>
+    <message>
+        <source>Click Connect and sign in in your browser. You're brought straight back, no key to copy.</source>
+        <translation>Haz clic en Conectar e inicia sesión en tu navegador. Vuelves aquí directamente, sin clave que copiar.</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Conectar</translation>
+    </message>
+    <message>
+        <source>Sign in via your browser to activate AI Edit</source>
+        <translation>Inicia sesión en tu navegador para activar AI Edit</translation>
+    </message>
+    <message>
+        <source>Didn't open? Open the page again</source>
+        <translation>¿No se abrió? Abrir la página de nuevo</translation>
+    </message>
+    <message>
+        <source>Have a key already? Paste it</source>
+        <translation>¿Ya tienes una clave? Pégala</translation>
+    </message>
+    <message>
+        <source>Paste your activation key</source>
+        <translation>Pega tu clave de activación</translation>
+    </message>
+    <message>
+        <source>Waiting for you to sign in in your browser</source>
+        <translation>Esperando a que inicies sesión en el navegador</translation>
+    </message>
+    <message>
+        <source>Couldn't open your browser. Use the manual key option below.</source>
+        <translation>No se pudo abrir el navegador. Usa la opción de clave manual de abajo.</translation>
+    </message>
+    <message>
+        <source>Sign-in timed out. Click Connect to try again.</source>
+        <translation>Tiempo de inicio de sesión agotado. Haz clic en Conectar para reintentar.</translation>
+    </message>
+    <message>
+        <source>Unexpected response from the server. Please try again.</source>
+        <translation>Respuesta inesperada del servidor. Inténtalo de nuevo.</translation>
+    </message>
+    <message>
+        <source>Connecting AI Edit</source>
+        <translation>Conectando AI Edit</translation>
+    </message>
+    <message>
+        <source>Edit your map with AI</source>
+        <translation>Edita tu mapa con IA</translation>
+    </message>
+    <message>
+        <source>Sign in / Sign up to start</source>
+        <translation>Inicia sesión / Regístrate para empezar</translation>
+    </message>
+    <message>
+        <source>Sign in via your browser to start using AI Edit</source>
+        <translation>Inicia sesión en tu navegador para empezar a usar AI Edit</translation>
+    </message>
+    <message>
+        <source>5 free AI Edits, no credit card</source>
+        <translation>5 AI Edits gratis, sin tarjeta</translation>
+    </message>
+    <message>
+        <source>Use an activation key</source>
+        <translation>Usar una clave de activación</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>Conectado</translation>
+    </message>
+    <message>
+        <source>Activation key</source>
+        <translation>Clave de activación</translation>
+    </message>
+    <message>
+        <source>Sign out</source>
+        <translation>Cerrar sesión</translation>
+    </message>
+    <message>
+        <source>Sign out of AI Edit?</source>
+        <translation>¿Cerrar sesión en AI Edit?</translation>
+    </message>
+    <message>
+        <source>You can sign back in anytime from QGIS.</source>
+        <translation>Puedes volver a iniciar sesión en cualquier momento desde QGIS.</translation>
+    </message>
+    <message>
+        <source>Open again</source>
+        <translation>Abrir de nuevo</translation>
+    </message>
+    <message>
+        <source>Subscribe to Pro</source>
+        <translation>Suscribirse a Pro</translation>
+    </message>
+    <message>
+        <source>Upgrade to Pro</source>
+        <translation>Mejorar a Pro</translation>
+    </message>
+    <message>
+        <source>Preferences</source>
+        <translation>Preferencias</translation>
+    </message>
+    <message>
+        <source>AI Edit output folder</source>
+        <translation>Carpeta de salida de AI Edit</translation>
     </message>
 </context>
 </TS>

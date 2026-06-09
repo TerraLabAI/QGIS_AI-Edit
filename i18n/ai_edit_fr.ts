@@ -24,6 +24,14 @@
         <translation>Votre essai gratuit est terminé.</translation>
     </message>
     <message>
+        <source>This license is already in use on the maximum number of computers. Free one in your account, or wait for an inactive one to expire.</source>
+        <translation>Cette licence est déjà utilisée sur le nombre maximum d'ordinateurs. Libérez-en un dans votre compte, ou attendez qu'un poste inactif expire.</translation>
+    </message>
+    <message>
+        <source>Manage your computers</source>
+        <translation>Gérer vos ordinateurs</translation>
+    </message>
+    <message>
         <source>No internet connection. Check your network and try again.</source>
         <translation>Pas de connexion internet. Vérifiez votre réseau et réessayez.</translation>
     </message>
@@ -838,6 +846,10 @@ Nous serions ravis d'avoir votre retour !</translation>
     <message>
         <source>Manage on terra-lab.ai</source>
         <translation>Gérer sur terra-lab.ai</translation>
+    </message>
+    <message>
+        <source>Manage account on terra-lab.ai</source>
+        <translation>Gérer mon compte sur terra-lab.ai</translation>
     </message>
     <message>
         <source>Manage plan</source>
@@ -1660,6 +1672,10 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Échec de la génération : l'IA n'a pas pu créer d'image pour cette requête. Vous n'avez pas été débité. Reformulez votre prompt, ou choisissez une autre zone.</translation>
     </message>
     <message>
+        <source>Our image servers are busy right now. You have not been charged. Please wait a moment and try again.</source>
+        <translation>Nos serveurs d'images sont momentanément surchargés. Vous n'avez pas été débité. Patientez un instant et réessayez.</translation>
+    </message>
+    <message>
         <source>Copy prompt</source>
         <translation>Copier le prompt</translation>
     </message>
@@ -1718,6 +1734,114 @@ Nous serions ravis d'avoir votre retour !</translation>
     <message>
         <source>Water &amp; hydrology</source>
         <translation>Eau et hydrologie</translation>
+    </message>
+    <message>
+        <source>Activate AI Edit</source>
+        <translation>Activer AI Edit</translation>
+    </message>
+    <message>
+        <source>Click Connect and sign in in your browser. You're brought straight back, no key to copy.</source>
+        <translation>Cliquez sur Connecter et identifiez-vous dans votre navigateur. Vous revenez ici directement, sans clé à copier.</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Connecter</translation>
+    </message>
+    <message>
+        <source>Sign in via your browser to activate AI Edit</source>
+        <translation>Identifiez-vous via votre navigateur pour activer AI Edit</translation>
+    </message>
+    <message>
+        <source>Didn't open? Open the page again</source>
+        <translation>Rien ne s'est ouvert ? Rouvrir la page</translation>
+    </message>
+    <message>
+        <source>Have a key already? Paste it</source>
+        <translation>Vous avez déjà une clé ? Collez-la</translation>
+    </message>
+    <message>
+        <source>Paste your activation key</source>
+        <translation>Collez votre clé d'activation</translation>
+    </message>
+    <message>
+        <source>Waiting for you to sign in in your browser</source>
+        <translation>En attente de votre connexion dans le navigateur</translation>
+    </message>
+    <message>
+        <source>Couldn't open your browser. Use the manual key option below.</source>
+        <translation>Impossible d'ouvrir votre navigateur. Utilisez l'option de clé manuelle ci-dessous.</translation>
+    </message>
+    <message>
+        <source>Sign-in timed out. Click Connect to try again.</source>
+        <translation>Délai de connexion dépassé. Cliquez sur Connecter pour réessayer.</translation>
+    </message>
+    <message>
+        <source>Unexpected response from the server. Please try again.</source>
+        <translation>Réponse inattendue du serveur. Veuillez réessayer.</translation>
+    </message>
+    <message>
+        <source>Connecting AI Edit</source>
+        <translation>Connexion d'AI Edit</translation>
+    </message>
+    <message>
+        <source>Edit your map with AI</source>
+        <translation>Éditez votre carte avec l'IA</translation>
+    </message>
+    <message>
+        <source>Sign in / Sign up to start</source>
+        <translation>Se connecter / S'inscrire pour commencer</translation>
+    </message>
+    <message>
+        <source>Sign in via your browser to start using AI Edit</source>
+        <translation>Connectez-vous via votre navigateur pour commencer à utiliser AI Edit</translation>
+    </message>
+    <message>
+        <source>5 free AI Edits, no credit card</source>
+        <translation>5 AI Edits gratuits, sans carte bancaire</translation>
+    </message>
+    <message>
+        <source>Use an activation key</source>
+        <translation>Utiliser une clé d'activation</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>Connecté</translation>
+    </message>
+    <message>
+        <source>Activation key</source>
+        <translation>Clé d'activation</translation>
+    </message>
+    <message>
+        <source>Sign out</source>
+        <translation>Se déconnecter</translation>
+    </message>
+    <message>
+        <source>Sign out of AI Edit?</source>
+        <translation>Se déconnecter d'AI Edit ?</translation>
+    </message>
+    <message>
+        <source>You can sign back in anytime from QGIS.</source>
+        <translation>Vous pourrez vous reconnecter à tout moment depuis QGIS.</translation>
+    </message>
+    <message>
+        <source>Open again</source>
+        <translation>Rouvrir</translation>
+    </message>
+    <message>
+        <source>Subscribe to Pro</source>
+        <translation>Passer au Pro</translation>
+    </message>
+    <message>
+        <source>Upgrade to Pro</source>
+        <translation>Passer à Pro</translation>
+    </message>
+    <message>
+        <source>Preferences</source>
+        <translation>Préférences</translation>
+    </message>
+    <message>
+        <source>AI Edit output folder</source>
+        <translation>Dossier de sortie AI Edit</translation>
     </message>
 </context>
 </TS>

@@ -5,8 +5,8 @@ import time
 
 from qgis.core import Qgis, QgsApplication, QgsPointXY, QgsRectangle
 from qgis.gui import QgsRubberBand
-from qgis.PyQt.QtCore import QEvent, QObject, QSettings, Qt, QTimer
-from qgis.PyQt.QtGui import QColor, QIcon, QKeySequence, QPixmap
+from qgis.PyQt.QtCore import QEvent, QObject, QSettings, Qt, QTimer, QUrl
+from qgis.PyQt.QtGui import QColor, QDesktopServices, QIcon, QKeySequence, QPixmap
 from qgis.PyQt.QtWidgets import QAction, QShortcut
 
 from ..api.terralab_client import TerraLabClient
@@ -41,6 +41,7 @@ from ..core.reference_image_store import ReferenceImageStore
 from ..workers.export_worker import ExportWorker
 from ..workers.generation_worker import GenerationWorker
 from ..workers.generic_request_task import GenericRequestTask
+from ..workers.pairing_poll_task import PairingPollTask
 from .canvas_exporter import (
     apply_export_context,
     has_server_config,
@@ -147,6 +148,10 @@ def _localize_server_error(error: str, code: str) -> str:
         "SUBSCRIPTION_EXPIRED": tr("Your subscription has expired."),
         "SUBSCRIPTION_INACTIVE": tr("Your subscription is inactive."),
         "FREE_TIER_EXPIRED": tr("Your free trial has ended."),
+        "DEVICE_LIMIT_EXCEEDED": tr(
+            "This license is already in use on the maximum number of computers."
+            " Free one in your account, or wait for an inactive one to expire."
+        ),
         "RATE_LIMITED": tr("Too many requests, please wait a moment."),
         "RATE_LIMITER_DOWN": tr("Service temporarily unavailable, please retry shortly."),
         "STORAGE_UNAVAILABLE": tr("Storage temporarily unavailable, please retry shortly."),
@@ -199,6 +204,7 @@ _USER_FIXABLE_CODES = NETWORK_ERROR_CODES | frozenset({
     "QUOTA_EXCEEDED", "LIMIT_REACHED", "USAGE_LIMIT_REACHED",
     "MONTHLY_LIMIT_REACHED", "TRIAL_EXHAUSTED",
     "SUBSCRIPTION_EXPIRED", "SUBSCRIPTION_INACTIVE", "FREE_TIER_EXPIRED",
+    "DEVICE_LIMIT_EXCEEDED",
     "GENERATION_CANCELLED",
 })
 
@@ -245,6 +251,8 @@ def _enrich_error_message(error: str, code: str = "") -> str:
         config = get_server_config()
         dashboard = config.get("upgrade_url", get_dashboard_url())
         return f'{localized}. <a href="{dashboard}">{tr("Subscribe")}</a>'
+    if code == "DEVICE_LIMIT_EXCEEDED":
+        return f'{localized} <a href="{DASHBOARD_ERROR_URL}">{tr("Manage your computers")}</a>'
     if code == "PROXY_ERROR":
         return f"{localized}. {tr('Check QGIS proxy settings: Settings > Options > Network')}"
     if code == "SSL_ERROR":
@@ -397,6 +405,8 @@ class AIEditPlugin:
         self._versions: list[dict] = []
         self._selected_version_index = 0
         self._key_validation_worker = None
+        # One-click connect: polls the server for the browser handoff.
+        self._pairing_worker = None
         # Skip /usage round-trips while rapidly toggling the dock (10/60s rate limit).
         self._last_key_validation_unix: float = 0.0
         # Mark up state. Lazy: manager is created on first entry.
@@ -606,14 +616,17 @@ class AIEditPlugin:
         QTimer.singleShot(0, _load_stale_catalog)
         self._load_server_catalog()
         self._iface.addDockWidget(QtC.RightDockWidgetArea, self._dock_widget)
-        _first_install_settings = QSettings()
-        if not _first_install_settings.value("AIEdit/dock_shown_once", False, type=bool):
-            _first_install_settings.setValue("AIEdit/dock_shown_once", True)
+        # Auto-open the panel on first install and after every upgrade (new version),
+        # but never on a routine launch. Same-version launches let QGIS restore the dock
+        # to the state the user left it in (open/closed + position), via its objectName.
+        settings = QSettings()
+        current_version = self._read_plugin_version()
+        last_shown_version = settings.value("AIEdit/dock_shown_version", "", type=str)
+        if last_shown_version != current_version:
+            settings.setValue("AIEdit/dock_shown_version", current_version)
             self._dock_widget.show()
             self._dock_widget.raise_()
             self._ensure_dock_height()
-        else:
-            self._dock_widget.hide()
         # Check for a newer plugin version once QGIS has fetched repo metadata.
         # That cache is often empty just after startup, so retry on a backoff.
         self._update_check_done = False
@@ -630,7 +643,8 @@ class AIEditPlugin:
         self._dock_widget.history_download.connect(self._on_history_download)
         self._dock_widget.history_restore.connect(self._on_history_restore)
         self._dock_widget.activation_attempted.connect(self._on_activation_attempted)
-        self._dock_widget.change_key_clicked.connect(self._on_change_key)
+        self._dock_widget.pairing_requested.connect(self._on_pairing_requested)
+        self._dock_widget.pairing_cancel_requested.connect(self._on_cancel_pairing)
         self._dock_widget.settings_clicked.connect(self._on_settings_clicked)
         self._dock_widget.launch_clicked.connect(self._on_launch_clicked)
         self._dock_widget.exit_clicked.connect(self._on_exit_clicked)
@@ -756,6 +770,7 @@ class AIEditPlugin:
             self._export_config_loader,
             self._credits_loader,
             self._key_validation_worker,
+            self._pairing_worker,
             self._catalog_loader,
         ]:
             if loader is None:
@@ -771,6 +786,7 @@ class AIEditPlugin:
         self._export_config_loader = None
         self._credits_loader = None
         self._key_validation_worker = None
+        self._pairing_worker = None
         self._catalog_loader = None
 
         # Drain in-flight history tasks (add-to-map, download, reference reload).
@@ -1076,7 +1092,7 @@ class AIEditPlugin:
             activation_key=self._auth_manager.get_activation_key(),
             parent=self._iface.mainWindow(),
         )
-        dlg.change_key_requested.connect(self._on_change_key)
+        dlg.sign_out_requested.connect(self._on_sign_out)
         self._dock_widget.set_settings_button_active(True)
         try:
             dlg.exec()
@@ -1989,9 +2005,9 @@ class AIEditPlugin:
         dock as the Mark up reference. Best-effort: never blocks leaving the
         panel. No annotations means nothing to capture."""
         if (
-            self._markup_manager is None or
-            self._selected_extent is None or
-            self._markup_manager.annotation_count() <= 0
+            self._markup_manager is None
+            or self._selected_extent is None
+            or self._markup_manager.annotation_count() <= 0
         ):
             return
         try:
@@ -2241,33 +2257,53 @@ class AIEditPlugin:
         if self._markup_manager is not None:
             self._markup_manager.remove_layer()
 
-    def _on_change_key(self):
-        """Show change-key mode without clearing the current key yet.
-
-        The old key stays in QSettings so Cancel can restore it.
-        Actual clearing happens when the new key is successfully validated.
-        """
-        self._dock_widget.show_change_key_mode()
+    def _on_sign_out(self):
+        """Disconnect: clear the stored key and return to the sign-in screen."""
+        self._last_key_validation_unix = 0.0
+        clear_activation()
+        self._auth_manager.set_activation_key("")
+        self._dock_widget.set_activation_key("")
+        self._dock_widget.set_activated(False)
         self._settings_action.setEnabled(False)
-        log_debug("Change key mode entered")
+        log_debug("Signed out")
+
+    def _apply_activation(self, key: str):
+        """Shared success funnel for both manual paste and one-click connect.
+
+        Persists the key, loads it into the auth manager, flips the dock to the
+        activated state, and kicks a credit refresh. Callers add their own
+        path-specific telemetry afterward.
+        """
+        save_activation(key)
+        self._auth_manager.set_activation_key(key)
+        self._dock_widget.set_activated(True)
+        self._dock_widget.set_activation_message(tr("Activation key verified!"), is_error=False)
+        self._dock_widget.hide_activation_limit_cta()
+        self._settings_action.setEnabled(True)
+        # Stay on LAUNCH state; tool is activated on user click.
+        self._dock_widget.set_checking_credits(True)
+        self._refresh_credits()
+        # Persist activation timestamp once for cohort analysis.
+        settings = QSettings()
+        if not settings.value("AIEdit/activation_timestamp_unix", "", type=str):
+            settings.setValue("AIEdit/activation_timestamp_unix", str(int(time.time())))
+
+    def _cancel_pairing_worker(self):
+        """Cancel any in-flight pairing poll (never terminate())."""
+        if self._pairing_worker is not None and self._pairing_worker.is_active():
+            try:
+                self._pairing_worker.cancel()
+            except Exception:  # nosec B110
+                pass
 
     def _on_activation_attempted(self, key: str):
+        # Manual paste wins over an in-flight browser handoff: cancel the poll
+        # so two success paths can't race.
+        self._cancel_pairing_worker()
         success, message, code = validate_key_with_server(self._client, key)
         normalized_code = (code or "").strip().upper()
         if success:
-            save_activation(key)
-            self._auth_manager.set_activation_key(key)
-            self._dock_widget.set_activated(True)
-            self._dock_widget.set_activation_message(tr("Activation key verified!"), is_error=False)
-            self._dock_widget.hide_activation_limit_cta()
-            self._settings_action.setEnabled(True)
-            # Stay on LAUNCH state; tool is activated on user click.
-            self._dock_widget.set_checking_credits(True)
-            self._refresh_credits()
-            # Persist activation timestamp once for cohort analysis.
-            settings = QSettings()
-            if not settings.value("AIEdit/activation_timestamp_unix", "", type=str):
-                settings.setValue("AIEdit/activation_timestamp_unix", str(int(time.time())))
+            self._apply_activation(key)
             telemetry.track("activation_attempted", {"success": True})
             telemetry.track("plugin_activated")
             telemetry.flush()
@@ -2296,6 +2332,81 @@ class AIEditPlugin:
             if is_quota_error:
                 self._dock_widget.show_activation_limit_cta(SUBSCRIBE_ERROR_URL)
             log_warning(f"Activation failed: {message}")
+
+    # --- One-click connect (browser pairing handoff) ------------------------
+
+    def _on_pairing_requested(self, code: str):
+        """Open the browser to /connect and start polling for the key.
+
+        Re-entrant: if a poll is already running (the user clicked "open the
+        page again"), we only re-open the browser instead of starting a second
+        worker.
+        """
+        # Build the connect URL from the client base so .env.local
+        # TERRALAB_BASE_URL is honored in dev. Never log the code or full URL.
+        url = (
+            f"{self._client.base_url}/connect?code={code}&product=ai-edit"
+            "&utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=connect"
+        )
+        opened = QDesktopServices.openUrl(QUrl(url))
+        if not opened:
+            self._dock_widget.show_pairing_idle()
+            self._dock_widget.set_activation_message(
+                tr("Couldn't open your browser. Use the manual key option below."),
+                is_error=True,
+            )
+            return
+
+        if self._pairing_worker is not None and self._pairing_worker.is_active():
+            # Already polling for this code; the browser was just re-opened.
+            return
+
+        self._pairing_worker = PairingPollTask(self._client, code)
+        self._pairing_worker.pairing_succeeded.connect(self._on_pairing_succeeded)
+        self._pairing_worker.pairing_failed.connect(self._on_pairing_failed)
+        self._pairing_worker.pairing_timeout.connect(self._on_pairing_timeout)
+        QgsApplication.taskManager().addTask(self._pairing_worker)
+        telemetry.track("ai_edit_pair_started")
+        telemetry.flush()
+        log("Pairing started")
+
+    def _on_pairing_succeeded(self, key: str):
+        self._apply_activation(key)
+        # Bring QGIS back to front so the user sees the activated dock.
+        try:
+            mw = self._iface.mainWindow()
+            mw.activateWindow()
+            mw.raise_()
+            self._dock_widget.raise_()
+        except Exception:  # nosec B110
+            pass
+        telemetry.track("ai_edit_pair_succeeded")
+        telemetry.track("plugin_activated")
+        telemetry.flush()
+        log("Pairing successful")
+
+    def _on_pairing_failed(self, message: str, code: str):
+        self._dock_widget.show_pairing_idle()
+        self._dock_widget.set_activation_message(message, is_error=True)
+        telemetry.track("ai_edit_pair_failed", {"error_code": (code or "UNKNOWN")})
+        telemetry.flush()
+        log_warning("Pairing failed")
+
+    def _on_pairing_timeout(self):
+        self._dock_widget.show_pairing_idle()
+        self._dock_widget.set_activation_message(
+            tr("Sign-in timed out. Click Connect to try again."),
+            is_error=True,
+        )
+        telemetry.track("ai_edit_pair_timeout")
+        telemetry.flush()
+        log("Pairing timed out")
+
+    def _on_cancel_pairing(self):
+        self._cancel_pairing_worker()
+        telemetry.track("ai_edit_pair_cancelled")
+        telemetry.flush()
+        log("Pairing cancelled")
 
     def _on_generate(self, prompt: str):
         if self._worker is not None and self._worker.is_active():
@@ -2369,8 +2480,8 @@ class AIEditPlugin:
         # marks. With no markup, behave exactly as before (single clean render).
         markup_layer = None
         if (
-            self._markup_manager is not None and
-            self._markup_manager.annotation_count() > 0
+            self._markup_manager is not None
+            and self._markup_manager.annotation_count() > 0
         ):
             try:
                 markup_layer = self._markup_manager.layer()

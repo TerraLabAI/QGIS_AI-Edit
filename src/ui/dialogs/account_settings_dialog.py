@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from qgis.PyQt.QtCore import QThread, pyqtSignal
+from qgis.PyQt.QtCore import QThread, QUrl, pyqtSignal
+from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -22,7 +23,6 @@ from ...core import qt_compat as QtC
 from ...core.auth.activation_manager import (
     get_dashboard_url,
     get_privacy_url,
-    get_subscribe_url,
     get_terms_url,
 )
 from ...core.i18n import tr
@@ -51,6 +51,30 @@ _LINK_BTN = (
     f"QPushButton:hover {{ color: {BRAND_BLUE_HOVER}; }}"
 )
 
+# Prominent primary action: open the account dashboard on terra-lab.ai.
+_MANAGE_BTN = (
+    f"QPushButton {{ background-color: {BRAND_BLUE}; color: #ffffff;"
+    f" border: none; border-radius: 8px; padding: 9px 16px;"
+    f" font-size: 12px; font-weight: 600; }}"
+    f"QPushButton:hover {{ background-color: {BRAND_BLUE_HOVER}; }}"
+)
+
+# Compact sign-out link (sits inside the account chip, not a full-width button).
+_SIGNOUT_LINK = (
+    "QPushButton { border: none; background: transparent; color: palette(text);"
+    " font-size: 11px; text-decoration: underline; padding: 2px 4px; }"
+    f"QPushButton:hover {{ color: {BRAND_RED}; }}"
+)
+
+# Normal buttons inside a card need an explicit background, else the card's
+# "QPushButton { background: transparent }" rule breaks native rendering.
+_PREF_BTN = (
+    "QPushButton { background: palette(button); color: palette(button-text);"
+    " border: 1px solid rgba(128,128,128,0.45); border-radius: 5px;"
+    " padding: 3px 12px; }"
+    "QPushButton:hover { background: rgba(128,128,128,0.18); }"
+)
+
 _CARD_STYLE = (
     "QFrame { background: rgba(128,128,128,0.08);"
     " border: 1px solid rgba(128,128,128,0.2);"
@@ -61,7 +85,7 @@ _CARD_STYLE = (
 
 # Quiet local-preference rows (output folder, guidance) sit below the account
 # cards. Aligned labels keep their controls on a shared left edge.
-_PREF_LABEL_W = 92
+_PREF_LABEL_W = 132
 _PREF_LABEL_STYLE = (
     "font-size: 11px; color: palette(text);"
     " background: transparent; border: none;"
@@ -88,7 +112,7 @@ class _AccountLoaderWorker(QThread):
 
 class AccountSettingsDialog(QDialog):
 
-    change_key_requested = pyqtSignal()
+    sign_out_requested = pyqtSignal()
 
     def __init__(self, client, auth, activation_key, parent=None):
         super().__init__(parent)
@@ -97,8 +121,8 @@ class AccountSettingsDialog(QDialog):
         self.setMinimumWidth(400)
         self.setMaximumWidth(500)
 
-        self._activation_key = activation_key
-        self._key_visible = False
+        # The activation key now lives only in the web dashboard; Settings is
+        # pure account management, so the key is intentionally not shown here.
         self._worker = None
 
         self._layout = QVBoxLayout(self)
@@ -122,10 +146,10 @@ class AccountSettingsDialog(QDialog):
         self._retry_btn = QPushButton(tr("Retry"))
         self._retry_btn.setMaximumWidth(100)
         self._retry_btn.clicked.connect(self._fetch_account)
-        self._error_change_key_btn = QPushButton(tr("Change activation key"))
-        self._error_change_key_btn.setStyleSheet(_LINK_BTN)
-        self._error_change_key_btn.setCursor(QtC.PointingHandCursor)
-        self._error_change_key_btn.clicked.connect(self._on_change_key)
+        self._error_sign_out_btn = QPushButton(tr("Sign out"))
+        self._error_sign_out_btn.setStyleSheet(_LINK_BTN)
+        self._error_sign_out_btn.setCursor(QtC.PointingHandCursor)
+        self._error_sign_out_btn.clicked.connect(self._on_sign_out)
         retry_row = QHBoxLayout()
         retry_row.addStretch()
         retry_row.addWidget(self._retry_btn)
@@ -133,7 +157,7 @@ class AccountSettingsDialog(QDialog):
         error_layout.addLayout(retry_row)
         change_row = QHBoxLayout()
         change_row.addStretch()
-        change_row.addWidget(self._error_change_key_btn)
+        change_row.addWidget(self._error_sign_out_btn)
         change_row.addStretch()
         error_layout.addLayout(change_row)
         self._error_widget.setVisible(False)
@@ -177,18 +201,7 @@ class AccountSettingsDialog(QDialog):
         if sub:
             self._content_layout.addWidget(self._build_subscription_card(sub))
 
-        # Hairline divider between the account cards and the quiet pref rows.
-        pref_sep = QFrame()
-        pref_sep.setObjectName("prefSep")
-        pref_sep.setStyleSheet(
-            "QFrame#prefSep { border: none;"
-            " border-top: 1px solid rgba(127,127,127,0.18); }"
-        )
-        pref_sep.setFixedHeight(1)
-        self._content_layout.addSpacing(2)
-        self._content_layout.addWidget(pref_sep)
-        self._content_layout.addWidget(self._build_output_folder_row())
-        self._content_layout.addWidget(self._build_guidance_row())
+        self._content_layout.addWidget(self._build_preferences_card())
 
         # Discreet footer: thin top separator, small muted Terms / Privacy links.
         footer = QFrame()
@@ -217,13 +230,27 @@ class AccountSettingsDialog(QDialog):
         self._content_widget.setVisible(True)
         self.adjustSize()
 
+    def _build_preferences_card(self) -> QFrame:
+        card = QFrame()
+        card.setStyleSheet(_CARD_STYLE)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
+
+        title = QLabel(f"<b>{tr('Preferences')}</b>")
+        title.setStyleSheet("font-size: 13px; color: palette(text);")
+        layout.addWidget(title)
+        layout.addWidget(self._build_output_folder_row())
+        layout.addWidget(self._build_guidance_row())
+        return card
+
     def _build_output_folder_row(self) -> QWidget:
         w = QWidget()
         row = QHBoxLayout(w)
         row.setContentsMargins(2, 0, 2, 0)
         row.setSpacing(8)
 
-        label = QLabel(tr("Output folder"))
+        label = QLabel(tr("AI Edit output folder"))
         label.setFixedWidth(_PREF_LABEL_W)
         label.setStyleSheet(_PREF_LABEL_STYLE)
         row.addWidget(label)
@@ -245,6 +272,7 @@ class AccountSettingsDialog(QDialog):
 
         browse_btn = QPushButton(tr("Browse..."))
         browse_btn.setFixedHeight(24)
+        browse_btn.setStyleSheet(_PREF_BTN)
         browse_btn.setCursor(QtC.PointingHandCursor)
         browse_btn.clicked.connect(self._on_output_dir_browse)
         row.addWidget(browse_btn)
@@ -265,6 +293,7 @@ class AccountSettingsDialog(QDialog):
 
         self._guidance_btn = QPushButton(tr("Show again"))
         self._guidance_btn.setFixedHeight(24)
+        self._guidance_btn.setStyleSheet(_PREF_BTN)
         self._guidance_btn.setCursor(QtC.PointingHandCursor)
         self._guidance_btn.setToolTip(
             tr("Bring back the in-app tips you have closed (library, drawing, etc.).")
@@ -309,56 +338,59 @@ class AccountSettingsDialog(QDialog):
         card.setStyleSheet(_CARD_STYLE)
 
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(6)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
-        email_row = QHBoxLayout()
-        email_row.setSpacing(4)
-        email_lbl = QLabel(f"<b>{tr('Email')}</b>")
-        email_lbl.setStyleSheet("font-size: 12px; color: palette(text);")
-        email_row.addWidget(email_lbl)
-        email_row.addStretch()
-        email_val = QLabel(data.get("email", "-"))
-        email_val.setTextInteractionFlags(QtC.TextSelectableByMouse)
-        email_val.setStyleSheet("font-size: 12px; color: palette(text);")
-        email_row.addWidget(email_val)
-        layout.addLayout(email_row)
+        email = data.get("email", "-")
 
-        sep = QFrame()
-        sep.setFrameShape(QtC.FrameHLine)
-        sep.setStyleSheet("color: rgba(128,128,128,0.2);")
-        sep.setFixedHeight(1)
-        layout.addWidget(sep)
-
-        key_row = QHBoxLayout()
-        key_row.setSpacing(4)
-        key_lbl = QLabel(f"<b>{tr('Key')}</b>")
-        key_lbl.setStyleSheet("font-size: 12px; color: palette(text);")
-        key_row.addWidget(key_lbl)
-        key_row.addStretch()
-        self._key_label = QLabel(self._masked_key())
-        self._key_label.setTextInteractionFlags(QtC.TextSelectableByMouse)
-        self._key_label.setStyleSheet(
-            "font-size: 11px; font-family: monospace; color: palette(text);"
+        # A real account "chip": round avatar (first letter) + email + status.
+        chip = QFrame()
+        chip.setStyleSheet(
+            "QFrame { background: palette(base);"
+            " border: 1px solid rgba(128,128,128,0.25); border-radius: 8px; }"
+            "QLabel { background: transparent; border: none; }"
         )
-        key_row.addWidget(self._key_label)
-        self._toggle_btn = QPushButton(tr("Show"))
-        self._toggle_btn.setStyleSheet(_LINK_BTN)
-        self._toggle_btn.setCursor(QtC.PointingHandCursor)
-        self._toggle_btn.clicked.connect(self._toggle_key_visibility)
-        key_row.addWidget(self._toggle_btn)
-        layout.addLayout(key_row)
+        chip_row = QHBoxLayout(chip)
+        chip_row.setContentsMargins(12, 10, 12, 10)
+        chip_row.setSpacing(11)
 
-        change_row = QHBoxLayout()
-        change_row.addStretch()
-        change_btn = QPushButton(tr("Change activation key"))
-        change_btn.setStyleSheet(_LINK_BTN)
-        change_btn.setCursor(QtC.PointingHandCursor)
-        change_btn.clicked.connect(self._on_change_key)
-        change_row.addWidget(change_btn)
-        layout.addLayout(change_row)
+        avatar = QLabel(email[:1].upper() if email and email != "-" else "?")
+        avatar.setFixedSize(38, 38)
+        avatar.setAlignment(QtC.AlignCenter)
+        avatar.setStyleSheet(
+            f"background: {BRAND_GREEN}; color: #14210A; border-radius: 19px;"
+            " font-size: 17px; font-weight: 700;"
+        )
+        chip_row.addWidget(avatar)
 
+        id_col = QVBoxLayout()
+        id_col.setSpacing(2)
+        email_val = QLabel(email)
+        email_val.setTextInteractionFlags(QtC.TextSelectableByMouse)
+        email_val.setStyleSheet(
+            "font-size: 13px; font-weight: 600; color: palette(text);"
+        )
+        id_col.addWidget(email_val)
+        status_lbl = QLabel("✓ " + tr("Connected"))
+        status_lbl.setStyleSheet(
+            f"font-size: 11px; font-weight: 600; color: {BRAND_GREEN_TEXT};"
+        )
+        id_col.addWidget(status_lbl)
+        chip_row.addLayout(id_col, 1)
+
+        # Sign out is a quiet inline link on the right of the chip, not a heavy
+        # full-width button below the email.
+        sign_out_btn = QPushButton(tr("Sign out"))
+        sign_out_btn.setStyleSheet(_SIGNOUT_LINK)
+        sign_out_btn.setCursor(QtC.PointingHandCursor)
+        sign_out_btn.clicked.connect(self._on_sign_out)
+        chip_row.addWidget(sign_out_btn, 0, QtC.AlignVCenter)
+
+        layout.addWidget(chip)
         return card
+
+    def _open_dashboard(self):
+        QDesktopServices.openUrl(QUrl(get_dashboard_url()))
 
     def _build_subscription_card(self, sub: dict) -> QFrame:
         card = QFrame()
@@ -424,37 +456,27 @@ class AccountSettingsDialog(QDialog):
         )
         card_layout.addWidget(progress)
 
-        footer_row = QHBoxLayout()
-        footer_row.setContentsMargins(0, 2, 0, 0)
-        footer_row.setSpacing(6)
+        # A small reset note (paid renewal date) above the action buttons.
+        period_end = sub.get("current_period_end", "")
+        if period_end and not is_free:
+            reset_row = QHBoxLayout()
+            reset_row.setContentsMargins(0, 2, 0, 0)
+            reset_label = QLabel(f"{tr('Resets')} {self._format_date(period_end)}")
+            reset_label.setStyleSheet("font-size: 10px; color: palette(text);")
+            reset_row.addWidget(reset_label)
+            reset_row.addStretch()
+            card_layout.addLayout(reset_row)
 
-        if is_free and remaining == 0:
-            left_label = QLabel(
-                f'<a href="{get_subscribe_url()}" style="color: {BRAND_BLUE};">'
-                f'{tr("Subscribe")}</a>'
-            )
-            left_label.setOpenExternalLinks(True)
-            left_label.setStyleSheet(f"font-size: 10px; color: {BRAND_RED};")
-            footer_row.addWidget(left_label)
-        else:
-            period_end = sub.get("current_period_end", "")
-            if period_end and not is_free:
-                reset_text = self._format_date(period_end)
-                reset_label = QLabel(f"{tr('Resets')} {reset_text}")
-                reset_label.setStyleSheet("font-size: 10px; color: palette(text);")
-                footer_row.addWidget(reset_label)
+        card_layout.addSpacing(4)
 
-        footer_row.addStretch()
-
-        manage_label = QLabel(
-            f'<a href="{get_dashboard_url()}" style="color: {BRAND_BLUE};'
-            f' text-decoration: none;">{tr("Manage on terra-lab.ai")} ↗</a>'
-        )
-        manage_label.setOpenExternalLinks(True)
-        manage_label.setStyleSheet("font-size: 10px;")
-        footer_row.addWidget(manage_label)
-
-        card_layout.addLayout(footer_row)
+        # Subscribing/upgrading lives on the website (terra-lab.ai); the plugin
+        # only points there via Manage account. Keeps billing out of the plugin.
+        manage_btn = QPushButton(tr("Manage account on terra-lab.ai") + "  ↗")
+        manage_btn.setStyleSheet(_MANAGE_BTN)
+        manage_btn.setCursor(QtC.PointingHandCursor)
+        manage_btn.setMinimumHeight(36)
+        manage_btn.clicked.connect(self._open_dashboard)
+        card_layout.addWidget(manage_btn)
 
         return card
 
@@ -482,23 +504,21 @@ class AccountSettingsDialog(QDialog):
         except (ValueError, AttributeError):
             return iso_str
 
-    def _masked_key(self) -> str:
-        key = self._activation_key
-        if len(key) <= 8:
-            return key[:3] + "****"
-        return key[:6] + "****" + key[-4:]
+    def _on_sign_out(self):
+        from qgis.PyQt.QtWidgets import QMessageBox
 
-    def _toggle_key_visibility(self):
-        self._key_visible = not self._key_visible
-        if self._key_visible:
-            self._key_label.setText(self._activation_key)
-            self._toggle_btn.setText(tr("Hide"))
-        else:
-            self._key_label.setText(self._masked_key())
-            self._toggle_btn.setText(tr("Show"))
-
-    def _on_change_key(self):
-        self.change_key_requested.emit()
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(tr("Sign out"))
+        box.setText(tr("Sign out of AI Edit?"))
+        box.setInformativeText(tr("You can sign back in anytime from QGIS."))
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        box.setDefaultButton(QMessageBox.StandardButton.No)
+        if box.exec() != QMessageBox.StandardButton.Yes:
+            return
+        self.sign_out_requested.emit()
         self.accept()
 
     def closeEvent(self, event):

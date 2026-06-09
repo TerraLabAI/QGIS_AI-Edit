@@ -372,6 +372,20 @@ class TerraLabClient:
             "GET", f"/api/plugin/config?product={product}"
         )
 
+    def poll_pairing(self, code: str, timeout_ms: int = 10_000) -> dict:
+        """Poll whether a pairing code has been bound to an activation key.
+
+        Unauthenticated GET (the code itself is the bearer of trust). Returns
+        {"status": "pending" | "ready" | "not_found", ...} or {"error", "code"}
+        on a network/server failure (the caller retries those within a deadline).
+        """
+        from urllib.parse import quote
+        return self._request(
+            "GET",
+            f"/api/plugin/pair/poll?code={quote(code, safe='')}",
+            timeout_ms=timeout_ms,
+        )
+
     def send_telemetry_batch(self, events: list, auth: dict) -> dict:
         """Send a batch of telemetry events to the track endpoint."""
         body = json.dumps({"events": events}).encode("utf-8")

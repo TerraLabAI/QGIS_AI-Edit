@@ -29,10 +29,22 @@ class AuthManager:
         """Build auth headers. Requires activation key."""
         if not self._activation_key:
             return {}
-        return {
+        headers = {
             "Authorization": f"Bearer {self._activation_key}",
             "X-Product-ID": "ai-edit",
         }
+        # Anonymous per-machine hash so the server can apply the device limit.
+        # Best-effort: a hash failure must never strip auth.
+        try:
+            from ..device_id import get_device_hash, get_device_platform
+
+            headers["X-Device-Hash"] = get_device_hash()
+            platform = get_device_platform()
+            if platform:
+                headers["X-Device-Platform"] = platform
+        except Exception:  # nosec B110
+            pass
+        return headers
 
     def check_can_generate(self) -> tuple[bool, str, str]:
         """Check if user can generate.

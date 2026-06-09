@@ -74,6 +74,7 @@ from .dialogs.error_report_dialog import (
 from .panel_helpers import (
     apply_swatch_style,
     build_panel_header,
+    make_hidpi_pixmap,
     make_section_header,
     panel_section_label,
 )
@@ -169,6 +170,19 @@ _BTN_GHOST = (
     " border: 1px solid rgba(128, 128, 128, 0.5); }"
     f"QPushButton:disabled {{ background-color: rgba(128, 128, 128, 0.08);"
     f" border: 1px solid rgba(128, 128, 128, 0.15); color: {DISABLED_TEXT}; }}"
+)
+
+# Compact filled buttons for the browser-handoff waiting state. Both carry a
+# soft tint (never transparent): neutral for "open again", red for "cancel".
+_BTN_PAIR_NEUTRAL = (
+    "QPushButton { background-color: rgba(128,128,128,0.16); color: palette(text);"
+    " border: none; border-radius: 4px; }"
+    "QPushButton:hover { background-color: rgba(128,128,128,0.28); }"
+)
+_BTN_PAIR_CANCEL = (
+    f"QPushButton {{ background-color: rgba(211,47,47,0.12); color: {BRAND_RED};"
+    f" border: none; border-radius: 4px; }}"
+    f"QPushButton:hover {{ background-color: rgba(211,47,47,0.22); }}"
 )
 
 # Shared height for the prompt-row chips so text-only and icon chips align.
@@ -305,6 +319,34 @@ def _pencil_icon(ink: QColor) -> QIcon:
     p.drawLine(QPointF(24, 12), QPointF(29, 17))
     p.end()
     return QIcon(pm)
+
+
+class _Spinner(QWidget):
+    """A small rotating arc, the conventional 'busy' indicator. Driven by an
+    external QTimer calling ``advance()`` so one timer can be paused with the
+    section it belongs to."""
+
+    def __init__(self, diameter: int = 16, parent=None):
+        super().__init__(parent)
+        self._angle = 0
+        self._d = diameter
+        self.setFixedSize(diameter, diameter)
+
+    def advance(self):
+        self._angle = (self._angle + 30) % 360
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        margin = 2.0
+        rect = QRectF(margin, margin, self._d - 2 * margin, self._d - 2 * margin)
+        pen = QPen(QColor(BRAND_GREEN))
+        pen.setWidthF(2.2)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        painter.drawArc(rect, int(-self._angle * 16), 270 * 16)
+        painter.end()
 
 
 class _ZoneGestureGlyph(QWidget):
@@ -730,20 +772,20 @@ class _PromptContainer(QFrame):
         "QToolButton::menu-indicator { image: none; width: 0; }"
     )
     _CHIP_BTN_STYLE = (
-        _CHIP_REST +
-        f"QToolButton:hover {{ {_CHIP_HOVER} }}" +
-        f"QToolButton:pressed {{ {_CHIP_PRESSED} }}" +
-        f'QToolButton[active="true"] {{ {_CHIP_PRESSED} }}' +
-        _CHIP_TAIL
+        _CHIP_REST
+        + f"QToolButton:hover {{ {_CHIP_HOVER} }}"
+        + f"QToolButton:pressed {{ {_CHIP_PRESSED} }}"
+        + f'QToolButton[active="true"] {{ {_CHIP_PRESSED} }}'
+        + _CHIP_TAIL
     )
     # Same chip, but property-driven hover for buttons that pop a QMenu - Qt
     # eats the synthetic Leave event when a popup closes, leaving :hover stuck
     # on (see _FooterIconButton).
     _CHIP_BTN_HOVERPROP_STYLE = (
-        _CHIP_REST +
-        f'QToolButton[hover="true"] {{ {_CHIP_HOVER} }}' +
-        f'QToolButton[active="true"] {{ {_CHIP_PRESSED} }}' +
-        _CHIP_TAIL
+        _CHIP_REST
+        + f'QToolButton[hover="true"] {{ {_CHIP_HOVER} }}'
+        + f'QToolButton[active="true"] {{ {_CHIP_PRESSED} }}'
+        + _CHIP_TAIL
     )
     _MENU_STYLE = (
         "QMenu { background: palette(base); border: 1px solid rgba(128,128,128,0.35);"
@@ -1124,7 +1166,8 @@ class AIEditDockWidget(QDockWidget):
     base_version_selected = pyqtSignal(int)
     retry_clicked = pyqtSignal(str)       # retry on same zone with (possibly edited) prompt
     activation_attempted = pyqtSignal(str)
-    change_key_clicked = pyqtSignal()
+    pairing_requested = pyqtSignal(str)        # one-click connect: emits the minted pairing code
+    pairing_cancel_requested = pyqtSignal()    # user cancelled the browser handoff
     settings_clicked = pyqtSignal()
     launch_clicked = pyqtSignal()          # user clicked "Launch AI Edit" on entry screen
     exit_clicked = pyqtSignal()            # user clicked the always-visible Exit button
@@ -1167,6 +1210,9 @@ class AIEditDockWidget(QDockWidget):
 
     def __init__(self, parent=None, reference_store: ReferenceImageStore | None = None):
         super().__init__(tr("AI Edit by TerraLab"), parent)
+        # Stable objectName lets QGIS save/restore the dock (position + visibility) across
+        # sessions, like the native Layers panel.
+        self.setObjectName("AIEditDockWidget")
         self.setAllowedAreas(QtC.LeftDockWidgetArea | QtC.RightDockWidgetArea)
         # Scale min width with font so hi-DPI displays don't crop the footer.
         try:
@@ -1701,10 +1747,10 @@ class AIEditDockWidget(QDockWidget):
         )
         trial_layout.addWidget(self._trial_info_text)
         self._trial_info_benefits = QLabel(
-            tr("Subscribe to unlock:") + "<br>" +
-            "&nbsp;&nbsp;✓&nbsp; " + tr("150 edits every month") + "<br>" +
-            "&nbsp;&nbsp;✓&nbsp; " + tr("2K and 4K outputs") + "<br>" +
-            "&nbsp;&nbsp;✓&nbsp; " + tr("Cancel anytime")
+            tr("Subscribe to unlock:") + "<br>"
+            + "&nbsp;&nbsp;✓&nbsp; " + tr("150 edits every month") + "<br>"
+            + "&nbsp;&nbsp;✓&nbsp; " + tr("2K and 4K outputs") + "<br>"
+            + "&nbsp;&nbsp;✓&nbsp; " + tr("Cancel anytime")
         )
         self._trial_info_benefits.setWordWrap(True)
         self._trial_info_benefits.setTextFormat(QtC.RichText)
@@ -1775,6 +1821,11 @@ class AIEditDockWidget(QDockWidget):
         # Kept so resizeEvent can measure the row's natural width and collapse
         # low-priority items (count, then pill text) until it fits.
         self._footer_row = footer_row
+
+        # Signed-out only: the "Use an activation key" fallback sits at the
+        # bottom-left of the footer (next to Help), in the slot the credits take
+        # once signed in. The two are mutually exclusive, so they never collide.
+        footer_row.addWidget(self._paste_toggle, 0, QtC.AlignVCenter)
 
         self._credit_ring = CreditRing(diameter=16, parent=footer_widget)
         self._credit_ring.setVisible(False)
@@ -1871,7 +1922,8 @@ class AIEditDockWidget(QDockWidget):
         # Settings button - gear icon, opens the Account Settings dialog
         # directly. Shortcuts have moved inside that dialog.
         self._settings_btn = _FooterIconButton(footer_widget)
-        self._settings_btn.setText("⚙")  # ⚙ U+2699 GEAR
+        self._settings_btn.setIcon(self._make_gear_glyph_icon())
+        self._settings_btn.setIconSize(QSize(20, 20))
         self._settings_btn.setToolTip(tr("Settings"))
         self._settings_btn.setCursor(QtC.PointingHandCursor)
         self._settings_btn.setFocusPolicy(QtC.NoFocus)
@@ -2020,56 +2072,112 @@ class AIEditDockWidget(QDockWidget):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(8)
 
-        # --- How to set up AI Edit ---
-        self._setup_header = QLabel(tr("Two steps to start using AI Edit"))
+        # --- Light headline (the gray instruction box is intentionally gone:
+        # the button + one reassurance line is all a new user needs) ---
+        layout.addSpacing(6)
+        self._setup_header = QLabel(tr("Edit your map with AI") + " 🍌")
+        self._setup_header.setAlignment(QtC.AlignCenter)
         self._setup_header.setStyleSheet(
-            "font-weight: bold; font-size: 13px; color: palette(text);"
+            "font-weight: 600; font-size: 14px; color: palette(text);"
         )
         layout.addWidget(self._setup_header)
 
-        self._setup_desc = QLabel(
-            tr("1. Sign up or sign in on terra-lab.ai to get your key") +
-            "\n" +
-            tr("2. Paste your key below to activate")
+        layout.addSpacing(14)
+
+        # --- Primary: one tap to sign in (browser handoff, no copy-paste) ---
+        self._connect_section = QWidget()
+        connect_layout = QVBoxLayout(self._connect_section)
+        connect_layout.setContentsMargins(0, 0, 0, 0)
+        connect_layout.setSpacing(6)
+
+        self._connect_btn = QPushButton(tr("Sign in / Sign up to start"))
+        self._connect_btn.setToolTip(tr("Sign in via your browser to start using AI Edit"))
+        self._connect_btn.setMinimumHeight(38)
+        self._connect_btn.setCursor(QtC.PointingHandCursor)
+        self._connect_btn.setStyleSheet(_BTN_GREEN_AUTH)
+        self._connect_btn.clicked.connect(self._on_connect_clicked)
+        connect_layout.addWidget(self._connect_btn)
+
+        connect_hint = QLabel(tr("5 free AI Edits, no credit card"))
+        connect_hint.setAlignment(QtC.AlignCenter)
+        connect_hint.setWordWrap(True)
+        connect_hint.setStyleSheet("font-size: 11px; color: palette(text);")
+        connect_layout.addWidget(connect_hint)
+
+        layout.addWidget(self._connect_section)
+
+        # --- Waiting state: shown while the browser handoff is in progress ---
+        self._pairing_wait_section = QWidget()
+        wait_layout = QVBoxLayout(self._pairing_wait_section)
+        wait_layout.setContentsMargins(0, 4, 0, 0)
+        wait_layout.setSpacing(12)
+
+        # Spinner + static status text on one centered row (no jumping dots).
+        status_row = QHBoxLayout()
+        status_row.setSpacing(8)
+        status_row.addStretch(1)
+        self._pairing_spinner = _Spinner(16)
+        status_row.addWidget(self._pairing_spinner, 0, QtC.AlignVCenter)
+        self._pairing_status = QLabel(tr("Waiting for you to sign in in your browser"))
+        self._pairing_status.setWordWrap(True)
+        self._pairing_status.setStyleSheet("font-size: 12px; color: palette(text);")
+        status_row.addWidget(self._pairing_status, 0, QtC.AlignVCenter)
+        status_row.addStretch(1)
+        wait_layout.addLayout(status_row)
+
+        # Two compact, filled buttons side by side.
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(6)
+        self._pairing_reopen_btn = QPushButton(tr("Open again"))
+        self._pairing_reopen_btn.setToolTip(tr("Didn't open? Open the page again"))
+        self._pairing_reopen_btn.setMinimumHeight(28)
+        self._pairing_reopen_btn.setCursor(QtC.PointingHandCursor)
+        self._pairing_reopen_btn.setStyleSheet(_BTN_PAIR_NEUTRAL)
+        self._pairing_reopen_btn.clicked.connect(self._on_pairing_reopen_clicked)
+        btn_row.addWidget(self._pairing_reopen_btn)
+
+        self._pairing_cancel_btn = QPushButton(tr("Cancel"))
+        self._pairing_cancel_btn.setMinimumHeight(28)
+        self._pairing_cancel_btn.setCursor(QtC.PointingHandCursor)
+        self._pairing_cancel_btn.setStyleSheet(_BTN_PAIR_CANCEL)
+        self._pairing_cancel_btn.clicked.connect(self._on_pairing_cancel_clicked)
+        btn_row.addWidget(self._pairing_cancel_btn)
+        wait_layout.addLayout(btn_row)
+
+        self._pairing_wait_section.setVisible(False)
+        layout.addWidget(self._pairing_wait_section)
+
+        # One timer rotates the spinner while waiting. Parented to the dock
+        # (segfault-safe) and stopped the moment the wait section hides.
+        self._pairing_anim_timer = QTimer(self)
+        self._pairing_anim_timer.setInterval(80)
+        self._pairing_anim_timer.timeout.connect(self._pairing_spinner.advance)
+        self._pending_pairing_code = ""
+
+        layout.addStretch(1)
+
+        # --- Discreet fallback: a tiny text link, not a button. Almost everyone
+        # uses "Sign in to start"; this only matters when the browser can't open
+        # or a key was handed out by an admin. Reveals the paste field on click.
+        self._paste_toggle = QPushButton(tr("Use an activation key"))
+        self._paste_toggle.setCursor(QtC.PointingHandCursor)
+        self._paste_toggle.setStyleSheet(
+            "QPushButton { background: transparent; border: none;"
+            " color: palette(text); font-size: 11px; padding: 2px;"
+            " text-decoration: underline; }"
         )
-        self._setup_desc.setWordWrap(True)
-        self._setup_desc.setStyleSheet(_INSTRUCTION_BOX)
-        layout.addWidget(self._setup_desc)
+        self._paste_toggle.clicked.connect(self._toggle_paste_section)
+        # Added to the footer (bottom-left, next to Help) instead of here, so it
+        # sits where the credits go once signed in. See the footer build below.
 
-        layout.addSpacing(12)
+        self._paste_section = QWidget()
+        paste_layout = QVBoxLayout(self._paste_section)
+        paste_layout.setContentsMargins(0, 0, 0, 0)
+        paste_layout.setSpacing(6)
 
-        # --- Step 1: Create account (inside _signup_section) ---
-        self._signup_section = QWidget()
-        signup_layout = QVBoxLayout(self._signup_section)
-        signup_layout.setContentsMargins(0, 0, 0, 0)
-        signup_layout.setSpacing(8)
-
-        step1_label = QLabel(tr("1. Sign up / Sign in"))
-        step1_label.setStyleSheet("font-weight: bold; font-size: 12px; color: palette(text);")
-        signup_layout.addWidget(step1_label)
-
-        self._login_btn = QPushButton(tr("Get Your Key"))
-        self._login_btn.setToolTip(tr("Sign up or sign in to receive your activation key"))
-        self._login_btn.setMinimumHeight(36)
-        self._login_btn.setCursor(QtC.PointingHandCursor)
-        self._login_btn.setStyleSheet(_BTN_GREEN_AUTH)
-        self._login_btn.clicked.connect(self._on_login_clicked)
-        signup_layout.addWidget(self._login_btn)
-
-        login_hint = QLabel(tr("5 free generations, no credit card required"))
-        login_hint.setAlignment(QtC.AlignCenter)
-        login_hint.setWordWrap(True)
-        login_hint.setStyleSheet("font-size: 11px; color: palette(text);")
-        signup_layout.addWidget(login_hint)
-
-        layout.addWidget(self._signup_section)
-
-        layout.addSpacing(8)
-
-        # --- Step 2: Paste key (outside _signup_section for change-key mode) ---
-        self._step2_label = QLabel(tr("2. Paste your activation key"))
+        self._step2_label = QLabel(tr("Paste your activation key"))
         self._step2_label.setStyleSheet("font-weight: bold; font-size: 12px; color: palette(text);")
-        layout.addWidget(self._step2_label)
+        paste_layout.addWidget(self._step2_label)
 
         self._key_input_widget = QWidget()
         key_input_layout = QHBoxLayout(self._key_input_widget)
@@ -2089,16 +2197,9 @@ class AIEditDockWidget(QDockWidget):
         unlock_btn.clicked.connect(self._on_unlock_clicked)
         key_input_layout.addWidget(unlock_btn)
 
-        layout.addWidget(self._key_input_widget)
-
-        # Cancel button (visible only in change-key mode)
-        self._cancel_key_btn = QPushButton(tr("Cancel"))
-        self._cancel_key_btn.setToolTip(tr("Discard changes and keep the current key"))
-        self._cancel_key_btn.setCursor(QtC.PointingHandCursor)
-        self._cancel_key_btn.setStyleSheet(_BTN_GHOST)
-        self._cancel_key_btn.clicked.connect(self._on_cancel_change_key)
-        self._cancel_key_btn.setVisible(False)
-        layout.addWidget(self._cancel_key_btn)
+        paste_layout.addWidget(self._key_input_widget)
+        self._paste_section.setVisible(False)
+        layout.addWidget(self._paste_section)
 
         # Activation message (errors / success)
         self._activation_message = QLabel("")
@@ -2490,38 +2591,25 @@ class AIEditDockWidget(QDockWidget):
         if activated:
             self.hide_trial_info()
             self._update_layer_warning()
-            self._cancel_key_btn.setVisible(False)
+            # The footer key fallback belongs to the signed-out state only.
+            self._paste_toggle.setVisible(False)
             self._set_upgrade_cta_wanted(self._is_free_tier)
             self.set_launch_state()
+            # A stale pairing spinner must never survive a successful activation.
+            self._stop_pairing_wait()
         else:
             self._setup_header.setVisible(True)
-            self._setup_desc.setVisible(True)
-            self._signup_section.setVisible(True)
-            self._step2_label.setVisible(True)
-            self._key_input_widget.setVisible(True)
-            self._cancel_key_btn.setVisible(False)
+            self._connect_section.setVisible(True)
+            self._paste_toggle.setVisible(True)
+            self._paste_section.setVisible(False)
+            self._stop_pairing_wait()
             self._activation_message.setVisible(False)
             self.hide_activation_limit_cta()
-
-    def show_change_key_mode(self):
-        """Show only the key input, no signup flow. For users changing their key."""
-        self._activated = False
-        self._activation_widget.setVisible(True)
-        self._main_widget.setVisible(False)
-        self._settings_btn.setVisible(False)
-        self._vectorize_btn.setVisible(False)
-        self._swipe_btn.setVisible(False)
-        self._set_upgrade_cta_wanted(False)
-        self._setup_header.setVisible(False)
-        self._setup_desc.setVisible(False)
-        self._signup_section.setVisible(False)
-        self._step2_label.setVisible(True)
-        self._key_input_widget.setVisible(True)
-        self._cancel_key_btn.setVisible(True)
-        self._activation_message.setVisible(False)
-        self.hide_activation_limit_cta()
-        self._code_input.clear()
-        self._code_input.setFocus()
+            # The credits ring + count and the upsell pill belong to a signed-in
+            # session only; clear them so they never linger after sign-out.
+            self._set_credits_wanted(False)
+            self._set_upgrade_cta_wanted(False)
+            self.hide_trial_info()
 
     def hide_consent(self):
         """Hide the consent checkbox after first generation."""
@@ -2927,11 +3015,11 @@ class AIEditDockWidget(QDockWidget):
 
     def _is_free_tier_exhausted(self) -> bool:
         return bool(
-            self._is_free_tier and
-            self._cached_used is not None and
-            self._cached_limit is not None and
-            self._cached_limit > 0 and
-            self._cached_used >= self._cached_limit
+            self._is_free_tier
+            and self._cached_used is not None
+            and self._cached_limit is not None
+            and self._cached_limit > 0
+            and self._cached_used >= self._cached_limit
         )
 
     def seed_version_strip(self, original_pixmap, prompt: str = "", meta: dict | None = None) -> None:
@@ -3125,30 +3213,47 @@ class AIEditDockWidget(QDockWidget):
     def _on_key_toggle(self, checked: bool):
         pass
 
-    def _on_login_clicked(self):
-        """Open terra-lab.ai sign-up page in system browser.
+    def _on_connect_clicked(self):
+        """Start the one-click browser handoff. Mints a high-entropy pairing
+        code; the plugin opens the browser and polls until it gets the key."""
+        import secrets
+        self._pending_pairing_code = secrets.token_urlsafe(32)
+        self.show_pairing_waiting()
+        self.pairing_requested.emit(self._pending_pairing_code)
 
-        Users clicking "Get Your Key" don't have an account yet by default, so
-        we land them on /signup. The page exposes a Sign-in tab for the
-        edge case of an existing user reinstalling the plugin.
-        """
-        import webbrowser
-        webbrowser.open(
-            "https://terra-lab.ai/signup?product=ai-edit"
-            "&utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit"
-            "&utm_content=sign_up"
-        )
+    def _on_pairing_reopen_clicked(self):
+        """Re-open the browser with the SAME code (do not mint a new one)."""
+        if self._pending_pairing_code:
+            self.pairing_requested.emit(self._pending_pairing_code)
 
-    def _on_cancel_change_key(self):
-        """Cancel key change and restore the activated state."""
-        from ..core.auth.activation_manager import get_activation_key
-        saved_key = get_activation_key()
-        if saved_key:
-            self._code_input.setText(saved_key)
-            self.set_activated(True)
-        else:
-            self._signup_section.setVisible(True)
-            self._cancel_key_btn.setVisible(False)
+    def _on_pairing_cancel_clicked(self):
+        self.pairing_cancel_requested.emit()
+        self.show_pairing_idle()
+
+    def _toggle_paste_section(self):
+        self._paste_section.setVisible(not self._paste_section.isVisible())
+        if self._paste_section.isVisible():
+            self._code_input.setFocus()
+
+    def show_pairing_waiting(self):
+        """Switch the onboarding into the 'waiting for browser' state."""
+        self._connect_section.setVisible(False)
+        self._paste_toggle.setVisible(False)
+        self._paste_section.setVisible(False)
+        self._activation_message.setVisible(False)
+        self._pairing_wait_section.setVisible(True)
+        self._pairing_anim_timer.start()
+
+    def _stop_pairing_wait(self):
+        """Hide the waiting section and stop its animation timer."""
+        self._pairing_anim_timer.stop()
+        self._pairing_wait_section.setVisible(False)
+
+    def show_pairing_idle(self):
+        """Return to the idle onboarding (Connect button visible)."""
+        self._stop_pairing_wait()
+        self._connect_section.setVisible(True)
+        self._paste_toggle.setVisible(True)
 
     def _on_unlock_clicked(self):
         code = self._code_input.text().strip()
@@ -3185,9 +3290,9 @@ class AIEditDockWidget(QDockWidget):
         """
         subscribe_url = get_subscribe_url()
         self._show_status_box(
-            message +
-            f' <a href="{subscribe_url}" style="color: {BRAND_BLUE}; font-weight: bold;">' +
-            tr("Subscribe") + "</a>",
+            message
+            + f' <a href="{subscribe_url}" style="color: {BRAND_BLUE}; font-weight: bold;">'
+            + tr("Subscribe") + "</a>",
             "warning"
         )
         # 12 s banner; parented timer dies with the dock.
@@ -3590,6 +3695,54 @@ class AIEditDockWidget(QDockWidget):
         """
         ink = self.palette().color(QPalette.ColorRole.WindowText)
         return _tinted_svg_icon("swipe.svg", ink)
+
+    def _make_gear_glyph_icon(self) -> QIcon:
+        """Footer Settings glyph - a vector gear painted in the palette text
+        colour. Replaces the U+2699 GEAR character, which Windows renders as a
+        colour emoji (Segoe UI Emoji) while macOS shows a flat black glyph; the
+        painted version is identical on both platforms and crisp at any DPI.
+        """
+        import math
+
+        from qgis.PyQt.QtCore import QPointF, Qt
+        from qgis.PyQt.QtGui import QPainter, QPainterPath
+
+        s = 20
+        ink = self.palette().color(QPalette.ColorRole.WindowText)
+        pm = make_hidpi_pixmap(s)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        cx = cy = s / 2.0
+        teeth = 8
+        step = 2.0 * math.pi / teeth
+        r_tip = s * 0.46
+        r_root = s * 0.34
+        half_tip = step * 0.18
+        half_root = step * 0.30
+        path = QPainterPath()
+        for i in range(teeth):
+            a = i * step
+            corners = (
+                (a - half_root, r_root),
+                (a - half_tip, r_tip),
+                (a + half_tip, r_tip),
+                (a + half_root, r_root),
+            )
+            for ang, r in corners:
+                pt = QPointF(cx + r * math.cos(ang), cy + r * math.sin(ang))
+                if i == 0 and ang == corners[0][0]:
+                    path.moveTo(pt)
+                else:
+                    path.lineTo(pt)
+        path.closeSubpath()
+        # Center hole: OddEven fill subtracts it from the gear body.
+        path.addEllipse(QPointF(cx, cy), s * 0.15, s * 0.15)
+        path.setFillRule(Qt.FillRule.OddEvenFill)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(ink)
+        p.drawPath(path)
+        p.end()
+        return QIcon(pm)
 
     # Public API consumed by the plugin layer ---------------------------
 

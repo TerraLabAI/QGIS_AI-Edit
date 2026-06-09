@@ -16,7 +16,13 @@ from qgis.PyQt.QtGui import (
     QPen,
     QPixmap,
 )
-from qgis.PyQt.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
+from qgis.PyQt.QtWidgets import (
+    QApplication,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 BRAND_BLUE = "#1e88e5"
 
@@ -135,6 +141,36 @@ def is_dark_palette(widget: QWidget) -> bool:
     return (c.red() + c.green() + c.blue()) / 3 < 128
 
 
+def screen_device_pixel_ratio() -> float:
+    """Device pixel ratio of the primary screen (2.0 on Retina, 1.25/1.5/2.0
+    on scaled Windows). Falls back to 1.0 before a screen exists."""
+    app = QApplication.instance()
+    if app is not None:
+        screen = app.primaryScreen()
+        if screen is not None:
+            ratio = screen.devicePixelRatio()
+            if ratio > 0:
+                return float(ratio)
+    return 1.0
+
+
+def make_hidpi_pixmap(logical_px: int, dpr: float | None = None) -> QPixmap:
+    """Transparent pixmap sized for the current display scale.
+
+    Renders into ``logical_px * dpr`` physical pixels and tags the pixmap
+    with its dpr, so a QPainter draws in logical coordinates while the
+    output stays crisp at any scale (Retina, Windows 125/150/200%). Without
+    this, a fixed-size pixmap gets stretched by Qt and looks pixelated.
+    """
+    if dpr is None:
+        dpr = screen_device_pixel_ratio()
+    physical = max(1, round(logical_px * dpr))
+    pm = QPixmap(physical, physical)
+    pm.setDevicePixelRatio(dpr)
+    pm.fill(Qt.GlobalColor.transparent)
+    return pm
+
+
 def make_color_dot_icon(
     color: QColor,
     selected: bool,
@@ -142,49 +178,50 @@ def make_color_dot_icon(
     dot_px: int = 22,
 ) -> QIcon:
     """Solid circle icon used as a color-picker swatch."""
-    size = dot_px * 2  # 2x for crisp rendering
-    pm = QPixmap(size, size)
-    pm.fill(Qt.GlobalColor.transparent)
+    s = dot_px
+    pm = make_hidpi_pixmap(s)
     p = QPainter(pm)
     p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    center = QPointF(s / 2, s / 2)
     if selected:
         ring = QPen(QColor("#1f1f1f") if is_dark else QColor("#ffffff"))
-        ring.setWidthF(3)
+        ring.setWidthF(1.5)
         p.setPen(ring)
         p.setBrush(QBrush(color))
-        p.drawEllipse(QPointF(size / 2, size / 2), size * 0.42, size * 0.42)
+        p.drawEllipse(center, s * 0.42, s * 0.42)
         halo = QPen(QColor(BRAND_BLUE))
-        halo.setWidthF(2.5)
+        halo.setWidthF(1.25)
         p.setPen(halo)
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawEllipse(QPointF(size / 2, size / 2), size * 0.48, size * 0.48)
+        p.drawEllipse(center, s * 0.48, s * 0.48)
     else:
         edge = QColor(0, 0, 0, 60)
-        p.setPen(QPen(edge, 1.2))
+        p.setPen(QPen(edge, 0.6))
         p.setBrush(QBrush(color))
-        p.drawEllipse(QPointF(size / 2, size / 2), size * 0.42, size * 0.42)
+        p.drawEllipse(center, s * 0.42, s * 0.42)
     p.end()
     return QIcon(pm)
 
 
 def make_custom_color_icon(is_dark: bool, dot_px: int = 22) -> QIcon:
     """Plus-icon swatch that opens the system color dialog."""
-    size = dot_px * 2
-    pm = QPixmap(size, size)
-    pm.fill(Qt.GlobalColor.transparent)
+    s = dot_px
+    pm = make_hidpi_pixmap(s)
     p = QPainter(pm)
     p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    center = QPointF(s / 2, s / 2)
     bg = QColor(128, 128, 128, 50)
     p.setBrush(QBrush(bg))
-    p.setPen(QPen(QColor(128, 128, 128, 110), 1.2))
-    p.drawEllipse(QPointF(size / 2, size / 2), size * 0.42, size * 0.42)
+    p.setPen(QPen(QColor(128, 128, 128, 110), 0.6))
+    p.drawEllipse(center, s * 0.42, s * 0.42)
     ink = QColor("#bbbbbb" if is_dark else "#555555")
     pen = QPen(ink)
-    pen.setWidthF(2.4)
+    pen.setWidthF(1.2)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     p.setPen(pen)
-    cx = size / 2
-    p.drawLine(QPointF(cx - 6, cx), QPointF(cx + 6, cx))
-    p.drawLine(QPointF(cx, cx - 6), QPointF(cx, cx + 6))
+    cx = s / 2
+    arm = s * 0.27
+    p.drawLine(QPointF(cx - arm, cx), QPointF(cx + arm, cx))
+    p.drawLine(QPointF(cx, cx - arm), QPointF(cx, cx + arm))
     p.end()
     return QIcon(pm)

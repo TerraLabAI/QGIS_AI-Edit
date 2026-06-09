@@ -403,9 +403,9 @@ class ReferenceImagesWidget(QWidget):
             tr(
                 "Supported files (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff "
                 "*.asc *.img *.vrt *.dem *.pdf *.shp *.gpkg *.geojson *.kml *.kmz)"
-            ) +
-            ";;" +
-            tr("All files (*)"),
+            )
+            + ";;"
+            + tr("All files (*)"),
         )
         if paths:
             self._add_paths(paths)

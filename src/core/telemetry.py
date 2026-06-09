@@ -34,6 +34,14 @@ _NO_CONSENT_EVENTS = frozenset({
     # billing-bleed bug stays invisible.
     "generation_refund_attempted",
     "generation_refund_failed",
+    # One-click connect onboarding. These fire pre-activation, so they sit in
+    # _pending_pre_auth until the first authenticated flush drains them. Server
+    # allow-list mirrored in terralab-website plugin/track route.
+    "ai_edit_pair_started",
+    "ai_edit_pair_succeeded",
+    "ai_edit_pair_failed",
+    "ai_edit_pair_timeout",
+    "ai_edit_pair_cancelled",
 })
 
 

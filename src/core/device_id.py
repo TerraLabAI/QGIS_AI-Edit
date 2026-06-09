@@ -55,3 +55,20 @@ def get_device_hash(settings=None) -> str:
     digest = hashlib.sha256(_machine_seed(s)).hexdigest()
     _cached = digest[:_HASH_LEN]
     return _cached
+
+
+# Max length the server stores for the platform label; keep payload tiny.
+_PLATFORM_MAX_LEN = 48
+
+
+def get_device_platform() -> str:
+    """Return a human-readable OS label for this machine (e.g. "macOS 15.0").
+
+    Lets the account page show which computer a license is active on. No PII:
+    just the OS name + version. Empty string if unavailable.
+    """
+    try:
+        name = QSysInfo.prettyProductName() or ""
+    except Exception:  # nosec B110
+        name = ""
+    return name.strip()[:_PLATFORM_MAX_LEN]
