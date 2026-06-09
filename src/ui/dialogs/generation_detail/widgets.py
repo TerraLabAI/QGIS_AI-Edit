@@ -1,0 +1,209 @@
+
+from __future__ import annotations
+
+from qgis.PyQt.QtCore import QSize
+from qgis.PyQt.QtGui import QPixmap
+from qgis.PyQt.QtWidgets import (
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ....core import qt_compat as QtC
+from ....core.config_store import get_export_copy, get_export_dial
+from ....core.i18n import tr
+from ...dock.design_tokens import INK, RADIUS_CONTROL, qcolor
+from ...icons import icon_for, widget_pixel_ratio
+from ...keyboard_focus import settle_dialog_default_button
+from ...version_strip import rounded_cover_pixmap
+from .styles import (
+    _ACTION_BTN,
+    _LIGHTBOX_QSS,
+    _REF_OVERLAY_BTN,
+    _REF_OVERLAY_BTN_PX,
+    _REF_THUMB,
+)
+
+
+
+_LIGHTBOX_MAX_W_PX = 1100
+_LIGHTBOX_MAX_H_PX = 800
+
+
+class _AspectBox(QWidget):
+
+
+
+
+    def __init__(self, child: QWidget, ratio: float, parent=None):
+        super().__init__(parent)
+        self._child = child
+        child.setParent(self)
+        self._ratio = ratio if ratio and ratio > 0 else 1.0
+        self._overlay: QWidget | None = None
+        self._overlay_margin = 10
+
+    def set_ratio(self, ratio: float) -> None:
+        self._ratio = ratio if ratio and ratio > 0 else 1.0
+        self._relayout()
+
+    def set_overlay(self, widget: QWidget) -> None:
+
+        self._overlay = widget
+        widget.setParent(self)
+        widget.raise_()
+        self._relayout()
+
+    def resizeEvent(self, event):  # noqa: N802
+        self._relayout()
+        super().resizeEvent(event)
+
+    def _relayout(self) -> None:
+        w, h = self.width(), self.height()
+        if w <= 0 or h <= 0:
+            return
+        if w / h > self._ratio:
+            ch = h
+            cw = int(round(h * self._ratio))
+        else:
+            cw = w
+            ch = int(round(w / self._ratio))
+        cx, cy = (w - cw) // 2, (h - ch) // 2
+        self._child.setGeometry(cx, cy, cw, ch)
+        if self._overlay is not None:
+            ow = self._overlay.width()
+            oh = self._overlay.height()
+            m = self._overlay_margin
+            self._overlay.move(cx + cw - ow - m, cy + ch - oh - m)
+            self._overlay.raise_()
+
+
+class _RefThumb(QWidget):
+
+
+
+    def __init__(self, index: int, on_open, on_download, parent=None):
+        super().__init__(parent)
+        self._index = index
+        self._on_open = on_open
+        self._full_pm: QPixmap | None = None
+        self.setFixedSize(72, 72)
+
+
+        self.setCursor(QtC.ArrowCursor)
+
+
+        self.setToolTip(get_export_copy(
+            "dialogs.widgets.ref_thumb_view_tooltip", tr("View full size")))
+
+        self._img = QLabel(self)
+        self._img.setGeometry(0, 0, 72, 72)
+        self._img.setAlignment(QtC.AlignCenter)
+        self._img.setStyleSheet(_REF_THUMB)
+
+        self._overlay = QWidget(self)
+        self._overlay.setGeometry(0, 0, 72, 72)
+
+        self._overlay.setStyleSheet("background: transparent;")
+        ov = QHBoxLayout(self._overlay)
+        ov.setContentsMargins(0, 0, 0, 0)
+        ov.setSpacing(6)
+        ov.addStretch(1)
+        open_b = QToolButton(self._overlay)
+        open_b.setIcon(icon_for(self, "expand", 14, qcolor(INK)))
+        open_b.setIconSize(QSize(14, 14))
+        open_b.setFixedSize(_REF_OVERLAY_BTN_PX, _REF_OVERLAY_BTN_PX)
+        open_b.setCursor(QtC.PointingHandCursor)
+        open_b.setToolTip(get_export_copy("dialogs.widgets.open_large_tooltip", tr("View full size")))
+        open_b.setAccessibleName(open_b.toolTip())
+        open_b.setStyleSheet(_REF_OVERLAY_BTN)
+        open_b.clicked.connect(lambda: self._on_open(self._index))
+        ov.addWidget(open_b)
+        dl_b = QToolButton(self._overlay)
+        dl_b.setIcon(icon_for(self, "download", 14, qcolor(INK)))
+        dl_b.setIconSize(QSize(14, 14))
+        dl_b.setFixedSize(_REF_OVERLAY_BTN_PX, _REF_OVERLAY_BTN_PX)
+        dl_b.setCursor(QtC.PointingHandCursor)
+
+
+        dl_b.setToolTip(get_export_copy("dialogs.widgets.download_reference", tr("Download")))
+        dl_b.setAccessibleName(dl_b.toolTip())
+        dl_b.setStyleSheet(_REF_OVERLAY_BTN)
+        dl_b.clicked.connect(lambda: on_download(self._index))
+        ov.addWidget(dl_b)
+        ov.addStretch(1)
+        self._overlay.hide()
+
+    def set_pixmap(self, pm: QPixmap) -> None:
+        self._full_pm = pm
+        self.setCursor(QtC.PointingHandCursor)
+
+        self._img.setPixmap(
+            rounded_cover_pixmap(pm, 70, RADIUS_CONTROL - 1, widget_pixel_ratio(self))
+        )
+
+    def full_pixmap(self) -> QPixmap | None:
+        return self._full_pm
+
+    def enterEvent(self, event):  # noqa: N802
+        if self._full_pm is not None:
+            self._overlay.show()
+            self._overlay.raise_()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):  # noqa: N802
+        self._overlay.hide()
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):  # noqa: N802
+        if event.button() == QtC.LeftButton and self._full_pm is not None:
+            self._on_open(self._index)
+        super().mousePressEvent(event)
+
+
+class _ImageLightbox(QDialog):
+
+
+    def __init__(self, pixmap: QPixmap, title: str, on_download=None, parent=None):
+        super().__init__(parent)
+        self.setObjectName("referenceLightbox")
+        self.setStyleSheet(_LIGHTBOX_QSS)
+        self.setWindowTitle(
+            title or get_export_copy("dialogs.widgets.reference_fallback_title", tr("Reference")))
+        v = QVBoxLayout(self)
+        v.setContentsMargins(12, 12, 12, 12)
+        v.setSpacing(10)
+
+        img = QLabel(self)
+        img.setAlignment(QtC.AlignCenter)
+        max_w = get_export_dial("dialogs.widgets.lightbox_max_w_px", _LIGHTBOX_MAX_W_PX)
+        max_h = get_export_dial("dialogs.widgets.lightbox_max_h_px", _LIGHTBOX_MAX_H_PX)
+        shown = pixmap
+        if pixmap.width() > max_w or pixmap.height() > max_h:
+            shown = pixmap.scaled(
+                max_w, max_h, QtC.KeepAspectRatio, QtC.SmoothTransformation
+            )
+        img.setPixmap(shown)
+        v.addWidget(img, 1)
+
+        row = QHBoxLayout()
+        row.addStretch(1)
+        if on_download is not None:
+            dl = QPushButton(get_export_copy("dialogs.widgets.download_reference", tr("Download")))
+            dl.setIcon(icon_for(self, "download", 16))
+            dl.setStyleSheet(_ACTION_BTN)
+            dl.setCursor(QtC.PointingHandCursor)
+            dl.clicked.connect(on_download)
+            row.addWidget(dl)
+        close = QPushButton(get_export_copy("dialogs.widgets.close_button", tr("Close")))
+        close.setStyleSheet(_ACTION_BTN)
+        close.setCursor(QtC.PointingHandCursor)
+        close.clicked.connect(self.accept)
+        row.addWidget(close)
+        v.addLayout(row)
+
+        settle_dialog_default_button(self)
