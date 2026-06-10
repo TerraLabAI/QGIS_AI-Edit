@@ -131,6 +131,19 @@ def _ascii_safe_dir(directory: str) -> str:
     return directory
 
 
+def _create_gtiff(driver, path: str, w: int, h: int, bands: int):
+    """driver.Create normally returns None on failure, but raises RuntimeError
+    when any plugin in the process has called gdal.UseExceptions(). Normalize
+    both so the tempdir fallback always gets a chance. Returns (ds, error)."""
+    try:
+        ds = driver.Create(path, w, h, bands, gdal.GDT_Byte, options=_GTIFF_CREATION_OPTIONS)
+    except RuntimeError as e:
+        return None, str(e)
+    if ds is None:
+        return None, gdal.GetLastErrorMsg() or "driver returned no dataset"
+    return ds, ""
+
+
 def _unique_tif_path(directory: str, base: str) -> str:
     """First free <base>.tif in directory; _2, _3... on same-second collisions."""
     path = os.path.join(directory, f"{base}.tif")
@@ -248,23 +261,21 @@ def write_geotiff(
             ctx.crop_offsets = (0, 0, recv_w, recv_h)
 
         driver = gdal.GetDriverByName("GTiff")
-        dst_ds = driver.Create(
-            output_path, recv_w, recv_h, bands, gdal.GDT_Byte,
-            options=_GTIFF_CREATION_OPTIONS,
-        )
-        if dst_ds is None and output_path == primary_path:
-            # Windows MAX_PATH / antivirus lock / perm denied, retry in tempdir.
-            log_warning(f"GDAL Create failed at {primary_path}, retrying in tempdir")
+        dst_ds, create_err = _create_gtiff(driver, output_path, recv_w, recv_h, bands)
+        if dst_ds is None:
+            # Windows MAX_PATH / antivirus lock / network-share perm denied,
+            # retry in tempdir.
+            log_warning(
+                f"GDAL Create failed at {primary_path} ({create_err}); retrying in tempdir"
+            )
             fallback_dir = os.path.join(tempfile.gettempdir(), "terralab_ai_edit")
             os.makedirs(fallback_dir, exist_ok=True)
             output_path = _unique_tif_path(_ascii_safe_dir(fallback_dir), file_base)
-            dst_ds = driver.Create(
-                output_path, recv_w, recv_h, bands, gdal.GDT_Byte,
-                options=_GTIFF_CREATION_OPTIONS,
-            )
+            dst_ds, create_err = _create_gtiff(driver, output_path, recv_w, recv_h, bands)
         if dst_ds is None:
             raise RuntimeError(
                 tr("Failed to create GeoTIFF at {path}").format(path=output_path)
+                + f" ({create_err})"
             )
 
         x_res = ext_width / recv_w
