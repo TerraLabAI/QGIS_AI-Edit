@@ -98,6 +98,24 @@ class GenerationService:
             time.sleep(0.2)
         return self._cancelled
 
+    def _wait_with_progress(
+        self, seconds, on_progress, status, polls, max_polls, estimated_time, submit_time
+    ) -> bool:
+        """Sleep `seconds`, ticking the progress callback every ~2s so the
+        loading messages and progress bar keep moving between slower polls.
+        Returns True if cancellation was requested during the wait."""
+        waited = 0.0
+        while waited < seconds:
+            chunk = min(2.0, seconds - waited)
+            if self._sleep_or_cancelled(chunk):
+                return True
+            waited += chunk
+            if on_progress and waited < seconds:
+                on_progress(
+                    status, polls, max_polls, estimated_time, time.time() - submit_time
+                )
+        return False
+
     # Below this base64 size we send the image inline in the submit body -
     # a single round-trip looks cleaner from outside and avoids an extra API
     # call for the common-case small generations (most zones encode well under
@@ -354,16 +372,19 @@ class GenerationService:
         poll_interval = resp.get("poll_interval", self._poll_interval)
         estimated_time = resp.get("estimated_time")
         max_wait = resp.get("max_wait")  # Server-driven hard ceiling (seconds)
-        # Cap the polling loop at 1000 iterations to guard against a misconfigured
-        # tiny poll_interval producing a multi-hour wait.
+        # Time-based budget: per-poll sleeps vary now that the server sends an
+        # adaptive retry_after hint, so counting iterations would under- or
+        # over-wait. An iteration hard cap still guards against a misconfigured
+        # tiny interval producing a multi-hour loop.
         HARD_CAP = 1000
-        absolute_max_polls = min(int(360 / poll_interval), HARD_CAP)
         if max_wait:
-            max_polls = min(int(max_wait / poll_interval), HARD_CAP)
+            budget_s = float(max_wait)
         elif estimated_time:
-            max_polls = min(max(absolute_max_polls, int(estimated_time * 3 / poll_interval)), HARD_CAP)
+            budget_s = max(360.0, float(estimated_time) * 3)
         else:
-            max_polls = absolute_max_polls
+            budget_s = 360.0
+        # Poll-count estimate kept for the progress callback signature.
+        max_polls = min(int(budget_s / poll_interval), HARD_CAP)
 
         if ctx is not None:
             ctx.submitted_resolution = resp.get("resolution", suggested_resolution)
@@ -386,9 +407,13 @@ class GenerationService:
                 request_id=request_id,
             )
 
-        # Poll
+        # Poll. Pending responses from newer servers carry an adaptive
+        # retry_after hint (slower early in the job, fast near completion);
+        # without one we keep the fixed interval, so older servers work
+        # unchanged.
         consecutive_poll_errors = 0
-        for i in range(max_polls):
+        polls = 0
+        while polls < HARD_CAP and (time.time() - submit_time) < budget_s:
             if self._cancelled:
                 return GenerationResult(
                     success=False,
@@ -398,21 +423,27 @@ class GenerationService:
                 )
 
             status_resp = self._client.poll_status(request_id, auth=auth)
+            polls += 1
 
             if "error" in status_resp and "status" not in status_resp:
                 code = status_resp.get("code", "")
                 # A transient network blip during polling must not abandon a
                 # paid generation: the job is already submitted and charged, and
                 # the server keeps working. Tolerate a few consecutive blips
-                # (with the normal poll wait between them) before giving up.
+                # before giving up, backing off so a rate-limit spike or flaky
+                # link isn't answered with a retry storm.
                 if code in _RETRYABLE_POLL_CODES:
                     consecutive_poll_errors += 1
                     if consecutive_poll_errors <= _MAX_CONSECUTIVE_POLL_ERRORS:
+                        backoff = min(
+                            poll_interval * (2 ** (consecutive_poll_errors - 1)), 12.0
+                        )
                         log_warning(
                             f"Transient poll error {code} "
-                            f"({consecutive_poll_errors}/{_MAX_CONSECUTIVE_POLL_ERRORS}), retrying"
+                            f"({consecutive_poll_errors}/{_MAX_CONSECUTIVE_POLL_ERRORS}), "
+                            f"retrying in {backoff:.0f}s"
                         )
-                        if self._sleep_or_cancelled(poll_interval):
+                        if self._sleep_or_cancelled(backoff):
                             return GenerationResult(
                                 success=False,
                                 error=tr("Generation cancelled"),
@@ -422,8 +453,8 @@ class GenerationService:
                         continue
                 # Non-retryable server/app error, or too many consecutive blips.
                 if ctx is not None:
-                    ctx.poll_count = i + 1
-                    ctx.total_wait_seconds = (i + 1) * poll_interval
+                    ctx.poll_count = polls
+                    ctx.total_wait_seconds = round(time.time() - submit_time, 1)
                     ctx.final_status = "error"
                 return GenerationResult(
                     success=False,
@@ -438,12 +469,12 @@ class GenerationService:
 
             if on_progress:
                 elapsed = time.time() - submit_time
-                on_progress(status, i + 1, max_polls, estimated_time, elapsed)
+                on_progress(status, polls, max_polls, estimated_time, elapsed)
 
             if status == "completed":
                 if ctx is not None:
-                    ctx.poll_count = i + 1
-                    ctx.total_wait_seconds = (i + 1) * poll_interval
+                    ctx.poll_count = polls
+                    ctx.total_wait_seconds = round(time.time() - submit_time, 1)
                     ctx.final_status = "completed"
                     ctx.received_image_width = status_resp.get("output_width")
                     ctx.received_image_height = status_resp.get("output_height")
@@ -455,8 +486,8 @@ class GenerationService:
 
             if status == "failed":
                 if ctx is not None:
-                    ctx.poll_count = i + 1
-                    ctx.total_wait_seconds = (i + 1) * poll_interval
+                    ctx.poll_count = polls
+                    ctx.total_wait_seconds = round(time.time() - submit_time, 1)
                     ctx.final_status = "failed"
                 return GenerationResult(
                     success=False,
@@ -464,7 +495,16 @@ class GenerationService:
                     request_id=request_id,
                 )
 
-            if self._sleep_or_cancelled(poll_interval):
+            sleep_s = poll_interval
+            hint = status_resp.get("retry_after")
+            if hint is not None:
+                try:
+                    sleep_s = min(max(float(hint), 1.0), 15.0)
+                except (TypeError, ValueError):
+                    pass
+            if self._wait_with_progress(
+                sleep_s, on_progress, status, polls, max_polls, estimated_time, submit_time
+            ):
                 return GenerationResult(
                     success=False,
                     error=tr("Generation cancelled"),
@@ -481,8 +521,8 @@ class GenerationService:
             final_status = final.get("status", "unknown")
             if final_status == "completed":
                 if ctx is not None:
-                    ctx.poll_count = max_polls
-                    ctx.total_wait_seconds = max_polls * poll_interval
+                    ctx.poll_count = polls
+                    ctx.total_wait_seconds = round(time.time() - submit_time, 1)
                     ctx.final_status = "completed"
                 return GenerationResult(
                     success=True,
@@ -491,8 +531,8 @@ class GenerationService:
                 )
             if final_status == "failed":
                 if ctx is not None:
-                    ctx.poll_count = max_polls
-                    ctx.total_wait_seconds = max_polls * poll_interval
+                    ctx.poll_count = polls
+                    ctx.total_wait_seconds = round(time.time() - submit_time, 1)
                     ctx.final_status = "failed"
                 return GenerationResult(
                     success=False,
@@ -503,8 +543,8 @@ class GenerationService:
             pass
 
         if ctx is not None:
-            ctx.poll_count = max_polls
-            ctx.total_wait_seconds = max_polls * poll_interval
+            ctx.poll_count = polls
+            ctx.total_wait_seconds = round(time.time() - submit_time, 1)
             ctx.final_status = "timeout"
 
         return GenerationResult(

@@ -7,7 +7,6 @@ QgsGeometry objects.
 """
 from __future__ import annotations
 
-import math
 import os
 import time
 
@@ -31,20 +30,19 @@ from qgis.core import (
     QgsProject,
     QgsRasterLayer,
     QgsVectorLayer,
+    QgsWkbTypes,
 )
 from qgis.PyQt.QtCore import Qt
 
 from ..errors import AIEditError, ErrorCode
 from ..i18n import tr
-from ..logger import log_debug
+from ..logger import log_debug, log_warning
 
 
 def _compute_vector_features(
     *,
     raster_path: str,
     raster_crs,
-    source_raster_name: str,
-    source_raster_id: str,
     transform_context,
     ellipsoid: str,
     target_rgb: tuple[int, int, int],
@@ -194,9 +192,6 @@ def _compute_vector_features(
     measurer.setEllipsoid(ellipsoid or "EPSG:7030")
 
     class_color_hex = "#{:02X}{:02X}{:02X}".format(*target_rgb)
-    # int(hex24, 16) — stable across re-runs on the same color.
-    class_id_int = (target_rgb[0] << 16) | (target_rgb[1] << 8) | target_rgb[2]
-    created_at_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
     feats: list[QgsFeature] = []
     next_fid = 1
@@ -221,33 +216,34 @@ def _compute_vector_features(
             smoothed = geom.smooth(5, 0.25)
             if not smoothed.isEmpty():
                 geom = smoothed
-        area_m2 = float(measurer.measureArea(geom))
-        perimeter_m = float(measurer.measurePerimeter(geom))
-        area_ha = area_m2 / 10000.0
-        # Polsby-Popper shape index: 1.0 = perfect circle, ~0 = sliver. Useful
-        # in remote sensing to separate compact features (buildings) from
-        # elongated ones (roads) on the same vectorized layer.
-        compactness = (
-            (4.0 * math.pi * area_m2) / (perimeter_m * perimeter_m)
-            if perimeter_m > 0 else 0.0
-        )
-        feat = QgsFeature()
-        feat.setGeometry(geom)
-        feat.setAttributes([
-            next_fid,
-            class_id_int,
-            class_label,
-            class_color_hex,
-            area_m2,
-            area_ha,
-            perimeter_m,
-            compactness,
-            source_raster_name,
-            source_raster_id,
-            created_at_iso,
-        ])
-        feats.append(feat)
-        next_fid += 1
+        # Simplify/smooth can self-intersect; downstream tools and GeoPackage
+        # expect valid rings. makeValid may split a bowtie into several
+        # polygons: emit one feature per part.
+        geoms = [geom]
+        if not geom.isGeosValid():
+            fixed = geom.makeValid()
+            parts = [
+                part
+                for part in (
+                    fixed.asGeometryCollection() if fixed.isMultipart() else [fixed]
+                )
+                if not part.isEmpty()
+                and part.type() == QgsWkbTypes.GeometryType.PolygonGeometry  # noqa: W503
+                and part.area() >= min_area  # noqa: W503
+            ]
+            geoms = parts or [geom]
+        for part in geoms:
+            area_m2 = float(measurer.measureArea(part))
+            feat = QgsFeature()
+            feat.setGeometry(part)
+            feat.setAttributes([
+                next_fid,
+                class_label,
+                class_color_hex,
+                area_m2,
+            ])
+            feats.append(feat)
+            next_fid += 1
 
     mask_ds = None
     ogr_ds = None
@@ -271,31 +267,26 @@ def _build_vector_layer(
     target_rgb: tuple[int, int, int],
     output_rgb: tuple[int, int, int] | None,
     class_label: str,
+    source_raster_name: str = "",
 ) -> QgsVectorLayer:
     """Build the styled in-memory polygon layer from precomputed features.
 
     Creates a ``QgsVectorLayer`` and adds features, so it MUST run on the main
     thread (call from a QgsTask's ``finished()``, never from ``run()``)."""
-    # CRS-agnostic URI + explicit setCrs() — EPSG:4326 fallback would corrupt alignment.
+    # Minimal per-feature schema (industry pattern: stable machine code in
+    # class_color + free-text label in class_name, plus the geodesic measure).
+    # Run-level provenance lives in the layer metadata, not repeated per row.
+    # CRS-agnostic URI + explicit setCrs(): EPSG:4326 fallback would corrupt alignment.
     mem_layer = QgsVectorLayer(
         (
             "Polygon"
             "?field=feature_id:integer"
-            "&field=class_id:integer"
-            # Generous string lengths: the memory provider silently DROPS any
-            # feature whose value overflows a field, so a too-short field makes
-            # the whole layer come back empty. class_name is user-editable and
-            # source_raster_id holds a QGIS layer id (name + 36-char UUID, often
-            # 70-80 chars) - both must not clip.
+            # Generous length: the memory provider silently DROPS any feature
+            # whose value overflows a field, so a too-short field makes the
+            # whole layer come back empty. class_name is user-editable.
             "&field=class_name:string(254)"
             "&field=class_color:string(9)"
             "&field=area_m2:double"
-            "&field=area_ha:double"
-            "&field=perimeter_m:double"
-            "&field=compactness:double"
-            "&field=source_raster:string(254)"
-            "&field=source_raster_id:string(254)"
-            "&field=created_at:string(25)"
         ),
         layer_name,
         "memory",
@@ -314,6 +305,7 @@ def _build_vector_layer(
             tr("Could not store the vectorized polygons (internal field error)."),
         )
     _configure_attribute_table(mem_layer, class_label)
+    _set_layer_provenance(mem_layer, source_raster_name, target_rgb, class_label)
     # Style the polygons in the colour the user picked, so a red selection traces
     # red. The source raster is hidden after vectorizing, so a same-colour vector
     # never blends into it.
@@ -321,6 +313,68 @@ def _build_vector_layer(
     _apply_style(mem_layer, style_rgb)
     log_debug(f"Vectorize layer built: {mem_layer.featureCount()} polygons")
     return mem_layer
+
+
+def make_layer_permanent(
+    mem_layer: QgsVectorLayer,
+    gpkg_path: str,
+    table_name: str,
+    target_rgb: tuple[int, int, int],
+    class_label: str,
+    source_raster_name: str = "",
+) -> QgsVectorLayer | None:
+    """Persist the freshly built vector layer into the output GeoPackage and
+    return the disk-backed replacement, or None to keep the memory layer.
+
+    Memory layers silently vanish when the project closes; GeoPackage is the
+    QGIS-native container, so each run becomes one table in ai_edit.gpkg next
+    to the generated rasters. Best-effort: any failure (locked file, read-only
+    folder) keeps the volatile in-memory layer instead of failing the run.
+    Main-thread only (creates layers, reads QgsProject)."""
+    from qgis.core import QgsVectorFileWriter
+
+    try:
+        os.makedirs(os.path.dirname(gpkg_path), exist_ok=True)
+        options = QgsVectorFileWriter.SaveVectorOptions()
+        options.driverName = "GPKG"
+        options.layerName = table_name
+        options.actionOnExistingFile = (
+            QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteLayer
+            if os.path.exists(gpkg_path)
+            else QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteFile
+        )
+        writer = (
+            QgsVectorFileWriter.writeAsVectorFormatV3
+            if hasattr(QgsVectorFileWriter, "writeAsVectorFormatV3")
+            else QgsVectorFileWriter.writeAsVectorFormatV2
+        )
+        res = writer(
+            mem_layer, gpkg_path, QgsProject.instance().transformContext(), options
+        )
+        code = res[0] if isinstance(res, tuple) else res
+        if code != QgsVectorFileWriter.WriterError.NoError:
+            log_warning(f"Vectorize: GeoPackage write failed ({res}), keeping memory layer")
+            return None
+        layer = QgsVectorLayer(
+            f"{gpkg_path}|layername={table_name}", mem_layer.name(), "ogr"
+        )
+        if not layer.isValid() or layer.featureCount() != mem_layer.featureCount():
+            log_warning("Vectorize: GeoPackage layer failed to load back, keeping memory layer")
+            return None
+    except Exception as err:  # noqa: BLE001 - persistence is best-effort
+        log_warning(f"Vectorize: GeoPackage persist skipped ({err})")
+        return None
+
+    _configure_attribute_table(layer, class_label)
+    _set_layer_provenance(layer, source_raster_name, target_rgb, class_label)
+    _apply_style(layer, target_rgb)
+    try:
+        # Stored inside the GeoPackage, so the style survives outside this project.
+        layer.saveStyleToDatabase(table_name, "AI Edit Vectorize", True, "")
+    except Exception:  # nosec B110 - cosmetic only
+        pass
+    log_debug(f"Vectorize layer persisted: {gpkg_path}|{table_name}")
+    return layer
 
 
 def vectorize_by_color(
@@ -348,8 +402,6 @@ def vectorize_by_color(
     feats = _compute_vector_features(
         raster_path=(raster_layer.source() or "").split("|", 1)[0],
         raster_crs=raster_layer.crs(),
-        source_raster_name=raster_layer.name() or "",
-        source_raster_id=raster_layer.id() or "",
         transform_context=project.transformContext(),
         ellipsoid=project.ellipsoid() or "EPSG:7030",
         target_rgb=target_rgb,
@@ -365,6 +417,7 @@ def vectorize_by_color(
     return _build_vector_layer(
         feats or [], raster_layer.crs(), layer_name or "Vector",
         target_rgb, output_rgb, class_label,
+        source_raster_name=raster_layer.name() or "",
     )
 
 
@@ -453,15 +506,15 @@ def _configure_attribute_table(layer: QgsVectorLayer, class_label: str) -> None:
     so the user gets a readable attribute table out of the box.
 
     - displayExpression makes the form-view feature list show
-      `<id> - <class> (<area> ha)` instead of repeating the same color hex.
+      `<id> - <class> (<area> m2)` instead of repeating the same color hex.
     - QgsDefaultValue gives rows added manually via the table a sensible default.
     - TextEdit widget on class_name unlocks QGIS's per-column unique-values
       autocomplete so the user types once then picks from prior values.
-    - Default sort by area_ha descending puts large polygons at the top.
+    - Default sort by area_m2 descending puts large polygons at the top.
     """
     layer.setDisplayExpression(
-        "format('%1 - %2 (%3 ha)', \"feature_id\","
-        " coalesce(\"class_name\", ''), round(\"area_ha\", 2))"
+        "format('%1 - %2 (%3 m²)', \"feature_id\","
+        " coalesce(\"class_name\", ''), round(\"area_m2\"))"
     )
 
     idx = layer.fields().indexOf("class_name")
@@ -471,9 +524,31 @@ def _configure_attribute_table(layer: QgsVectorLayer, class_label: str) -> None:
         layer.setEditorWidgetSetup(idx, QgsEditorWidgetSetup("TextEdit", {}))
 
     config = layer.attributeTableConfig()
-    config.setSortExpression('"area_ha"')
+    config.setSortExpression('"area_m2"')
     config.setSortOrder(Qt.SortOrder.DescendingOrder)
     layer.setAttributeTableConfig(config)
+
+
+def _set_layer_provenance(
+    layer: QgsVectorLayer,
+    source_raster_name: str,
+    target_rgb: tuple[int, int, int],
+    class_label: str,
+) -> None:
+    """Record run-level provenance on the LAYER (Properties > Metadata), the
+    QGIS convention, instead of repeating it as an attribute on every row."""
+    color_hex = "#{:02X}{:02X}{:02X}".format(*target_rgb)
+    created = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    md = layer.metadata()
+    md.setTitle(layer.name())
+    md.setAbstract(
+        f"Polygons traced from the color {color_hex} by AI Edit (TerraLab) Vectorize."
+        + (f" Source raster: {source_raster_name}." if source_raster_name else "")
+        + (f" Class: {class_label}." if class_label else "")
+    )
+    history = [f"{created} vectorized from '{source_raster_name}' (color {color_hex})"]
+    md.setHistory(history)
+    layer.setMetadata(md)
 
 
 def _apply_style(layer: QgsVectorLayer, output_rgb: tuple[int, int, int]) -> None:

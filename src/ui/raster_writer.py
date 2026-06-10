@@ -5,7 +5,6 @@ import re
 import shutil
 import tempfile
 import time
-import unicodedata
 
 from osgeo import gdal, osr
 from qgis.core import QgsProject, QgsRasterLayer
@@ -13,11 +12,54 @@ from qgis.core import QgsProject, QgsRasterLayer
 from ..core.i18n import tr
 from ..core.logger import log_debug, log_warning
 from ..core.prompts.prompt_presets import lookup_template_by_prompt
+from ..core.slug import slugify as _slugify
 from .layer_groups import add_layer_to_ai_edit_top
+
+# Professional GeoTIFF layout: tiled so pan/zoom only reads the visible
+# blocks, DEFLATE because Vectorize matches exact pixel colors (lossy JPEG
+# would smear the flat tints it relies on). Overviews are built after the
+# pixel copy.
+_GTIFF_CREATION_OPTIONS = [
+    "COMPRESS=DEFLATE",
+    "PREDICTOR=2",
+    "TILED=YES",
+    "BLOCKXSIZE=256",
+    "BLOCKYSIZE=256",
+]
 
 # Formats GDAL reliably decodes across all platforms (esp. Windows OSGeo4W,
 # which often ships without WebP/AVIF drivers).
 _GDAL_SAFE_FORMATS = {"PNG", "JPEG", "TIFF", "GIF", "BMP"}
+
+# Env-var values that betray a foreign package (another plugin's bundled
+# rasterio/pyproj venv) having pointed PROJ at its own, version-mismatched
+# proj.db. Production telemetry shows this breaking every CRS lookup
+# in-process on Windows (proj_create_from_database errors), failing the
+# GeoTIFF write of paid generations.
+_FOREIGN_PROJ_MARKERS = ("rasterio", "pyproj", ".qgis_ai_segmentation", "venv")
+
+
+def _restore_qgis_proj_paths() -> None:
+    """If PROJ_LIB/PROJ_DATA was hijacked by a foreign bundled GIS stack,
+    point GDAL's PROJ back at QGIS's own database for all subsequent ops."""
+    try:
+        values = [os.environ.get(var, "") for var in ("PROJ_LIB", "PROJ_DATA")]
+        hijacked = any(
+            marker in value.lower() for value in values for marker in _FOREIGN_PROJ_MARKERS
+        )
+        if not hijacked:
+            return
+        from qgis.core import QgsProjUtils
+
+        paths = [p for p in QgsProjUtils.searchPaths() if p and os.path.isdir(p)]
+        if paths and hasattr(osr, "SetPROJSearchPaths"):
+            osr.SetPROJSearchPaths(paths)
+            log_warning(
+                "PROJ search paths restored to QGIS defaults "
+                f"(foreign override detected: {[v[:80] for v in values if v]})"
+            )
+    except Exception as err:  # nosec B110 - best-effort self-heal.
+        log_warning(f"PROJ path restore skipped: {err}")
 
 
 def _detect_image_format(data: bytes) -> str | None:
@@ -76,24 +118,27 @@ def _ascii_safe_dir(directory: str) -> str:
 
     # 8.3 short names are disabled on this volume. C:\\Users\\Public is ASCII
     # and writable by every user; fall back to it so the layer still loads.
-    # Keep the last path component (the per-generation folder, already ASCII via
-    # _slugify + timestamp) as a subdirectory so each generation gets its own
-    # output path. A flat fallback would route every generation to the same
-    # raster.tif; once QGIS holds the first result open, the next GDAL Create on
-    # that path returns None -> write_error.
+    # Output filenames are unique per generation (slug + timestamp), so a
+    # single shared folder cannot collide.
     public = os.environ.get("PUBLIC")
     if public and public.isascii():
-        tail = os.path.basename(directory.rstrip(os.sep))
-        if tail and tail.isascii():
-            safe = os.path.join(public, "terralab_ai_edit", tail)
-        else:
-            safe = os.path.join(public, "terralab_ai_edit")
+        safe = os.path.join(public, "terralab_ai_edit")
         try:
             os.makedirs(safe, exist_ok=True)
             return safe
         except OSError:
             pass
     return directory
+
+
+def _unique_tif_path(directory: str, base: str) -> str:
+    """First free <base>.tif in directory; _2, _3... on same-second collisions."""
+    path = os.path.join(directory, f"{base}.tif")
+    counter = 2
+    while os.path.exists(path):
+        path = os.path.join(directory, f"{base}_{counter}.tif")
+        counter += 1
+    return path
 
 
 def write_geotiff(
@@ -105,30 +150,26 @@ def write_geotiff(
     ctx=None,
 ) -> str:
     """Write raw image bytes as a georeferenced GeoTIFF. GDAL-only so it runs on a worker thread."""
+    _restore_qgis_proj_paths()
     timestamp = int(time.time())
-    slug = _slugify(prompt)[:40] if prompt else "generated"
-    folder_stamp = time.strftime("%Y%m%d_%H%M%S", time.localtime(timestamp))
-    generation_folder_name = f"{folder_stamp}_{slug}" if slug else folder_stamp
-    filename = "raster.tif"
+    slug = (_slugify(prompt)[:40] if prompt else "") or "ai_edit"
+    file_base = f"{slug}_{time.strftime('%Y%m%d_%H%M%S', time.localtime(timestamp))}"
 
     # Fall back to tempdir if user's output_dir is read-only so a hostile
     # folder doesn't lose the paid generation.
-    primary_generation_dir = os.path.join(output_dir, generation_folder_name)
     try:
-        os.makedirs(primary_generation_dir, exist_ok=True)
-        resolved_dir = primary_generation_dir
+        os.makedirs(output_dir, exist_ok=True)
+        resolved_dir = output_dir
     except OSError as e:
         log_warning(f"output_dir not writable ({e}); using tempdir fallback")
-        resolved_dir = os.path.join(
-            tempfile.gettempdir(), "terralab_ai_edit", generation_folder_name
-        )
+        resolved_dir = os.path.join(tempfile.gettempdir(), "terralab_ai_edit")
         os.makedirs(resolved_dir, exist_ok=True)
 
     # Reroute through an ASCII-safe path: a non-ASCII directory (accented
     # Windows username) writes fine via GDAL but loads back as an invalid
     # QGIS layer. The directory exists by now, so 8.3 short names resolve.
     resolved_dir = _ascii_safe_dir(resolved_dir)
-    primary_path = os.path.join(resolved_dir, filename)
+    primary_path = _unique_tif_path(resolved_dir, file_base)
     output_path = primary_path
 
     xmin = extent_dict["xmin"]
@@ -208,18 +249,18 @@ def write_geotiff(
 
         driver = gdal.GetDriverByName("GTiff")
         dst_ds = driver.Create(
-            output_path, recv_w, recv_h, bands, gdal.GDT_Byte
+            output_path, recv_w, recv_h, bands, gdal.GDT_Byte,
+            options=_GTIFF_CREATION_OPTIONS,
         )
         if dst_ds is None and output_path == primary_path:
-            # Windows MAX_PATH / antivirus lock / perm denied — retry in tempdir.
+            # Windows MAX_PATH / antivirus lock / perm denied, retry in tempdir.
             log_warning(f"GDAL Create failed at {primary_path}, retrying in tempdir")
-            fallback_dir = os.path.join(
-                tempfile.gettempdir(), "terralab_ai_edit", generation_folder_name
-            )
+            fallback_dir = os.path.join(tempfile.gettempdir(), "terralab_ai_edit")
             os.makedirs(fallback_dir, exist_ok=True)
-            output_path = os.path.join(_ascii_safe_dir(fallback_dir), filename)
+            output_path = _unique_tif_path(_ascii_safe_dir(fallback_dir), file_base)
             dst_ds = driver.Create(
-                output_path, recv_w, recv_h, bands, gdal.GDT_Byte
+                output_path, recv_w, recv_h, bands, gdal.GDT_Byte,
+                options=_GTIFF_CREATION_OPTIONS,
             )
         if dst_ds is None:
             raise RuntimeError(
@@ -251,15 +292,35 @@ def write_geotiff(
         )
         dst_ds.SetMetadataItem(
             "AI_EDIT_RESOLUTION",
-            ctx.submitted_resolution if ctx else "unknown",
+            (getattr(ctx, "submitted_resolution", None) or "unknown") if ctx else "unknown",
         )
         dst_ds.SetMetadataItem("AI_EDIT_MODEL", "AI Edit")
+        # Provenance lives in the GeoTIFF itself (no sidecar files): request
+        # ids for support, template + geometry context for external tools.
+        if ctx is not None:
+            for tag, value in (
+                ("AI_EDIT_REQUEST_ID", getattr(ctx, "request_id", None)),
+                ("AI_EDIT_PARENT_REQUEST_ID", getattr(ctx, "parent_request_id", None)),
+                ("AI_EDIT_TEMPLATE_ID", getattr(ctx, "template_id", None)),
+                ("AI_EDIT_TEMPLATE_NAME", getattr(ctx, "template_name", None)),
+                ("AI_EDIT_ASPECT_RATIO", getattr(ctx, "submitted_aspect_ratio", None)),
+                ("AI_EDIT_GROUND_RESOLUTION_M", getattr(ctx, "ground_resolution_m", None)),
+            ):
+                if value is not None:
+                    dst_ds.SetMetadataItem(tag, str(value))
         # Standard tags so the file reads correctly outside the plugin.
         dst_ds.SetMetadataItem("TIFFTAG_SOFTWARE", "AI Edit by TerraLab")
         dst_ds.SetMetadataItem(
             "TIFFTAG_DATETIME", time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime())
         )
         dst_ds.SetMetadataItem("TIFFTAG_IMAGEDESCRIPTION", prompt[:512])
+        # Machine-readable AI provenance: greppable today, and the kind of
+        # disclosure the EU AI Act (art. 50) expects from August 2026.
+        dst_ds.SetMetadataItem("AI_GENERATED", "TRUE")
+        dst_ds.SetMetadataItem(
+            "AI_EDIT_DISCLAIMER",
+            "Synthetic imagery generated by AI. Not survey data or ground truth.",
+        )
 
         # Copy bands via raw GDAL buffers, not ReadAsArray/WriteArray. The array
         # path pulls in osgeo.gdal_array -> numpy; a broken numpy ABI (common on
@@ -273,6 +334,24 @@ def write_geotiff(
             dst_ds.GetRasterBand(i).WriteRaster(
                 0, 0, recv_w, recv_h, raw, recv_w, recv_h, gdal.GDT_Byte
             )
+
+        # Internal overviews so big outputs pan/zoom instantly everywhere the
+        # file travels (QGIS, ArcGIS...). Best-effort: never fail the paid
+        # generation over pyramids.
+        try:
+            levels = []
+            factor = 2
+            while max(recv_w, recv_h) / factor >= 256:
+                levels.append(factor)
+                factor *= 2
+            if levels:
+                gdal.SetConfigOption("COMPRESS_OVERVIEW", "DEFLATE")
+                try:
+                    dst_ds.BuildOverviews("AVERAGE", levels)
+                finally:
+                    gdal.SetConfigOption("COMPRESS_OVERVIEW", None)
+        except Exception as err:  # noqa: BLE001 - cosmetic, file is already valid
+            log_warning(f"overview build skipped: {err}")
 
         dst_ds.FlushCache()
         dst_ds = None
@@ -288,55 +367,7 @@ def write_geotiff(
             tr("GeoTIFF write produced no file at {path}").format(path=output_path)
         )
 
-    # STAC-style sidecar mirrors the TIFF tags for tools that ignore GDAL metadata.
-    try:
-        _write_provenance_sidecar(
-            output_path=output_path,
-            prompt=prompt,
-            crs_wkt=crs_wkt,
-            extent=(xmin, ymin, xmax, ymax),
-            timestamp_iso=timestamp_iso,
-            ctx=ctx,
-        )
-    except Exception as err:  # nosec B110
-        log_warning(f"Provenance sidecar write failed: {err}")
-
     return output_path
-
-
-def _write_provenance_sidecar(
-    output_path: str,
-    prompt: str,
-    crs_wkt: str,
-    extent: tuple,
-    timestamp_iso: str,
-    ctx,
-) -> None:
-    """Provenance sidecar (prompt, request ids, CRS, extent)."""
-    import json as _json
-
-    xmin, ymin, xmax, ymax = extent
-    payload = {
-        "type": "ai-edit-provenance",
-        "version": 1,
-        "created_at": timestamp_iso,
-        "prompt": prompt,
-        "model": "AI Edit",
-        "request_id": getattr(ctx, "request_id", None),
-        "parent_request_id": getattr(ctx, "parent_request_id", None),
-        "template_id": getattr(ctx, "template_id", None),
-        "template_name": getattr(ctx, "template_name", None),
-        "resolution": getattr(ctx, "submitted_resolution", None),
-        "aspect_ratio": getattr(ctx, "submitted_aspect_ratio", None),
-        "extent": {"xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax},
-        "crs_wkt": crs_wkt[:5000],
-        "ground_resolution_m": getattr(ctx, "ground_resolution_m", None),
-        "centroid_lat": getattr(ctx, "centroid_lat", None),
-        "centroid_lon": getattr(ctx, "centroid_lon", None),
-    }
-    sidecar = os.path.splitext(output_path)[0] + ".ai-edit.json"
-    with open(sidecar, "w", encoding="utf-8") as f:
-        _json.dump(payload, f, ensure_ascii=False, indent=2)
 
 
 def _humanize_prompt(prompt: str, max_chars: int = 30) -> str:
@@ -415,6 +446,7 @@ def add_geotiff_to_project(
         raise RuntimeError(f"{msg} (exists={exists}, size={size} bytes)")
 
     _apply_default_raster_style(layer)
+    _set_raster_layer_metadata(layer, prompt)
 
     project.addMapLayer(layer, False)
     node = add_layer_to_ai_edit_top(layer)
@@ -424,8 +456,26 @@ def add_geotiff_to_project(
     return layer
 
 
+def _set_raster_layer_metadata(layer: QgsRasterLayer, prompt: str) -> None:
+    """Mirror the GeoTIFF provenance tags into Layer Properties > Metadata,
+    where QGIS users look first."""
+    try:
+        md = layer.metadata()
+        md.setTitle(layer.name())
+        md.setAbstract(
+            "AI-generated imagery created with AI Edit (TerraLab)."
+            + (f' Prompt: "{prompt}".' if prompt else "")
+            + " Synthetic imagery, not survey data."
+        )
+        created = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        md.setHistory([f"{created} generated by AI Edit"])
+        layer.setMetadata(md)
+    except Exception as err:  # nosec B110 - cosmetic only
+        log_warning(f"raster layer metadata skipped: {err}")
+
+
 def _apply_default_raster_style(layer: QgsRasterLayer) -> None:
-    """3-band RGB renderer + .qml sidecar so the file renders the same standalone."""
+    """Pin the 3-band RGB renderer; the style travels with the project file."""
     try:
         from qgis.core import QgsMultiBandColorRenderer
 
@@ -437,17 +487,6 @@ def _apply_default_raster_style(layer: QgsRasterLayer) -> None:
         layer.triggerRepaint()
     except Exception as err:  # nosec B110
         log_warning(f"Default raster renderer skipped: {err}")
-        return
-
-    try:
-        path = layer.source() or ""
-        if "|" in path:
-            path = path.split("|", 1)[0]
-        if path and os.path.isfile(path):
-            qml_path = os.path.splitext(path)[0] + ".qml"
-            layer.saveNamedStyle(qml_path)
-    except Exception as err:  # nosec B110
-        log_warning(f".qml sidecar write skipped: {err}")
 
 
 OUTPUT_DIR_SETTING = "AIEdit/output_dir"
@@ -530,12 +569,3 @@ def set_output_dir(path: str) -> None:
         settings.sync()
     except Exception:  # nosec B110
         pass
-
-
-def _slugify(text: str) -> str:
-    """ASCII-only slug. GDAL mishandles unicode in some Windows locales -> WRITE_ERROR."""
-    text = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode("ascii")
-    text = text.lower().strip()
-    text = re.sub(r"[^\w\s-]", "", text)
-    text = re.sub(r"[-\s]+", "_", text)
-    return text.strip("_")

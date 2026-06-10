@@ -4,6 +4,10 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>Cancelling sign-in</source>
+        <translation>Cancelando o login</translation>
+    </message>
+    <message>
         <source>No credit was used.</source>
         <translation>Nenhum crédito foi usado.</translation>
     </message>
@@ -1264,6 +1268,18 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Mostrar {n} modelos experimentais</translation>
     </message>
     <message>
+        <source>Load older generations</source>
+        <translation>Carregar gerações mais antigas</translation>
+    </message>
+    <message>
+        <source>Loading session</source>
+        <translation>Carregando a sessão</translation>
+    </message>
+    <message>
+        <source>Loading...</source>
+        <translation>Carregando...</translation>
+    </message>
+    <message>
         <source>Show {n} more</source>
         <translation>Mostrar mais {n}</translation>
     </message>
@@ -1778,6 +1794,14 @@ Adoraríamos receber seu retorno!</translation>
     <message>
         <source>Unexpected response from the server. Please try again.</source>
         <translation>Resposta inesperada do servidor. Tente novamente.</translation>
+    </message>
+    <message>
+        <source>This account has no active AI Edit plan. Reactivate it on terra-lab.ai, then click Connect again.</source>
+        <translation>Esta conta não tem um plano AI Edit ativo. Reative-o em terra-lab.ai e clique em Conectar novamente.</translation>
+    </message>
+    <message>
+        <source>Sign-in was cancelled in the browser. Click Connect to try again.</source>
+        <translation>O login foi cancelado no navegador. Clique em Conectar para tentar de novo.</translation>
     </message>
     <message>
         <source>Connecting AI Edit</source>

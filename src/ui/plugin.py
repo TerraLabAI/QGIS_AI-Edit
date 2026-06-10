@@ -99,12 +99,13 @@ SUBSCRIBE_ERROR_URL = (
 
 
 def _key_validation_request(client, key):
-    """Run validate_key_with_server and reshape its (ok, msg, code) tuple into
-    the dict shape GenericRequestTask expects ({} on success, {"error": msg,
-    "code": code} on failure)."""
-    success, message, code = validate_key_with_server(client, key)
+    """Run validate_key_with_server and reshape its tuple into the dict shape
+    GenericRequestTask expects (the /usage payload on success, {"error": msg,
+    "code": code} on failure). Passing the payload through lets the caller
+    reuse it for the credits display instead of fetching /usage twice."""
+    success, message, code, usage = validate_key_with_server(client, key)
     if success:
-        return {}
+        return usage if isinstance(usage, dict) else {}
     return {"error": message, "code": code}
 
 
@@ -614,7 +615,8 @@ class AIEditPlugin:
                 if self._dock_widget is not None:
                     self._dock_widget.set_server_catalog(None)
         QTimer.singleShot(0, _load_stale_catalog)
-        self._load_server_catalog()
+        # Fresh catalog arrives via the startup bootstrap bundle (initGui);
+        # library opens trigger _load_server_catalog refetches afterwards.
         self._iface.addDockWidget(QtC.RightDockWidgetArea, self._dock_widget)
         # Auto-open the panel on first install and after every upgrade (new version),
         # but never on a routine launch. Same-version launches let QGIS restore the dock
@@ -705,8 +707,10 @@ class AIEditPlugin:
         self._map_tool.compare_requested.connect(self._on_canvas_compare)
         self._map_tool.vectorize_requested.connect(self._on_canvas_vectorize)
 
-        # Restore saved activation key
-        self._check_activation_state()
+        # Restore saved activation key. UI only here (optimistic activated or
+        # sign-up screen); the network half rides the single bootstrap call
+        # below instead of three separate startup requests.
+        self._check_activation_state(validate=False)
         if not self._auth_manager.has_activation_key():
             telemetry.track("activation_screen_viewed")
 
@@ -719,8 +723,9 @@ class AIEditPlugin:
             self._client, self._auth_manager, self._read_plugin_version()
         )
 
-        # Load export config in background (non-blocking)
-        self._load_export_config()
+        # One background call fetches export config + catalog + key/credits;
+        # falls back to the three legacy loaders on older servers.
+        self._bootstrap_startup()
 
         if self._dev_mode:
             log("AI Edit plugin loaded [DEV MODE]")
@@ -1024,8 +1029,13 @@ class AIEditPlugin:
                 log_debug(f"Dock height adjust skipped: {err}")
         QTimer.singleShot(0, _apply)
 
-    def _check_activation_state(self):
-        """Check activation key presence and validate with server."""
+    def _check_activation_state(self, validate: bool = True):
+        """Check activation key presence and validate with server.
+
+        ``validate=False`` does only the synchronous UI half (optimistic
+        activated view or sign-up screen); the caller provides the server
+        confirmation through another channel (the startup bootstrap bundle).
+        """
         settings = QSettings()
         saved_key = get_activation_key(settings)
         if not saved_key:
@@ -1039,7 +1049,11 @@ class AIEditPlugin:
         self._auth_manager.set_activation_key(saved_key)
         self._dock_widget.set_activation_key(saved_key)
 
-        if (time.time() - self._last_key_validation_unix) < 30:
+        # Revalidation window. The server enforces auth on every real request
+        # anyway, so this client-side check is purely cosmetic (which screen to
+        # show); 30s made every dock toggle cost two /usage calls and was the
+        # single largest source of API traffic (10x the generation volume).
+        if (time.time() - self._last_key_validation_unix) < 900:
             self._dock_widget.set_activated(True)
             self._settings_action.setEnabled(True)
             # Stay on LAUNCH state; tool is activated on user click.
@@ -1053,22 +1067,31 @@ class AIEditPlugin:
         self._settings_action.setEnabled(True)
         self._dock_widget.set_launch_enabled(False)
 
+        if not validate:
+            return
+
         self._key_validation_worker = GenericRequestTask(
             "AI Edit key validation",
             lambda c=self._client, k=saved_key: _key_validation_request(c, k),
         )
-        self._key_validation_worker.succeeded.connect(lambda _payload: self._on_key_valid())
+        self._key_validation_worker.succeeded.connect(self._on_key_valid)
         self._key_validation_worker.failed.connect(self._on_key_invalid)
         QgsApplication.taskManager().addTask(self._key_validation_worker)
 
-    def _on_key_valid(self):
-        """Server confirmed the key is valid."""
+    def _on_key_valid(self, usage=None):
+        """Server confirmed the key is valid. The validation call IS a /usage
+        fetch, so its payload feeds the credits display directly instead of
+        firing a second, identical request."""
         self._last_key_validation_unix = time.time()
         self._dock_widget.set_activated(True)
         self._settings_action.setEnabled(True)
         # Stay on LAUNCH state; tool is activated on user click.
-        self._dock_widget.set_checking_credits(True)
-        self._refresh_credits()
+        if isinstance(usage, dict) and "images_used" in usage:
+            self._auth_manager.seed_usage(usage)
+            self._on_credits_loaded(usage)
+        else:
+            self._dock_widget.set_checking_credits(True)
+            self._refresh_credits()
 
     def _on_key_invalid(self, message: str, code: str):
         """Server rejected the key - show activation screen."""
@@ -1111,6 +1134,55 @@ class AIEditPlugin:
         )
         QgsApplication.taskManager().addTask(self._export_config_loader)
 
+    def _bootstrap_startup(self):
+        """One background call for export config + preset catalog + key
+        validation/credits. Replaces three separate startup requests; falls
+        back to the legacy loaders when the server predates /bootstrap."""
+        auth = self._auth_manager.get_auth_header()
+        task = GenericRequestTask(
+            "AI Edit bootstrap",
+            lambda c=self._client, a=auth: c.get_bootstrap(a),
+        )
+        task.succeeded.connect(self._on_bootstrap_loaded)
+        task.failed.connect(lambda _msg, _code: self._bootstrap_fallback())
+        self._bootstrap_task = task
+        QgsApplication.taskManager().addTask(task)
+
+    def _on_bootstrap_loaded(self, payload):
+        if not isinstance(payload, dict) or "export_config" not in payload:
+            self._bootstrap_fallback()
+            return
+        config = payload.get("export_config")
+        if isinstance(config, dict):
+            self._on_export_config_loaded(config)
+        catalog_payload = payload.get("catalog")
+        if isinstance(catalog_payload, dict):
+            try:
+                from ..core.prompts.prompt_presets_client import store_catalog
+
+                catalog = store_catalog(catalog_payload)
+                if catalog is not None:
+                    self._last_catalog_fetch_unix = time.time()
+                    self._on_server_catalog_loaded(catalog)
+            except Exception as err:  # nosec B110
+                log_warning(f"Bootstrap catalog handling failed: {err}")
+        usage = payload.get("usage")
+        if isinstance(usage, dict) and "error" in usage:
+            self._on_key_invalid(
+                str(usage.get("error", "")), str(usage.get("code", ""))
+            )
+        elif isinstance(usage, dict):
+            self._on_key_valid(usage)
+        # usage None = signed-out startup; the sign-up screen is already shown.
+
+    def _bootstrap_fallback(self):
+        """Older server without /bootstrap: run the three legacy loaders."""
+        log_debug("Bootstrap unavailable; using individual startup requests")
+        self._load_export_config()
+        self._load_server_catalog()
+        if self._auth_manager.has_activation_key():
+            self._check_activation_state()
+
     def _load_server_catalog(self):
         """Fetch the AI Edit preset catalog in the background and hand it to
         the dock when ready. Failures are silent - the stale cache or the
@@ -1122,6 +1194,13 @@ class AIEditPlugin:
         latest catalog within seconds. Without force_refresh, fetch would
         short-circuit on cache hit and the user could stay on a stale catalog
         until the TTL expired (painful right after a server-side push)."""
+        # Every library open lands here; a catalog fetched less than a minute
+        # ago is plenty fresh, so skip the refetch instead of re-hitting the
+        # server on each open.
+        now = time.time()
+        if now - getattr(self, "_last_catalog_fetch_unix", 0.0) < 60.0:
+            return
+        self._last_catalog_fetch_unix = now
         self._catalog_loader = GenericRequestTask(
             "AI Edit preset catalog",
             lambda c=self._client: _server_catalog_request(c, force_refresh=True),
@@ -1488,12 +1567,6 @@ class AIEditPlugin:
                     if os.path.exists(path):
                         os.remove(path)
                     shutil.move(produced, path)
-                    side = os.path.join(os.path.dirname(produced), "raster.ai-edit.json")
-                    if os.path.exists(side):
-                        side_dest = os.path.splitext(path)[0] + ".ai-edit.json"
-                        if os.path.exists(side_dest):
-                            os.remove(side_dest)
-                        shutil.move(side, side_dest)
                 finally:
                     shutil.rmtree(tmp_dir, ignore_errors=True)
                 return {"path": path}
@@ -1558,7 +1631,138 @@ class AIEditPlugin:
             job.get("template_name"),
         )
         self._load_reference_images(job.get("reference_image_urls") or [])
+        # Rebuild the iteration session this generation belongs to (Original,
+        # V1, V2...) so the next edit continues the chain instead of starting
+        # a blank lineage. Thumbnails arrive async; the strip appears then.
+        self._restore_session_chain(job)
         self._notify(tr("Generation restored. Adjust and generate again."), duration=4)
+
+    def _session_chain_for(self, job: dict) -> list[dict]:
+        """All cached generations connected to `job` through parent links,
+        oldest first. Falls back to just `job` when nothing links to it."""
+        rid = job.get("request_id")
+        if not rid:
+            return []
+        try:
+            jobs = self._dock_widget.get_cached_recent_jobs()
+        except Exception:  # nosec B110 - cache is best-effort.
+            jobs = []
+        by_id = {j.get("request_id"): j for j in jobs if j.get("request_id")}
+        by_id.setdefault(rid, job)
+        children: dict[str, list[str]] = {}
+        for j in by_id.values():
+            parent = j.get("parent_request_id")
+            if parent and parent in by_id:
+                children.setdefault(parent, []).append(j["request_id"])
+        # Climb to the chain's root (cycle-safe), then collect everything below.
+        root = by_id[rid]
+        seen = {rid}
+        while True:
+            parent = root.get("parent_request_id")
+            if not parent or parent not in by_id or parent in seen:
+                break
+            seen.add(parent)
+            root = by_id[parent]
+        chain: list[dict] = []
+        stack = [root["request_id"]]
+        visited: set[str] = set()
+        while stack:
+            cid = stack.pop()
+            if cid in visited:
+                continue
+            visited.add(cid)
+            chain.append(by_id[cid])
+            stack.extend(children.get(cid, []))
+        chain.sort(key=lambda j: j.get("created_at") or "")
+        return chain
+
+    def _restore_session_chain(self, job: dict) -> None:
+        """Download the chain's thumbnails off-thread, then seed the version
+        strip with the whole session."""
+        chain = self._session_chain_for(job)
+        if not chain or self._client is None:
+            return
+        self._pending_session_rid = job.get("request_id")
+        urls = [chain[0].get("input_thumb_url") or chain[0].get("input_url")]
+        urls += [j.get("output_thumb_url") or j.get("output_url") for j in chain]
+
+        def _work(items=tuple(urls)):
+            blobs = []
+            for url in items:
+                blob = None
+                if url:
+                    try:
+                        blob = self._client.download_image(url)
+                    except Exception as err:  # noqa: BLE001
+                        log_warning(f"session thumb download failed: {err}")
+                blobs.append(blob)
+            return {"blobs": blobs}
+
+        restored_rid = job.get("request_id")
+        task = GenericRequestTask(tr("Loading session"), _work)
+        task.succeeded.connect(
+            lambda payload, c=chain, rid=restored_rid:
+            self._on_session_thumbs_loaded(c, rid, payload)
+        )
+        task.failed.connect(
+            lambda msg, _code: log_warning(f"session restore failed: {msg}")
+        )
+        self._hold_history_task(task)
+
+    def _on_session_thumbs_loaded(
+        self, chain: list, selected_rid: str | None, payload: dict
+    ) -> None:
+        if self._dock_widget is None:
+            return
+        # Stale arrival: the user restored something else since, or drew a new
+        # zone (which invalidates the token). Never overwrite a live session.
+        if selected_rid != getattr(self, "_pending_session_rid", None):
+            return
+        # The user already started generating: the export seeded the lineage.
+        if self._versions:
+            return
+        blobs = payload.get("blobs") or []
+        if len(blobs) != len(chain) + 1:
+            return
+        self._versions = [{"layer_id": None, "request_id": None, "prompt": ""}]
+        self._dock_widget.seed_version_strip(self._pixmap_from_blob(blobs[0]))
+        for j, blob in zip(chain, blobs[1:]):
+            dims = None
+            if j.get("output_w") and j.get("output_h"):
+                dims = f"{j['output_w']} × {j['output_h']}"
+            meta = {
+                "definition": j.get("resolution") or "",
+                "dimensions": dims,
+                "template_name": j.get("template_name"),
+                "base_label": None,
+            }
+            self._versions.append({
+                "layer_id": None,
+                "request_id": j.get("request_id"),
+                "prompt": j.get("prompt") or "",
+            })
+            self._dock_widget.add_version_thumb(
+                self._pixmap_from_blob(blob), j.get("prompt") or "", meta
+            )
+        index = next(
+            (i for i, v in enumerate(self._versions) if v["request_id"] == selected_rid),
+            len(self._versions) - 1,
+        )
+        self._selected_version_index = index
+        self._dock_widget.select_version(index)
+        self._dock_widget.reveal_version_strip()
+
+    @staticmethod
+    def _pixmap_from_blob(blob):
+        from qgis.PyQt.QtGui import QPixmap
+
+        pixmap = QPixmap()
+        if blob:
+            try:
+                pixmap.loadFromData(blob)
+            except Exception:  # nosec B110 - a broken thumb shows as blank.
+                pixmap = QPixmap()
+        return pixmap
 
     def _restore_zone(self, extent_dict: dict, crs_wkt: str) -> bool:
         """Recreate the selection zone from a stored extent + CRS so a past
@@ -1845,6 +2049,9 @@ class AIEditPlugin:
         """Start a fresh lineage: empty the version list and clear the strip."""
         self._versions = []
         self._selected_version_index = 0
+        # Invalidate any in-flight session-restore download: its thumbnails
+        # must not seed a lineage the user has since broken.
+        self._pending_session_rid = None
         if self._dock_widget is not None:
             try:
                 self._dock_widget.reset_version_strip()
@@ -2122,16 +2329,58 @@ class AIEditPlugin:
         elif which == "delete":
             self._on_zone_delete_requested()
 
+    def _selected_version_layer(self):
+        """The raster layer of the selected version (or the newest version
+        that has one). None when the lineage holds no on-map layer."""
+        from qgis.core import QgsProject
+
+        if not self._versions:
+            return None
+        candidates = []
+        if 0 <= self._selected_version_index < len(self._versions):
+            candidates.append(self._versions[self._selected_version_index])
+        candidates.extend(reversed(self._versions))
+        for version in candidates:
+            layer_id = version.get("layer_id")
+            if layer_id:
+                layer = QgsProject.instance().mapLayer(layer_id)
+                if layer is not None:
+                    return layer
+        return None
+
     def _show_action_pills(self) -> None:
         """Show the canvas action pills with the right options for the current
         result: Compare when a before/after is possible, Vectorize when the run
-        was a detection / segmentation template."""
+        was a detection / segmentation template.
+
+        Self-healing: tool detours (Mark up, Vectorize, eyedropper) often leave
+        a vector layer active, which made Compare silently vanish while
+        Vectorize stayed. If Compare is ineligible but the lineage has a result
+        raster on the map, re-activate it and re-check. Same for the zone rect:
+        programmatic flows may not have armed the map tool, so restore it from
+        the selected extent before showing badges (they anchor to it)."""
         if self._map_tool is None:
             return
+        if (
+            getattr(self._map_tool, "_zone_rect", None) is None
+            and self._selected_extent is not None  # noqa: W503
+        ):
+            try:
+                self._map_tool.set_zone(QgsRectangle(self._selected_extent))
+            except Exception as err:  # nosec B110
+                log_warning(f"zone rect restore for pills failed: {err}")
         can_compare = (
             self._swipe_controller is not None
             and self._swipe_controller.can_swipe_now()  # noqa: W503
         )
+        if not can_compare and self._swipe_controller is not None:
+            layer = self._selected_version_layer()
+            if layer is not None:
+                try:
+                    self._iface.setActiveLayer(layer)
+                    can_compare = self._swipe_controller.can_swipe_now()
+                except Exception as err:  # nosec B110
+                    log_warning(f"re-activate result for Compare failed: {err}")
         color = self._vectorize_suggestion[1] if self._vectorize_suggestion else None
         self._map_tool.show_action_badges(compare=can_compare, vectorize=bool(color))
 
@@ -2300,7 +2549,7 @@ class AIEditPlugin:
         # Manual paste wins over an in-flight browser handoff: cancel the poll
         # so two success paths can't race.
         self._cancel_pairing_worker()
-        success, message, code = validate_key_with_server(self._client, key)
+        success, message, code, _usage = validate_key_with_server(self._client, key)
         normalized_code = (code or "").strip().upper()
         if success:
             self._apply_activation(key)
@@ -2402,8 +2651,16 @@ class AIEditPlugin:
         telemetry.flush()
         log("Pairing timed out")
 
-    def _on_cancel_pairing(self):
+    def _on_cancel_pairing(self, code: str = ""):
         self._cancel_pairing_worker()
+        if code:
+            # Retire the code server-side so a later Confirm in the browser
+            # shows "expired" instead of binding a key nobody is polling for.
+            task = GenericRequestTask(
+                tr("Cancelling sign-in"),
+                lambda c=code: self._client.cancel_pairing(c),
+            )
+            self._hold_history_task(task)
         telemetry.track("ai_edit_pair_cancelled")
         telemetry.flush()
         log("Pairing cancelled")

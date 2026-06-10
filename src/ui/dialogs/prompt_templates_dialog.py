@@ -900,7 +900,7 @@ class _LibrarySyncWorker(QThread):
     user can re-add to the map, reuse, or download. Emits one signal per
     section so the dialog refreshes progressively."""
 
-    recent_jobs_fetched = pyqtSignal(list)
+    recent_jobs_fetched = pyqtSignal(list, bool)
     favorite_jobs_fetched = pyqtSignal(list)
     failed = pyqtSignal(str)
 
@@ -916,7 +916,9 @@ class _LibrarySyncWorker(QThread):
             self.failed.emit(f"history: {e}")
             return
         if isinstance(hist, dict) and "error" not in hist:
-            self.recent_jobs_fetched.emit(hist.get("jobs", []) or [])
+            jobs = hist.get("jobs", []) or []
+            # Older servers don't send has_more; a full page implies more.
+            self.recent_jobs_fetched.emit(jobs, bool(hist.get("has_more", len(jobs) >= 50)))
         else:
             self.failed.emit(
                 f"history: {hist.get('error', 'unknown') if isinstance(hist, dict) else 'parse_error'}"
@@ -935,6 +937,35 @@ class _LibrarySyncWorker(QThread):
             self.failed.emit(
                 f"favorites: {favs.get('error', 'unknown') if isinstance(favs, dict) else 'parse_error'}"
             )
+
+
+class _HistoryPageWorker(QThread):
+    """Background fetch of one OLDER page of the generation history - the
+    Recent tab's server-side Load more, used once the locally held jobs are
+    all visible but the server reported has_more."""
+
+    page_fetched = pyqtSignal(list, bool)
+    failed = pyqtSignal(str)
+
+    def __init__(self, client, auth: dict, before: str, parent=None):
+        super().__init__(parent)
+        self._client = client
+        self._auth = auth
+        self._before = before
+
+    def run(self):
+        try:
+            resp = self._client.get_generation_history(
+                self._auth, limit=50, before=self._before
+            )
+        except Exception as e:
+            self.failed.emit(f"history page: {e}")
+            return
+        if isinstance(resp, dict) and "error" not in resp:
+            jobs = resp.get("jobs", []) or []
+            self.page_fetched.emit(jobs, bool(resp.get("has_more", False)))
+        else:
+            self.failed.emit("history page: server error")
 
 
 class _FavoriteSyncWorker(QThread):
@@ -1074,6 +1105,11 @@ class PromptTemplatesDialog(QDialog):
         self._recent_jobs: list[dict] = list(recent_jobs or [])
         self._favorite_jobs: list[dict] = list(favorite_jobs or [])
         self._history_fresh = bool(history_fresh)
+        # Whether the server holds generations older than what we have; drives
+        # the Recent tab's server-side Load more. A full warm-cache page means
+        # "probably more" until a sync says otherwise.
+        self._recent_has_more = len(self._recent_jobs) >= 50
+        self._recent_page_worker: _HistoryPageWorker | None = None
 
         self._selected_preset: dict | None = None
         # A past generation the user chose to fully reproduce (prompt + refs +
@@ -1657,18 +1693,78 @@ class PromptTemplatesDialog(QDialog):
         if btn is None or not _is_alive(btn):
             return
         remaining = len(st["entries"]) - st["visible"]
-        if remaining <= 0:
-            btn.setVisible(False)
-        else:
+        if remaining > 0:
             btn.setVisible(True)
+            btn.setEnabled(True)
             btn.setText(tr("Show {n} more").format(n=remaining))
+        elif key == "recent" and self._recent_has_more:
+            # Local jobs all visible but the server holds older ones.
+            btn.setVisible(True)
+            btn.setEnabled(True)
+            btn.setText(tr("Load older generations"))
+        else:
+            btn.setVisible(False)
 
     def _on_gallery_show_more(self, key: str) -> None:
+        st = self._gallery_state.get(key)
+        if (
+            key == "recent"
+            and st is not None
+            and st["visible"] >= len(st["entries"])
+            and self._recent_has_more
+        ):
+            self._fetch_older_recent()
+            return
         self._append_gallery_cards(key)
         self._update_gallery_more_btn(key)
         trigger = self._gallery_loaders.get(key)
         if trigger is not None:
             QTimer.singleShot(0, trigger)
+
+    def _fetch_older_recent(self) -> None:
+        """Server-side Load more for Recent: fetch the page older than the
+        oldest job currently held and append it to the gallery."""
+        if self._client is None or self._auth_provider is None:
+            return
+        if self._recent_page_worker is not None and self._recent_page_worker.isRunning():
+            return
+        oldest = self._recent_jobs[-1].get("created_at") if self._recent_jobs else None
+        if not oldest:
+            return
+        auth = self._auth_provider() or {}
+        if not auth.get("Authorization"):
+            return
+        st = self._gallery_state.get("recent")
+        if st is not None and _is_alive(st.get("btn")):
+            st["btn"].setEnabled(False)
+            st["btn"].setText(tr("Loading..."))
+        worker = _HistoryPageWorker(self._client, auth, oldest, parent=None)
+        worker.page_fetched.connect(self._on_older_recent_fetched)
+        worker.failed.connect(self._on_older_recent_failed)
+        _detach_worker(worker)
+        self._recent_page_worker = worker
+        worker.start()
+
+    def _on_older_recent_fetched(self, jobs: list, has_more: bool) -> None:
+        self._recent_has_more = bool(has_more) and bool(jobs)
+        known = {j.get("request_id") for j in self._recent_jobs}
+        fresh = [j for j in (jobs or []) if j.get("request_id") not in known]
+        if fresh:
+            self._recent_jobs.extend(fresh)
+            st = self._gallery_state.get("recent")
+            if st is not None:
+                st["entries"].extend({"kind": "job", "data": j} for j in fresh)
+                self._append_gallery_cards("recent")
+            self._refresh_sidebar_button("recent")
+        self._update_gallery_more_btn("recent")
+        trigger = self._gallery_loaders.get("recent")
+        if trigger is not None:
+            QTimer.singleShot(0, trigger)
+        self.history_synced.emit(self._recent_jobs, self._favorite_jobs)
+
+    def _on_older_recent_failed(self, msg: str) -> None:
+        log_debug(f"Recent older-page fetch failed: {msg}")
+        self._update_gallery_more_btn("recent")
 
     def _build_generation_card(self, job: dict, show_origin_pill: bool = False) -> _GenerationCard:
         return _GenerationCard(
@@ -2088,8 +2184,9 @@ class PromptTemplatesDialog(QDialog):
         refresh returns exactly what the warm cache already showed."""
         return [j.get("request_id") for j in a] == [j.get("request_id") for j in b]
 
-    def _on_recent_jobs_fetched(self, jobs: list):
+    def _on_recent_jobs_fetched(self, jobs: list, has_more: bool = False):
         jobs = jobs or []
+        self._recent_has_more = bool(has_more)
         changed = not self._same_jobs(jobs, self._recent_jobs)
         self._recent_jobs = jobs
         if changed:

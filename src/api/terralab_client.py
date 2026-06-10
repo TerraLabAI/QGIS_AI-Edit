@@ -315,14 +315,21 @@ class TerraLabClient:
         return self._request("GET", "/api/plugin/favorites", auth=auth)
 
     def get_generation_history(
-        self, auth: dict, limit: int = 24, favorites_only: bool = False
+        self, auth: dict, limit: int = 24, favorites_only: bool = False,
+        before: str | None = None,
     ) -> dict:
         """Get the user's past generations (before/after + prompt + location).
         Newest first. Each job carries short-lived signed input/output URLs.
-        favorites_only filters to starred generations."""
+        favorites_only filters to starred generations. `before` (ISO timestamp
+        of the oldest job already shown) pages further back; the response's
+        has_more flag says whether older rows remain."""
         path = f"/api/ai-edit/history?limit={limit}"
         if favorites_only:
             path += "&favorites_only=true"
+        if before:
+            from urllib.parse import quote
+
+            path += f"&before={quote(before)}"
         return self._request("GET", path, auth=auth)
 
     def set_generation_favorite(
@@ -366,6 +373,14 @@ class TerraLabClient:
         """Fetch export config from the server (no auth required)."""
         return self._request("GET", "/api/ai-edit/export-config")
 
+    def get_bootstrap(self, auth: dict | None = None) -> dict:
+        """One-call startup bundle: export config + preset catalog + usage
+        (when auth is sent). Newer servers only; callers fall back to the
+        individual endpoints when this 404s."""
+        if auth:
+            return self._request("GET", "/api/plugin/bootstrap", auth=auth)
+        return self._request("GET", "/api/plugin/bootstrap")
+
     def get_config(self, product: str) -> dict:
         """Fetch server-driven plugin config (no auth required)."""
         return self._request(
@@ -384,6 +399,17 @@ class TerraLabClient:
             "GET",
             f"/api/plugin/pair/poll?code={quote(code, safe='')}",
             timeout_ms=timeout_ms,
+        )
+
+    def cancel_pairing(self, code: str) -> dict:
+        """Retire an abandoned pairing code server-side, so a later Confirm in
+        the browser shows expired instead of binding a key nobody polls for.
+
+        Unauthenticated POST (the code itself is the bearer of trust).
+        """
+        body = json.dumps({"code": code, "product": "ai-edit"}).encode("utf-8")
+        return self._request(
+            "POST", "/api/plugin/pair/cancel", body=body, timeout_ms=5_000
         )
 
     def send_telemetry_batch(self, events: list, auth: dict) -> dict:

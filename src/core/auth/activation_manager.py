@@ -96,14 +96,17 @@ def migrate_legacy_key(settings=None) -> bool:
 def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
     """Validate an activation key against the server.
 
-    Returns (success, message, error_code).
+    Returns (success, message, error_code, usage). ``usage`` is the raw
+    /usage payload on success (the validation call IS a usage fetch, so
+    callers can reuse it instead of fetching credits a second time); None
+    on failure.
     """
     key = key.strip()
     if not key:
-        return False, tr("Please enter your activation key."), "NO_KEY"
+        return False, tr("Please enter your activation key."), "NO_KEY", None
 
     if not _KEY_RE.match(key):
-        return False, tr("Invalid key format. Keys look like tl_ followed by 32 characters."), "INVALID_FORMAT"
+        return False, tr("Invalid key format. Keys look like tl_ followed by 32 characters."), "INVALID_FORMAT", None
 
     # Call /api/plugin/usage with the key as Bearer token
     auth = {
@@ -117,6 +120,7 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
             False,
             tr("Cannot reach server. Check your internet connection."),
             "NO_CONNECTION",
+            None,
         )
 
     if "error" in result:
@@ -125,7 +129,7 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
         error_lower = error_msg.lower()
 
         if code == "TRIAL_EXHAUSTED" or "free credits used" in error_lower:
-            return False, error_msg, "TRIAL_EXHAUSTED"
+            return False, error_msg, "TRIAL_EXHAUSTED", None
 
         if code in {
             "QUOTA_EXCEEDED",
@@ -133,13 +137,14 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
             "USAGE_LIMIT_REACHED",
             "MONTHLY_LIMIT_REACHED",
         } or "monthly limit reached" in error_lower:
-            return False, error_msg, "QUOTA_EXCEEDED"
+            return False, error_msg, "QUOTA_EXCEEDED", None
 
         if code == "INVALID_KEY":
             return (
                 False,
                 tr("Invalid activation key. Check your key and try again."),
                 code,
+                None,
             )
         if code == "SUBSCRIPTION_INACTIVE":
             return (
@@ -148,8 +153,9 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
                     "Your subscription has expired or been canceled. Renew at terra-lab.ai/dashboard"  # noqa: E501
                 ),
                 code,
+                None,
             )
-        return False, error_msg, (code or "VALIDATION_FAILED")
+        return False, error_msg, (code or "VALIDATION_FAILED"), None
 
     server_product = result.get("product_id", "")
     if server_product and server_product != "ai-edit":
@@ -157,9 +163,10 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
             False,
             tr("This key belongs to a different product. Use your AI Edit key."),
             "WRONG_PRODUCT",
+            None,
         )
 
-    return True, tr("Activation key verified!"), ""
+    return True, tr("Activation key verified!"), "", result
 
 
 def get_subscribe_url() -> str:

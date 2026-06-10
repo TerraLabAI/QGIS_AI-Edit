@@ -79,12 +79,42 @@ class PairingPollTask(QgsTask):
                 )
                 return False
 
+            if status == "no_plan":
+                # The signed-in account has no active plan to connect. Terminal:
+                # stop now with a clear message instead of polling to timeout.
+                self._failure = (
+                    tr(
+                        "This account has no active AI Edit plan. "
+                        "Reactivate it on terra-lab.ai, then click Connect again."
+                    ),
+                    "NO_PLAN",
+                )
+                return False
+
+            if status == "cancelled":
+                # The user left the browser page without confirming. Terminal:
+                # stop polling right away instead of spinning until timeout.
+                self._failure = (
+                    tr("Sign-in was cancelled in the browser. Click Connect to try again."),
+                    "CANCELLED",
+                )
+                return False
+
             # Everything else - "pending" (bound row not ready yet), "not_found"
             # (the user hasn't reached /connect yet, or the code expired), and
             # transient network/server errors - just means "keep waiting". The
             # poll is idempotent, so we loop until ready or the overall deadline.
+            # Newer servers hint how long to wait; absent or junk falls back to
+            # the fixed interval so older servers behave unchanged.
+            sleep_s = self._interval_s
+            hint = result.get("retry_after") if isinstance(result, dict) else None
+            if hint is not None:
+                try:
+                    sleep_s = min(max(float(hint), 1.0), 15.0)
+                except (TypeError, ValueError):
+                    pass
             log_debug("Pairing poll: waiting")
-            self._sleep_cancellable(self._interval_s)
+            self._sleep_cancellable(sleep_s)
 
         if self.isCanceled():
             return False

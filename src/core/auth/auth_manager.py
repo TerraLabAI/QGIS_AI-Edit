@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import threading
+import time
+
 from ..errors import NETWORK_ERROR_CODES, ErrorCode
 from ..i18n import tr
 
@@ -8,6 +11,12 @@ from ..i18n import tr
 # network error fast instead of making the user wait the full API timeout.
 _PREFLIGHT_TIMEOUT_MS = 12_000
 
+# Credits are refetched on activation and after every generation, so a recent
+# snapshot is almost always available when the user clicks Generate. Reusing it
+# skips one network round-trip per generation; the server re-checks quota on
+# submit anyway, so a stale "allowed" can never produce a free image.
+_USAGE_CACHE_TTL_S = 60.0
+
 
 class AuthManager:
     """Manages authentication state for paid AI Edit plugin."""
@@ -15,9 +24,34 @@ class AuthManager:
     def __init__(self, client):
         self._client = client
         self._activation_key = ""
+        self._usage_cache: dict | None = None
+        self._usage_cache_monotonic = 0.0
+        self._usage_lock = threading.Lock()
 
     def set_activation_key(self, key: str):
         self._activation_key = key.strip() if key else ""
+        with self._usage_lock:
+            self._usage_cache = None
+
+    def _store_usage(self, usage) -> None:
+        if isinstance(usage, dict) and "error" not in usage:
+            with self._usage_lock:
+                self._usage_cache = dict(usage)
+                self._usage_cache_monotonic = time.monotonic()
+
+    def seed_usage(self, usage: dict) -> None:
+        """Feed an externally fetched /usage payload into the snapshot the
+        pre-generation check reuses (e.g. the key-validation response)."""
+        self._store_usage(usage)
+
+    def _fresh_cached_usage(self) -> dict | None:
+        with self._usage_lock:
+            if (
+                self._usage_cache is not None
+                and time.monotonic() - self._usage_cache_monotonic < _USAGE_CACHE_TTL_S
+            ):
+                return dict(self._usage_cache)
+        return None
 
     def get_activation_key(self) -> str:
         return self._activation_key
@@ -59,15 +93,18 @@ class AuthManager:
                 ErrorCode.NO_KEY.value,
             )
 
-        auth = self.get_auth_header()
-        try:
-            usage = self._client.get_usage(auth=auth, timeout_ms=_PREFLIGHT_TIMEOUT_MS)
-        except Exception:
-            return (
-                False,
-                tr("No internet connection. Check your network and try again."),
-                ErrorCode.NO_NETWORK.value,
-            )
+        usage = self._fresh_cached_usage()
+        if usage is None:
+            auth = self.get_auth_header()
+            try:
+                usage = self._client.get_usage(auth=auth, timeout_ms=_PREFLIGHT_TIMEOUT_MS)
+            except Exception:
+                return (
+                    False,
+                    tr("No internet connection. Check your network and try again."),
+                    ErrorCode.NO_NETWORK.value,
+                )
+            self._store_usage(usage)
 
         if "error" in usage:
             code = usage.get("code", "")
@@ -111,10 +148,14 @@ class AuthManager:
         return True, f"{used}/{limit} images used", ""
 
     def get_usage_info(self) -> dict:
-        """Fetch current usage info from backend."""
+        """Fetch current usage info from backend. Always hits the network (the
+        credit display must be authoritative) and refreshes the snapshot the
+        pre-generation check reuses."""
         if not self._activation_key:
             return {"error": tr("No activation key"), "code": ErrorCode.NO_KEY.value}
         try:
-            return self._client.get_usage(auth=self.get_auth_header())
+            usage = self._client.get_usage(auth=self.get_auth_header())
         except Exception:
             return {"error": tr("Connection error"), "code": ErrorCode.NO_NETWORK.value}
+        self._store_usage(usage)
+        return usage

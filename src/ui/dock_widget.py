@@ -1167,7 +1167,7 @@ class AIEditDockWidget(QDockWidget):
     retry_clicked = pyqtSignal(str)       # retry on same zone with (possibly edited) prompt
     activation_attempted = pyqtSignal(str)
     pairing_requested = pyqtSignal(str)        # one-click connect: emits the minted pairing code
-    pairing_cancel_requested = pyqtSignal()    # user cancelled the browser handoff
+    pairing_cancel_requested = pyqtSignal(str)  # user cancelled the browser handoff (emits the code)
     settings_clicked = pyqtSignal()
     launch_clicked = pyqtSignal()          # user clicked "Launch AI Edit" on entry screen
     exit_clicked = pyqtSignal()            # user clicked the always-visible Exit button
@@ -2574,8 +2574,14 @@ class AIEditDockWidget(QDockWidget):
     def set_launch_enabled(self, enabled: bool) -> None:
         """Disable Launch AI Edit during async validation/credit checks
         so the user can't fire a session before we know they're authorised.
-        Avoids flashing the sign-up screen on reload."""
-        self._launch_btn.setEnabled(enabled)
+        Avoids flashing the sign-up screen on reload. Re-enabling goes through
+        the layer gate instead of flipping the button directly: with no visible
+        layer there is nothing to capture, and a direct enable here used to
+        override that lock right after the credits check."""
+        if enabled:
+            self._update_layer_warning()
+        else:
+            self._launch_btn.setEnabled(False)
 
     def set_activated(self, activated: bool):
         self._activated = activated
@@ -3038,6 +3044,20 @@ class AIEditDockWidget(QDockWidget):
         """Clear and hide the strip (new zone breaks the lineage)."""
         self._version_strip.clear()
 
+    def select_version(self, index: int) -> None:
+        """Move the strip's selection ring without emitting version_selected."""
+        self._version_strip.set_selected(index)
+
+    def reveal_version_strip(self) -> None:
+        """Show the lineage in the main flow (its 'generating' slot) so a
+        restored session is visible before the next result arrives."""
+        self._place_version_strip("generating")
+
+    def get_cached_recent_jobs(self) -> list:
+        """Session-cached past generations (newest first). Used to rebuild the
+        iteration chain when the user reuses a generation from Recent."""
+        return list(self._library_recent_cache or [])
+
     def set_version_strip_readonly(self, readonly: bool) -> None:
         self._version_strip.set_readonly(readonly)
 
@@ -3227,7 +3247,8 @@ class AIEditDockWidget(QDockWidget):
             self.pairing_requested.emit(self._pending_pairing_code)
 
     def _on_pairing_cancel_clicked(self):
-        self.pairing_cancel_requested.emit()
+        self.pairing_cancel_requested.emit(self._pending_pairing_code)
+        self._pending_pairing_code = ""
         self.show_pairing_idle()
 
     def _toggle_paste_section(self):

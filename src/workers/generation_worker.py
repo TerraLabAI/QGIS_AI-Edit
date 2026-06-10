@@ -165,7 +165,13 @@ class GenerationTask(QgsTask):
             try:
                 allowed, reason, code = self._auth_manager.check_can_generate()
             except Exception as e:
-                return self._mark_failed(str(e), ErrorCode.NO_NETWORK)
+                # Raw exception text is technical jargon (SSL traces, socket
+                # errors); log it, show the friendly line the code maps to.
+                log_debug(f"Pre-generation check raised: {e}")
+                return self._mark_failed(
+                    tr("No internet connection. Check your network and try again."),
+                    ErrorCode.NO_NETWORK,
+                )
             if not allowed:
                 return self._mark_failed(reason, code or ErrorCode.GENERATION_FAILED.value)
 
@@ -287,6 +293,24 @@ class GenerationTask(QgsTask):
         except Exception as e:
             request_id = (self._ctx.request_id if self._ctx is not None else None)
             self._refund_if_needed(request_id, "write_error")
+            # Ship the failing frames so write failures are diagnosable from
+            # telemetry (the bare message has not been enough to pinpoint the
+            # recurring numpy/PROJ poisoning on Windows). Usernames stripped.
+            try:
+                import re as _re
+                import traceback as _tb
+
+                tail = " | ".join(_tb.format_exc().strip().splitlines()[-4:])
+                tail = _re.sub(r"(?i)([/\\]Users[/\\])[^/\\]+", r"\1***", tail)
+                from ..core import telemetry
+
+                telemetry.track("plugin_error", {
+                    "error_type": "write_geotiff_failed",
+                    "error_message": tail[:480],
+                })
+                telemetry.flush()
+            except Exception:  # nosec B110
+                pass
             return self._mark_failed(
                 tr("Failed to write GeoTIFF: {err}. Credit refunded.").format(err=e),
                 ErrorCode.WRITE_ERROR.value,

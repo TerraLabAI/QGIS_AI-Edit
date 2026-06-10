@@ -214,6 +214,17 @@ def fetch_server_catalog(client, force_refresh: bool = False) -> dict | None:
     return catalog
 
 
+def store_catalog(payload) -> dict | None:
+    """Validate + cache a catalog delivered out-of-band (the /bootstrap
+    bundle) so the normal cached-read path serves it. Returns the parsed
+    catalog, or None when the payload doesn't match the v2 shape."""
+    catalog = _validate_catalog(payload)
+    if catalog is None:
+        return None
+    _write_cache(catalog)
+    return catalog
+
+
 def absolute_demo_url(client, relative: str) -> str:
     """Resolve a demo URL (e.g. `/api/ai-edit/template-demos/<id>/before`) to
     the absolute terra-lab.ai URL via the client's base_url. Lets us serve

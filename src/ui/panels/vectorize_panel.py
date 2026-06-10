@@ -730,8 +730,6 @@ class VectorizePanel(QWidget):
         compute_kwargs = {
             "raster_path": (raster.source() or "").split("|", 1)[0],
             "raster_crs": raster.crs(),
-            "source_raster_name": raster.name() or "",
-            "source_raster_id": raster.id() or "",
             "transform_context": project.transformContext(),
             "ellipsoid": project.ellipsoid() or "EPSG:7030",
             "target_rgb": target_rgb,
@@ -746,6 +744,7 @@ class VectorizePanel(QWidget):
         }
         params = {
             "raster_id": raster.id(),
+            "raster_name": raster.name() or "",
             "raster_crs": raster.crs(),
             "target_rgb": target_rgb,
             "is_initial": is_initial,
@@ -803,12 +802,20 @@ class VectorizePanel(QWidget):
             new_layer = _build_vector_layer(
                 feats, params["raster_crs"], params["layer_name"],
                 params["target_rgb"], None, self._class_label,
+                source_raster_name=params.get("raster_name", ""),
             )
 
             previous_id = self._last_layer_id
             existing = (
                 QgsProject.instance().mapLayer(previous_id) if previous_id else None
             )
+            if existing is None:
+                # First run: swap the volatile memory layer for a GeoPackage
+                # table so the result survives the QGIS session. Falls back to
+                # the memory layer if the write fails.
+                persisted = self._persist_layer(new_layer, params)
+                if persisted is not None:
+                    new_layer = persisted
             if existing is not None:
                 # Re-run: transplant the new geometries into the existing layer
                 # so the user's symbology, name and layer id all survive.
@@ -818,12 +825,23 @@ class VectorizePanel(QWidget):
                     provider.deleteFeatures(old_ids)
                 fresh_feats = [QgsFeature(f) for f in new_layer.getFeatures()]
                 provider.addFeatures(fresh_feats)
+                if existing.providerType() == "ogr":
+                    # Provider edits went straight to the GeoPackage; re-read
+                    # so feature count and ids reflect the file.
+                    existing.reload()
                 existing.updateExtents()
                 # Re-pick of a different colour: restyle so the trace matches the
                 # new selection. Same colour keeps the user's symbology untouched.
                 if params["target_rgb"] != self._last_target_rgb:
-                    from ...core.generation.vectorization_service import _apply_style
+                    from ...core.generation.vectorization_service import (
+                        _apply_style,
+                        _set_layer_provenance,
+                    )
                     _apply_style(existing, params["target_rgb"])
+                    _set_layer_provenance(
+                        existing, params.get("raster_name", ""),
+                        params["target_rgb"], self._class_label,
+                    )
                 existing.triggerRepaint()
                 final_layer = existing
             else:
@@ -888,6 +906,26 @@ class VectorizePanel(QWidget):
             self._handle_run_error(str(e), None)
         finally:
             self._reset_button()
+
+    def _persist_layer(self, mem_layer, params):
+        """One GeoPackage next to the generated rasters, one table per run
+        (lowercase ASCII names per the GeoPackage spec)."""
+        import time
+
+        from ...core.generation.vectorization_service import make_layer_permanent
+        from ...core.slug import slugify
+        from ..raster_writer import get_output_dir
+
+        base = slugify(self._class_label or params.get("raster_name", ""))[:40] or "result"
+        table_name = f"vectorize_{base}_{time.strftime('%Y%m%d_%H%M%S')}"
+        return make_layer_permanent(
+            mem_layer,
+            os.path.join(get_output_dir(), "ai_edit.gpkg"),
+            table_name,
+            params["target_rgb"],
+            self._class_label,
+            params.get("raster_name", ""),
+        )
 
     def _on_vectorize_failed(self, message: str, code: str) -> None:
         self._vectorize_task = None
