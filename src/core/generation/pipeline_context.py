@@ -88,8 +88,9 @@ class PipelineContext:
     crop_offsets: tuple[int, int, int, int] | None = None  # x, y, w, h
 
     # Refund safety: set to True once the worker has asked the server to
-    # refund this generation, so download_failed + write_error paths can't
-    # double-refund.
+    # refund this generation, so a retried refund path can't double-refund.
+    # Only download_failed refunds today; write failures don't refund (the
+    # completed generation stays downloadable from the library).
     refund_emitted: bool = False
 
     def validate(self) -> list[str]:

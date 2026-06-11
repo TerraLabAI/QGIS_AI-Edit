@@ -632,6 +632,10 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Falha ao renderizar a camada</translation>
     </message>
     <message>
+        <source>The image was generated but could not be saved to your output folder ({err}). It is kept in your prompt library: open the Recent tab and download the AI result, or change the output folder and try again.</source>
+        <translation>A imagem foi gerada mas não pôde ser salva na sua pasta de saída ({err}). Ela fica guardada na sua biblioteca de prompts: abra a aba Recentes e baixe o Resultado da IA, ou mude a pasta de saída e tente novamente.</translation>
+    </message>
+    <message>
         <source>Failed to write GeoTIFF: {err}. Credit refunded.</source>
         <translation>Falha ao gravar o GeoTIFF: {err}. Crédito reembolsado.</translation>
     </message>

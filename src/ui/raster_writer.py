@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import struct
 import tempfile
 import time
 
@@ -39,15 +40,17 @@ _GDAL_SAFE_FORMATS = {"PNG", "JPEG", "TIFF", "GIF", "BMP"}
 _FOREIGN_PROJ_MARKERS = ("rasterio", "pyproj", ".qgis_ai_segmentation", "venv")
 
 
-def _restore_qgis_proj_paths() -> None:
+def _restore_qgis_proj_paths(force: bool = False) -> None:
     """If PROJ_LIB/PROJ_DATA was hijacked by a foreign bundled GIS stack,
-    point GDAL's PROJ back at QGIS's own database for all subsequent ops."""
+    point GDAL's PROJ back at QGIS's own database for all subsequent ops.
+    force=True skips marker detection, for after a CRS op already failed
+    (the hijack can happen via SetPROJSearchPaths with no env var trace)."""
     try:
         values = [os.environ.get(var, "") for var in ("PROJ_LIB", "PROJ_DATA")]
         hijacked = any(
             marker in value.lower() for value in values for marker in _FOREIGN_PROJ_MARKERS
         )
-        if not hijacked:
+        if not hijacked and not force:
             return
         from qgis.core import QgsProjUtils
 
@@ -60,6 +63,30 @@ def _restore_qgis_proj_paths() -> None:
             )
     except Exception as err:  # nosec B110 - best-effort self-heal.
         log_warning(f"PROJ path restore skipped: {err}")
+
+
+def _safe_projection_wkt(crs_wkt: str) -> str | None:
+    """Parse the capture CRS for embedding. A poisoned PROJ database makes
+    ImportFromWkt raise "OGR Error: Corrupt data" on perfectly valid WKT
+    (seen in production on Windows); retry once after forcing the QGIS PROJ
+    paths back, and give up with None so a paid generation is never lost
+    over CRS embedding alone."""
+    if not crs_wkt:
+        return None
+    err = ""
+    for attempt in (1, 2):
+        try:
+            srs = osr.SpatialReference()
+            if srs.ImportFromWkt(crs_wkt) == 0:
+                return srs.ExportToWkt()
+            err = gdal.GetLastErrorMsg() or "import returned an error code"
+        except RuntimeError as e:
+            err = str(e)
+        if attempt == 1:
+            log_warning(f"CRS import failed ({err}); restoring PROJ paths and retrying")
+            _restore_qgis_proj_paths(force=True)
+    log_warning(f"CRS import still failing after PROJ restore ({err})")
+    return None
 
 
 def _detect_image_format(data: bytes) -> str | None:
@@ -144,14 +171,100 @@ def _create_gtiff(driver, path: str, w: int, h: int, bands: int):
     return ds, ""
 
 
-def _unique_tif_path(directory: str, base: str) -> str:
-    """First free <base>.tif in directory; _2, _3... on same-second collisions."""
-    path = os.path.join(directory, f"{base}.tif")
+def _unique_output_path(directory: str, base: str, ext: str = "tif") -> str:
+    """First free <base>.<ext> in directory; _2, _3... on same-second collisions."""
+    path = os.path.join(directory, f"{base}.{ext}")
     counter = 2
     while os.path.exists(path):
-        path = os.path.join(directory, f"{base}_{counter}.tif")
+        path = os.path.join(directory, f"{base}_{counter}.{ext}")
         counter += 1
     return path
+
+
+_FALLBACK_EXT = {
+    "PNG": "png",
+    "JPEG": "jpg",
+    "GIF": "gif",
+    "BMP": "bmp",
+    "TIFF": "tif",
+    "WebP": "webp",
+    "AVIF": "avif",
+    "HEIF": "heif",
+}
+
+
+def _image_dimensions(data: bytes, fmt: str | None) -> tuple[int, int]:
+    """Width/height parsed straight from the bytes, no GDAL: the rescue path
+    cannot trust GDAL since GDAL may be what just failed. (0, 0) if unknown."""
+    try:
+        if fmt == "PNG" and len(data) >= 24 and data[12:16] == b"IHDR":
+            w, h = struct.unpack(">II", data[16:24])
+            return int(w), int(h)
+        if fmt == "JPEG":
+            i = 2
+            while i + 9 < len(data):
+                if data[i] != 0xFF:
+                    i += 1
+                    continue
+                marker = data[i + 1]
+                if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+                    i += 2
+                    continue
+                seg_len = struct.unpack(">H", data[i + 2:i + 4])[0]
+                if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+                    h, w = struct.unpack(">HH", data[i + 5:i + 9])
+                    return int(w), int(h)
+                i += 2 + seg_len
+    except Exception:  # nosec B110 - dimensions are best-effort
+        pass
+    return 0, 0
+
+
+def _output_file_base(prompt: str) -> str:
+    slug = (_slugify(prompt)[:40] if prompt else "") or "ai_edit"
+    return f"{slug}_{time.strftime('%Y%m%d_%H%M%S')}"
+
+
+def _rescue_plain_image(
+    image_data: bytes,
+    img_format: str | None,
+    extent_dict: dict,
+    crs_wkt: str,
+    file_base: str,
+    width: int,
+    height: int,
+) -> str | None:
+    """Last-resort save when the GeoTIFF pipeline fails: the paid pixels are
+    already in memory, so write them untouched to tempdir with a PAM sidecar
+    (.aux.xml) carrying the georeferencing. Pure file I/O, no GDAL dataset,
+    so it survives a broken GDAL/PROJ stack. Returns None if even this fails."""
+    ext = _FALLBACK_EXT.get(img_format or "")
+    if ext is None or width <= 0 or height <= 0:
+        return None
+    try:
+        rescue_dir = os.path.join(tempfile.gettempdir(), "terralab_ai_edit")
+        os.makedirs(rescue_dir, exist_ok=True)
+        path = _unique_output_path(_ascii_safe_dir(rescue_dir), file_base, ext)
+        with open(path, "wb") as f:
+            f.write(image_data)
+        x_res = (extent_dict["xmax"] - extent_dict["xmin"]) / width
+        y_res = (extent_dict["ymax"] - extent_dict["ymin"]) / height
+        gt = ", ".join(
+            f"{v:.16e}"
+            for v in (extent_dict["xmin"], x_res, 0.0, extent_dict["ymax"], 0.0, -y_res)
+        )
+        # Minimal XML text escaping; avoids importing xml.sax (flagged by
+        # security scanners) for three character replacements.
+        wkt_xml = crs_wkt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        srs_xml = f"  <SRS>{wkt_xml}</SRS>\n" if crs_wkt else ""
+        with open(path + ".aux.xml", "w", encoding="utf-8") as f:
+            f.write(
+                f"<PAMDataset>\n{srs_xml}  <GeoTransform>{gt}</GeoTransform>\n</PAMDataset>\n"
+            )
+        return path
+    except Exception as e:  # noqa: BLE001 - last resort, never raise past here
+        log_warning(f"plain-image rescue failed: {e}")
+        return None
 
 
 def write_geotiff(
@@ -162,11 +275,50 @@ def write_geotiff(
     prompt: str = "",
     ctx=None,
 ) -> str:
-    """Write raw image bytes as a georeferenced GeoTIFF. GDAL-only so it runs on a worker thread."""
+    """Write raw image bytes as a georeferenced GeoTIFF, falling back to the
+    plain image plus a PAM sidecar when the whole GDAL pipeline fails. Once
+    the pixels are in memory a paid generation must never be lost to a write
+    error. Runs on a worker thread."""
+    try:
+        return _write_geotiff_gdal(
+            image_data, extent_dict, crs_wkt, output_dir, prompt=prompt, ctx=ctx
+        )
+    except Exception as gtiff_err:
+        img_format = _detect_image_format(image_data)
+        width, height = _image_dimensions(image_data, img_format)
+        rescued = _rescue_plain_image(
+            image_data, img_format, extent_dict, crs_wkt,
+            _output_file_base(prompt), width, height,
+        )
+        if rescued is None:
+            raise
+        log_warning(f"GeoTIFF write failed ({gtiff_err}); rescued plain image to {rescued}")
+        try:
+            from ..core import telemetry
+
+            telemetry.track("plugin_error", {
+                "error_type": "write_geotiff_rescued",
+                "error_message": str(gtiff_err)[:480],
+            })
+        except Exception:  # nosec B110
+            pass
+        if ctx is not None:
+            ctx.output_path = rescued
+        return rescued
+
+
+def _write_geotiff_gdal(
+    image_data: bytes,
+    extent_dict: dict,
+    crs_wkt: str,
+    output_dir: str,
+    prompt: str = "",
+    ctx=None,
+) -> str:
+    """GDAL GeoTIFF pipeline (tiled, compressed, overviews, provenance tags)."""
     _restore_qgis_proj_paths()
     timestamp = int(time.time())
-    slug = (_slugify(prompt)[:40] if prompt else "") or "ai_edit"
-    file_base = f"{slug}_{time.strftime('%Y%m%d_%H%M%S', time.localtime(timestamp))}"
+    file_base = _output_file_base(prompt)
 
     # Fall back to tempdir if user's output_dir is read-only so a hostile
     # folder doesn't lose the paid generation.
@@ -182,7 +334,7 @@ def write_geotiff(
     # Windows username) writes fine via GDAL but loads back as an invalid
     # QGIS layer. The directory exists by now, so 8.3 short names resolve.
     resolved_dir = _ascii_safe_dir(resolved_dir)
-    primary_path = _unique_tif_path(resolved_dir, file_base)
+    primary_path = _unique_output_path(resolved_dir, file_base)
     output_path = primary_path
 
     xmin = extent_dict["xmin"]
@@ -270,7 +422,7 @@ def write_geotiff(
             )
             fallback_dir = os.path.join(tempfile.gettempdir(), "terralab_ai_edit")
             os.makedirs(fallback_dir, exist_ok=True)
-            output_path = _unique_tif_path(_ascii_safe_dir(fallback_dir), file_base)
+            output_path = _unique_output_path(_ascii_safe_dir(fallback_dir), file_base)
             dst_ds, create_err = _create_gtiff(driver, output_path, recv_w, recv_h, bands)
         if dst_ds is None:
             raise RuntimeError(
@@ -289,9 +441,13 @@ def write_geotiff(
             ctx.output_bands = bands
             ctx.output_dimensions = (recv_w, recv_h)
 
-        srs = osr.SpatialReference()
-        srs.ImportFromWkt(crs_wkt)
-        dst_ds.SetProjection(srs.ExportToWkt())
+        projection_wkt = _safe_projection_wkt(crs_wkt)
+        if projection_wkt:
+            dst_ds.SetProjection(projection_wkt)
+        else:
+            # Pixels and geotransform are intact; add_geotiff_to_project
+            # re-attaches the CRS at load time from the capture WKT.
+            log_warning("CRS embedding failed; writing GeoTIFF without projection")
 
         timestamp_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         dst_ds.SetMetadataItem("AI_EDIT_PROMPT", prompt)
@@ -430,6 +586,7 @@ def _reload_from_ascii_copy(src_path: str, display_name: str) -> QgsRasterLayer 
 def add_geotiff_to_project(
     geotiff_path: str,
     prompt: str = "",
+    crs_wkt: str = "",
 ) -> QgsRasterLayer:
     """Add GeoTIFF as a flat child of AI-Edit. Sub-group is created lazily on first vectorize."""
     display_name = _build_layer_name(prompt)
@@ -455,6 +612,19 @@ def add_geotiff_to_project(
         size = os.path.getsize(geotiff_path) if exists else -1
         msg = tr("Failed to create valid raster layer from {path}").format(path=geotiff_path)
         raise RuntimeError(f"{msg} (exists={exists}, size={size} bytes)")
+
+    # Files written without an embedded projection (CRS embedding failed, or
+    # the plain-image rescue path) get their CRS back from the capture WKT.
+    if crs_wkt and not layer.crs().isValid():
+        try:
+            from qgis.core import QgsCoordinateReferenceSystem
+
+            crs = QgsCoordinateReferenceSystem.fromWkt(crs_wkt)
+            if crs.isValid():
+                layer.setCrs(crs)
+                log_warning("layer CRS set from capture WKT (file had no projection)")
+        except Exception as err:  # noqa: BLE001 - layer is still usable
+            log_warning(f"layer CRS fallback failed: {err}")
 
     _apply_default_raster_style(layer)
     _set_raster_layer_metadata(layer, prompt)

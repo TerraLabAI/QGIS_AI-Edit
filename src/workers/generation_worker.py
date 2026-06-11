@@ -291,8 +291,10 @@ class GenerationTask(QgsTask):
                 ctx=self._ctx,
             )
         except Exception as e:
-            request_id = (self._ctx.request_id if self._ctx is not None else None)
-            self._refund_if_needed(request_id, "write_error")
+            # No refund: the generation is completed and archived server-side,
+            # so it already sits in the prompt library's Recent tab with a
+            # working GeoTIFF download. Refunding a locally failed save would
+            # pay back credits for an image the user still has access to.
             # Ship the failing frames so write failures are diagnosable from
             # telemetry (the bare message has not been enough to pinpoint the
             # recurring numpy/PROJ poisoning on Windows). Usernames stripped.
@@ -312,7 +314,12 @@ class GenerationTask(QgsTask):
             except Exception:  # nosec B110
                 pass
             return self._mark_failed(
-                tr("Failed to write GeoTIFF: {err}. Credit refunded.").format(err=e),
+                tr(
+                    "The image was generated but could not be saved to your "
+                    "output folder ({err}). It is kept in your prompt library: "
+                    "open the Recent tab and download the AI result, or change "
+                    "the output folder and try again."
+                ).format(err=e),
                 ErrorCode.WRITE_ERROR.value,
             )
 
@@ -346,6 +353,7 @@ class GenerationTask(QgsTask):
         self._success_payload = {
             "geotiff_path": geotiff_path,
             "prompt": self._prompt,
+            "crs_wkt": self._crs_wkt,
             **_ctx_snapshot(self._ctx),
         }
         return True

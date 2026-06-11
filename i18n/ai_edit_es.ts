@@ -632,6 +632,10 @@ We'd love to hear from you!</source>
         <translation>Error al renderizar la capa</translation>
     </message>
     <message>
+        <source>The image was generated but could not be saved to your output folder ({err}). It is kept in your prompt library: open the Recent tab and download the AI result, or change the output folder and try again.</source>
+        <translation>La imagen se generó pero no se pudo guardar en su carpeta de salida ({err}). Se conserva en su biblioteca de prompts: abra la pestaña Recientes y descargue el Resultado IA, o cambie la carpeta de salida e inténtelo de nuevo.</translation>
+    </message>
+    <message>
         <source>Failed to write GeoTIFF: {err}. Credit refunded.</source>
         <translation>Error al escribir el GeoTIFF: {err}. Crédito reembolsado.</translation>
     </message>

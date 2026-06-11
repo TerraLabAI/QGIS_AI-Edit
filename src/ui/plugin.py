@@ -1491,7 +1491,7 @@ class AIEditPlugin:
 
             data = self._client.download_image(url)
             path = write_geotiff(data, ed, wkt, d, prompt=p)
-            return {"path": path, "prompt": p}
+            return {"path": path, "prompt": p, "crs_wkt": wkt}
 
         task = GenericRequestTask(tr("Adding past generation to the map"), _work)
         task.succeeded.connect(self._on_history_layer_ready)
@@ -1510,7 +1510,11 @@ class AIEditPlugin:
         if not path:
             return
         try:
-            layer = add_geotiff_to_project(path, (result or {}).get("prompt", ""))
+            layer = add_geotiff_to_project(
+                path,
+                (result or {}).get("prompt", ""),
+                crs_wkt=(result or {}).get("crs_wkt", ""),
+            )
         except Exception as err:  # noqa: BLE001
             self._notify(tr("Could not add layer: {msg}").format(msg=err), duration=6)
             return
@@ -3077,6 +3081,7 @@ class AIEditPlugin:
             layer = add_geotiff_to_project(
                 result_info["geotiff_path"],
                 result_info.get("prompt", ""),
+                crs_wkt=result_info.get("crs_wkt", ""),
             )
             try:
                 self._iface.setActiveLayer(layer)

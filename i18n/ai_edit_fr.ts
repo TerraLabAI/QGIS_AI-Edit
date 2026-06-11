@@ -632,6 +632,10 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Échec du rendu de la couche</translation>
     </message>
     <message>
+        <source>The image was generated but could not be saved to your output folder ({err}). It is kept in your prompt library: open the Recent tab and download the AI result, or change the output folder and try again.</source>
+        <translation>L'image a bien été générée mais n'a pas pu être enregistrée dans votre dossier de sortie ({err}). Elle est conservée dans votre bibliothèque de prompts : ouvrez l'onglet Récents et téléchargez le Résultat IA, ou changez le dossier de sortie et réessayez.</translation>
+    </message>
+    <message>
         <source>Failed to write GeoTIFF: {err}. Credit refunded.</source>
         <translation>Échec de l'écriture du GeoTIFF : {err}. Crédit remboursé.</translation>
     </message>
