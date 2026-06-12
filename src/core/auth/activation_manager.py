@@ -106,7 +106,11 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
         return False, tr("Please enter your activation key."), "NO_KEY", None
 
     if not _KEY_RE.match(key):
-        return False, tr("Invalid key format. Keys look like tl_ followed by 32 characters."), "INVALID_FORMAT", None
+        return False, tr(
+            "That does not look like an activation key. Most people do not need "
+            "one: just use the Sign in button. A key starts with tl_ and is only "
+            "for admin-issued or offline activation."
+        ), "INVALID_FORMAT", None
 
     # Call /api/plugin/usage with the key as Bearer token
     auth = {

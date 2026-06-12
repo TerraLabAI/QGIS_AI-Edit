@@ -466,9 +466,9 @@ def detect_freeform_vector_intent(prompt_text: str) -> str | None:
 # Off-rails prompt guidance. Detects, with high precision, the ways users
 # misuse the tool so the UI can show a soft, non-blocking hint that steers
 # them back onto a path that produces a good result. Grounded in real user
-# prompts (Supabase ai_edit_jobs): ~11% ask for a vector file / digitization,
-# many ask for measurements or counts, some talk to it like a chatbot. All of
-# those disappoint as a plain image edit.
+# prompts: ~11% ask for a vector file / digitization, many ask for
+# measurements or counts, some talk to it like a chatbot. All of those
+# disappoint as a plain image edit.
 #
 # Precision over recall on purpose: a false positive nags a user whose prompt
 # was actually fine, which is worse than staying silent. Valid instructions

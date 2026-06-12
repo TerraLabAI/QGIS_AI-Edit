@@ -12,6 +12,7 @@ from qgis.PyQt.QtWidgets import QAction, QShortcut
 from ..api.terralab_client import TerraLabClient
 from ..core import qt_compat as QtC
 from ..core import telemetry
+from ..core import telemetry_events as te
 from ..core.auth.activation_manager import (
     clear_activation,
     clear_config_cache,
@@ -337,6 +338,26 @@ def _is_service_busy(message: str, normalized_code: str) -> bool:
     return any(needle in text for needle in _BUSY_HINTS)
 
 
+def _scrub_paths(text: str) -> str:
+    """Strip usernames from any /Users/<name> or \\Users\\<name> path."""
+    import re
+    return re.sub(r"(?i)([/\\]Users[/\\])[^/\\]+", r"\1***", text or "")
+
+
+def _failure_stage(normalized_code: str) -> str:
+    """Map an error code to the pipeline stage it failed at."""
+    if normalized_code == "DOWNLOAD_FAILED":
+        return "download"
+    if normalized_code == "WRITE_ERROR":
+        return "write"
+    if normalized_code in {
+        "NO_NETWORK", "DNS_ERROR", "SSL_ERROR", "TIMEOUT", "PROXY_ERROR",
+        "CONNECTION_REFUSED", "TOO_LARGE", "BAD_REQUEST",
+    }:
+        return "submit"
+    return "poll"
+
+
 def _resolve_class_label(
     vector_color: str | None, vector_classes: list[dict] | None
 ) -> str:
@@ -448,6 +469,10 @@ class AIEditPlugin:
         self._plugin_opened_emitted = False
         # Cached cohort props enriched onto every generation event.
         self._first_generation_milestone_emitted = False
+        # Carried from generation_started to the terminal event so completed /
+        # failed can report is_retry and used_markup without re-deriving them.
+        self._last_generation_is_retry = False
+        self._last_generation_used_markup = False
 
         # Initialize tiers
         self._dev_mode = False
@@ -624,8 +649,10 @@ class AIEditPlugin:
         settings = QSettings()
         current_version = self._read_plugin_version()
         last_shown_version = settings.value("AIEdit/dock_shown_version", "", type=str)
+        auto_open_source = None
         if last_shown_version != current_version:
             settings.setValue("AIEdit/dock_shown_version", current_version)
+            auto_open_source = "auto_install" if not last_shown_version else "auto_upgrade"
             self._dock_widget.show()
             self._dock_widget.raise_()
             self._ensure_dock_height()
@@ -712,7 +739,7 @@ class AIEditPlugin:
         # below instead of three separate startup requests.
         self._check_activation_state(validate=False)
         if not self._auth_manager.has_activation_key():
-            telemetry.track("activation_screen_viewed")
+            telemetry.track(te.ACTIVATION_SCREEN_VIEWED)
 
         from .dialogs.error_report_dialog import start_log_collector
 
@@ -722,6 +749,12 @@ class AIEditPlugin:
         telemetry.init_telemetry(
             self._client, self._auth_manager, self._read_plugin_version()
         )
+        # Dock auto-opened on install/upgrade never went through _toggle_dock,
+        # so emit the open here to stop undercounting sessions.
+        if auto_open_source is not None and not self._plugin_opened_emitted:
+            self._plugin_opened_emitted = True
+            telemetry.track(te.PLUGIN_OPENED, {"open_source": auto_open_source})
+            telemetry.flush()
 
         # One background call fetches export config + catalog + key/credits;
         # falls back to the three legacy loaders on older servers.
@@ -967,7 +1000,7 @@ class AIEditPlugin:
         props = {}
         if days is not None:
             props["days_since_activation"] = days
-        telemetry.track("first_generation_milestone", props)
+        telemetry.track(te.FIRST_GENERATION_MILESTONE, props)
         telemetry.flush()
         settings.setValue("AIEdit/first_generation_milestone_fired", True)
         # Force-flush so a crash doesn't lose the flag and re-fire the milestone.
@@ -1006,7 +1039,7 @@ class AIEditPlugin:
                 self._selection_tool_was_active = False
             if not self._plugin_opened_emitted:
                 self._plugin_opened_emitted = True
-                telemetry.track("plugin_opened")
+                telemetry.track(te.PLUGIN_OPENED, {"open_source": "manual"})
                 telemetry.flush()
             log_debug("Dock shown")
 
@@ -1262,8 +1295,8 @@ class AIEditPlugin:
         """
         if self._worker is not None and self._worker.is_active():
             duration = time.time() - getattr(self, "_generation_start_time", time.time())
-            telemetry.track("generation_cancelled", self._enrich_generation_props({
-                "duration_seconds": round(duration, 1),
+            telemetry.track(te.GENERATION_CANCELLED, self._enrich_generation_props({
+                "duration_ms": int(duration * 1000),
                 "resolution": getattr(self, "_last_suggested_res", ""),
             }))
             telemetry.flush()
@@ -1289,7 +1322,7 @@ class AIEditPlugin:
 
     def _on_launch_clicked(self):
         """User clicked 'Launch AI Edit' on the entry screen."""
-        telemetry.track("launch_clicked")
+        telemetry.track(te.LAUNCH_CLICKED)
         self._disarm_swipe()
         self._activate_selection_tool()
         self._dock_widget.set_selecting_zone_state()
@@ -1342,8 +1375,8 @@ class AIEditPlugin:
         self._pills_armed = False
         if self._worker is not None and self._worker.is_active():
             duration = time.time() - getattr(self, "_generation_start_time", time.time())
-            telemetry.track("generation_cancelled", self._enrich_generation_props({
-                "duration_seconds": round(duration, 1),
+            telemetry.track(te.GENERATION_CANCELLED, self._enrich_generation_props({
+                "duration_ms": int(duration * 1000),
                 "resolution": getattr(self, "_last_suggested_res", ""),
             }))
             telemetry.flush()
@@ -1441,7 +1474,7 @@ class AIEditPlugin:
         props = {"template_id": template_id}
         if template_name:
             props["template_name"] = template_name
-        telemetry.track("template_selected", props)
+        telemetry.track(te.TEMPLATE_SELECTED, props)
 
     # --- Past-generation actions (from the prompt library Recent/Favorites) ---
 
@@ -1926,13 +1959,16 @@ class AIEditPlugin:
         self._dock_widget.set_status("")
         self._generation_service.reset()
         self._generation_start_time = time.time()
-        telemetry.track("generation_started", self._enrich_generation_props({
+        self._last_generation_is_retry = True
+        self._last_generation_used_markup = bool(self._last_guidance_b64)
+        telemetry.track(te.GENERATION_STARTED, self._enrich_generation_props({
             "prompt_length": len(prompt),
             "aspect_ratio": self._last_aspect_ratio or "",
             "resolution": self._last_suggested_res or "",
             "input_image_bytes": self._last_input_bytes,
             "input_image_format": self._last_input_format,
             "is_retry": True,
+            "has_geo_context": self._reference_store.count() > 0,
             "template_id": ctx.template_id,
             "template_name": ctx.template_name,
             "used_template": bool(ctx.template_id),
@@ -2000,6 +2036,20 @@ class AIEditPlugin:
             zone_crs = self._canvas.mapSettings().destinationCrs()
             self._dock_widget.set_reference_target_extent(QgsRectangle(extent), zone_crs)
         except Exception:  # nosec B110 - alignment is best-effort, never blocks selection.
+            pass
+        # Zone-drawn is the biggest funnel blind spot: users who draw but never
+        # generate are invisible otherwise. Dimensions only, never coordinates.
+        try:
+            mupp = self._canvas.mapSettings().mapUnitsPerPixel()
+            w_px = int(round(extent.width() / mupp)) if mupp else 0
+            h_px = int(round(extent.height() / mupp)) if mupp else 0
+            aspect_ratio = round(w_px / h_px, 3) if h_px else 0
+            telemetry.track(te.ZONE_DRAWN, {
+                "zone_width_px": w_px,
+                "zone_height_px": h_px,
+                "aspect_ratio": aspect_ratio,
+            })
+        except Exception:  # nosec B110 - telemetry must never block selection.
             pass
         log_debug("Zone selected")
 
@@ -2131,7 +2181,7 @@ class AIEditPlugin:
             self._markup_event_filter = _MarkupUndoFilter(self._on_markup_undo)
         self._iface.mainWindow().installEventFilter(self._markup_event_filter)
         self._suppress_qgis_undo()
-        telemetry.track("markup_opened")
+        telemetry.track(te.MARKUP_OPENED)
 
     def _on_markup_tool_changed(self, tool_key: str):
         """User picked Pencil / Arrow / Circle in the Mark up panel."""
@@ -2254,7 +2304,7 @@ class AIEditPlugin:
             self._pre_markup_map_tool = current
         self._in_tool_panel = "vectorize"
         self._dock_widget.set_vectorize_state()
-        telemetry.track("vectorize_panel_opened")
+        telemetry.track(te.VECTORIZE_PANEL_OPENED, {"source": "footer"})
 
     def _on_vectorize_suggestion_clicked(
         self, layer_id: str, color_hex: str, class_label: str
@@ -2273,14 +2323,14 @@ class AIEditPlugin:
                 self._pre_markup_map_tool = current
             self._in_tool_panel = "vectorize"
             self._dock_widget.set_vectorize_state()
-            telemetry.track("vectorize_panel_opened")
+            telemetry.track(te.VECTORIZE_PANEL_OPENED, {"source": "canvas_pill"})
         # activate() runs first via set_vectorize_state; preconfigure overrides
         # the just-reset state with the template's values.
         self._dock_widget._vectorize_panel.preconfigure(
             layer_id=layer_id, color_hex=color_hex, class_label=class_label
         )
         telemetry.track(
-            "vectorize_suggestion_clicked",
+            te.VECTORIZE_SUGGESTION_CLICKED,
             {"color": color_hex, "has_class_label": bool(class_label)},
         )
 
@@ -2431,7 +2481,7 @@ class AIEditPlugin:
         self._dock_widget.set_swipe_button_checked(True)
         if self._map_tool is not None:
             self._map_tool.set_compare_active(True)
-        telemetry.track("swipe_armed")
+        telemetry.track(te.SWIPE_ARMED)
 
     def _on_swipe_disarmed(self) -> None:
         self._dock_widget.set_swipe_button_checked(False)
@@ -2443,7 +2493,7 @@ class AIEditPlugin:
         self._dock_widget.set_swipe_button_enabled(
             self._swipe_controller.can_swipe_now()
         )
-        telemetry.track("swipe_disarmed")
+        telemetry.track(te.SWIPE_DISARMED)
 
     def _exit_tool_panel(self):
         """Common path for Done from either tool panel."""
@@ -2557,13 +2607,13 @@ class AIEditPlugin:
         normalized_code = (code or "").strip().upper()
         if success:
             self._apply_activation(key)
-            telemetry.track("activation_attempted", {"success": True})
-            telemetry.track("plugin_activated")
+            telemetry.track(te.ACTIVATION_ATTEMPTED, {"success": True})
+            telemetry.track(te.PLUGIN_ACTIVATED, {"activation_method": "manual"})
             telemetry.flush()
             log("Activation successful")
         else:
             self._dock_widget.set_activation_message(message, is_error=True)
-            telemetry.track("activation_attempted", {
+            telemetry.track(te.ACTIVATION_ATTEMPTED, {
                 "success": False,
                 "error_code": normalized_code or "UNKNOWN",
             })
@@ -2618,8 +2668,10 @@ class AIEditPlugin:
         self._pairing_worker.pairing_succeeded.connect(self._on_pairing_succeeded)
         self._pairing_worker.pairing_failed.connect(self._on_pairing_failed)
         self._pairing_worker.pairing_timeout.connect(self._on_pairing_timeout)
+        self._pairing_worker.pairing_browser_seen.connect(self._on_pairing_browser_seen)
+        self._pairing_worker.pairing_stalled.connect(self._on_pairing_stalled)
         QgsApplication.taskManager().addTask(self._pairing_worker)
-        telemetry.track("ai_edit_pair_started")
+        telemetry.track(te.AI_EDIT_PAIR_STARTED)
         telemetry.flush()
         log("Pairing started")
 
@@ -2633,25 +2685,35 @@ class AIEditPlugin:
             self._dock_widget.raise_()
         except Exception:  # nosec B110
             pass
-        telemetry.track("ai_edit_pair_succeeded")
-        telemetry.track("plugin_activated")
+        telemetry.track(te.AI_EDIT_PAIR_SUCCEEDED)
+        telemetry.track(te.PLUGIN_ACTIVATED, {"activation_method": "pairing"})
         telemetry.flush()
         log("Pairing successful")
 
     def _on_pairing_failed(self, message: str, code: str):
         self._dock_widget.show_pairing_idle()
         self._dock_widget.set_activation_message(message, is_error=True)
-        telemetry.track("ai_edit_pair_failed", {"error_code": (code or "UNKNOWN")})
+        telemetry.track(te.AI_EDIT_PAIR_FAILED, {"error_code": (code or "UNKNOWN")})
         telemetry.flush()
         log_warning("Pairing failed")
+
+    def _on_pairing_browser_seen(self):
+        if self._dock_widget:
+            self._dock_widget.show_pairing_browser_seen()
+
+    def _on_pairing_stalled(self):
+        if self._dock_widget:
+            self._dock_widget.show_pairing_stalled_hint()
+        log_warning("Pairing stalled: browser never reached /connect")
 
     def _on_pairing_timeout(self):
         self._dock_widget.show_pairing_idle()
         self._dock_widget.set_activation_message(
-            tr("Sign-in timed out. Click Connect to try again."),
+            tr("Sign-in timed out. Click Connect to try again, "
+               "or enter your key manually."),
             is_error=True,
         )
-        telemetry.track("ai_edit_pair_timeout")
+        telemetry.track(te.AI_EDIT_PAIR_TIMEOUT)
         telemetry.flush()
         log("Pairing timed out")
 
@@ -2665,7 +2727,7 @@ class AIEditPlugin:
                 lambda c=code: self._client.cancel_pairing(c),
             )
             self._hold_history_task(task)
-        telemetry.track("ai_edit_pair_cancelled")
+        telemetry.track(te.AI_EDIT_PAIR_CANCELLED)
         telemetry.flush()
         log("Pairing cancelled")
 
@@ -2780,6 +2842,12 @@ class AIEditPlugin:
             self._dock_widget.set_generating(False)
             msg = tr("Export error: {error}").format(error=e)
             self._dock_widget.set_status(msg, is_error=True)
+            telemetry.track(te.EXPORT_FAILED, {
+                "stage": "export",
+                "error_code": "canvas_export_failed",
+                "error_message": _scrub_paths(str(e))[:200],
+            })
+            telemetry.flush()
             self._show_error_report(msg)
             return
 
@@ -2807,6 +2875,12 @@ class AIEditPlugin:
         self._dock_widget.set_generating(False)
         msg = tr("Export error: {error}").format(error=error_msg)
         self._dock_widget.set_status(msg, is_error=True)
+        telemetry.track(te.EXPORT_FAILED, {
+            "stage": "export",
+            "error_code": "canvas_export_failed",
+            "error_message": _scrub_paths(error_msg)[:200],
+        })
+        telemetry.flush()
         self._show_error_report(msg)
 
     def _on_export_completed(
@@ -2905,7 +2979,9 @@ class AIEditPlugin:
         # here or we'd reset the prep ticker phase + bar back to 1%.
         self._generation_service.reset()
         self._generation_start_time = time.time()
-        telemetry.track("generation_started", self._enrich_generation_props({
+        self._last_generation_is_retry = False
+        used_markup = bool(guidance_b64)
+        telemetry.track(te.GENERATION_STARTED, self._enrich_generation_props({
             "prompt_length": len(prompt),
             "aspect_ratio": aspect_ratio,
             "resolution": suggested_res,
@@ -2914,11 +2990,13 @@ class AIEditPlugin:
             "input_image_bytes": size_bytes,
             "input_image_format": input_format,
             "is_retry": False,
+            "has_geo_context": self._reference_store.count() > 0,
             "template_id": ctx.template_id,
             "template_name": ctx.template_name,
             "used_template": bool(ctx.template_id),
-            "used_markup": bool(guidance_b64),
+            "used_markup": used_markup,
         }))
+        self._last_generation_used_markup = used_markup
         log(f"Generation started: prompt_len={len(prompt)}, resolution={suggested_res}, zone={img_w}x{img_h}px")
 
         plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -2956,7 +3034,7 @@ class AIEditPlugin:
         self._dock_widget.set_generating(False)
         # Template metadata arrives in the ctx_snapshot dict copied off the
         # worker thread (C2). Read it before cleanup so generation_failed is
-        # segmentable by template in PostHog.
+        # segmentable by template in telemetry.
         snap = ctx_snapshot or {}
         template_id = snap.get("template_id")
         template_name = snap.get("template_name")
@@ -2973,9 +3051,14 @@ class AIEditPlugin:
             or "monthly limit reached" in message_lower  # noqa: W503
         )
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
+        # error_code must never be empty: the polling path returns a bare
+        # status=failed (model could not produce an image) with no code.
+        effective_code = (code or "").strip() or "model_failure"
         extra_props: dict = {
-            "error_code": code,
-            "duration_seconds": round(duration, 1),
+            "error_code": effective_code,
+            "stage": _failure_stage(normalized_code),
+            "is_retry": self._last_generation_is_retry,
+            "duration_ms": int(duration * 1000),
             "resolution": getattr(self, "_last_suggested_res", ""),
             "template_id": template_id,
             "template_name": template_name,
@@ -2991,20 +3074,20 @@ class AIEditPlugin:
                     "output_dir_len": len(output_dir),
                     "output_dir_has_unicode": not output_dir.isascii(),
                     "output_dir_has_spaces": " " in output_dir,
-                    "exception_msg": (message or "")[:500],
+                    "exception_msg": _scrub_paths((message or "")[:500]),
                 })
             except Exception:  # nosec B110
                 pass
-        telemetry.track("generation_failed", self._enrich_generation_props(extra_props))
+        telemetry.track(te.GENERATION_FAILED, self._enrich_generation_props(extra_props))
         telemetry.flush()
         if normalized_code == "TRIAL_EXHAUSTED":
             config = get_server_config(self._client)
             dashboard = config.get("upgrade_url", get_dashboard_url())
             self._dock_widget.show_trial_exhausted_info(message, dashboard)
-            telemetry.track("trial_exhausted_viewed", {"error_type": "TRIAL_EXHAUSTED"})
+            telemetry.track(te.TRIAL_EXHAUSTED_VIEWED, {"is_free_tier": True})
         elif is_quota_error:
             self._dock_widget.show_usage_limit_info(message, SUBSCRIBE_ERROR_URL)
-            telemetry.track("trial_exhausted_viewed", {"error_type": code or "QUOTA_EXCEEDED"})
+            telemetry.track(te.TRIAL_EXHAUSTED_VIEWED, {"is_free_tier": False})
         elif _is_model_failure(message, normalized_code):
             # The model couldn't produce an image (no-output / safety block). The
             # server already marked the job failed and refunded the credit, so we
@@ -3092,9 +3175,12 @@ class AIEditPlugin:
             # of Recent/Favorites must refetch the next time it opens.
             if self._dock_widget is not None:
                 self._dock_widget.mark_library_history_dirty()
-            telemetry.track("generation_completed", self._enrich_generation_props({
-                "duration_seconds": round(duration, 1),
+            telemetry.track(te.GENERATION_COMPLETED, self._enrich_generation_props({
+                "duration_ms": int(duration * 1000),
                 "resolution": getattr(self, "_last_suggested_res", ""),
+                "is_retry": self._last_generation_is_retry,
+                "used_markup": self._last_generation_used_markup,
+                "output_rescued": bool(result_info.get("output_rescued")),
                 "template_id": template_id,
                 "template_name": template_name,
                 "used_template": bool(template_id),
@@ -3147,9 +3233,10 @@ class AIEditPlugin:
             self._refresh_credits()
             log(f"Generation complete ({round(duration, 1)}s): {result_info['geotiff_path']}")
         except Exception as e:
-            telemetry.track("plugin_error", {
-                "error_type": "layer_add_failed",
-                "error_message": str(e)[:200],
+            telemetry.track(te.PLUGIN_ERROR, {
+                "stage": "write",
+                "error_code": "layer_add_failed",
+                "error_message": _scrub_paths(str(e))[:200],
             })
             telemetry.flush()
             self._dock_widget.set_generating(False)

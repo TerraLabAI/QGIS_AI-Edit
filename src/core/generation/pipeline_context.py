@@ -82,6 +82,7 @@ class PipelineContext:
 
     # Write (populated by raster_writer.py)
     output_path: str | None = None
+    output_rescued: bool = False
     geotransform: tuple | None = None
     output_bands: int | None = None
     output_dimensions: tuple[int, int] | None = None

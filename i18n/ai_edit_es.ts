@@ -808,8 +808,12 @@ We'd love to hear from you!</source>
         <translation>Entrada inválida. Prueba con otra imagen o selección.</translation>
     </message>
     <message>
-        <source>Invalid key format. Keys look like tl_ followed by 32 characters.</source>
-        <translation>Formato de clave inválido. Las claves se ven como tl_ seguido de 32 caracteres.</translation>
+        <source>That does not look like an activation key. Most people do not need one: just use the Sign in button. A key starts with tl_ and is only for admin-issued or offline activation.</source>
+        <translation>Esto no parece una clave de activación. La mayoría de la gente no necesita ninguna: basta con usar el botón Iniciar sesión. Una clave empieza por tl_ y solo sirve para la activación administrada o sin conexión.</translation>
+    </message>
+    <message>
+        <source>Have a key? Enter it manually</source>
+        <translation>¿Tienes una clave? Introdúcela manualmente</translation>
     </message>
     <message>
         <source>Invalid request. Check your prompt and the selected area, then try again.</source>
@@ -1792,8 +1796,16 @@ We'd love to hear from you!</source>
         <translation>No se pudo abrir el navegador. Usa la opción de clave manual de abajo.</translation>
     </message>
     <message>
-        <source>Sign-in timed out. Click Connect to try again.</source>
-        <translation>Tiempo de inicio de sesión agotado. Haz clic en Conectar para reintentar.</translation>
+        <source>Sign-in timed out. Click Connect to try again, or enter your key manually.</source>
+        <translation>Tiempo de inicio de sesión agotado. Haz clic en Conectar para reintentar, o introduce tu clave manualmente.</translation>
+    </message>
+    <message>
+        <source>Browser page open. Finish signing in to connect.</source>
+        <translation>Página abierta en el navegador. Termina de iniciar sesión para conectar.</translation>
+    </message>
+    <message>
+        <source>Still waiting. If the page did not open or shows an error, click Open again or enter your key manually.</source>
+        <translation>Seguimos esperando. Si la página no se abrió o muestra un error, haz clic en Abrir de nuevo o introduce tu clave manualmente.</translation>
     </message>
     <message>
         <source>Unexpected response from the server. Please try again.</source>

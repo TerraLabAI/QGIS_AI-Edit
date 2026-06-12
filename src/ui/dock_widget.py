@@ -2144,7 +2144,23 @@ class AIEditDockWidget(QDockWidget):
         btn_row.addWidget(self._pairing_cancel_btn)
         wait_layout.addLayout(btn_row)
 
+        # Escape hatch DURING the wait: if the browser never opened (blocked,
+        # no default browser, tab closed), the user would otherwise be stuck at
+        # the spinner until a 600 s timeout. This lets them switch to the manual
+        # key field in one click. Mirrors the idle-screen "Use an activation key"
+        # affordance and the AI Segmentation plugin's pairing escape hatch.
+        self._pairing_use_key = QPushButton(tr("Have a key? Enter it manually"))
+        self._pairing_use_key.setCursor(QtC.PointingHandCursor)
+        self._pairing_use_key.setStyleSheet(
+            "QPushButton { background: transparent; border: none;"
+            " color: palette(text); font-size: 11px; padding: 2px;"
+            " text-decoration: underline; }"
+        )
+        self._pairing_use_key.clicked.connect(self._on_pairing_use_key_clicked)
+        wait_layout.addWidget(self._pairing_use_key, 0, QtC.AlignCenter)
+
         self._pairing_wait_section.setVisible(False)
+        self._pairing_active = False
         layout.addWidget(self._pairing_wait_section)
 
         # One timer rotates the spinner while waiting. Parented to the dock
@@ -3217,12 +3233,14 @@ class AIEditDockWidget(QDockWidget):
 
     def _on_upgrade_clicked(self):
         from ..core import telemetry
-        telemetry.track("subscribe_link_clicked", {"source": "upgrade_cta"})
+        from ..core import telemetry_events as te
+        telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {"source": "upgrade_cta"})
         QDesktopServices.openUrl(QUrl(get_subscribe_url()))
 
     def _on_trial_info_subscribe_clicked(self):
         from ..core import telemetry
-        telemetry.track("subscribe_link_clicked", {"source": "trial_exhausted_box"})
+        from ..core import telemetry_events as te
+        telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {"source": "trial_exhausted_box"})
         url = self._trial_info_url or get_subscribe_url()
         QDesktopServices.openUrl(QUrl(url))
 
@@ -3251,6 +3269,14 @@ class AIEditDockWidget(QDockWidget):
         self._pending_pairing_code = ""
         self.show_pairing_idle()
 
+    def _on_pairing_use_key_clicked(self):
+        """Escape hatch from the waiting state: cancel the server-side poll and
+        open the manual key field. For machines where the browser cannot open or
+        an admin handed out a key directly."""
+        self._on_pairing_cancel_clicked()
+        if not self._paste_section.isVisible():
+            self._toggle_paste_section()
+
     def _toggle_paste_section(self):
         self._paste_section.setVisible(not self._paste_section.isVisible())
         if self._paste_section.isVisible():
@@ -3258,6 +3284,8 @@ class AIEditDockWidget(QDockWidget):
 
     def show_pairing_waiting(self):
         """Switch the onboarding into the 'waiting for browser' state."""
+        self._pairing_active = True
+        self._pairing_status.setText(tr("Waiting for you to sign in in your browser"))
         self._connect_section.setVisible(False)
         self._paste_toggle.setVisible(False)
         self._paste_section.setVisible(False)
@@ -3265,8 +3293,23 @@ class AIEditDockWidget(QDockWidget):
         self._pairing_wait_section.setVisible(True)
         self._pairing_anim_timer.start()
 
+    def show_pairing_browser_seen(self):
+        """The server saw the browser reach /connect: reassure the user."""
+        if self._pairing_active:
+            self._pairing_status.setText(
+                tr("Browser page open. Finish signing in to connect."))
+
+    def show_pairing_stalled_hint(self):
+        """Long wait and the browser was never seen server-side: surface the
+        recovery paths instead of an endless spinner."""
+        if self._pairing_active:
+            self._pairing_status.setText(tr(
+                "Still waiting. If the page did not open or shows an error, "
+                "click Open again or enter your key manually."))
+
     def _stop_pairing_wait(self):
         """Hide the waiting section and stop its animation timer."""
+        self._pairing_active = False
         self._pairing_anim_timer.stop()
         self._pairing_wait_section.setVisible(False)
 
@@ -4027,13 +4070,15 @@ class AIEditDockWidget(QDockWidget):
     def _on_limit_cta_clicked(self):
         if self._limit_cta_url:
             from ..core import telemetry
-            telemetry.track("subscribe_link_clicked", {"source": "limit_cta"})
+            from ..core import telemetry_events as te
+            telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {"source": "limit_cta"})
             QDesktopServices.openUrl(QUrl(self._limit_cta_url))
 
     def _on_activation_limit_cta_clicked(self):
         if self._activation_limit_cta_url:
             from ..core import telemetry
-            telemetry.track("subscribe_link_clicked", {"source": "activation_limit_cta"})
+            from ..core import telemetry_events as te
+            telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {"source": "activation_limit_cta"})
             QDesktopServices.openUrl(QUrl(self._activation_limit_cta_url))
 
     def _on_consent_changed(self):

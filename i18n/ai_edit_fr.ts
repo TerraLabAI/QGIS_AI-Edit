@@ -808,8 +808,12 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Entrée invalide. Essayez une autre image ou sélection.</translation>
     </message>
     <message>
-        <source>Invalid key format. Keys look like tl_ followed by 32 characters.</source>
-        <translation>Format de clé invalide. Les clés ressemblent à tl_ suivi de 32 caractères.</translation>
+        <source>That does not look like an activation key. Most people do not need one: just use the Sign in button. A key starts with tl_ and is only for admin-issued or offline activation.</source>
+        <translation>Cela ne ressemble pas à une clé d'activation. La plupart des gens n'en ont pas besoin&#xa0;: utilisez simplement le bouton Se connecter. Une clé commence par tl_ et ne sert qu'à l'activation administrateur ou hors ligne.</translation>
+    </message>
+    <message>
+        <source>Have a key? Enter it manually</source>
+        <translation>Vous avez une clé&#xa0;? Saisissez-la manuellement</translation>
     </message>
     <message>
         <source>Invalid request. Check your prompt and the selected area, then try again.</source>
@@ -1792,8 +1796,16 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Impossible d'ouvrir votre navigateur. Utilisez l'option de clé manuelle ci-dessous.</translation>
     </message>
     <message>
-        <source>Sign-in timed out. Click Connect to try again.</source>
-        <translation>Délai de connexion dépassé. Cliquez sur Connecter pour réessayer.</translation>
+        <source>Sign-in timed out. Click Connect to try again, or enter your key manually.</source>
+        <translation>Délai de connexion dépassé. Cliquez sur Connecter pour réessayer, ou saisissez votre clé manuellement.</translation>
+    </message>
+    <message>
+        <source>Browser page open. Finish signing in to connect.</source>
+        <translation>Page ouverte dans le navigateur. Terminez la connexion pour continuer.</translation>
+    </message>
+    <message>
+        <source>Still waiting. If the page did not open or shows an error, click Open again or enter your key manually.</source>
+        <translation>Toujours en attente. Si la page ne s'est pas ouverte ou affiche une erreur, cliquez sur Rouvrir ou saisissez votre clé manuellement.</translation>
     </message>
     <message>
         <source>Unexpected response from the server. Please try again.</source>

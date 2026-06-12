@@ -55,12 +55,23 @@ class _TelemetryFlushTask(QgsTask):
         self._auth = auth
 
     def run(self) -> bool:
+        # One retry with a short backoff covers a transient network blip without
+        # a disk queue; a hard-offline session still loses the batch (accepted).
         if self.isCanceled():
             return False
         try:
             self._client.send_telemetry_batch(self._events, self._auth)
         except Exception:  # nosec B110
-            pass
+            if self.isCanceled():
+                return False
+            import time
+            time.sleep(2)
+            if self.isCanceled():
+                return False
+            try:
+                self._client.send_telemetry_batch(self._events, self._auth)
+            except Exception:  # nosec B110
+                pass
         return True
 
     def finished(self, result: bool) -> None:

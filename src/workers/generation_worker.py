@@ -32,6 +32,7 @@ def _ctx_snapshot(ctx) -> dict:
         "template_name": getattr(ctx, "template_name", None),
         "vector_color": getattr(ctx, "vector_color", None),
         "vector_classes": getattr(ctx, "vector_classes", None),
+        "output_rescued": bool(getattr(ctx, "output_rescued", False)),
     }
 
 
@@ -150,7 +151,12 @@ class GenerationTask(QgsTask):
         # Lazy import + swallow: telemetry must never break the worker.
         try:
             from ..core import telemetry
-            telemetry.track(event, properties)
+            from ..core import telemetry_events as te
+            allowed = {
+                "generation_refund_attempted": te.GENERATION_REFUND_ATTEMPTED,
+                "generation_refund_failed": te.GENERATION_REFUND_FAILED,
+            }
+            telemetry.track(allowed[event], properties)
             telemetry.flush()
         except Exception:  # nosec B110
             pass
@@ -305,10 +311,12 @@ class GenerationTask(QgsTask):
                 tail = " | ".join(_tb.format_exc().strip().splitlines()[-4:])
                 tail = _re.sub(r"(?i)([/\\]Users[/\\])[^/\\]+", r"\1***", tail)
                 from ..core import telemetry
+                from ..core import telemetry_events as te
 
-                telemetry.track("plugin_error", {
-                    "error_type": "write_geotiff_failed",
-                    "error_message": tail[:480],
+                telemetry.track(te.PLUGIN_ERROR, {
+                    "stage": "write",
+                    "error_code": "write_geotiff_failed",
+                    "error_message": tail[:200],
                 })
                 telemetry.flush()
             except Exception:  # nosec B110

@@ -44,6 +44,7 @@ from qgis.PyQt.QtWidgets import (
 
 from ...core import qt_compat as QtC
 from ...core import telemetry
+from ...core import telemetry_events as te
 from ...core.date_format import format_smart_date
 from ...core.i18n import tr
 from ...core.logger import log_warning
@@ -1006,7 +1007,10 @@ class GenerationDetailDialog(QDialog):
         self._prompt_is_favorite = prompt_history.toggle_favorite(
             prompt, label, source_cat
         )
-        telemetry.track("favorite_toggled", {"now_favorited": self._prompt_is_favorite})
+        telemetry.track(te.FAVORITE_TOGGLED, {
+            "now_favorited": self._prompt_is_favorite,
+            "source": "detail_dialog",
+        })
         telemetry.flush()
         self._refresh_prompt_star()
         self.prompt_favorite_toggled.emit(

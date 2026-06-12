@@ -808,8 +808,12 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Entrada inválida. Tente outra imagem ou seleção.</translation>
     </message>
     <message>
-        <source>Invalid key format. Keys look like tl_ followed by 32 characters.</source>
-        <translation>Formato de chave inválido. As chaves são tl_ seguido de 32 caracteres.</translation>
+        <source>That does not look like an activation key. Most people do not need one: just use the Sign in button. A key starts with tl_ and is only for admin-issued or offline activation.</source>
+        <translation>Isto não parece uma chave de ativação. A maioria das pessoas não precisa de uma: basta usar o botão Entrar. Uma chave começa com tl_ e serve apenas para ativação administrada ou offline.</translation>
+    </message>
+    <message>
+        <source>Have a key? Enter it manually</source>
+        <translation>Tem uma chave? Insira-a manualmente</translation>
     </message>
     <message>
         <source>Invalid request. Check your prompt and the selected area, then try again.</source>
@@ -1792,8 +1796,16 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Não foi possível abrir o navegador. Use a opção de chave manual abaixo.</translation>
     </message>
     <message>
-        <source>Sign-in timed out. Click Connect to try again.</source>
-        <translation>Tempo de login esgotado. Clique em Conectar para tentar de novo.</translation>
+        <source>Sign-in timed out. Click Connect to try again, or enter your key manually.</source>
+        <translation>Tempo de login esgotado. Clique em Conectar para tentar de novo, ou insira sua chave manualmente.</translation>
+    </message>
+    <message>
+        <source>Browser page open. Finish signing in to connect.</source>
+        <translation>Página aberta no navegador. Conclua o login para conectar.</translation>
+    </message>
+    <message>
+        <source>Still waiting. If the page did not open or shows an error, click Open again or enter your key manually.</source>
+        <translation>Ainda aguardando. Se a página não abriu ou mostra um erro, clique em Abrir novamente ou insira sua chave manualmente.</translation>
     </message>
     <message>
         <source>Unexpected response from the server. Please try again.</source>

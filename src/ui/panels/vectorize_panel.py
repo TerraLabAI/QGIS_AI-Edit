@@ -26,6 +26,7 @@ from qgis.PyQt.QtWidgets import (
 
 from ...core import qt_compat as QtC
 from ...core import telemetry
+from ...core import telemetry_events as te
 from ...core.errors import AIEditError
 from ...core.i18n import tr
 from ..layer_groups import (
@@ -888,7 +889,7 @@ class VectorizePanel(QWidget):
                 # layer is locked in (you refine one raster at a time).
                 self._layer_group.setVisible(False)
             telemetry.track(
-                "vectorize_completed",
+                te.VECTORIZE_COMPLETED,
                 {
                     "polygon_count": polygon_count,
                     "tolerance": params["tolerance"],

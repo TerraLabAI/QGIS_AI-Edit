@@ -294,16 +294,24 @@ def write_geotiff(
             raise
         log_warning(f"GeoTIFF write failed ({gtiff_err}); rescued plain image to {rescued}")
         try:
-            from ..core import telemetry
+            import re as _re
 
-            telemetry.track("plugin_error", {
-                "error_type": "write_geotiff_rescued",
-                "error_message": str(gtiff_err)[:480],
+            from ..core import telemetry
+            from ..core import telemetry_events as te
+
+            scrubbed = _re.sub(
+                r"(?i)([/\\]Users[/\\])[^/\\]+", r"\1***", str(gtiff_err)
+            )
+            telemetry.track(te.PLUGIN_ERROR, {
+                "stage": "write",
+                "error_code": "write_geotiff_rescued",
+                "error_message": scrubbed[:200],
             })
         except Exception:  # nosec B110
             pass
         if ctx is not None:
             ctx.output_path = rescued
+            ctx.output_rescued = True
         return rescued
 
 

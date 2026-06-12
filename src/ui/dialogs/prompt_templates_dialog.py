@@ -45,6 +45,7 @@ from qgis.PyQt.QtWidgets import (
 
 from ...core import qt_compat as QtC
 from ...core import telemetry
+from ...core import telemetry_events as te
 from ...core.date_format import format_smart_date
 from ...core.i18n import tr
 from ...core.logger import log_debug, log_warning
@@ -390,7 +391,7 @@ class _StarButton(QToolButton):
         now_fav = prompt_history.toggle_favorite(
             self._prompt, self._label, self._source_category
         )
-        telemetry.track("favorite_toggled", {"now_favorited": now_fav})
+        telemetry.track(te.FAVORITE_TOGGLED, {"now_favorited": now_fav, "source": "library"})
         telemetry.flush()
         self.refresh()
         self.toggled_state.emit(
@@ -1811,7 +1812,10 @@ class PromptTemplatesDialog(QDialog):
             if outcome == "use" and not self._browse_only:
                 if job is not None:
                     self._restore_job = job
-                    telemetry.track("recent_selected")
+                    telemetry.track(te.RECENT_SELECTED, {
+                        "request_id": str(job.get("request_id") or ""),
+                        "had_template": bool(job.get("template_id")),
+                    })
                     telemetry.flush()
                 elif preset is not None:
                     self._selected_preset = preset
