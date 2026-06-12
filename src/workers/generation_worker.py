@@ -102,7 +102,14 @@ class GenerationTask(QgsTask):
         self._failure_payload = (message, code_str, _ctx_snapshot(self._ctx))
         return False
 
-    def _refund_if_needed(self, request_id: str | None, reason: str) -> None:
+    def _refund_if_needed(
+        self,
+        request_id: str | None,
+        reason: str,
+        error_code: str | None = None,
+        error_message: str | None = None,
+        stream_fallback_used: bool | None = None,
+    ) -> None:
         if not request_id:
             self._track_refund_event(
                 "generation_refund_attempted",
@@ -111,13 +118,17 @@ class GenerationTask(QgsTask):
             return
         if self._ctx is not None and getattr(self._ctx, "refund_emitted", False):
             return
-        self._track_refund_event(
-            "generation_refund_attempted",
-            {"reason": reason, "request_id": request_id},
-        )
+        attempt_props = {"reason": reason, "request_id": request_id}
+        if error_code:
+            attempt_props["error_code"] = error_code
+        if error_message:
+            attempt_props["error_message"] = error_message[:200]
+        if stream_fallback_used is not None:
+            attempt_props["stream_fallback_used"] = stream_fallback_used
+        self._track_refund_event("generation_refund_attempted", attempt_props)
         try:
             response = self._client.refund_generation(
-                request_id, reason, self._auth_manager.get_auth_header()
+                request_id, reason, self._auth_manager.get_auth_header(), error_code=error_code
             )
             log_debug(f"Refund requested for {request_id} ({reason}): {response}")
             if self._ctx is not None:
@@ -255,11 +266,20 @@ class GenerationTask(QgsTask):
 
         image_data = None
         last_download_err: Exception | None = None
+        stream_fallback_used = False
         for attempt in range(1, 4):
             if self.isCanceled():
                 return False
+            url = result.image_url
+            if attempt > 1 and url:
+                # Retries ask the server to send the bytes directly instead of
+                # redirecting: some networks block the redirect target while
+                # the API host stays reachable, so re-following the redirect
+                # can never succeed. Older servers ignore the param.
+                url = f"{url}{'&' if '?' in url else '?'}stream=1"
+                stream_fallback_used = True
             try:
-                image_data = self._client.download_image(result.image_url)
+                image_data = self._client.download_image(url)
                 log_debug(f"Downloaded image (attempt {attempt}): {len(image_data)} bytes")
                 break
             except Exception as e:
@@ -273,7 +293,13 @@ class GenerationTask(QgsTask):
             request_id = getattr(result, "request_id", None) or (
                 self._ctx.request_id if self._ctx is not None else None
             )
-            self._refund_if_needed(request_id, "download_failed")
+            self._refund_if_needed(
+                request_id,
+                "download_failed",
+                error_code=getattr(last_download_err, "code", None),
+                error_message=str(last_download_err) if last_download_err else None,
+                stream_fallback_used=stream_fallback_used,
+            )
             return self._mark_failed(
                 tr(
                     "Failed to download result image after 3 attempts: {err}. "

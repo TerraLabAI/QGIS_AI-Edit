@@ -107,6 +107,17 @@ def _classify_network_error(
     )
 
 
+class DownloadError(RuntimeError):
+    """A failed image download, carrying a structured `code` so the refund
+    event / Discord alert can say WHY (TIMEOUT, SSL_ERROR, INCOMPLETE, ...)
+    instead of a bare "download_failed".
+    """
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
 class TerraLabClient:
     """HTTP client for TerraLab backend API.
 
@@ -431,13 +442,20 @@ class TerraLabClient:
             "POST", "/api/ai-edit/generate/cancel", auth=auth, body=body, timeout_ms=5_000
         )
 
-    def refund_generation(self, request_id: str, reason: str, auth: dict) -> dict:
+    def refund_generation(
+        self, request_id: str, reason: str, auth: dict, error_code: str | None = None
+    ) -> dict:
         """Ask the server to refund credits for a completed generation that
         the plugin failed to deliver to the user (download error, disk write
         error). The server returns 'already_refunded' if previously called.
         Reason must be one of: download_failed, write_error, disk_full, unknown.
+        `error_code` is the optional fine-grained cause (TIMEOUT, SSL_ERROR,
+        INCOMPLETE, ...) the server surfaces in the Discord alert.
         """
-        body = json.dumps({"request_id": request_id, "reason": reason}).encode("utf-8")
+        payload = {"request_id": request_id, "reason": reason}
+        if error_code:
+            payload["error_code"] = error_code
+        body = json.dumps(payload).encode("utf-8")
         return self._request(
             "POST", "/api/ai-edit/generate/refund", auth=auth, body=body, timeout_ms=10_000
         )
@@ -455,15 +473,16 @@ class TerraLabClient:
 
         if err != QtC.BlockingNoError:
             code, msg = _classify_network_error(blocker)
-            raise RuntimeError(
-                tr("Download failed ({code}): {msg}").format(code=code, msg=msg)
+            raise DownloadError(
+                code, tr("Download failed ({code}): {msg}").format(code=code, msg=msg)
             )
 
         reply = blocker.reply()
         http_status = reply.attribute(QtC.HttpStatusCodeAttribute)
         if http_status and _safe_int(http_status) >= 400:
-            raise RuntimeError(
-                tr("Download failed: HTTP {status}").format(status=http_status)
+            raise DownloadError(
+                f"HTTP_{_safe_int(http_status)}",
+                tr("Download failed: HTTP {status}").format(status=http_status),
             )
 
         data = bytes(reply.content())
@@ -478,15 +497,18 @@ class TerraLabClient:
         # reports as success. Raise so the caller's retry loop re-downloads
         # instead of writing a corrupt GeoTIFF.
         if not data:
-            raise RuntimeError(tr("Server returned an empty response (0 bytes)"))
+            raise DownloadError(
+                "EMPTY_BODY", tr("Server returned an empty response (0 bytes)")
+            )
         declared = reply.rawHeader(b"Content-Length")
         if declared:
             expected = _safe_int(bytes(declared).decode("ascii", errors="replace"))
             if expected and len(data) < expected:
-                raise RuntimeError(
+                raise DownloadError(
+                    "INCOMPLETE",
                     tr("Download incomplete: received {got} of {total} bytes").format(
                         got=len(data), total=expected
-                    )
+                    ),
                 )
         return data
 
