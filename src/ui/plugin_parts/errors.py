@@ -1,0 +1,451 @@
+from __future__ import annotations
+
+import html
+import re
+
+from ...core.auth.activation_manager import (
+    build_utm_url,
+    get_dashboard_url,
+    get_server_url,
+)
+from ...core.config_store import (
+    ServerDialSet,
+    get_export_copy,
+    get_export_dial,
+    get_export_dial_list,
+    get_export_text,
+)
+from ...core.errors import (
+    NETWORK_ERROR_CODES,
+    PROMPT_BLOCKED_CODES,
+    ErrorCode,
+    ErrorCodeTrait,
+    codes_with_trait,
+)
+from ...core.i18n import tr
+from ...core.logger import log_warning
+
+
+__all__ = [
+    "_CREDIT_REASSURE_CODES",
+    "_enrich_error_message",
+    "_is_model_failure",
+    "_is_prompt_blocked",
+    "_is_safety_block",
+    "_is_service_busy",
+    "_localize_server_error",
+    "_prompt_blocked_message",
+    "_report_policy",
+    "_resolve_class_label",
+    "content_policy_url",
+    "DASHBOARD_ERROR_URL",
+    "dashboard_error_url",
+    "SUBSCRIBE_ERROR_URL",
+    "subscribe_error_url",
+]
+
+
+
+_MAX_ERROR_CHARS = 240
+_MAX_CTA_CHARS = 120
+
+
+
+
+
+DASHBOARD_ERROR_URL = build_utm_url("/dashboard", "dashboard_error")
+SUBSCRIBE_ERROR_URL = build_utm_url("/dashboard/ai-edit", "subscribe")
+
+
+def dashboard_error_url() -> str:
+
+    return get_server_url("dashboard_error_url", DASHBOARD_ERROR_URL)
+
+
+def subscribe_error_url() -> str:
+
+    return get_server_url("subscribe_error_url", SUBSCRIBE_ERROR_URL)
+
+
+def content_policy_url() -> str:
+
+
+
+
+
+
+    return get_server_url("content_policy_url", "")
+
+
+def _localize_server_error(error: str, code: str) -> str:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    if not code:
+        return html.escape(error or "")
+    served = get_export_text(
+        "error_messages", code, get_export_dial("flows.errors.max_error_chars", _MAX_ERROR_CHARS)
+    )
+    if served is not None:
+        return html.escape(served, quote=False)
+    mapping = {
+
+
+
+        "NO_NETWORK": tr("No internet connection."),
+        "DNS_ERROR": tr("Cannot reach the server."),
+        "TIMEOUT": tr("The request timed out."),
+        "SSL_ERROR": tr("Secure connection failed."),
+        "PROXY_ERROR": tr("Proxy connection failed."),
+        "CONNECTION_REFUSED": tr("Could not connect to the service."),
+        "AUTH_ERROR": tr("Your sign-in has expired. Sign in again to continue."),
+
+
+        "NO_KEY": tr("You are signed out. Sign in to use AI Edit."),
+        "INVALID_KEY": tr("Your sign-in is no longer valid. Sign in again."),
+        "KEY_REVOKED": tr("This sign-in was revoked. Sign in again."),
+        "SUBSCRIPTION_EXPIRED": tr("Your subscription has expired."),
+        "SUBSCRIPTION_INACTIVE": tr("Your subscription is inactive."),
+        "FREE_TIER_EXPIRED": tr("Your free trial has ended."),
+        "DEVICE_LIMIT_EXCEEDED": tr(
+            "This license is already in use on the maximum number of computers."
+            " Free one in your account, or wait for an inactive one to expire."
+        ),
+        "RATE_LIMITED": tr("Too many requests, please wait a moment."),
+        "RATE_LIMITER_DOWN": tr("Service temporarily unavailable, please retry shortly."),
+        "STORAGE_UNAVAILABLE": tr("Storage temporarily unavailable, please retry shortly."),
+        "SIGN_FAILED": tr("Could not prepare upload, please retry shortly."),
+        "UPLOAD_TOKEN_INVALID": tr("Upload session expired, please retry."),
+        "UPLOAD_TOKEN_MISMATCH": tr("Upload session does not match your account."),
+        "WRONG_PRODUCT": tr("This sign-in is for a different TerraLab product. Sign in again from AI Edit."),
+        "WRONG_REQUEST": tr("Unknown or unauthorized request."),
+        "AUTH_MIGRATION_REQUIRED": tr("Account migration required, please re-login from the website."),
+        "NOT_READY": tr("Result not ready yet."),
+        "NOT_AVAILABLE": tr("Result not available."),
+        "UPSTREAM_UNAVAILABLE": tr("Result temporarily unavailable, please retry shortly."),
+        "UPSTREAM_EMPTY": tr("Result temporarily unavailable, please retry shortly."),
+        "PROVIDER_BAD_RESPONSE": tr("The generation service returned an unexpected response, please retry."),
+        "PROVIDER_ERROR": tr("Generation failed, please try again."),
+        "MISCONFIGURED": tr("Service not configured. Please contact support."),
+        "SERVER_ERROR": tr("Service temporarily unavailable, please retry shortly."),
+        "DB_ERROR": tr("Database error, please retry shortly."),
+        "BAD_REQUEST": tr("Invalid request. Check your prompt and the selected area, then try again."),
+        "BAD_INPUT": tr("Invalid input. Check your prompt and the selected area."),
+        "INVALID_INPUT": tr("Invalid input. Try a different image or selection."),
+        "PAYLOAD_TOO_LARGE": tr("Image too large. Draw a smaller zone or pick a lower Quality."),
+        "RESOLUTION_NOT_ALLOWED": tr(
+            "This Quality is not in your plan. Upgrade to Pro to use it."
+        ),
+        "NOT_FOUND": tr("Resource not found."),
+        "NOT_SEEDED": tr("Catalog not yet available, please retry shortly."),
+        "DEMO_FETCH_FAILED": tr("Could not load the demo preview."),
+        "UNKNOWN_TEMPLATE": tr("Unknown template."),
+    }
+    localized = mapping.get(code)
+    if localized is not None:
+        return localized
+
+
+
+
+    if code.upper() in PROMPT_BLOCKED_CODES:
+        return tr("This prompt is not allowed: its content goes against our rules.")
+
+
+
+
+
+
+    if not error or code.upper() in _PLUGIN_OWN_CODES:
+        return html.escape(error or "")
+    if code.upper() in _SERVER_INTERNAL_CODES or _TECHNICAL_TEXT_RE.search(error):
+        log_warning(f"Unmapped server error {code}: {error}")
+        return tr("The service could not complete this request.")
+    return html.escape(error)
+
+
+_PLUGIN_OWN_CODES = frozenset(member.value for member in ErrorCode)
+
+_SERVER_INTERNAL_CODES = codes_with_trait(ErrorCodeTrait.SERVER_INTERNAL)
+_TECHNICAL_TEXT_RE = re.compile(
+    r"HTTP \d{3}|Traceback|Exception|Errno|\bstack\b|\bundefined\b|\bnull\b|[A-Za-z]:\\|/Users/|/home/",
+    re.IGNORECASE,
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+_USER_FIXABLE_CODES = codes_with_trait(ErrorCodeTrait.REPORT_NONE)
+_TRANSIENT_CODES = codes_with_trait(ErrorCodeTrait.REPORT_LINK)
+
+
+
+
+
+
+
+_SERVER_FAULT_CODES = codes_with_trait(ErrorCodeTrait.REPORT_DIALOG)
+
+
+
+
+
+
+_CREDIT_REASSURE_CODES = codes_with_trait(ErrorCodeTrait.CREDIT_NOTE)
+
+
+def _is_prompt_blocked(normalized_code: str) -> bool:
+
+
+
+
+
+
+
+    return normalized_code in PROMPT_BLOCKED_CODES
+
+
+def _prompt_blocked_message(error: str, code: str) -> str:
+
+
+    parts = [
+        _localize_server_error(error, code),
+        get_export_copy(
+            "flows.errors.not_charged", tr("You have not been charged."), escape=True
+        ),
+    ]
+    url = content_policy_url()
+    if url:
+        parts.append(f'<a href="{url}">{_served_cta(code) or tr("Read our content rules")}</a>')
+    return " ".join(parts)
+
+
+def _report_policy(normalized_code: str) -> str:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    if _is_prompt_blocked(normalized_code):
+        return "none"
+    if normalized_code in _USER_FIXABLE_CODES:
+        return "none"
+    if normalized_code in _TRANSIENT_CODES:
+        return "link"
+    if normalized_code in _SERVER_FAULT_CODES:
+        return "dialog"
+    if normalized_code in get_export_dial_list(
+        "error_policy.user_fixable_extra", (), normalize=str.upper
+    ):
+        return "none"
+    if normalized_code in get_export_dial_list(
+        "error_policy.transient_extra", (), normalize=str.upper
+    ):
+        return "link"
+    return "dialog"
+
+
+
+
+
+_DASHBOARD_CTA_CODES = codes_with_trait(ErrorCodeTrait.ACCOUNT_LINK)
+
+
+def _served_cta(code: str) -> str:
+
+
+    if not code:
+        return ""
+    served = get_export_text(
+        "error_ctas", code, get_export_dial("flows.errors.max_cta_chars", _MAX_CTA_CHARS)
+    )
+    return html.escape(served, quote=False) if served is not None else ""
+
+
+def _with_proxy_hint(message: str, code: str) -> str:
+
+    try:
+        from ...api.network_error_classifier import network_setup_hint
+
+        hint = network_setup_hint(code)
+    except Exception:  # nosec B110
+        hint = ""
+    if not hint:
+        return message
+    sep = " " if message.endswith((".", "!", "?")) else ". "
+    return f"{message}{sep}{hint}"
+
+
+def network_next_step(code: str) -> str:
+
+
+
+
+    code = (code or "").strip().upper()
+    if code == "PROXY_ERROR":
+        return tr("Check QGIS proxy settings: Settings > Options > Network") + "."
+    if code == "SSL_ERROR":
+        return tr(
+            "Ask your IT team to allow terra-lab.ai, or import your company root "
+            "certificate in Settings > Options > Authentication"
+        ) + "."
+    if code == "NETWORK_BLOCKED":
+        return tr("Ask your IT team to allow terra-lab.ai.")
+    if code not in NETWORK_ERROR_CODES:
+        return ""
+    return _with_proxy_hint(tr("Check your internet connection") + ".", code)
+
+
+def _enrich_error_message(error: str, code: str = "") -> str:
+
+
+
+
+
+
+    localized = _localize_server_error(error, code)
+    cta = _served_cta(code)
+
+
+    lead = localized if localized.endswith((".", "!", "?")) else f"{localized}."
+    if code in _DASHBOARD_CTA_CODES:
+        return f'{lead} <a href="{dashboard_error_url()}">{cta or tr("Check your dashboard")}</a>'
+    if code == "TRIAL_EXHAUSTED":
+
+
+
+        upgrade = get_server_url("upgrade_url", get_dashboard_url())
+        return f'{lead} <a href="{upgrade}">{cta or tr("Subscribe")}</a>'
+    if code == "DEVICE_LIMIT_EXCEEDED":
+        return f'{localized} <a href="{dashboard_error_url()}">{cta or tr("Manage your computers")}</a>'
+    if code == "PROXY_ERROR":
+        return f"{lead} {cta or tr('Check QGIS proxy settings: Settings > Options > Network')}"
+    if code == "SSL_ERROR":
+        ssl_hint = cta or tr(
+            "Ask your IT team to allow terra-lab.ai, or import your company root "
+            "certificate in Settings > Options > Authentication"
+        )
+        return f"{lead} {ssl_hint}"
+    if code in ("DNS_ERROR", "NO_NETWORK"):
+        return _with_proxy_hint(f"{lead} {cta or tr('Check your internet connection')}", code)
+    if code == "TIMEOUT":
+        message = f"{lead} {cta or tr('Try again, or check your internet speed')}"
+
+
+
+        qgis_step = tr("Raise the timeout in Settings > Options > Network.")
+        if qgis_step in (error or ""):
+            sep = " " if message.endswith((".", "!", "?")) else ". "
+            message = f"{message}{sep}{qgis_step}"
+        return _with_proxy_hint(message, code)
+    if code == "CONNECTION_REFUSED":
+        return _with_proxy_hint(
+            f"{lead} {cta or tr('The service may be temporarily unavailable')}", code
+        )
+    if code == "AUTH_ERROR":
+        return f'{lead} <a href="{dashboard_error_url()}">{cta or tr("Check your dashboard")}</a>'
+
+
+    if cta:
+        return f"{lead} {cta}"
+    return localized
+
+
+
+_NON_MODEL_FAILURE_CODES = codes_with_trait(ErrorCodeTrait.NOT_MODEL_FAILURE)
+
+
+
+
+_MODEL_FAILURE_CODES = frozenset({"safety_block", "invalid_request", "no_image"})
+
+
+def _is_safety_block(failure_code: str | None) -> bool:
+
+
+    return failure_code == "safety_block"
+
+
+def _is_model_failure(failure_code: str | None, normalized_code: str) -> bool:
+
+
+
+
+    if normalized_code in _NON_MODEL_FAILURE_CODES:
+        return False
+    if _is_prompt_blocked(normalized_code):
+        return False
+    return failure_code in _MODEL_FAILURE_CODES
+
+
+
+
+
+
+_BUSY_CODES = ServerDialSet(
+    "error_codes.busy_extra",
+    codes_with_trait(ErrorCodeTrait.BUSY),
+    normalize=str.upper,
+)
+
+
+def _is_service_busy(failure_code: str | None, normalized_code: str) -> bool:
+    return failure_code == "busy" or normalized_code in _BUSY_CODES
+
+
+def _resolve_class_label(
+    vector_color: str | None, vector_classes: list[dict] | None
+) -> str:
+
+
+
+
+
+    if not vector_color or not isinstance(vector_classes, list):
+        return ""
+    target = vector_color.upper().lstrip("#")
+    for entry in vector_classes:
+        if not isinstance(entry, dict):
+            continue
+        color = (entry.get("color") or "").upper().lstrip("#")
+        if color and color == target:
+            label = entry.get("label")
+            if isinstance(label, str):
+                return label.strip()
+    return ""
