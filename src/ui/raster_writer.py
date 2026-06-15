@@ -237,9 +237,16 @@ def _rescue_plain_image(
     """Last-resort save when the GeoTIFF pipeline fails: the paid pixels are
     already in memory, so write them untouched to tempdir with a PAM sidecar
     (.aux.xml) carrying the georeferencing. Pure file I/O, no GDAL dataset,
-    so it survives a broken GDAL/PROJ stack. Returns None if even this fails."""
+    so it survives a broken GDAL/PROJ stack. Returns None if even this fails.
+
+    Dimensions are needed only to compute the geotransform for the sidecar.
+    When they cannot be parsed (a format _image_dimensions does not size, e.g.
+    WebP from a GDAL build without the WebP driver), still write the raw bytes
+    without the sidecar rather than losing the paid generation: the file is a
+    valid image and add_geotiff_to_project re-attaches the CRS from the capture
+    WKT at load time."""
     ext = _FALLBACK_EXT.get(img_format or "")
-    if ext is None or width <= 0 or height <= 0:
+    if ext is None:
         return None
     try:
         rescue_dir = os.path.join(tempfile.gettempdir(), "terralab_ai_edit")
@@ -247,6 +254,15 @@ def _rescue_plain_image(
         path = _unique_output_path(_ascii_safe_dir(rescue_dir), file_base, ext)
         with open(path, "wb") as f:
             f.write(image_data)
+        if width <= 0 or height <= 0:
+            # No dimensions -> no geotransform. Skip the sidecar; the bytes are
+            # saved and the layer still loads (un-georeferenced, CRS recovered
+            # from the capture WKT). Better than re-raising and losing it.
+            log_warning(
+                "plain-image rescue saved without georeferencing "
+                f"(dimensions unknown for {img_format})"
+            )
+            return path
         x_res = (extent_dict["xmax"] - extent_dict["xmin"]) / width
         y_res = (extent_dict["ymax"] - extent_dict["ymin"]) / height
         gt = ", ".join(

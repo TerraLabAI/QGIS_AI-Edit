@@ -118,6 +118,36 @@ class DownloadError(RuntimeError):
         self.code = code
 
 
+# Smallest plausible real image. A transient proxy/CDN error body
+# ({"code":"UPSTREAM_UNAVAILABLE"} or an HTML error page) is well under this,
+# so the floor also catches non-image payloads that slip past the magic-byte
+# check below.
+_MIN_IMAGE_BYTES = 64
+
+
+def _looks_like_image(data: bytes) -> bool:
+    """True if the bytes start with a known raster image signature.
+
+    The image proxy can answer a slow/transient backend with a 200 and a tiny
+    JSON/HTML error body (a GCS hiccup, an upstream 503 surfaced as a branded
+    page). Those bytes are not an image: writing them produces a corrupt
+    GeoTIFF that fails later as a write error. Detecting them here instead lets
+    the caller's retry loop re-download (escalating to the stream=1 bypass),
+    so a recoverable blip never becomes a lost generation.
+    """
+    if len(data) < 12:
+        return False
+    return (
+        data[:8] == b"\x89PNG\r\n\x1a\n"              # PNG
+        or data[:3] == b"\xff\xd8\xff"               # JPEG
+        or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")  # WebP
+        or data[:6] in (b"GIF87a", b"GIF89a")        # GIF
+        or (data[:2] in (b"II", b"MM") and data[2:4] in (b"\x2a\x00", b"\x00\x2a"))  # TIFF
+        or data[:2] == b"BM"                         # BMP
+        or data[4:8] == b"ftyp"                      # AVIF / HEIF (ISO-BMFF)
+    )
+
+
 class TerraLabClient:
     """HTTP client for TerraLab backend API.
 
@@ -499,6 +529,17 @@ class TerraLabClient:
         if not data:
             raise DownloadError(
                 "EMPTY_BODY", tr("Server returned an empty response (0 bytes)")
+            )
+        # A 200 carrying a tiny non-image body is a transient backend hiccup the
+        # proxy surfaced as a branded error page or JSON, not the image. Treat it
+        # as a retryable download failure so the caller re-downloads (and on the
+        # next attempt switches to the stream=1 bypass) instead of handing these
+        # bytes to the GeoTIFF writer, where they would fail as a write error and
+        # never be retried.
+        if len(data) < _MIN_IMAGE_BYTES or not _looks_like_image(data):
+            raise DownloadError(
+                "NOT_IMAGE",
+                tr("Server returned a non-image response, retrying download"),
             )
         declared = reply.rawHeader(b"Content-Length")
         if declared:
