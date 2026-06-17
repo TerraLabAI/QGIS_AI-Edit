@@ -177,8 +177,8 @@ def _localize_server_error(error: str, code: str) -> str:
         "INVALID_INPUT": tr("Invalid input. Try a different image or selection."),
         "PAYLOAD_TOO_LARGE": tr("Image too large. Try selecting a smaller area or lowering the resolution."),
         "RESOLUTION_NOT_ALLOWED": tr(
-            "This resolution is not available on your plan."
-            " Upgrade to unlock higher resolutions."
+            "This quality is not available on your plan."
+            " Upgrade to unlock higher quality."
         ),
         "NOT_FOUND": tr("Resource not found."),
         "NOT_SEEDED": tr("Catalog not yet available, please retry shortly."),

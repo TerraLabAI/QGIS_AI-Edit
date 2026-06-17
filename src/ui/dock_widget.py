@@ -65,6 +65,7 @@ from ..core.prompts.hex_highlight import HEX_RX, contrast_text_for, expand_hex
 from ..core.prompts.loading_messages import get_phase_messages
 from ..core.prompts.prompt_presets import detect_prompt_guidance, format_template_prompt
 from ..core.reference_image_store import ReferenceImageStore
+from ..core.resolution_labels import resolution_chip_label, resolution_quality_name
 from .credit_ring import CreditRing
 from .dialogs.error_report_dialog import (
     REPORT_PROBLEM_HREF,
@@ -673,7 +674,8 @@ class _ResolutionMenuItem(QWidget):
 
     def __init__(
         self,
-        label: str,
+        quality: str,
+        resolution: str,
         credits: int,
         selected: bool,
         locked: bool,
@@ -686,7 +688,7 @@ class _ResolutionMenuItem(QWidget):
         self.setCursor(QtC.PointingHandCursor)
         self.setMinimumHeight(26)
         if locked:
-            self.setToolTip(tr("Subscribe for higher resolution"))
+            self.setToolTip(tr("Subscribe for higher quality"))
 
         row = QHBoxLayout(self)
         row.setContentsMargins(8, 4, 16, 4)
@@ -704,7 +706,14 @@ class _ResolutionMenuItem(QWidget):
         row.addWidget(check)
 
         muted = f"color: {DISABLED_TEXT};" if locked else "color: palette(text);"
-        name = QLabel(label, self)
+        # "Low-res" reads as the row label; the exact resolution "(1K)" trails
+        # in a dimmer tint as the supporting detail.
+        res_color = DISABLED_TEXT if locked else "rgba(128,128,128,0.85)"
+        name = QLabel(
+            f"{quality}-res <span style='color: {res_color};'>({resolution})</span>",
+            self,
+        )
+        name.setTextFormat(Qt.TextFormat.RichText)
         name.setStyleSheet(f"font-size: 12px; background: transparent; {muted}")
         name.setAttribute(QtC.WA_TransparentForMouseEvents, True)
         row.addWidget(name)
@@ -828,7 +837,7 @@ class _PromptContainer(QFrame):
         footer_row.setSpacing(6)
 
         self._templates_btn = QToolButton(self)
-        self._templates_btn.setText(tr("Prompt library"))
+        self._templates_btn.setText(tr("Library"))
         self._templates_btn.setToolTip(tr("Browse templates, your recent prompts, and favorites."))
         self._templates_btn.setCursor(QtC.PointingHandCursor)
         self._templates_btn.setStyleSheet(self._CHIP_BTN_STYLE)
@@ -844,8 +853,9 @@ class _PromptContainer(QFrame):
         self._resolution_menu.setToolTipsVisible(True)
         self._resolution_btn = _FooterIconButton(self)
         self._resolution_btn.setToolTip(
-            tr("<b>Resolution</b><br>Higher means a sharper, more detailed "
-               "result.")
+            tr("<b>AI Output Quality</b><br>Higher quality gives a sharper, "
+               "more detailed result at a larger resolution. Low (1K), "
+               "Medium (2K), High (4K).")
         )
         self._resolution_btn.setCursor(QtC.PointingHandCursor)
         self._resolution_btn.setStyleSheet(self._CHIP_BTN_HOVERPROP_STYLE)
@@ -926,8 +936,8 @@ class _PromptContainer(QFrame):
     def _apply_footer_fit(self) -> None:
         """Collapse footer labels when the dock is too narrow for the full row,
         so it never forces a horizontal scrollbar. Reference drops to icon-only
-        first (its tooltip still explains it), then the library pill shortens.
-        Measured, not threshold-based, so it stays correct across font/DPI."""
+        (its tooltip still explains it). Measured, not threshold-based, so it
+        stays correct across font/DPI."""
         avail = self.width() - 16
         if avail <= 0:
             return
@@ -940,13 +950,10 @@ class _PromptContainer(QFrame):
         self._attach_btn.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         )
-        self._templates_btn.setText(tr("Prompt library"))
         if not fits():
             self._attach_btn.setToolButtonStyle(
                 Qt.ToolButtonStyle.ToolButtonIconOnly
             )
-        if not fits():
-            self._templates_btn.setText(tr("Library"))
 
     def resizeEvent(self, event):  # noqa: N802
         super().resizeEvent(event)
@@ -1040,13 +1047,15 @@ class _PromptContainer(QFrame):
     def _update_resolution_label(self) -> None:
         # ▾ (U+25BE) sits on the text baseline; ⌄ (U+2304) renders too low
         # in most system fonts and breaks the visual alignment.
-        self._resolution_btn.setText(f"{self._selected_resolution}  ▾")
+        self._resolution_btn.setText(
+            f"{resolution_chip_label(self._selected_resolution)}  ▾"
+        )
 
     def _rebuild_resolution_menu(self) -> None:
         self._resolution_menu.clear()
         # Title so it reads as "this picks the output resolution", not as
         # another selectable row. Disabled action = non-clickable header.
-        header = QLabel(tr("Resolution"))
+        header = QLabel(tr("AI Output Quality"))
         header.setStyleSheet(
             "color: palette(text); font-size: 12px; font-weight: 600; "
             "padding: 9px 14px 7px 14px; background: transparent;"
@@ -1067,13 +1076,14 @@ class _PromptContainer(QFrame):
             selected = res == self._selected_resolution
             credits = self._resolution_costs.get(res, 0)
             widget = _ResolutionMenuItem(
-                res, credits, selected, locked, self._resolution_menu
+                resolution_quality_name(res), res, credits, selected, locked,
+                self._resolution_menu,
             )
             widget.clicked.connect(lambda r=res: self._on_menu_item_clicked(r))
             action = QWidgetAction(self._resolution_menu)
             action.setDefaultWidget(widget)
             if locked:
-                action.setToolTip(tr("Subscribe for higher resolution"))
+                action.setToolTip(tr("Subscribe for higher quality"))
             self._resolution_menu.addAction(action)
 
     def _on_menu_item_clicked(self, label: str) -> None:
@@ -1749,7 +1759,7 @@ class AIEditDockWidget(QDockWidget):
         self._trial_info_benefits = QLabel(
             tr("Subscribe to unlock:") + "<br>"
             + "&nbsp;&nbsp;✓&nbsp; " + tr("150 edits every month") + "<br>"
-            + "&nbsp;&nbsp;✓&nbsp; " + tr("2K and 4K outputs") + "<br>"
+            + "&nbsp;&nbsp;✓&nbsp; " + tr("Medium and High quality outputs") + "<br>"
             + "&nbsp;&nbsp;✓&nbsp; " + tr("Cancel anytime")
         )
         self._trial_info_benefits.setWordWrap(True)
@@ -1843,9 +1853,9 @@ class AIEditDockWidget(QDockWidget):
         # a mnemonic accelerator (which would underline the next character).
         # Text is (re)set by _apply_footer_responsive, which shortens it to
         # "Upgrade" when the dock is too narrow for the full label.
-        self._upgrade_cta = QPushButton(tr("Upgrade to 2K && 4K"))
+        self._upgrade_cta = QPushButton(tr("Upgrade for high resolution"))
         self._upgrade_cta.setToolTip(
-            tr("Subscribe to unlock 2K and 4K outputs, 150 edits per month, cancel anytime.")
+            tr("Subscribe to unlock Medium and High quality outputs, 150 edits per month, cancel anytime.")
         )
         self._upgrade_cta.setCursor(QtC.PointingHandCursor)
         self._upgrade_cta.setStyleSheet(
@@ -2247,10 +2257,9 @@ class AIEditDockWidget(QDockWidget):
         self._apply_footer_responsive()
 
     def _set_upgrade_cta_text(self, full: bool) -> None:
-        """Full label vs the short "Upgrade" fallback. Guarded so resizeEvent
-        (which fires often) only relayouts when the text actually changes."""
-        # "&&" renders a literal ampersand (single "&" is a Qt mnemonic).
-        text = tr("Upgrade to 2K && 4K") if full else tr("Upgrade")
+        """Full label vs the short "Higher resolution" fallback. Guarded so
+        resizeEvent (which fires often) only relayouts when the text changes."""
+        text = tr("Upgrade for high resolution") if full else tr("Higher resolution")
         if self._upgrade_cta.text() != text:
             self._upgrade_cta.setText(text)
 

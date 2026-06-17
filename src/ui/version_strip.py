@@ -38,6 +38,7 @@ from qgis.PyQt.QtWidgets import (
 
 from ..core import qt_compat as QtC
 from ..core.i18n import tr
+from ..core.resolution_labels import resolution_display_label
 
 _ICONS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "resources", "icons"
@@ -347,7 +348,7 @@ class _VersionTile(QFrame):
             pass
         dlg = _VersionInfoPopup(
             self._label,
-            self._meta.get("definition"),
+            resolution_display_label(self._meta.get("definition")),
             self._meta.get("base_label"),
             self._prompt,
             self._is_original,

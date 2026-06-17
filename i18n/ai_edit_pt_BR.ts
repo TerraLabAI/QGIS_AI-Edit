@@ -1883,5 +1883,61 @@ Adoraríamos receber seu retorno!</translation>
         <source>AI Edit output folder</source>
         <translation>Pasta de saída do AI Edit</translation>
     </message>
+    <message>
+        <source>Quality</source>
+        <translation>Qualidade</translation>
+    </message>
+    <message>
+        <source>Low</source>
+        <translation>Baixa</translation>
+    </message>
+    <message>
+        <source>Medium</source>
+        <translation>Média</translation>
+    </message>
+    <message>
+        <source>High</source>
+        <translation>Alta</translation>
+    </message>
+    <message>
+        <source>Subscribe for higher quality</source>
+        <translation>Assine para maior qualidade</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Higher means a sharper, more detailed result.</source>
+        <translation>&lt;b&gt;Qualidade&lt;/b&gt;&lt;br&gt;Maior significa um resultado mais nítido e detalhado.</translation>
+    </message>
+    <message>
+        <source>Medium and High quality outputs</source>
+        <translation>Saídas em qualidade média e alta</translation>
+    </message>
+    <message>
+        <source>Upgrade to Medium &amp;&amp; High quality</source>
+        <translation>Atualize para qualidade média e alta</translation>
+    </message>
+    <message>
+        <source>Subscribe to unlock Medium and High quality outputs, 150 edits per month, cancel anytime.</source>
+        <translation>Assine para desbloquear saídas em qualidade média e alta, 150 edições por mês, cancele quando quiser.</translation>
+    </message>
+    <message>
+        <source>This quality is not available on your plan. Upgrade to unlock higher quality.</source>
+        <translation>Esta qualidade não está disponível no seu plano. Atualize para desbloquear maior qualidade.</translation>
+    </message>
+    <message>
+        <source>AI Output Quality</source>
+        <translation>Qualidade de saída da IA</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;AI Output Quality&lt;/b&gt;&lt;br&gt;Higher quality gives a sharper, more detailed result at a larger resolution. Low (1K), Medium (2K), High (4K).</source>
+        <translation>&lt;b&gt;Qualidade de saída da IA&lt;/b&gt;&lt;br&gt;Maior qualidade dá um resultado mais nítido e detalhado em uma resolução maior. Baixa (1K), Média (2K), Alta (4K).</translation>
+    </message>
+    <message>
+        <source>Upgrade for high resolution</source>
+        <translation>Atualize para alta resolução</translation>
+    </message>
+    <message>
+        <source>Higher resolution</source>
+        <translation>Maior resolução</translation>
+    </message>
 </context>
 </TS>
