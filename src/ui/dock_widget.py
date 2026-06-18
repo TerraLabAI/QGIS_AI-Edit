@@ -688,7 +688,7 @@ class _ResolutionMenuItem(QWidget):
         self.setCursor(QtC.PointingHandCursor)
         self.setMinimumHeight(26)
         if locked:
-            self.setToolTip(tr("Subscribe for higher quality"))
+            self.setToolTip(tr("Subscribe for more detail"))
 
         row = QHBoxLayout(self)
         row.setContentsMargins(8, 4, 16, 4)
@@ -706,11 +706,11 @@ class _ResolutionMenuItem(QWidget):
         row.addWidget(check)
 
         muted = f"color: {DISABLED_TEXT};" if locked else "color: palette(text);"
-        # "Low-res" reads as the row label; the exact resolution "(1K)" trails
+        # "Standard" reads as the row label; the exact resolution "(1K)" trails
         # in a dimmer tint as the supporting detail.
         res_color = DISABLED_TEXT if locked else "rgba(128,128,128,0.85)"
         name = QLabel(
-            f"{quality}-res <span style='color: {res_color};'>({resolution})</span>",
+            f"{quality} <span style='color: {res_color};'>({resolution})</span>",
             self,
         )
         name.setTextFormat(Qt.TextFormat.RichText)
@@ -853,9 +853,9 @@ class _PromptContainer(QFrame):
         self._resolution_menu.setToolTipsVisible(True)
         self._resolution_btn = _FooterIconButton(self)
         self._resolution_btn.setToolTip(
-            tr("<b>AI Output Quality</b><br>Higher quality gives a sharper, "
-               "more detailed result at a larger resolution. Low (1K), "
-               "Medium (2K), High (4K).")
+            tr("<b>Output detail</b><br>Higher detail gives a sharper, "
+               "more precise result. Standard (1K), Detailed (2K), "
+               "Maximum (4K).")
         )
         self._resolution_btn.setCursor(QtC.PointingHandCursor)
         self._resolution_btn.setStyleSheet(self._CHIP_BTN_HOVERPROP_STYLE)
@@ -1055,7 +1055,7 @@ class _PromptContainer(QFrame):
         self._resolution_menu.clear()
         # Title so it reads as "this picks the output resolution", not as
         # another selectable row. Disabled action = non-clickable header.
-        header = QLabel(tr("AI Output Quality"))
+        header = QLabel(tr("Output detail"))
         header.setStyleSheet(
             "color: palette(text); font-size: 12px; font-weight: 600; "
             "padding: 9px 14px 7px 14px; background: transparent;"
@@ -1083,7 +1083,7 @@ class _PromptContainer(QFrame):
             action = QWidgetAction(self._resolution_menu)
             action.setDefaultWidget(widget)
             if locked:
-                action.setToolTip(tr("Subscribe for higher quality"))
+                action.setToolTip(tr("Subscribe for more detail"))
             self._resolution_menu.addAction(action)
 
     def _on_menu_item_clicked(self, label: str) -> None:
@@ -1759,7 +1759,7 @@ class AIEditDockWidget(QDockWidget):
         self._trial_info_benefits = QLabel(
             tr("Subscribe to unlock:") + "<br>"
             + "&nbsp;&nbsp;✓&nbsp; " + tr("150 edits every month") + "<br>"
-            + "&nbsp;&nbsp;✓&nbsp; " + tr("Medium and High quality outputs") + "<br>"
+            + "&nbsp;&nbsp;✓&nbsp; " + tr("Detailed and Maximum output") + "<br>"
             + "&nbsp;&nbsp;✓&nbsp; " + tr("Cancel anytime")
         )
         self._trial_info_benefits.setWordWrap(True)
@@ -1853,9 +1853,9 @@ class AIEditDockWidget(QDockWidget):
         # a mnemonic accelerator (which would underline the next character).
         # Text is (re)set by _apply_footer_responsive, which shortens it to
         # "Upgrade" when the dock is too narrow for the full label.
-        self._upgrade_cta = QPushButton(tr("Upgrade for high resolution"))
+        self._upgrade_cta = QPushButton(tr("Unlock more detail"))
         self._upgrade_cta.setToolTip(
-            tr("Subscribe to unlock Medium and High quality outputs, 150 edits per month, cancel anytime.")
+            tr("Subscribe to unlock Detailed and Maximum output, 150 edits per month, cancel anytime.")
         )
         self._upgrade_cta.setCursor(QtC.PointingHandCursor)
         self._upgrade_cta.setStyleSheet(
@@ -2257,9 +2257,9 @@ class AIEditDockWidget(QDockWidget):
         self._apply_footer_responsive()
 
     def _set_upgrade_cta_text(self, full: bool) -> None:
-        """Full label vs the short "Higher resolution" fallback. Guarded so
+        """Full label vs the short "More detail" fallback. Guarded so
         resizeEvent (which fires often) only relayouts when the text changes."""
-        text = tr("Upgrade for high resolution") if full else tr("Higher resolution")
+        text = tr("Unlock more detail") if full else tr("More detail")
         if self._upgrade_cta.text() != text:
             self._upgrade_cta.setText(text)
 

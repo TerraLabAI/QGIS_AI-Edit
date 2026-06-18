@@ -177,8 +177,8 @@ def _localize_server_error(error: str, code: str) -> str:
         "INVALID_INPUT": tr("Invalid input. Try a different image or selection."),
         "PAYLOAD_TOO_LARGE": tr("Image too large. Try selecting a smaller area or lowering the resolution."),
         "RESOLUTION_NOT_ALLOWED": tr(
-            "This quality is not available on your plan."
-            " Upgrade to unlock higher quality."
+            "This detail level is not available on your plan."
+            " Upgrade to unlock more detail."
         ),
         "NOT_FOUND": tr("Resource not found."),
         "NOT_SEEDED": tr("Catalog not yet available, please retry shortly."),
@@ -2245,47 +2245,18 @@ class AIEditPlugin:
         self._markup_outside_notice_active = False
 
     def _on_markup_done_clicked(self):
-        """Leave the Mark up panel. The drawing becomes a single reference image
-        (a copy of the zone with the marks on top); the temporary markup layer
-        is then deleted so the marks live only as that reference, never on the
-        map and never painted into the result (the clean zone is sent too)."""
-        # The capture briefly pumps the event loop; guard against a second Done
-        # click re-entering the teardown mid-capture.
+        """Leave the Mark up panel. The marks stay on the map so they render
+        directly onto the image sent to the model; the same zone WITHOUT the
+        marks is sent alongside so the model restores the pixels under each
+        mark and no stroke appears in the result. The markup layer is dropped
+        once the image has been captured at generation time."""
         if getattr(self, "_markup_done_in_progress", False):
             return
         self._markup_done_in_progress = True
         try:
-            self._capture_markup_reference()
-            self._clear_markup_layer()
             self._exit_tool_panel()
         finally:
             self._markup_done_in_progress = False
-
-    def _capture_markup_reference(self):
-        """Render the current zone with the markup on top and hand it to the
-        dock as the Mark up reference. Best-effort: never blocks leaving the
-        panel. No annotations means nothing to capture."""
-        if (
-            self._markup_manager is None
-            or self._selected_extent is None
-            or self._markup_manager.annotation_count() <= 0
-        ):
-            return
-        try:
-            from .layer_renderer import render_layers_to_qimage
-            canvas_crs = self._canvas.mapSettings().destinationCrs()
-            image = render_layers_to_qimage(
-                self._canvas.layers(),
-                force_extent=QgsRectangle(self._selected_extent),
-                force_crs=canvas_crs,
-                # Tiles are already warm on the canvas at this zone, so skip the
-                # multi-second settling loop that would freeze the Done click.
-                settle=False,
-            )
-            if image is not None and not image.isNull():
-                self._dock_widget.set_markup_reference(image)
-        except Exception as err:  # nosec B110 - capture is best-effort.
-            log_warning(f"Markup reference capture failed: {err}")
 
     def _on_vectorize_clicked(self):
         """User picked Tools → Vectorize.
@@ -2797,10 +2768,10 @@ class AIEditPlugin:
         self._dock_widget.set_generating(True)
         self._dock_widget.set_status("")
 
-        # When the user drew markup, send the clean zone as the main image and
-        # the same zone with markup on top as a separate guidance overlay, so
-        # the model sees the original pixels untouched and is only guided by the
-        # marks. With no markup, behave exactly as before (single clean render).
+        # When the user drew markup, the marks are rendered directly onto the
+        # MAIN image (co-located guidance), and the same zone WITHOUT the marks
+        # is sent as a clean base so the model can restore the pixels under each
+        # mark. With no markup, behave exactly as before (single clean render).
         markup_layer = None
         if (
             self._markup_manager is not None
@@ -2939,16 +2910,10 @@ class AIEditPlugin:
         self._selected_extent = actual_extent
         self._show_selection_rectangle(actual_extent)
 
-        # Mark up is captured as a composite reference on Done; ship it through
-        # the guidance channel (not as a context image) so the server applies
-        # its "these are pointers, do not reproduce the marks, leave unmarked
-        # areas unchanged" handling. The live-layer guidance render is empty by
-        # now (Done removed the layer), so this is the only guidance source.
-        if not guidance_b64:
-            mk_b64, mk_fmt = self._reference_store.get_markup_b64()
-            if mk_b64:
-                guidance_b64 = mk_b64
-                guidance_format = mk_fmt or "webp"
+        # ``guidance_b64`` here is the clean base (the zone with the marks
+        # removed); the marks ride on ``image_b64``. The server is told via the
+        # marks_on_input flag to restore the pixels under each mark from it, so
+        # no stroke appears in the result.
 
         # Preserve original zone for retry (never chain from AI result)
         self._last_image_b64 = image_b64
@@ -2963,15 +2928,22 @@ class AIEditPlugin:
 
         # Seed the version strip's Original tile from the very first export of
         # this lineage - that render is the clean zone before any AI edit. Later
-        # exports (iterations) skip this; the Original is captured once.
+        # exports (iterations) skip this; the Original is captured once. When
+        # markup was drawn, prefer the clean base so the Original tile shows the
+        # unmarked zone rather than the strokes.
         if not self._versions:
             self._versions.append({"layer_id": None, "request_id": None, "prompt": ""})
             self._selected_version_index = 0
-            pixmap = self._pixmap_from_b64(image_b64)
+            pixmap = self._pixmap_from_b64(guidance_b64 or image_b64)
             try:
                 self._dock_widget.seed_version_strip(pixmap)
             except AttributeError:
                 pass
+
+        # Keep the markup layer alive through the generation so the marks stay
+        # visible while the model works. It is dropped when the generation ends
+        # (_on_generation_finished / _on_generation_error / cancel) so the
+        # result shows clean and the temporary layer never piles up.
 
         if self._map_tool:
             self._map_tool.set_locked(True)
@@ -3039,6 +3011,9 @@ class AIEditPlugin:
         template_id = snap.get("template_id")
         template_name = snap.get("template_name")
         self._cleanup_worker()
+        # Generation ended (with an error): drop the markup layer so it does not
+        # linger or accumulate. A retry re-sends the cached marked image.
+        self._clear_markup_layer()
         normalized_code = (code or "").strip().upper()
         message_lower = (message or "").lower()
         is_quota_error = (
@@ -3158,6 +3133,10 @@ class AIEditPlugin:
         template_id: str | None = result_info.get("template_id")
         template_name: str | None = result_info.get("template_name")
         self._cleanup_worker()
+        # Generation is over: drop the markup layer so the result shows clean
+        # and the temporary layer does not accumulate. The marks stayed visible
+        # for the whole run.
+        self._clear_markup_layer()
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
 
         try:

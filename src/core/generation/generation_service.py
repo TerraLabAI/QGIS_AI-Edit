@@ -248,11 +248,12 @@ class GenerationService:
         # guidance decision below must reserve it too (alongside context).
         main_inline_bytes = len(image_b64) if upload_token is None else 0
 
-        # The markup-overlay guidance image rides the same upload path as the
-        # main image: presigned when large (keeps the submit body under the
-        # serverless cap), inline otherwise. Its own format token is used so a
-        # rare PNG encode fallback on the guidance alone stays correctly
-        # labeled. It never counts against the user's reference-image quota.
+        # The clean base image (the zone with the marks removed; the marks ride
+        # on the main image) travels through the guidance channel. It rides the
+        # same upload path as the main image: presigned when large (keeps the
+        # submit body under the serverless cap), inline otherwise. Its own
+        # format token is used so a rare PNG encode fallback on it alone stays
+        # correctly labeled. It never counts against the reference-image quota.
         guidance_upload_token = None
         guidance_inline = None
         if guidance_image:

@@ -4,12 +4,14 @@ from __future__ import annotations
 from qgis.core import QgsTask
 from qgis.PyQt.QtCore import pyqtSignal
 
-from ..ui.canvas_exporter import ExportPrep, render_export, render_guidance
+from ..ui.canvas_exporter import ExportPrep, render_clean_base, render_export
 
 
 class ExportWorker(QgsTask):
-    # b64, out_w, out_h, extent, bytes, format, guidance_b64, guidance_format
-    # guidance_b64/guidance_format are "" when the user drew no markup.
+    # b64, out_w, out_h, extent, bytes, format, clean_base_b64, clean_base_format
+    # The clean-base slots are "" when the user drew no markup. They travel
+    # through the guidance channel (a second image) so the model can restore the
+    # pixels under each mark; the marks themselves ride on the main b64.
     completed = pyqtSignal(str, int, int, object, int, str, str, str)
     failed = pyqtSignal(str)
 
@@ -34,13 +36,13 @@ class ExportWorker(QgsTask):
             return False
         try:
             b64, size_bytes, actual_extent, fmt = render_export(self._prep)
-            guidance = render_guidance(self._prep)
+            clean_base = render_clean_base(self._prep)
         except Exception as err:  # noqa: BLE001
             self._failure = str(err)
             return False
         if self.isCanceled():
             return False
-        guidance_b64, guidance_fmt = guidance or ("", "")
+        clean_base_b64, clean_base_fmt = clean_base or ("", "")
         self._success_payload = (
             b64,
             self._prep.out_w,
@@ -48,8 +50,8 @@ class ExportWorker(QgsTask):
             actual_extent,
             size_bytes,
             fmt,
-            guidance_b64,
-            guidance_fmt,
+            clean_base_b64,
+            clean_base_fmt,
         )
         return True
 

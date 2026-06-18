@@ -242,12 +242,17 @@ class TerraLabClient:
             payload["image"] = image_b64
         if context_images:
             payload["context_images"] = context_images
-        # Markup-overlay guidance image (separate from user reference images).
-        # Sent only when present so older backends ignore the field.
+        # Clean base image (separate from user reference images): the same zone
+        # with the markup removed. The marks themselves are drawn onto the MAIN
+        # image; this clean copy lets the server have the model restore the
+        # pixels under each mark. ``marks_on_input`` signals that contract.
+        # Sent only when present so older backends ignore the fields.
         if guidance_upload_token:
             payload["guidance_upload_token"] = guidance_upload_token
+            payload["marks_on_input"] = True
         elif guidance_image:
             payload["guidance_image"] = guidance_image
+            payload["marks_on_input"] = True
         if centroid_lat is not None and centroid_lon is not None:
             payload["centroid_lat"] = centroid_lat
             payload["centroid_lon"] = centroid_lon

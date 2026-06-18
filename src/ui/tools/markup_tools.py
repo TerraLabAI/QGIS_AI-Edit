@@ -12,7 +12,10 @@ Geometry per shape:
 * Arrow - MultiLineString of 3 segments (shaft + two head sides).
 * Circle - closed LineString tracing an ellipse boundary (no donut).
 
-The pre-prompt already treats red circles / arrows as AOI hints.
+The marks are rendered directly onto the image sent to the model; the
+pre-prompt treats hand-drawn strokes / arrows / circles as pointers to
+where the edit applies and removes them from the result. The default
+color is a neon magenta that is never a map class color.
 """
 from __future__ import annotations
 
@@ -58,6 +61,11 @@ def _symbol_property(name: str):
 # stroke as a pointer instead of mistaking it for a thin feature on the
 # underlying map.
 STROKE_WIDTH_PX = 4.5
+
+# Default annotation color: a neon magenta that is never a map class color.
+# Red is avoided on purpose - the segmentation mode reads a pure-red fill as
+# "color this target red #FF0000", so a red mark would be misread as a fill.
+MARKUP_DEFAULT_COLOR = (230, 0, 230)
 
 
 def _stroke_color_value(color: QColor) -> str:
@@ -169,7 +177,7 @@ class MarkupLayerManager(QObject):
     def _apply_style(layer: QgsVectorLayer) -> None:
         symbol = QgsLineSymbol.createSimple(
             {
-                "line_color": _stroke_color_value(QColor(230, 51, 51)),
+                "line_color": _stroke_color_value(QColor(*MARKUP_DEFAULT_COLOR)),
                 "line_width": str(STROKE_WIDTH_PX),
                 "line_width_unit": "Pixel",
                 "capstyle": "round",
@@ -315,7 +323,7 @@ class _MarkupBaseMapTool(QgsMapTool):
         self._canvas = canvas
         self._manager = manager
         self._shape = shape
-        self._color = QColor(230, 51, 51)
+        self._color = QColor(*MARKUP_DEFAULT_COLOR)
         self._rubber: QgsRubberBand | None = None
         self._active = False
         self.setCursor(QtC.CrossCursor)

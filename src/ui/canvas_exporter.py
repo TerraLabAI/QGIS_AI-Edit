@@ -227,7 +227,7 @@ class ExportPrep:
         "actual_extent",
         "background_color",
         "map_crs",
-        "guidance_settings",
+        "clean_base_settings",
     )
 
     def __init__(
@@ -238,7 +238,7 @@ class ExportPrep:
         actual_extent,
         background_color,
         map_crs,
-        guidance_settings=None,
+        clean_base_settings=None,
     ):
         self.settings = settings
         self.out_w = out_w
@@ -247,8 +247,9 @@ class ExportPrep:
         self.background_color = background_color
         self.map_crs = map_crs
         # When markup annotations exist, a second QgsMapSettings rendering the
-        # SAME zone with the markup layer on top. None when there is no markup.
-        self.guidance_settings = guidance_settings
+        # SAME zone WITHOUT the marks (the marks ride on the main image). None
+        # when there is no markup.
+        self.clean_base_settings = clean_base_settings
 
 
 def prepare_export(
@@ -261,11 +262,12 @@ def prepare_export(
     """Pick output size and clone settings. Cheap, main-thread.
 
     When ``markup_layer`` is given (the user drew guidance annotations), the
-    MAIN image excludes that layer so the model sees the original pixels
-    untouched, and a second ``guidance_settings`` is built that renders the
-    same zone WITH the markup on top. Both share the identical adjusted extent
-    and output size so the overlay registers pixel-for-pixel with the main
-    image.
+    MAIN image KEEPS that layer so the marks are drawn directly onto the image
+    the model edits, and a second ``clean_base_settings`` renders the SAME zone
+    WITHOUT the marks. Both share the identical adjusted extent and output size
+    so the clean base registers pixel-for-pixel with the marked main image; the
+    model restores the pixels under each mark from it and leaves no stroke in
+    the result.
     """
     if extent.width() <= 0 or extent.height() <= 0:
         raise ValueError("Invalid extent: width and height must be positive")
@@ -310,43 +312,45 @@ def prepare_export(
     settings.setExtent(adjusted_extent)
     settings.setOutputSize(QSize(out_w, out_h))
 
-    guidance_settings = None
+    clean_base_settings = None
     if markup_layer is not None:
         try:
             markup_id = markup_layer.id()
         except RuntimeError:
             markup_id = None
         if markup_id is not None:
-            # Main image: drop the markup layer so the model gets clean pixels.
+            # Main image KEEPS the markup so the marks are drawn directly onto
+            # the image the model edits (co-located guidance reads far stronger
+            # than a separate annotated copy). ``settings`` already carries the
+            # markup layer, so leave it untouched.
             all_layers = settings.layers()
-            main_layers = [lyr for lyr in all_layers if lyr.id() != markup_id]
-            markup_in_canvas = len(main_layers) != len(all_layers)
-            settings.setLayers(main_layers)
-            # Guidance image: clone again from the same source (markup still in
-            # the layer list, on top) and apply the SAME adjusted_extent +
-            # out_w/out_h. Do not recompute these or the overlay would drift
-            # out of registration with the main image.
-            guidance_settings = _clone_map_settings(map_settings)
-            guidance_settings.setExtent(adjusted_extent)
-            guidance_settings.setOutputSize(QSize(out_w, out_h))
+            clean_layers = [lyr for lyr in all_layers if lyr.id() != markup_id]
+            markup_in_canvas = len(clean_layers) != len(all_layers)
+            # Clean base: the SAME zone with the markup dropped, sent as a
+            # second image so the model can restore the pixels under each mark.
+            # Apply the SAME adjusted_extent + out_w/out_h so it registers
+            # pixel-for-pixel with the marked main image.
+            clean_base_settings = _clone_map_settings(map_settings)
+            clean_base_settings.setLayers(clean_layers)
+            clean_base_settings.setExtent(adjusted_extent)
+            clean_base_settings.setOutputSize(QSize(out_w, out_h))
             log_debug(
-                f"Markup guidance prep: markup_in_canvas={markup_in_canvas}, "
-                f"main_layers={len(main_layers)}, "
-                f"guidance_layers={len(guidance_settings.layers())}, "
+                f"Markup prep: markup_in_canvas={markup_in_canvas}, "
+                f"main_layers={len(all_layers)}, "
+                f"clean_base_layers={len(clean_layers)}, "
                 f"out={out_w}x{out_h}"
             )
             if not markup_in_canvas:
                 # Markup drawn but its layer is not in the canvas render set
-                # (user hid it): the guidance overlay would be identical to the
-                # clean main image, so the feature silently no-ops.
+                # (user hid it): the main image would carry no marks, so the
+                # feature silently no-ops.
                 log_warning(
-                    "Markup guidance: markup layer not in canvas render set "
-                    "(hidden?); guidance overlay matches the main image"
+                    "Markup: markup layer not in canvas render set (hidden?); "
+                    "main image carries no marks"
                 )
         else:
             log_warning(
-                "Markup guidance: markup layer reference is stale; "
-                "no guidance overlay rendered"
+                "Markup: markup layer reference is stale; no clean base rendered"
             )
 
     return ExportPrep(
@@ -356,7 +360,7 @@ def prepare_export(
         actual_extent=settings.visibleExtent(),
         background_color=map_settings.backgroundColor(),
         map_crs=map_crs,
-        guidance_settings=guidance_settings,
+        clean_base_settings=clean_base_settings,
     )
 
 
@@ -436,22 +440,24 @@ def render_export(
     return b64, raw_len, prep.actual_extent, fmt_token
 
 
-def render_guidance(prep: ExportPrep) -> tuple[str, str] | None:
-    """Render the markup-overlay guidance image (original zone + markup on top).
+def render_clean_base(prep: ExportPrep) -> tuple[str, str] | None:
+    """Render the clean base image (the zone with the markup removed).
 
-    Returns ``(b64, format_token)``, or ``None`` when there is no markup to
-    render. The format token is the guidance render's OWN actual format so the
-    upload content-type stays correct even if its encode falls back to PNG
-    independently of the main image.
+    Sent as a second image alongside the marked main image so the model can
+    restore the pixels under each mark and leave no stroke in the result.
+    Returns ``(b64, format_token)``, or ``None`` when there is no markup. The
+    format token is this render's OWN actual format so the upload content-type
+    stays correct even if its encode falls back to PNG independently of the
+    main image.
     """
-    if prep.guidance_settings is None:
+    if prep.clean_base_settings is None:
         return None
     image = _render_settings_to_image(
-        prep.guidance_settings, prep.out_w, prep.out_h, prep.background_color
+        prep.clean_base_settings, prep.out_w, prep.out_h, prep.background_color
     )
     b64, raw_len, fmt_token = _encode_image(image, prep.out_w, prep.out_h)
     log_debug(
-        f"Guidance image rendered: dims={prep.out_w}x{prep.out_h} "
+        f"Clean base image rendered: dims={prep.out_w}x{prep.out_h} "
         f"format={fmt_token} raw_bytes={raw_len} b64_bytes={len(b64)}"
     )
     return b64, fmt_token

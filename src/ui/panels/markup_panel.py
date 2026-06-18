@@ -40,6 +40,7 @@ from ..panel_helpers import (
     make_custom_color_icon,
     make_hidpi_pixmap,
 )
+from ..tools.markup_tools import MARKUP_DEFAULT_COLOR
 
 BRAND_BLUE = "#1e88e5"
 BRAND_RED = "#d32f2f"
@@ -56,14 +57,14 @@ _BTN_GHOST_QSS = (
 )
 
 
-# Warm-to-cool order with the default AOI hint (Red) first.
+# Annotation colors avoid the map palette (red / green / blue / gray) so the
+# model never reads a mark as a class fill. The default (neon magenta) is first.
 _MARKUP_PRESETS: list[tuple[str, int, int, int]] = [
-    ("Red", 230, 51, 51),
+    ("Magenta", *MARKUP_DEFAULT_COLOR),
+    ("Violet", 138, 43, 226),
+    ("Pink", 236, 72, 153),
     ("Amber", 245, 158, 11),
-    ("Green", 34, 158, 71),
     ("Cyan", 14, 165, 188),
-    ("Blue", 24, 118, 210),
-    ("Magenta", 217, 70, 175),
 ]
 
 _TOOL_BUTTON_SIZE = 56
@@ -129,7 +130,7 @@ class MarkupPanel(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._color = QColor(255, 0, 0)
+        self._color = QColor(*MARKUP_DEFAULT_COLOR)
         self._annotation_count = 0
         self._has_zone = False
 
@@ -145,9 +146,8 @@ class MarkupPanel(QWidget):
         self._markup_hint = DismissibleHint(
             HINT_MARKUP,
             "",
-            tr("Draw on your zone to show the AI what to change. On Done, your "
-               "drawing becomes a reference image - it never appears in the "
-               "result."),
+            tr("Draw on your zone to point the AI where to act. Your marks "
+               "guide the edit and are removed from the result."),
         )
         layout.addWidget(self._markup_hint)
 
@@ -332,8 +332,7 @@ class MarkupPanel(QWidget):
 
         self._done_btn = QPushButton(tr("Done"))
         self._done_btn.setToolTip(
-            tr("Save your marks as a reference image (your zone with the marks "
-               "on top) and close Mark up")
+            tr("Keep your marks on the zone to guide the edit, and close Mark up")
         )
         self._done_btn.setStyleSheet(_BTN_GHOST_QSS)
         self._done_btn.setCursor(QtC.PointingHandCursor)
@@ -429,8 +428,8 @@ class MarkupPanel(QWidget):
             text = _tool_hint(tool_key or "pencil")
         else:
             text = tr(
-                "{n} mark. Click Done to save it as a reference image."
+                "{n} mark. Click Done to guide the edit with it."
             ).format(n=count) if count == 1 else tr(
-                "{n} marks. Click Done to save them as a reference image."
+                "{n} marks. Click Done to guide the edit with them."
             ).format(n=count)
         self._status_label.setText(text)

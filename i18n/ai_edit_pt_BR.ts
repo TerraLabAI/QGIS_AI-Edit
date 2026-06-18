@@ -1888,56 +1888,56 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Qualidade</translation>
     </message>
     <message>
-        <source>Low</source>
-        <translation>Baixa</translation>
+        <source>Standard</source>
+        <translation>Padrão</translation>
     </message>
     <message>
-        <source>Medium</source>
-        <translation>Média</translation>
+        <source>Detailed</source>
+        <translation>Detalhado</translation>
     </message>
     <message>
-        <source>High</source>
-        <translation>Alta</translation>
+        <source>Maximum</source>
+        <translation>Máximo</translation>
     </message>
     <message>
-        <source>Subscribe for higher quality</source>
-        <translation>Assine para maior qualidade</translation>
+        <source>Subscribe for more detail</source>
+        <translation>Assine para mais detalhe</translation>
     </message>
     <message>
         <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Higher means a sharper, more detailed result.</source>
         <translation>&lt;b&gt;Qualidade&lt;/b&gt;&lt;br&gt;Maior significa um resultado mais nítido e detalhado.</translation>
     </message>
     <message>
-        <source>Medium and High quality outputs</source>
-        <translation>Saídas em qualidade média e alta</translation>
+        <source>Detailed and Maximum output</source>
+        <translation>Saídas Detalhado e Máximo</translation>
     </message>
     <message>
         <source>Upgrade to Medium &amp;&amp; High quality</source>
         <translation>Atualize para qualidade média e alta</translation>
     </message>
     <message>
-        <source>Subscribe to unlock Medium and High quality outputs, 150 edits per month, cancel anytime.</source>
-        <translation>Assine para desbloquear saídas em qualidade média e alta, 150 edições por mês, cancele quando quiser.</translation>
+        <source>Subscribe to unlock Detailed and Maximum output, 150 edits per month, cancel anytime.</source>
+        <translation>Assine para desbloquear saídas Detalhado e Máximo, 150 edições por mês, cancele quando quiser.</translation>
     </message>
     <message>
-        <source>This quality is not available on your plan. Upgrade to unlock higher quality.</source>
-        <translation>Esta qualidade não está disponível no seu plano. Atualize para desbloquear maior qualidade.</translation>
+        <source>This detail level is not available on your plan. Upgrade to unlock more detail.</source>
+        <translation>Este nível de detalhe não está disponível no seu plano. Atualize para desbloquear mais detalhe.</translation>
     </message>
     <message>
-        <source>AI Output Quality</source>
-        <translation>Qualidade de saída da IA</translation>
+        <source>Output detail</source>
+        <translation>Nível de detalhe</translation>
     </message>
     <message>
-        <source>&lt;b&gt;AI Output Quality&lt;/b&gt;&lt;br&gt;Higher quality gives a sharper, more detailed result at a larger resolution. Low (1K), Medium (2K), High (4K).</source>
-        <translation>&lt;b&gt;Qualidade de saída da IA&lt;/b&gt;&lt;br&gt;Maior qualidade dá um resultado mais nítido e detalhado em uma resolução maior. Baixa (1K), Média (2K), Alta (4K).</translation>
+        <source>&lt;b&gt;Output detail&lt;/b&gt;&lt;br&gt;Higher detail gives a sharper, more precise result. Standard (1K), Detailed (2K), Maximum (4K).</source>
+        <translation>&lt;b&gt;Nível de detalhe&lt;/b&gt;&lt;br&gt;Mais detalhe dá um resultado mais nítido e preciso. Padrão (1K), Detalhado (2K), Máximo (4K).</translation>
     </message>
     <message>
-        <source>Upgrade for high resolution</source>
-        <translation>Atualize para alta resolução</translation>
+        <source>Unlock more detail</source>
+        <translation>Desbloqueie mais detalhe</translation>
     </message>
     <message>
-        <source>Higher resolution</source>
-        <translation>Maior resolução</translation>
+        <source>More detail</source>
+        <translation>Mais detalhe</translation>
     </message>
 </context>
 </TS>
