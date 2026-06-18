@@ -35,7 +35,13 @@ class GenericRequestTask(QgsTask):
         try:
             result = self._request_fn()
         except Exception as e:
-            self._failure = (str(e), "")
+            # Preserve a usable code so consumers that branch on it (network vs
+            # app error, whether to open the bug-report dialog) don't misread a
+            # raised exception as a generic blank-code error.
+            from ..core.errors import ErrorCode
+            raw_code = getattr(e, "code", "")
+            code = getattr(raw_code, "value", raw_code) or ErrorCode.UNKNOWN.value
+            self._failure = (str(e)[:200], str(code))
             return False
 
         if self.isCanceled():

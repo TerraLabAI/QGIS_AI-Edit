@@ -182,6 +182,16 @@ PROXY_ERRORS = {
 HttpStatusCodeAttribute = _resolve(
     QNetworkRequest, "Attribute", "HttpStatusCodeAttribute"
 )
+# Redirect policy. PyQt5 on some QGIS 3 builds exposes these flat, not scoped,
+# so resolve through the same scoped-then-flat helper rather than hardcoding
+# QNetworkRequest.Attribute.* / QNetworkRequest.RedirectPolicy.* (which would
+# AttributeError on those builds, on every API request and download).
+RedirectPolicyAttribute = _resolve(
+    QNetworkRequest, "Attribute", "RedirectPolicyAttribute"
+)
+NoLessSafeRedirectPolicy = _resolve(
+    QNetworkRequest, "RedirectPolicy", "NoLessSafeRedirectPolicy"
+)
 
 
 def safe_single_shot(msec: int, owner: QObject, callback) -> QTimer:

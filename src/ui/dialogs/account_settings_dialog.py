@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from qgis.PyQt.QtCore import QThread, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import (
     QDialog,
@@ -26,6 +26,7 @@ from ...core.auth.activation_manager import (
     get_terms_url,
 )
 from ...core.i18n import tr
+from ...workers.generic_request_task import GenericRequestTask
 from ..dock_widget import (
     BRAND_BLUE,
     BRAND_BLUE_HOVER,
@@ -90,24 +91,6 @@ _PREF_LABEL_STYLE = (
     "font-size: 11px; color: palette(text);"
     " background: transparent; border: none;"
 )
-
-
-class _AccountLoaderWorker(QThread):
-
-    loaded = pyqtSignal(dict)
-    failed = pyqtSignal(str)
-
-    def __init__(self, client, auth):
-        super().__init__()
-        self._client = client
-        self._auth = auth
-
-    def run(self):
-        result = self._client.get_account(auth=self._auth)
-        if "error" in result:
-            self.failed.emit(result.get("error", "Unknown error"))
-        else:
-            self.loaded.emit(result)
 
 
 class AccountSettingsDialog(QDialog):
@@ -181,10 +164,37 @@ class AccountSettingsDialog(QDialog):
         self._error_widget.setVisible(False)
         self._content_widget.setVisible(False)
 
-        self._worker = _AccountLoaderWorker(self._client, self._auth)
-        self._worker.loaded.connect(self._on_loaded)
+        from qgis.core import QgsApplication
+
+        # Drop any previous in-flight load (Retry) so its result can't land late.
+        self._cancel_worker()
+
+        auth = self._auth
+        client = self._client
+        self._worker = GenericRequestTask(
+            "AI Edit account load",
+            lambda: client.get_account(auth=auth),
+        )
+        self._worker.succeeded.connect(self._on_loaded)
         self._worker.failed.connect(self._on_failed)
-        self._worker.start()
+        QgsApplication.taskManager().addTask(self._worker)
+
+    def _cancel_worker(self):
+        """Disconnect then cancel the loader task so a late result never fires
+        into a closed dialog. We never force-kill a thread mid network-call,
+        which can corrupt Qt's socket state; cancellation is cooperative."""
+        if self._worker is None:
+            return
+        try:
+            self._worker.succeeded.disconnect()
+            self._worker.failed.disconnect()
+        except (RuntimeError, TypeError):  # nosec B110
+            pass
+        try:
+            self._worker.cancel()
+        except Exception:  # nosec B110
+            pass
+        self._worker = None
 
     def _on_loaded(self, data: dict):
         self._loading_label.setVisible(False)
@@ -521,13 +531,16 @@ class AccountSettingsDialog(QDialog):
         self.sign_out_requested.emit()
         self.accept()
 
+    def done(self, result):  # noqa: N802 - Qt signature
+        # accept()/reject() (Sign out, OK) dismiss the dialog without a
+        # closeEvent, so cancel the in-flight loader here too rather than let it
+        # complete with now-stale auth into a dismissed dialog.
+        self._cancel_worker()
+        super().done(result)
+
     def closeEvent(self, event):
-        # The account loader thread has no event loop, so quit() is a no-op.
-        # Wait gives the in-flight network call (built-in 5s timeout) room to
-        # return; terminate is the last-resort exit when the network stack
-        # itself is wedged, otherwise QThread destruction would crash QGIS.
-        if self._worker and self._worker.isRunning():
-            if not self._worker.wait(6000):
-                self._worker.terminate()
-                self._worker.wait(1000)
+        # The loader is a QgsTask now: no thread to wait on or terminate.
+        # Disconnect + cancel so a late result can't fire into the closing
+        # dialog; the task manager drains run() on its own.
+        self._cancel_worker()
         super().closeEvent(event)

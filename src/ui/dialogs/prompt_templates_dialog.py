@@ -1207,6 +1207,12 @@ class PromptTemplatesDialog(QDialog):
         )
         self._search_input.setClearButtonEnabled(True)
         self._search_input.setStyleSheet(_SEARCH_BOX)
+        # Debounce: rebuilding the whole results grid on every keystroke was
+        # visibly laggy. Coalesce keystrokes into one rebuild after a short pause.
+        self._search_debounce = QTimer(self)
+        self._search_debounce.setSingleShot(True)
+        self._search_debounce.setInterval(180)
+        self._search_debounce.timeout.connect(self._run_search)
         self._search_input.textChanged.connect(self._on_search_changed)
         root.addWidget(self._search_input)
 
@@ -1832,7 +1838,15 @@ class PromptTemplatesDialog(QDialog):
         burst of dozens of full-size image downloads."""
         trigger = lambda: self._load_visible_cards(scroll, cards)  # noqa: E731
         self._gallery_loaders[key] = trigger
-        scroll.verticalScrollBar().valueChanged.connect(lambda _v: trigger())
+        # Coalesce scroll ticks: a fast scroll fires valueChanged dozens of
+        # times/sec, and each call is an O(cards) mapTo sweep. Debounce ~50ms so
+        # the sweep runs once the scroll settles. Timer parented to scroll so it
+        # dies with the gallery.
+        debounce = QTimer(scroll)
+        debounce.setSingleShot(True)
+        debounce.setInterval(50)
+        debounce.timeout.connect(trigger)
+        scroll.verticalScrollBar().valueChanged.connect(lambda _v: debounce.start())
         # Two ticks: one once the event loop drains, one after layout settles.
         QTimer.singleShot(0, trigger)
         QTimer.singleShot(80, trigger)
@@ -1840,6 +1854,10 @@ class PromptTemplatesDialog(QDialog):
     @staticmethod
     def _load_visible_cards(scroll: QScrollArea, cards: list) -> None:
         if not _is_alive(scroll):
+            return
+        # Once every (alive) card has its thumbnails, the gallery is warm and the
+        # mapTo sweep is pure waste on every further scroll tick. Skip it.
+        if all(getattr(c, "_thumbs_requested", True) for c in cards if _is_alive(c)):
             return
         viewport = scroll.viewport()
         vp_h = viewport.height()
@@ -2215,6 +2233,7 @@ class PromptTemplatesDialog(QDialog):
         empty query → restore the last sidebar tab."""
         query = text.strip().lower()
         if not query:
+            self._search_debounce.stop()
             if self._active_tab == "__search__":
                 # Restore the tab the user was on before they started searching
                 # (lazily building it if needed).
@@ -2229,12 +2248,20 @@ class PromptTemplatesDialog(QDialog):
         # Entering search: remember current tab so we can restore it on clear.
         if self._active_tab != "__search__":
             self._previous_tab = self._active_tab
-        self._rebuild_search_results(query)
+        # Switch into search mode immediately; debounce only the heavy rebuild
+        # so typing stays smooth.
         self._stack.setCurrentWidget(self._search_page)
         self._active_tab = "__search__"
         # Drop sidebar highlight while searching - no tab is "active".
         for btn in self._sidebar_buttons.values():
             btn.setStyleSheet(_SIDEBAR_ITEM)
+        self._search_debounce.start()
+
+    def _run_search(self):
+        """Debounced: rebuild the search grid for the current query."""
+        query = self._search_input.text().strip().lower()
+        if query:
+            self._rebuild_search_results(query)
 
     # -- Cleanup ---------------------------------------------------------
 

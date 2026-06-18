@@ -592,6 +592,10 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Erro ao adicionar a camada: {error}</translation>
     </message>
     <message>
+        <source>Exit</source>
+        <translation>Sair</translation>
+    </message>
+    <message>
         <source>Exit and return to the start</source>
         <translation>Sair e voltar ao início</translation>
     </message>

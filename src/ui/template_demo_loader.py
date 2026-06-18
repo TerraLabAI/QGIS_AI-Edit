@@ -20,6 +20,11 @@ from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 
 from ..core.logger import log_debug, log_warning
+from ..core.qt_compat import (
+    NoLessSafeRedirectPolicy,
+    RedirectPolicyAttribute,
+    safe_single_shot,
+)
 
 # Bump this when the server-side demo set is re-seeded in a way that must
 # invalidate every client's on-disk cache at once (the 7-day TTL is too slow).
@@ -28,6 +33,11 @@ from ..core.logger import log_debug, log_warning
 # v4: Top Picks demos re-generated; the card grid still served the old cached
 # preview while the detail popup (separate "_preview" key) fetched the new one,
 # so they disagreed. Drop every client's cache so cards re-fetch the new demos.
+# Demos the server returned 404 for (not yet seeded). Module-level so the
+# knowledge survives reopening the library dialog within a QGIS session and we
+# don't re-issue doomed requests (each burns a concurrency slot + 15s timeout).
+_KNOWN_MISSING: set[tuple[str, str]] = set()
+
 _CACHE_DIR_NAME = "ai-edit-template-demos-v4"
 
 
@@ -98,7 +108,6 @@ class TemplateDemoLoader(QObject):
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
-        self._known_missing: set[tuple[str, str]] = set()
         self._queue: list[tuple[str, str, str]] = []
         self._in_flight = 0
         _cache_root().mkdir(parents=True, exist_ok=True)
@@ -112,9 +121,18 @@ class TemplateDemoLoader(QObject):
         if not template_id or not which or not url:
             return
         key = (template_id, which)
-        if key in self._known_missing:
+        if key in _KNOWN_MISSING:
             self.failed.emit(template_id, which)
             return
+        # Defer the disk read + decode to the next event-loop turn so a burst of
+        # cached cards built in one synchronous loop doesn't block the dialog's
+        # first paint. Parented to self, so it can't fire after the loader dies.
+        safe_single_shot(
+            0, self,
+            lambda t=template_id, w=which, u=url: self._load_cached_or_fetch(t, w, u),
+        )
+
+    def _load_cached_or_fetch(self, template_id: str, which: str, url: str) -> None:
         pm = read_cached_pixmap(template_id, which)
         if pm is not None:
             self.loaded.emit(template_id, which, pm)
@@ -131,11 +149,9 @@ class TemplateDemoLoader(QObject):
 
     def _start(self, template_id: str, which: str, url: str) -> None:
         req = QNetworkRequest(QUrl(url))
-        # FollowRedirectsAttribute was removed in Qt6; RedirectPolicyAttribute works on Qt5.9+ and Qt6.
-        req.setAttribute(
-            QNetworkRequest.Attribute.RedirectPolicyAttribute,
-            QNetworkRequest.RedirectPolicy.NoLessSafeRedirectPolicy,
-        )
+        # Follow redirects. Resolved via qt_compat (scoped-then-flat) because
+        # PyQt5 on some QGIS 3 builds exposes these enums flat, not scoped.
+        req.setAttribute(RedirectPolicyAttribute, NoLessSafeRedirectPolicy)
         req.setRawHeader(b"Accept", b"image/jpeg, image/png, image/webp, image/*")
         req.setTransferTimeout(15_000)
         # Route through QGIS's network manager so the fetch inherits its SSL CA
@@ -159,7 +175,7 @@ class TemplateDemoLoader(QObject):
                 http_int = 0
             if err_code != no_err or http_int >= 400:
                 if http_int == 404:
-                    self._known_missing.add((template_id, which))
+                    _KNOWN_MISSING.add((template_id, which))
                 else:
                     log_debug(
                         f"Demo fetch failed for {template_id}/{which}: "

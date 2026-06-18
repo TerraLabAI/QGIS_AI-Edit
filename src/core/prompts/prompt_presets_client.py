@@ -44,8 +44,11 @@ from qgis.PyQt.QtCore import QSettings
 
 from ..logger import log_debug, log_warning
 
-_CACHE_KEY = "terralab/ai_edit/server_catalog_v2"
-_CACHE_TS_KEY = "terralab/ai_edit/server_catalog_v2_ts"
+# Namespaced under AIEdit/ like every other plugin QSettings key (was under the
+# shared terralab/ root). Renaming orphans the old cached catalog harmlessly:
+# it is re-fetched from the server on next launch.
+_CACHE_KEY = "AIEdit/server_catalog_v2"
+_CACHE_TS_KEY = "AIEdit/server_catalog_v2_ts"
 # 1h. The cache is now primarily an instant-render + offline fallback under a
 # stale-while-revalidate strategy: every plugin start fires force_refresh=True
 # on a background thread, so the catalog stays fresh without blocking the UI.

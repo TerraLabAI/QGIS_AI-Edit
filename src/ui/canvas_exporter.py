@@ -18,7 +18,7 @@ from qgis.core import (
     QgsUnitTypes,
 )
 from qgis.PyQt.QtCore import QBuffer, QSize
-from qgis.PyQt.QtGui import QImage, QImageWriter, QPainter
+from qgis.PyQt.QtGui import QColor, QImage, QImageWriter, QPainter
 
 from ..core import qt_compat as QtC
 from ..core.errors import AIEditError, ErrorCode
@@ -228,6 +228,7 @@ class ExportPrep:
         "background_color",
         "map_crs",
         "clean_base_settings",
+        "markup_overlay",
     )
 
     def __init__(
@@ -239,6 +240,7 @@ class ExportPrep:
         background_color,
         map_crs,
         clean_base_settings=None,
+        markup_overlay=None,
     ):
         self.settings = settings
         self.out_w = out_w
@@ -250,6 +252,10 @@ class ExportPrep:
         # SAME zone WITHOUT the marks (the marks ride on the main image). None
         # when there is no markup.
         self.clean_base_settings = clean_base_settings
+        # Marks rasterized on the main thread into a transparent QImage. The
+        # worker composites it onto the clean main render (the live markup
+        # memory layer must never be rendered off-thread). None when no markup.
+        self.markup_overlay = markup_overlay
 
 
 def prepare_export(
@@ -262,12 +268,14 @@ def prepare_export(
     """Pick output size and clone settings. Cheap, main-thread.
 
     When ``markup_layer`` is given (the user drew guidance annotations), the
-    MAIN image KEEPS that layer so the marks are drawn directly onto the image
-    the model edits, and a second ``clean_base_settings`` renders the SAME zone
-    WITHOUT the marks. Both share the identical adjusted extent and output size
-    so the clean base registers pixel-for-pixel with the marked main image; the
-    model restores the pixels under each mark from it and leaves no stroke in
-    the result.
+    marks are rasterized on THIS (main) thread into ``markup_overlay`` and the
+    worker composites them onto the clean main render, so the marks bake into
+    the image the model edits without rendering the live markup memory layer
+    off-thread (a parallel render job spun up on the export worker thread over a
+    main-thread memory layer deadlocks). A second ``clean_base_settings``
+    renders the SAME zone WITHOUT the marks at the identical adjusted extent and
+    output size, so the clean base registers pixel-for-pixel and the model
+    restores the pixels under each mark, leaving no stroke in the result.
     """
     if extent.width() <= 0 or extent.height() <= 0:
         raise ValueError("Invalid extent: width and height must be positive")
@@ -313,16 +321,13 @@ def prepare_export(
     settings.setOutputSize(QSize(out_w, out_h))
 
     clean_base_settings = None
+    markup_overlay = None
     if markup_layer is not None:
         try:
             markup_id = markup_layer.id()
         except RuntimeError:
             markup_id = None
         if markup_id is not None:
-            # Main image KEEPS the markup so the marks are drawn directly onto
-            # the image the model edits (co-located guidance reads far stronger
-            # than a separate annotated copy). ``settings`` already carries the
-            # markup layer, so leave it untouched.
             all_layers = settings.layers()
             clean_layers = [lyr for lyr in all_layers if lyr.id() != markup_id]
             markup_in_canvas = len(clean_layers) != len(all_layers)
@@ -334,20 +339,33 @@ def prepare_export(
             clean_base_settings.setLayers(clean_layers)
             clean_base_settings.setExtent(adjusted_extent)
             clean_base_settings.setOutputSize(QSize(out_w, out_h))
-            log_debug(
-                f"Markup prep: markup_in_canvas={markup_in_canvas}, "
-                f"main_layers={len(all_layers)}, "
-                f"clean_base_layers={len(clean_layers)}, "
-                f"out={out_w}x{out_h}"
-            )
-            if not markup_in_canvas:
+            if markup_in_canvas:
+                # The marks must bake into the main image, but the markup layer
+                # is an in-memory QgsVectorLayer with main-thread affinity.
+                # Rendering it inside the export QgsTask (a worker thread) via
+                # QgsMapRendererParallelJob deadlocks (it never finishes). So
+                # rasterize the marks HERE on the main thread, drop the live
+                # layer from the worker's render set, and let render_export()
+                # composite the overlay onto the clean main render.
+                markup_overlay = _render_markup_overlay(
+                    map_settings, markup_layer, adjusted_extent, out_w, out_h
+                )
+                settings.setLayers(clean_layers)
+            else:
                 # Markup drawn but its layer is not in the canvas render set
-                # (user hid it): the main image would carry no marks, so the
-                # feature silently no-ops.
+                # (user hid it): the main image carries no marks, so the feature
+                # silently no-ops.
                 log_warning(
                     "Markup: markup layer not in canvas render set (hidden?); "
                     "main image carries no marks"
                 )
+            log_debug(
+                f"Markup prep: markup_in_canvas={markup_in_canvas}, "
+                f"overlay={'yes' if markup_overlay is not None else 'no'}, "
+                f"main_layers={len(all_layers)}, "
+                f"clean_base_layers={len(clean_layers)}, "
+                f"out={out_w}x{out_h}"
+            )
         else:
             log_warning(
                 "Markup: markup layer reference is stale; no clean base rendered"
@@ -361,6 +379,7 @@ def prepare_export(
         background_color=map_settings.backgroundColor(),
         map_crs=map_crs,
         clean_base_settings=clean_base_settings,
+        markup_overlay=markup_overlay,
     )
 
 
@@ -393,6 +412,33 @@ def _render_settings_to_image(
             fallback.waitForFinished()
         finally:
             painter.end()
+    return image
+
+
+def _render_markup_overlay(
+    base_settings: QgsMapSettings,
+    markup_layer,
+    extent: QgsRectangle,
+    out_w: int,
+    out_h: int,
+) -> QImage | None:
+    """Rasterize ONLY the markup layer to a transparent image on the CALLING thread.
+
+    The markup layer is an in-memory vector layer with main-thread affinity, so
+    rendering it inside the off-thread export task deadlocks (see prepare_export).
+    Called from the main thread, this returns a transparent overlay the worker
+    composites onto the clean main render so the marks still bake into the image.
+    Returns None when the render produces nothing usable.
+    """
+    settings = _clone_map_settings(base_settings)
+    settings.setLayers([markup_layer])
+    settings.setExtent(extent)
+    settings.setOutputSize(QSize(out_w, out_h))
+    transparent = QColor(0, 0, 0, 0)
+    settings.setBackgroundColor(transparent)
+    image = _render_settings_to_image(settings, out_w, out_h, transparent)
+    if image is None or image.isNull():
+        return None
     return image
 
 
@@ -436,6 +482,14 @@ def render_export(
     image = _render_settings_to_image(
         prep.settings, prep.out_w, prep.out_h, prep.background_color, progress_cb
     )
+    if prep.markup_overlay is not None and not prep.markup_overlay.isNull():
+        # Marks were rasterized on the main thread (the live markup memory layer
+        # cannot be rendered off-thread); bake them onto the clean main render.
+        painter = QPainter(image)
+        try:
+            painter.drawImage(0, 0, prep.markup_overlay)
+        finally:
+            painter.end()
     b64, raw_len, fmt_token = _encode_image(image, prep.out_w, prep.out_h)
     return b64, raw_len, prep.actual_extent, fmt_token
 

@@ -168,9 +168,20 @@ class GenerationTask(QgsTask):
                 "generation_refund_failed": te.GENERATION_REFUND_FAILED,
             }
             telemetry.track(allowed[event], properties)
-            telemetry.flush()
+            # No flush() from the worker thread: addTask() is main-thread-only.
+            # The main thread flushes when the generation finishes
+            # (_on_generation_error / _on_generation_finished).
         except Exception:  # nosec B110
             pass
+
+    def _sleep_cancellable(self, seconds: float) -> bool:
+        """Sleep in 0.2s slices so Cancel is honored during a retry backoff.
+        Returns True if cancellation was requested during the wait."""
+        for _ in range(int(seconds / 0.2)):
+            if self.isCanceled():
+                return True
+            time.sleep(0.2)
+        return self.isCanceled()
 
     def run(self) -> bool:
         if self.isCanceled():
@@ -257,6 +268,11 @@ class GenerationTask(QgsTask):
             return False
 
         if not result.success:
+            # No client-side refund on timeout: a timeout is usually the user's
+            # own slow/flaky link (the job often completed server-side and lands
+            # in Recent), which is not our fault. The server reconcile cron is
+            # the sole authority and refunds only genuine server-side failures.
+            # We only refund when delivery fails on our side (download path).
             return self._mark_failed(
                 result.error or tr("Generation failed"),
                 result.error_code or ErrorCode.GENERATION_FAILED.value,
@@ -287,7 +303,8 @@ class GenerationTask(QgsTask):
                 if attempt < 3:
                     backoff = 2 ** (attempt - 1)
                     log_debug(f"Download attempt {attempt} failed: {e}; retry in {backoff}s")
-                    time.sleep(backoff)
+                    if self._sleep_cancellable(backoff):
+                        return False
 
         if image_data is None:
             request_id = getattr(result, "request_id", None) or (
@@ -344,7 +361,7 @@ class GenerationTask(QgsTask):
                     "error_code": "write_geotiff_failed",
                     "error_message": tail[:200],
                 })
-                telemetry.flush()
+                # Flush runs on the main thread in _on_generation_error.
             except Exception:  # nosec B110
                 pass
             return self._mark_failed(

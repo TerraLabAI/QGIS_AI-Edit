@@ -592,6 +592,10 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Erreur lors de l'ajout de la couche : {error}</translation>
     </message>
     <message>
+        <source>Exit</source>
+        <translation>Quitter</translation>
+    </message>
+    <message>
         <source>Exit and return to the start</source>
         <translation>Quitter et revenir au début</translation>
     </message>

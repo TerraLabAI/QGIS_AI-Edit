@@ -592,6 +592,10 @@ We'd love to hear from you!</source>
         <translation>Error al añadir la capa: {error}</translation>
     </message>
     <message>
+        <source>Exit</source>
+        <translation>Salir</translation>
+    </message>
+    <message>
         <source>Exit and return to the start</source>
         <translation>Salir y volver al inicio</translation>
     </message>

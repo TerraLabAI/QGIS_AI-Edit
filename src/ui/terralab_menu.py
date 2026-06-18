@@ -10,6 +10,10 @@ from qgis.PyQt.QtWidgets import QMenu
 TERRALAB_URL = "https://terra-lab.ai?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=menu_more"
 _UTILITY_SEPARATOR = "_terralab_utility_sep"
 _PLUGINS_MENU_NAME = "TerraLab"
+# Stable identity for the shared menubar menu, robust to translation or a
+# third-party QMenu("TerraLab") colliding on display text (the toolbar already
+# keys on an objectName; the menu now matches).
+_MENU_OBJECT_NAME = "TerraLabMenu"
 
 
 def _find_terralab_logo():
@@ -33,9 +37,11 @@ def _open_plugin_manager_updates():
 def get_or_create_terralab_menu(main_window) -> QMenu:
     menu_bar = main_window.menuBar()
     for action in menu_bar.actions():
-        if action.menu() and action.text() == "TerraLab":
-            return action.menu()
+        menu = action.menu()
+        if menu and (menu.objectName() == _MENU_OBJECT_NAME or action.text() == "TerraLab"):
+            return menu
     menu = QMenu("TerraLab", main_window)
+    menu.setObjectName(_MENU_OBJECT_NAME)
     menu_bar.addMenu(menu)
     sep = menu.addSeparator()
     sep.setObjectName(_UTILITY_SEPARATOR)
@@ -49,12 +55,22 @@ def get_or_create_terralab_menu(main_window) -> QMenu:
     return menu
 
 
-def add_plugin_to_menu(menu: QMenu, action, product_id: str):
+def add_plugin_to_menu(menu: QMenu, action, product_id: str, is_cross_promo: bool = False):
+    """Add a plugin action to the shared menu.
+
+    Cross-promo placeholders never replace a real plugin's action (mirrors
+    add_action_to_toolbar); a real action does replace a placeholder. Without
+    this, load order could let AI Edit's cross-promo entry clobber the sibling
+    plugin's real menu item.
+    """
     action.setProperty("terralab_product_id", product_id)
+    action.setProperty("terralab_is_cross_promo", is_cross_promo)
     for a in menu.actions():
         if a.objectName() == _UTILITY_SEPARATOR:
             break
         if a.property("terralab_product_id") == product_id and a is not action:
+            if is_cross_promo and not a.property("terralab_is_cross_promo"):
+                return
             menu.removeAction(a)
             break
     sep_action = None

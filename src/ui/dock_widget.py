@@ -1510,7 +1510,7 @@ class AIEditDockWidget(QDockWidget):
         self._generate_btn.setVisible(False)
         generate_row.addWidget(self._generate_btn, 1)
 
-        self._exit_btn = QPushButton(tr("Done"))
+        self._exit_btn = QPushButton(tr("Exit"))
         self._exit_btn.setToolTip(tr("Exit and return to the start"))
         self._exit_btn.setCursor(QtC.PointingHandCursor)
         # Width: hold a longer label ("Quitter", "Salir", "Sair") without
@@ -1665,7 +1665,7 @@ class AIEditDockWidget(QDockWidget):
         self._result_regenerate_btn.clicked.connect(self._on_retry_clicked)
         result_actions_row.addWidget(self._result_regenerate_btn, 1)
 
-        self._result_exit_btn = QPushButton(tr("Done"))
+        self._result_exit_btn = QPushButton(tr("Exit"))
         self._result_exit_btn.setToolTip(tr("Exit and return to the start"))
         self._result_exit_btn.setCursor(QtC.PointingHandCursor)
         # See `_exit_btn` above for why this is a minimum rather than fixed

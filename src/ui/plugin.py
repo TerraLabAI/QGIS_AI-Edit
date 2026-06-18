@@ -406,6 +406,8 @@ class AIEditPlugin:
         self._export_config_loader = None
         self._credits_loader = None
         self._catalog_loader = None
+        # Startup config bootstrap task; cancelled in unload like the loaders.
+        self._bootstrap_task = None
         # Holds in-flight history actions (add-to-map / download) so the task
         # isn't garbage-collected mid-run.
         self._history_tasks: list = []
@@ -597,7 +599,9 @@ class AIEditPlugin:
             icon=ai_seg_icon,
         )
         add_action_to_toolbar(self._terralab_toolbar, self._ai_seg_action, "ai-segmentation", is_cross_promo=True)
-        add_plugin_to_menu(self._terralab_menu, self._ai_seg_action, "ai-segmentation")
+        add_plugin_to_menu(
+            self._terralab_menu, self._ai_seg_action, "ai-segmentation", is_cross_promo=True
+        )
         add_to_plugins_menu(self._iface, self._ai_seg_action)
 
         # Add "Settings" to the TerraLab menu utility section
@@ -661,7 +665,11 @@ class AIEditPlugin:
         self._update_check_done = False
         self._update_check_delays = [5000, 30000, 60000, 120000]
         self._update_check_index = 0
-        QTimer.singleShot(self._update_check_delays[0], self._check_for_plugin_update)
+        # Parent the timer to the dock so it can't fire into a torn-down plugin
+        # after unload (and doesn't retain the plugin in the global event loop).
+        QtC.safe_single_shot(
+            self._update_check_delays[0], self._dock_widget, self._check_for_plugin_update
+        )
         self._dock_widget.stop_clicked.connect(self._on_stop)
         self._dock_widget.generate_clicked.connect(self._on_generate)
         self._dock_widget.retry_clicked.connect(self._on_retry)
@@ -769,6 +777,9 @@ class AIEditPlugin:
 
     def unload(self):
         """Called by QGIS when plugin is unloaded."""
+        # Make any pending plugin-update-check timer a no-op (belt-and-suspenders
+        # alongside parenting it to the dock).
+        self._update_check_done = True
         # Stop generation task. QgsTaskManager owns the task lifecycle, so we
         # request cancellation and drop our reference; the framework drains
         # the run() loop and emits taskTerminated on the main thread.
@@ -810,6 +821,7 @@ class AIEditPlugin:
             self._key_validation_worker,
             self._pairing_worker,
             self._catalog_loader,
+            self._bootstrap_task,
         ]:
             if loader is None:
                 continue
@@ -826,6 +838,7 @@ class AIEditPlugin:
         self._key_validation_worker = None
         self._pairing_worker = None
         self._catalog_loader = None
+        self._bootstrap_task = None
 
         # Drain in-flight history tasks (add-to-map, download, reference reload).
         # Their succeeded/failed slots touch self._canvas / self._iface, which
@@ -946,6 +959,15 @@ class AIEditPlugin:
             self._terralab_menu = None
 
         if self._map_tool is not None:
+            # Detach the selection tool from the canvas before we drop it, or
+            # QgsMapCanvas keeps pointing at a torn-down tool and the next click
+            # after a reload dispatches into freed state. Mirrors the markup
+            # unset above.
+            try:
+                if self._canvas is not None and self._canvas.mapTool() is self._map_tool:
+                    self._canvas.unsetMapTool(self._map_tool)
+            except RuntimeError:  # nosec B110 - C++ canvas already gone
+                pass
             try:
                 self._map_tool.cleanup()
             except Exception as err:  # nosec B110
@@ -1301,6 +1323,13 @@ class AIEditPlugin:
             }))
             telemetry.flush()
             self._generation_service.cancel()
+            # Cancel the task too, not just the service. Otherwise finished()
+            # sees isCanceled()==False and emits a stale "Generation cancelled"
+            # error into the reset UI (plus a spurious generation_failed event).
+            try:
+                self._worker.cancel()
+            except Exception:  # nosec B110
+                pass
         self._clear_selection_rectangle()
         self._selected_extent = None
         self._last_image_b64 = None
@@ -1367,7 +1396,7 @@ class AIEditPlugin:
         self._update_check_index += 1
         if self._update_check_index < len(self._update_check_delays):
             delay = self._update_check_delays[self._update_check_index]
-            QTimer.singleShot(delay, self._check_for_plugin_update)
+            QtC.safe_single_shot(delay, self._dock_widget, self._check_for_plugin_update)
 
     def _on_exit_clicked(self):
         """User clicked Exit / Done: cancel work and return to LAUNCH."""
@@ -1381,6 +1410,13 @@ class AIEditPlugin:
             }))
             telemetry.flush()
             self._generation_service.cancel()
+            # Cancel the task too, not just the service. Otherwise finished()
+            # sees isCanceled()==False and emits a stale "Generation cancelled"
+            # error into the reset UI (plus a spurious generation_failed event).
+            try:
+                self._worker.cancel()
+            except Exception:  # nosec B110
+                pass
         self._clear_selection_rectangle()
         self._selected_extent = None
         self._last_image_b64 = None

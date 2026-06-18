@@ -109,11 +109,24 @@ def _compute_vector_features(
     proj = src.GetProjection()
     if not proj:
         raise AIEditError(ErrorCode.INVALID_RASTER, tr("Raster has no CRS"))
+    # A degenerate geotransform (no real pixel size) would make min_area and
+    # simplify_tol collapse to 0 and emit thousands of single-pixel polygons.
+    if not gt or gt[1] == 0 or gt[5] == 0:
+        raise AIEditError(
+            ErrorCode.INVALID_RASTER, tr("Raster has no usable georeferencing.")
+        )
 
     r = src.GetRasterBand(1).ReadAsArray()
     g = src.GetRasterBand(2).ReadAsArray()
     b = src.GetRasterBand(3).ReadAsArray()
     src = None
+    # GDAL returns None (it does not raise) when a band read fails on a corrupt
+    # or truncated file; guard so we surface a clean error, not an AttributeError.
+    if r is None or g is None or b is None:
+        raise AIEditError(
+            ErrorCode.INVALID_RASTER,
+            tr("Could not read raster pixels (the file may be incomplete)."),
+        )
 
     tr_r, tg_g, tb_b = target_rgb
     mask = (

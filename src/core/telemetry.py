@@ -1,6 +1,7 @@
 """Telemetry batched in memory, flushed once per generation cycle. Fails silently."""
 
 import platform
+import threading
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -83,6 +84,10 @@ class TelemetryCollector:
         self._client = client
         self._auth_manager = auth_manager
         self._plugin_version = plugin_version
+        # Guards _batch / _pending_pre_auth / _inflight: track() can run on a
+        # worker thread (refund + write-error paths) while the main thread
+        # flushes, so the list mutations must not race.
+        self._lock = threading.Lock()
         self._batch: list = []
         # Pre-auth lifecycle events parked here until first authenticated flush
         # drains them, so the activation funnel stays observable. Capped to 50.
@@ -139,38 +144,47 @@ class TelemetryCollector:
                 **(properties or {}),
             },
         }
-        self._batch.append(evt)
+        with self._lock:
+            self._batch.append(evt)
 
     def flush(self):
         """Non-blocking. Lifecycle events ship pre-consent; everything else
-        requires consent. Pre-auth events queue in _pending_pre_auth."""
-        if not self._batch and not self._pending_pre_auth:
-            return
+        requires consent. Pre-auth events queue in _pending_pre_auth.
 
-        if not self._has_auth():
-            for evt in self._batch:
-                if evt["event"] in _NO_CONSENT_EVENTS and len(self._pending_pre_auth) < 50:
-                    self._pending_pre_auth.append(evt)
+        MAIN THREAD ONLY: it ends in QgsApplication.taskManager().addTask(),
+        which is main-thread-only. Worker threads must only telemetry.track()
+        and let the next main-thread flush ship the batch (see generation_worker)."""
+        task = None
+        with self._lock:
+            if not self._batch and not self._pending_pre_auth:
+                return
+
+            if not self._has_auth():
+                for evt in self._batch:
+                    if evt["event"] in _NO_CONSENT_EVENTS and len(self._pending_pre_auth) < 50:
+                        self._pending_pre_auth.append(evt)
+                self._batch.clear()
+                return
+
+            consented = self._has_consent()
+            events_to_send = list(self._pending_pre_auth) + [
+                e for e in self._batch
+                if consented or e["event"] in _NO_CONSENT_EVENTS
+            ]
             self._batch.clear()
-            return
+            self._pending_pre_auth.clear()
 
-        consented = self._has_consent()
-        events_to_send = list(self._pending_pre_auth) + [
-            e for e in self._batch
-            if consented or e["event"] in _NO_CONSENT_EVENTS
-        ]
-        self._batch.clear()
-        self._pending_pre_auth.clear()
+            if not events_to_send:
+                return
 
-        if not events_to_send:
-            return
+            auth = self._auth_manager.get_auth_header()
+            task = _TelemetryFlushTask(self._client, events_to_send, auth)
+            # Hold a strong reference so the task isn't GC'd while running.
+            # The TaskManager would keep it alive too, but tracking lets us
+            # cancel everything cleanly on shutdown().
+            self._inflight.append(task)
 
-        auth = self._auth_manager.get_auth_header()
-        task = _TelemetryFlushTask(self._client, events_to_send, auth)
-        # Hold a strong reference so the task isn't GC'd while running.
-        # The TaskManager would keep it alive too, but tracking lets us
-        # cancel everything cleanly on shutdown().
-        self._inflight.append(task)
+        # Outside the lock: connect signals + hand to the task manager (Qt calls).
         try:
             task.taskCompleted.connect(lambda t=task: self._drop_inflight(t))
             task.taskTerminated.connect(lambda t=task: self._drop_inflight(t))
@@ -179,18 +193,21 @@ class TelemetryCollector:
         QgsApplication.taskManager().addTask(task)
 
     def _drop_inflight(self, task: "_TelemetryFlushTask") -> None:
-        try:
-            self._inflight.remove(task)
-        except ValueError:
-            pass
+        with self._lock:
+            try:
+                self._inflight.remove(task)
+            except ValueError:
+                pass
 
     def shutdown(self):
-        for task in list(self._inflight):
+        with self._lock:
+            inflight = list(self._inflight)
+            self._inflight.clear()
+        for task in inflight:
             try:
                 task.cancel()
             except Exception:  # nosec B110
                 pass
-        self._inflight.clear()
 
 
 _collector: Optional[TelemetryCollector] = None

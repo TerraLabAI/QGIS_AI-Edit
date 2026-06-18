@@ -210,6 +210,7 @@ class TerraLabClient:
         parent_request_id: str | None = None,
         template_id: str | None = None,
         template_name: str | None = None,
+        idempotency_key: str | None = None,
     ) -> dict:
         """Submit a prompt for generation. Exactly one of ``image_b64`` or
         ``upload_token`` must be provided.
@@ -236,6 +237,10 @@ class TerraLabClient:
             "resolution": resolution,
             "aspect_ratio": aspect_ratio,
         }
+        # Stable per-attempt key so a retried submit dedupes server-side instead
+        # of charging twice. Sent only when present; old servers ignore it.
+        if idempotency_key:
+            payload["idempotency_key"] = idempotency_key
         if upload_token is not None:
             payload["upload_token"] = upload_token
         else:
@@ -501,6 +506,9 @@ class TerraLabClient:
         Raises RuntimeError on failure (callers use try/except).
         """
         req = QNetworkRequest(QUrl(url))
+        # Follow the 302 to storage. Resolved through qt_compat because PyQt5 on
+        # some QGIS 3 builds exposes these enums flat, not scoped.
+        req.setAttribute(QtC.RedirectPolicyAttribute, QtC.NoLessSafeRedirectPolicy)
         req.setTransferTimeout(_TIMEOUT_DOWNLOAD)
 
         blocker = QgsBlockingNetworkRequest()
@@ -575,6 +583,9 @@ class TerraLabClient:
         """
         url = f"{self.base_url}{path}"
         req = QNetworkRequest(QUrl(url))
+        # Follow redirects (e.g. signed-image 302s). Resolved through qt_compat
+        # because PyQt5 on some QGIS 3 builds exposes these enums flat.
+        req.setAttribute(QtC.RedirectPolicyAttribute, QtC.NoLessSafeRedirectPolicy)
         req.setRawHeader(b"Content-Type", b"application/json")
         req.setTransferTimeout(timeout_ms)
 

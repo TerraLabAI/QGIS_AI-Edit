@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import base64
+import secrets
 import time
 from dataclasses import dataclass
 from typing import Callable
 
-from ..errors import ErrorCode
+from ..errors import NETWORK_ERROR_CODES, ErrorCode
 from ..i18n import tr
 from ..logger import log_debug, log_warning
 
@@ -47,45 +48,19 @@ class GenerationService:
         self._poll_interval = poll_interval
         self._max_polls = max_polls
         self._cancelled = False
-        self._active_request_id: str | None = None
-        self._active_auth: dict | None = None
 
     def cancel(self):
-        """Mark the polling loop as cancelled and fire a best-effort
-        server-side cancel so the row transitions to status='cancelled' and
-        the credits are refunded immediately (without waiting for the
-        reconciliation cron to time the row out)."""
+        """Stop the local polling loop only. We deliberately do NOT cancel the
+        job server-side: a user interrupting (Stop/Exit, closing the dock,
+        unloading the plugin) is not our fault, so we never refund. The
+        generation keeps running on the server, is charged once, and the result
+        lands in the user's Recent tab to pick up. Refunds happen only for
+        genuine server-side failures (the reconcile cron) or our own delivery
+        failures (the download path)."""
         self._cancelled = True
-        request_id = self._active_request_id
-        auth = self._active_auth
-        if not request_id or not auth:
-            return
-        # Use QgsTask instead of a raw threading.Thread daemon. Python daemon
-        # threads running QgsBlockingNetworkRequest can corrupt Qt's network
-        # state on shutdown because Qt sockets aren't safe outside Qt threads.
-        try:
-            from qgis.core import QgsApplication
-
-            from ...workers.generic_request_task import GenericRequestTask
-
-            client = self._client
-
-            def _do_cancel():
-                try:
-                    client.cancel_generation(request_id, auth)
-                except Exception:  # nosec B110
-                    pass
-                return {}
-
-            task = GenericRequestTask("AI Edit generation cancel", _do_cancel)
-            QgsApplication.taskManager().addTask(task)
-        except Exception as err:  # nosec B110
-            log_warning(f"Cancel task could not be scheduled: {err}")
 
     def reset(self):
         self._cancelled = False
-        self._active_request_id = None
-        self._active_auth = None
 
     def _sleep_or_cancelled(self, seconds: float) -> bool:
         """Sleep in small chunks so a Cancel is picked up quickly. Returns True
@@ -190,9 +165,20 @@ class GenerationService:
             )
             return None
 
-        ok, err = self._client.upload_to_signed_url(upload_url, data, headers)
+        # Retry a transient blip on the storage PUT before conceding. The
+        # presigned path is taken precisely for large images, so a single
+        # dropped packet here would otherwise cascade into an inline body that
+        # overflows the cap and surfaces a misleading "too much image data".
+        ok, err = False, None
+        for _attempt in range(3):
+            ok, err = self._client.upload_to_signed_url(upload_url, data, headers)
+            if ok:
+                break
+            log_warning(f"Presigned upload attempt {_attempt + 1} failed: {err}")
+            if _attempt < 2:
+                time.sleep(0.5 * (_attempt + 1))
         if not ok:
-            log_warning(f"Presigned upload failed: {err}; falling back to inline")
+            log_warning(f"Presigned upload failed after retries: {err}; falling back to inline")
             return None
         return token
 
@@ -325,9 +311,24 @@ class GenerationService:
             if ctx.template_name:
                 geo_kwargs["template_name"] = ctx.template_name
 
-        if upload_token is not None:
+        # One idempotency key for this whole generation attempt: a submit retried
+        # after a dropped response reuses it so the server dedupes instead of
+        # creating a second paid job. Old servers ignore the field.
+        idempotency_key = secrets.token_urlsafe(16)
+        image_kwargs = (
+            {"upload_token": upload_token}
+            if upload_token is not None
+            else {"image_b64": image_b64}
+        )
+        resp: dict = {}
+        for _attempt in range(2):
+            if self._cancelled:
+                return GenerationResult(
+                    success=False,
+                    error=tr("Generation cancelled"),
+                    error_code=ErrorCode.GENERATION_CANCELLED.value,
+                )
             resp = self._client.submit_generation(
-                upload_token=upload_token,
                 prompt=prompt,
                 resolution=suggested_resolution,
                 aspect_ratio=aspect_ratio,
@@ -335,31 +336,45 @@ class GenerationService:
                 context_images=context_images,
                 guidance_image=guidance_inline,
                 guidance_upload_token=guidance_upload_token,
+                idempotency_key=idempotency_key,
+                **image_kwargs,
                 **geo_kwargs,
             )
-        else:
-            resp = self._client.submit_generation(
-                image_b64=image_b64,
-                prompt=prompt,
-                resolution=suggested_resolution,
-                aspect_ratio=aspect_ratio,
-                auth=auth,
-                context_images=context_images,
-                guidance_image=guidance_inline,
-                guidance_upload_token=guidance_upload_token,
-                **geo_kwargs,
-            )
-
-        if "error" in resp:
+            if "error" not in resp:
+                break
+            code = resp.get("code", "")
+            # Retry only a transient network blip, reusing the key so the retry
+            # cannot double-charge. App errors (quota, bad request) fail fast.
+            if code in NETWORK_ERROR_CODES and _attempt == 0:
+                if self._sleep_or_cancelled(1.0):
+                    return GenerationResult(
+                        success=False,
+                        error=tr("Generation cancelled"),
+                        error_code=ErrorCode.GENERATION_CANCELLED.value,
+                    )
+                continue
             return GenerationResult(
-                success=False, error=resp["error"], error_code=resp.get("code", "")
+                success=False, error=resp["error"], error_code=code
             )
 
-        request_id = resp["request_id"]
+        # A flaky link can drop the connection right as a 2xx arrives, leaving an
+        # empty/truncated body (_request returns {} for an empty 2xx). A bare
+        # resp["request_id"] would then raise KeyError out of run(), which emits
+        # no failed signal and wedges the dock on "generating" forever. Treat a
+        # missing id as a clean, reassuring failure instead.
+        request_id = resp.get("request_id")
+        if not request_id:
+            log_warning(f"Submit returned no request_id; resp keys={list(resp.keys())}")
+            return GenerationResult(
+                success=False,
+                error=tr(
+                    "The server did not confirm your request. If a credit was "
+                    "charged it will be refunded shortly. Check the Recent tab "
+                    "before retrying."
+                ),
+                error_code=ErrorCode.SERVER_ERROR.value,
+            )
         submit_time = time.time()
-        # Track active job so cancel() can fire a server-side cancel + refund.
-        self._active_request_id = request_id
-        self._active_auth = auth
         log_debug(
             f"Submitted: request_id={request_id}, "
             f"resolution={resp.get('resolution', suggested_resolution)}, "
@@ -517,31 +532,39 @@ class GenerationService:
         # poll budget but the server may have a terminal state cached, or can
         # close it via the provider queue now. Saves the user the round-trip to the
         # reconcile cron (which would otherwise take up to 2 min to resolve).
-        try:
-            final = self._client.poll_status(request_id, auth=auth, force_fallback=True)
-            final_status = final.get("status", "unknown")
-            if final_status == "completed":
-                if ctx is not None:
-                    ctx.poll_count = polls
-                    ctx.total_wait_seconds = round(time.time() - submit_time, 1)
-                    ctx.final_status = "completed"
-                return GenerationResult(
-                    success=True,
-                    image_url=final.get("image_url"),
-                    request_id=request_id,
-                )
-            if final_status == "failed":
-                if ctx is not None:
-                    ctx.poll_count = polls
-                    ctx.total_wait_seconds = round(time.time() - submit_time, 1)
-                    ctx.final_status = "failed"
-                return GenerationResult(
-                    success=False,
-                    error=final.get("error") or tr("Generation failed"),
-                    request_id=request_id,
-                )
-        except Exception:  # nosec B110
-            pass
+        # Retry once on a flaky link so a single blip doesn't discard a
+        # generation that actually finished. Capped at 2 attempts: this asks the
+        # server to hit the provider queue, so we must not hammer it.
+        for _attempt in range(2):
+            if self._cancelled:
+                break
+            try:
+                final = self._client.poll_status(request_id, auth=auth, force_fallback=True)
+                final_status = final.get("status", "unknown")
+                if final_status == "completed":
+                    if ctx is not None:
+                        ctx.poll_count = polls
+                        ctx.total_wait_seconds = round(time.time() - submit_time, 1)
+                        ctx.final_status = "completed"
+                    return GenerationResult(
+                        success=True,
+                        image_url=final.get("image_url"),
+                        request_id=request_id,
+                    )
+                if final_status == "failed":
+                    if ctx is not None:
+                        ctx.poll_count = polls
+                        ctx.total_wait_seconds = round(time.time() - submit_time, 1)
+                        ctx.final_status = "failed"
+                    return GenerationResult(
+                        success=False,
+                        error=final.get("error") or tr("Generation failed"),
+                        request_id=request_id,
+                    )
+            except Exception:  # nosec B110
+                pass
+            if _attempt == 0 and self._sleep_or_cancelled(1.5):
+                break
 
         if ctx is not None:
             ctx.poll_count = polls

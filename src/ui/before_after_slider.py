@@ -17,8 +17,9 @@ QT6 = QT_VERSION >= 0x060000
 
 # Auto-loop period (ms): full oscillation 0 → 100 → 0.
 _AUTO_LOOP_PERIOD_MS = 5800
-# Frame interval (ms): 60 fps target on idle systems.
-_FRAME_INTERVAL_MS = 16
+# Frame interval (ms): ~30 fps is plenty for the slow triangle-wave loop and
+# halves the repaint load versus 60 fps.
+_FRAME_INTERVAL_MS = 33
 # Divider visuals.
 _DIVIDER_COLOR = QColor("#FFFFFF")
 _DIVIDER_SHADOW = QColor(0, 0, 0, 64)
@@ -85,10 +86,20 @@ class BeforeAfterSlider(QWidget):
         self._timer = QTimer(self)
         self._timer.setInterval(_FRAME_INTERVAL_MS)
         self._timer.timeout.connect(self._on_tick)
-        if auto_loop:
-            self._timer.start()
+        # The timer is started from showEvent and stopped on hide, so an
+        # auto-loop slider scrolled off-screen or on a hidden tab does not keep
+        # repainting at full frame rate.
 
     # ---- lifecycle -------------------------------------------------------
+
+    def showEvent(self, ev):  # noqa: N802 - Qt signature
+        if self._auto_loop and not self._timer.isActive():
+            self._timer.start()
+        super().showEvent(ev)
+
+    def hideEvent(self, ev):  # noqa: N802 - Qt signature
+        self._timer.stop()
+        super().hideEvent(ev)
 
     def closeEvent(self, ev):  # noqa: N802 - Qt signature
         self._timer.stop()

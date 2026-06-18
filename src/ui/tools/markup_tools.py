@@ -298,11 +298,20 @@ class MarkupLayerManager(QObject):
         self.annotation_count_changed.emit(0)
 
     def disconnect_signals(self) -> None:
-        """Drop our QgsProject signal connection. Call before discarding the manager."""
-        try:
-            QgsProject.instance().layersWillBeRemoved.disconnect(self._on_layers_removed)
-        except (TypeError, RuntimeError):  # nosec B110
-            pass
+        """Drop our QgsProject signal connections. Call before discarding the
+        manager. All three signals connected in __init__ must be released, or
+        QgsProject (a process-long singleton) keeps firing into a dead manager
+        and stacks a stale handler on every plugin reload."""
+        project = QgsProject.instance()
+        for signal, slot in (
+            (project.layersWillBeRemoved, self._on_layers_removed),
+            (project.cleared, self._on_project_cleared),
+            (project.crsChanged, self._on_project_crs_changed),
+        ):
+            try:
+                signal.disconnect(slot)
+            except (TypeError, RuntimeError):  # nosec B110
+                pass
 
 
 # ----------------------------------------------------------------------
