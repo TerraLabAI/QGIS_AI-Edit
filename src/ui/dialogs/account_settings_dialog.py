@@ -69,8 +69,10 @@ _SIGNOUT_LINK = (
 
 # Normal buttons inside a card need an explicit background, else the card's
 # "QPushButton { background: transparent }" rule breaks native rendering.
+# Text uses palette(text), NOT palette(button-text): the QGIS dark theme sets
+# ButtonText to black on a dark Button, giving unreadable black-on-dark.
 _PREF_BTN = (
-    "QPushButton { background: palette(button); color: palette(button-text);"
+    "QPushButton { background: palette(button); color: palette(text);"
     " border: 1px solid rgba(128,128,128,0.45); border-radius: 5px;"
     " padding: 3px 12px; }"
     "QPushButton:hover { background: rgba(128,128,128,0.18); }"
@@ -107,6 +109,8 @@ class AccountSettingsDialog(QDialog):
         # The activation key now lives only in the web dashboard; Settings is
         # pure account management, so the key is intentionally not shown here.
         self._worker = None
+        self._avatar = None
+        self._avatar_worker = None
 
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(16, 16, 16, 12)
@@ -196,6 +200,53 @@ class AccountSettingsDialog(QDialog):
             pass
         self._worker = None
 
+    def _start_avatar_load(self, url: str) -> None:
+        """Download the profile photo off-thread and swap it into the avatar."""
+        from qgis.core import QgsApplication
+        client = self._client
+        self._avatar_worker = GenericRequestTask(
+            "AI Edit avatar load",
+            lambda: client.download_image(url),
+        )
+        self._avatar_worker.succeeded.connect(self._on_avatar_loaded)
+        # Any failure (no network, not an image) keeps the letter badge.
+        self._avatar_worker.failed.connect(lambda *_: None)
+        QgsApplication.taskManager().addTask(self._avatar_worker)
+
+    def _on_avatar_loaded(self, blob: bytes) -> None:
+        if not blob:
+            return
+        from qgis.PyQt.QtCore import Qt
+        from qgis.PyQt.QtGui import QPainter, QPainterPath, QPixmap
+        pm = QPixmap()
+        if not pm.loadFromData(blob):
+            return
+        size = 38
+        scaled = pm.scaled(
+            size, size,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        x = max(0, (scaled.width() - size) // 2)
+        y = max(0, (scaled.height() - size) // 2)
+        scaled = scaled.copy(x, y, size, size)
+        rounded = QPixmap(size, size)
+        rounded.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(rounded)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        path = QPainterPath()
+        path.addEllipse(0, 0, size, size)
+        painter.setClipPath(path)
+        painter.drawPixmap(0, 0, scaled)
+        painter.end()
+        # The dialog may have closed before the download landed (guard the C++ obj).
+        try:
+            self._avatar.setText("")
+            self._avatar.setPixmap(rounded)
+            self._avatar.setStyleSheet("border-radius: 19px;")
+        except (RuntimeError, AttributeError):  # nosec B110
+            pass
+
     def _on_loaded(self, data: dict):
         self._loading_label.setVisible(False)
         self._error_widget.setVisible(False)
@@ -255,15 +306,21 @@ class AccountSettingsDialog(QDialog):
         return card
 
     def _build_output_folder_row(self) -> QWidget:
+        # Label on its own line, then a full-width field + Browse below. Inline,
+        # the field got squeezed to ~100px between the label and the button, so
+        # a long path showed only its tail and read as cropped.
         w = QWidget()
-        row = QHBoxLayout(w)
-        row.setContentsMargins(2, 0, 2, 0)
-        row.setSpacing(8)
+        col = QVBoxLayout(w)
+        col.setContentsMargins(2, 0, 2, 0)
+        col.setSpacing(5)
 
         label = QLabel(tr("AI Edit output folder"))
-        label.setFixedWidth(_PREF_LABEL_W)
         label.setStyleSheet(_PREF_LABEL_STYLE)
-        row.addWidget(label)
+        col.addWidget(label)
+
+        field_row = QHBoxLayout()
+        field_row.setContentsMargins(0, 0, 0, 0)
+        field_row.setSpacing(8)
 
         self._output_dir_edit = QLineEdit()
         from qgis.core import QgsSettings
@@ -277,16 +334,19 @@ class AccountSettingsDialog(QDialog):
             )
         )
         self._output_dir_edit.editingFinished.connect(self._on_output_dir_edited)
-        self._output_dir_edit.setFixedHeight(24)
-        row.addWidget(self._output_dir_edit, 1)
+        self._output_dir_edit.setMinimumHeight(28)
+        # Show the start of a long path, not its tail.
+        self._output_dir_edit.setCursorPosition(0)
+        field_row.addWidget(self._output_dir_edit, 1)
 
         browse_btn = QPushButton(tr("Browse..."))
-        browse_btn.setFixedHeight(24)
+        browse_btn.setMinimumHeight(28)
         browse_btn.setStyleSheet(_PREF_BTN)
         browse_btn.setCursor(QtC.PointingHandCursor)
         browse_btn.clicked.connect(self._on_output_dir_browse)
-        row.addWidget(browse_btn)
+        field_row.addWidget(browse_btn)
 
+        col.addLayout(field_row)
         return w
 
     def _build_guidance_row(self) -> QWidget:
@@ -371,7 +431,14 @@ class AccountSettingsDialog(QDialog):
             f"background: {BRAND_GREEN}; color: #14210A; border-radius: 19px;"
             " font-size: 17px; font-weight: 700;"
         )
+        self._avatar = avatar
         chip_row.addWidget(avatar)
+        # Swap the letter badge for the real profile photo when the account has
+        # one (e.g. Google sign-in). Downloaded off-thread; the badge stays as a
+        # fallback if there is no photo or the download fails.
+        avatar_url = data.get("avatar_url")
+        if avatar_url:
+            self._start_avatar_load(avatar_url)
 
         id_col = QVBoxLayout()
         id_col.setSpacing(2)

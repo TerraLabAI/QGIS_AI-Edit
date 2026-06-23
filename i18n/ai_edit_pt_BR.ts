@@ -100,8 +100,8 @@
         <translation>1. Cadastre-se ou faça login em terra-lab.ai para obter sua chave</translation>
     </message>
     <message>
-        <source>150 edits every month</source>
-        <translation>150 edições por mês</translation>
+        <source>3,000 credits every month</source>
+        <translation>3.000 créditos por mês</translation>
     </message>
     <message>
         <source>2. Paste your activation key</source>
@@ -838,6 +838,10 @@ Adoraríamos receber seu retorno!</translation>
     <message>
         <source>Library</source>
         <translation>Biblioteca</translation>
+    </message>
+    <message>
+        <source>Link not opening? Copy link</source>
+        <translation>O link não abre? Copiar link</translation>
     </message>
     <message>
         <source>Load this prompt, its reference images, and the same map zone back into AI Edit, replacing what you have now.</source>
@@ -1920,8 +1924,8 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Atualize para qualidade média e alta</translation>
     </message>
     <message>
-        <source>Subscribe to unlock Detailed and Maximum output, 150 edits per month, cancel anytime.</source>
-        <translation>Assine para desbloquear saídas Detalhado e Máximo, 150 edições por mês, cancele quando quiser.</translation>
+        <source>Subscribe to unlock Detailed and Maximum output, 3,000 credits per month, cancel anytime.</source>
+        <translation>Assine para desbloquear saídas Detalhado e Máximo, 3.000 créditos por mês, cancele quando quiser.</translation>
     </message>
     <message>
         <source>This detail level is not available on your plan. Upgrade to unlock more detail.</source>

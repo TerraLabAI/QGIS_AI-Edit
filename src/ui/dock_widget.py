@@ -38,7 +38,6 @@ from qgis.PyQt.QtWidgets import (
     QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMenu,
     QProgressBar,
     QPushButton,
@@ -1175,7 +1174,6 @@ class AIEditDockWidget(QDockWidget):
     # to pick the export base + parent for the next edit.
     base_version_selected = pyqtSignal(int)
     retry_clicked = pyqtSignal(str)       # retry on same zone with (possibly edited) prompt
-    activation_attempted = pyqtSignal(str)
     pairing_requested = pyqtSignal(str)        # one-click connect: emits the minted pairing code
     pairing_cancel_requested = pyqtSignal(str)  # user cancelled the browser handoff (emits the code)
     settings_clicked = pyqtSignal()
@@ -1455,10 +1453,16 @@ class AIEditDockWidget(QDockWidget):
         # QGIS style so the checkmark glyph renders correctly.
         self._consent_check = QCheckBox()
         self._consent_check.setText("")  # text set via label below
+        # Bigger, easier-to-hit indicator (the default is tiny and hard to click).
+        # Size only, no border/background, so the native checkmark still renders.
+        self._consent_check.setStyleSheet(
+            "QCheckBox::indicator { width: 18px; height: 18px; }"
+        )
+        self._consent_check.setCursor(QtC.PointingHandCursor)
         consent_layout = QHBoxLayout()
         consent_layout.setContentsMargins(0, 0, 0, 0)
-        consent_layout.setSpacing(4)
-        consent_layout.addWidget(self._consent_check, 0)
+        consent_layout.setSpacing(8)
+        consent_layout.addWidget(self._consent_check, 0, QtC.AlignTop)
         _terms_url = (
             "https://terra-lab.ai/terms-of-sale"
             "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=consent_terms"
@@ -1758,7 +1762,7 @@ class AIEditDockWidget(QDockWidget):
         trial_layout.addWidget(self._trial_info_text)
         self._trial_info_benefits = QLabel(
             tr("Subscribe to unlock:") + "<br>"
-            + "&nbsp;&nbsp;✓&nbsp; " + tr("150 edits every month") + "<br>"
+            + "&nbsp;&nbsp;✓&nbsp; " + tr("3,000 credits every month") + "<br>"
             + "&nbsp;&nbsp;✓&nbsp; " + tr("Detailed and Maximum output") + "<br>"
             + "&nbsp;&nbsp;✓&nbsp; " + tr("Cancel anytime")
         )
@@ -1832,11 +1836,6 @@ class AIEditDockWidget(QDockWidget):
         # low-priority items (count, then pill text) until it fits.
         self._footer_row = footer_row
 
-        # Signed-out only: the "Use an activation key" fallback sits at the
-        # bottom-left of the footer (next to Help), in the slot the credits take
-        # once signed in. The two are mutually exclusive, so they never collide.
-        footer_row.addWidget(self._paste_toggle, 0, QtC.AlignVCenter)
-
         self._credit_ring = CreditRing(diameter=16, parent=footer_widget)
         self._credit_ring.setVisible(False)
         footer_row.addWidget(self._credit_ring)
@@ -1855,7 +1854,7 @@ class AIEditDockWidget(QDockWidget):
         # "Upgrade" when the dock is too narrow for the full label.
         self._upgrade_cta = QPushButton(tr("Unlock more detail"))
         self._upgrade_cta.setToolTip(
-            tr("Subscribe to unlock Detailed and Maximum output, 150 edits per month, cancel anytime.")
+            tr("Subscribe to unlock Detailed and Maximum output, 3,000 credits per month, cancel anytime.")
         )
         self._upgrade_cta.setCursor(QtC.PointingHandCursor)
         self._upgrade_cta.setStyleSheet(
@@ -2154,20 +2153,18 @@ class AIEditDockWidget(QDockWidget):
         btn_row.addWidget(self._pairing_cancel_btn)
         wait_layout.addLayout(btn_row)
 
-        # Escape hatch DURING the wait: if the browser never opened (blocked,
-        # no default browser, tab closed), the user would otherwise be stuck at
-        # the spinner until a 600 s timeout. This lets them switch to the manual
-        # key field in one click. Mirrors the idle-screen "Use an activation key"
-        # affordance and the AI Segmentation plugin's pairing escape hatch.
-        self._pairing_use_key = QPushButton(tr("Have a key? Enter it manually"))
-        self._pairing_use_key.setCursor(QtC.PointingHandCursor)
-        self._pairing_use_key.setStyleSheet(
+        # Copy the connect link so the user can finish sign-in in a different
+        # browser (e.g. their default has no Google session). Standard CLI
+        # device-flow fallback ("open browser, or copy this link").
+        self._pairing_copy_btn = QPushButton(tr("Link not opening? Copy link"))
+        self._pairing_copy_btn.setCursor(QtC.PointingHandCursor)
+        self._pairing_copy_btn.setStyleSheet(
             "QPushButton { background: transparent; border: none;"
             " color: palette(text); font-size: 11px; padding: 2px;"
             " text-decoration: underline; }"
         )
-        self._pairing_use_key.clicked.connect(self._on_pairing_use_key_clicked)
-        wait_layout.addWidget(self._pairing_use_key, 0, QtC.AlignCenter)
+        self._pairing_copy_btn.clicked.connect(self._on_pairing_copy_clicked)
+        wait_layout.addWidget(self._pairing_copy_btn, 0, QtC.AlignCenter)
 
         self._pairing_wait_section.setVisible(False)
         self._pairing_active = False
@@ -2179,53 +2176,9 @@ class AIEditDockWidget(QDockWidget):
         self._pairing_anim_timer.setInterval(80)
         self._pairing_anim_timer.timeout.connect(self._pairing_spinner.advance)
         self._pending_pairing_code = ""
+        self._pairing_link = ""
 
         layout.addStretch(1)
-
-        # --- Discreet fallback: a tiny text link, not a button. Almost everyone
-        # uses "Sign in to start"; this only matters when the browser can't open
-        # or a key was handed out by an admin. Reveals the paste field on click.
-        self._paste_toggle = QPushButton(tr("Use an activation key"))
-        self._paste_toggle.setCursor(QtC.PointingHandCursor)
-        self._paste_toggle.setStyleSheet(
-            "QPushButton { background: transparent; border: none;"
-            " color: palette(text); font-size: 11px; padding: 2px;"
-            " text-decoration: underline; }"
-        )
-        self._paste_toggle.clicked.connect(self._toggle_paste_section)
-        # Added to the footer (bottom-left, next to Help) instead of here, so it
-        # sits where the credits go once signed in. See the footer build below.
-
-        self._paste_section = QWidget()
-        paste_layout = QVBoxLayout(self._paste_section)
-        paste_layout.setContentsMargins(0, 0, 0, 0)
-        paste_layout.setSpacing(6)
-
-        self._step2_label = QLabel(tr("Paste your activation key"))
-        self._step2_label.setStyleSheet("font-weight: bold; font-size: 12px; color: palette(text);")
-        paste_layout.addWidget(self._step2_label)
-
-        self._key_input_widget = QWidget()
-        key_input_layout = QHBoxLayout(self._key_input_widget)
-        key_input_layout.setContentsMargins(0, 0, 0, 0)
-        key_input_layout.setSpacing(6)
-        self._code_input = QLineEdit()
-        self._code_input.setPlaceholderText("tl_...")
-        self._code_input.setMinimumHeight(28)
-        self._code_input.returnPressed.connect(self._on_unlock_clicked)
-        key_input_layout.addWidget(self._code_input)
-
-        unlock_btn = QPushButton(tr("Activate"))
-        unlock_btn.setToolTip(tr("Validate the activation key you pasted"))
-        unlock_btn.setMinimumHeight(28)
-        unlock_btn.setMinimumWidth(70)
-        unlock_btn.setStyleSheet(_BTN_BLUE_AUTH)
-        unlock_btn.clicked.connect(self._on_unlock_clicked)
-        key_input_layout.addWidget(unlock_btn)
-
-        paste_layout.addWidget(self._key_input_widget)
-        self._paste_section.setVisible(False)
-        layout.addWidget(self._paste_section)
 
         # Activation message (errors / success)
         self._activation_message = QLabel("")
@@ -2622,8 +2575,6 @@ class AIEditDockWidget(QDockWidget):
         if activated:
             self.hide_trial_info()
             self._update_layer_warning()
-            # The footer key fallback belongs to the signed-out state only.
-            self._paste_toggle.setVisible(False)
             self._set_upgrade_cta_wanted(self._is_free_tier)
             self.set_launch_state()
             # A stale pairing spinner must never survive a successful activation.
@@ -2631,8 +2582,6 @@ class AIEditDockWidget(QDockWidget):
         else:
             self._setup_header.setVisible(True)
             self._connect_section.setVisible(True)
-            self._paste_toggle.setVisible(True)
-            self._paste_section.setVisible(False)
             self._stop_pairing_wait()
             self._activation_message.setVisible(False)
             self.hide_activation_limit_cta()
@@ -3176,12 +3125,6 @@ class AIEditDockWidget(QDockWidget):
         self._hide_status_box()
         self._hide_limit_cta()
 
-    def get_activation_key(self) -> str:
-        return self._code_input.text().strip()
-
-    def set_activation_key(self, key: str):
-        self._code_input.setText(key)
-
     def get_prompt(self) -> str:
         return self._prompt_input.toPlainText().strip()
 
@@ -3273,31 +3216,36 @@ class AIEditDockWidget(QDockWidget):
         if self._pending_pairing_code:
             self.pairing_requested.emit(self._pending_pairing_code)
 
+    def set_pairing_link(self, url: str):
+        """Store the connect URL so the copy-link button can offer it (the URL
+        is built plugin-side; the dock only displays it)."""
+        self._pairing_link = url or ""
+
+    def _on_pairing_copy_clicked(self):
+        """Copy the connect link so the user can finish sign-in in another
+        browser. Brief 'Copied!' feedback, then restore the label."""
+        if not self._pairing_link:
+            return
+        from qgis.PyQt.QtWidgets import QApplication
+        clipboard = QApplication.clipboard()
+        if clipboard is None:
+            return
+        clipboard.setText(self._pairing_link)
+        self._pairing_copy_btn.setText(tr("Copied!"))
+        QTimer.singleShot(
+            1400, lambda: self._pairing_copy_btn.setText(tr("Link not opening? Copy link"))
+        )
+
     def _on_pairing_cancel_clicked(self):
         self.pairing_cancel_requested.emit(self._pending_pairing_code)
         self._pending_pairing_code = ""
         self.show_pairing_idle()
-
-    def _on_pairing_use_key_clicked(self):
-        """Escape hatch from the waiting state: cancel the server-side poll and
-        open the manual key field. For machines where the browser cannot open or
-        an admin handed out a key directly."""
-        self._on_pairing_cancel_clicked()
-        if not self._paste_section.isVisible():
-            self._toggle_paste_section()
-
-    def _toggle_paste_section(self):
-        self._paste_section.setVisible(not self._paste_section.isVisible())
-        if self._paste_section.isVisible():
-            self._code_input.setFocus()
 
     def show_pairing_waiting(self):
         """Switch the onboarding into the 'waiting for browser' state."""
         self._pairing_active = True
         self._pairing_status.setText(tr("Waiting for you to sign in in your browser"))
         self._connect_section.setVisible(False)
-        self._paste_toggle.setVisible(False)
-        self._paste_section.setVisible(False)
         self._activation_message.setVisible(False)
         self._pairing_wait_section.setVisible(True)
         self._pairing_anim_timer.start()
@@ -3314,7 +3262,7 @@ class AIEditDockWidget(QDockWidget):
         if self._pairing_active:
             self._pairing_status.setText(tr(
                 "Still waiting. If the page did not open or shows an error, "
-                "click Open again or enter your key manually."))
+                "click Open again or copy the link into another browser."))
 
     def _stop_pairing_wait(self):
         """Hide the waiting section and stop its animation timer."""
@@ -3326,14 +3274,6 @@ class AIEditDockWidget(QDockWidget):
         """Return to the idle onboarding (Connect button visible)."""
         self._stop_pairing_wait()
         self._connect_section.setVisible(True)
-        self._paste_toggle.setVisible(True)
-
-    def _on_unlock_clicked(self):
-        code = self._code_input.text().strip()
-        if not code:
-            self.set_activation_message(tr("Enter your code"), is_error=True)
-            return
-        self.activation_attempted.emit(code)
 
     # ------------------------------------------------------------------
     # Resolution helpers

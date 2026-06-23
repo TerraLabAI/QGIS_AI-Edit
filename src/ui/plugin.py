@@ -679,7 +679,6 @@ class AIEditPlugin:
         self._dock_widget.history_add_to_map.connect(self._on_history_add_to_map)
         self._dock_widget.history_download.connect(self._on_history_download)
         self._dock_widget.history_restore.connect(self._on_history_restore)
-        self._dock_widget.activation_attempted.connect(self._on_activation_attempted)
         self._dock_widget.pairing_requested.connect(self._on_pairing_requested)
         self._dock_widget.pairing_cancel_requested.connect(self._on_cancel_pairing)
         self._dock_widget.settings_clicked.connect(self._on_settings_clicked)
@@ -1102,7 +1101,6 @@ class AIEditPlugin:
             return
 
         self._auth_manager.set_activation_key(saved_key)
-        self._dock_widget.set_activation_key(saved_key)
 
         # Revalidation window. The server enforces auth on every real request
         # anyway, so this client-side check is purely cosmetic (which screen to
@@ -2572,7 +2570,6 @@ class AIEditPlugin:
         self._last_key_validation_unix = 0.0
         clear_activation()
         self._auth_manager.set_activation_key("")
-        self._dock_widget.set_activation_key("")
         self._dock_widget.set_activated(False)
         self._settings_action.setEnabled(False)
         log_debug("Signed out")
@@ -2606,43 +2603,6 @@ class AIEditPlugin:
             except Exception:  # nosec B110
                 pass
 
-    def _on_activation_attempted(self, key: str):
-        # Manual paste wins over an in-flight browser handoff: cancel the poll
-        # so two success paths can't race.
-        self._cancel_pairing_worker()
-        success, message, code, _usage = validate_key_with_server(self._client, key)
-        normalized_code = (code or "").strip().upper()
-        if success:
-            self._apply_activation(key)
-            telemetry.track(te.ACTIVATION_ATTEMPTED, {"success": True})
-            telemetry.track(te.PLUGIN_ACTIVATED, {"activation_method": "manual"})
-            telemetry.flush()
-            log("Activation successful")
-        else:
-            self._dock_widget.set_activation_message(message, is_error=True)
-            telemetry.track(te.ACTIVATION_ATTEMPTED, {
-                "success": False,
-                "error_code": normalized_code or "UNKNOWN",
-            })
-            telemetry.flush()
-            message_lower = (message or "").lower()
-            if normalized_code == "TRIAL_EXHAUSTED":
-                config = get_server_config(self._client)
-                dashboard = config.get("upgrade_url", SUBSCRIBE_ERROR_URL)
-                self._dock_widget.show_activation_limit_cta(dashboard)
-            is_quota_error = (
-                normalized_code in {
-                    "QUOTA_EXCEEDED",
-                    "LIMIT_REACHED",
-                    "USAGE_LIMIT_REACHED",
-                    "MONTHLY_LIMIT_REACHED",
-                }
-                or "monthly limit reached" in message_lower  # noqa: W503
-            )
-            if is_quota_error:
-                self._dock_widget.show_activation_limit_cta(SUBSCRIBE_ERROR_URL)
-            log_warning(f"Activation failed: {message}")
-
     # --- One-click connect (browser pairing handoff) ------------------------
 
     def _on_pairing_requested(self, code: str):
@@ -2658,11 +2618,14 @@ class AIEditPlugin:
             f"{self._client.base_url}/connect?code={code}&product=ai-edit"
             "&utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=connect"
         )
+        # Hand the URL to the dock so its copy-link button can offer it (lets
+        # the user finish sign-in in a different browser).
+        self._dock_widget.set_pairing_link(url)
         opened = QDesktopServices.openUrl(QUrl(url))
         if not opened:
             self._dock_widget.show_pairing_idle()
             self._dock_widget.set_activation_message(
-                tr("Couldn't open your browser. Use the manual key option below."),
+                tr("Couldn't open your browser. Copy the link and open it manually."),
                 is_error=True,
             )
             return
@@ -3328,6 +3291,10 @@ class AIEditPlugin:
         rb.setColor(QColor(0, 0, 0, 0))
         rb.setStrokeColor(QColor(65, 105, 225, 180))
         rb.setWidth(2)
+        # Sit above the Before/After swipe overlay (zValue 100) so the blue zone
+        # frame stays fully visible on all four sides while the user swipes,
+        # instead of the overlay covering its right half.
+        rb.setZValue(110)
         for x, y, last in (
             (extent.xMinimum(), extent.yMinimum(), False),
             (extent.xMaximum(), extent.yMinimum(), False),

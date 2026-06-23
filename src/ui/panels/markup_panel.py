@@ -70,6 +70,8 @@ _MARKUP_PRESETS: list[tuple[str, int, int, int]] = [
 _TOOL_BUTTON_SIZE = 56
 _TOOL_ICON_PX = 24
 _COLOR_DOT_PX = 22
+# Cap on user-added custom swatches kept in the color row (oldest dropped).
+_MAX_CUSTOM_SWATCHES = 4
 
 
 def _tool_hint(tool_key: str) -> str:
@@ -230,9 +232,13 @@ class MarkupPanel(QWidget):
         color_row = QHBoxLayout(color_group)
         color_row.setContentsMargins(8, 6, 8, 8)
         color_row.setSpacing(6)
+        self._color_row = color_row
 
         self._color_btns: dict[tuple[int, int, int], QToolButton] = {}
-        dot_btn_style = (
+        # Custom colors the user picks via "+"; kept in insertion order so the
+        # oldest can be dropped once the row is full.
+        self._custom_color_keys: list[tuple[int, int, int]] = []
+        self._dot_btn_style = (
             "QToolButton {"
             " background: transparent;"
             " border: none;"
@@ -240,6 +246,7 @@ class MarkupPanel(QWidget):
             "}"
             "QToolButton:disabled { opacity: 0.4; }"
         )
+        dot_btn_style = self._dot_btn_style
 
         for _label, r, g, b in _MARKUP_PRESETS:
             btn = QToolButton()
@@ -403,7 +410,46 @@ class MarkupPanel(QWidget):
         )
         if not chosen.isValid():
             return
-        self._set_color(QColor(chosen.red(), chosen.green(), chosen.blue()))
+        color = QColor(chosen.red(), chosen.green(), chosen.blue())
+        # Show the picked color as a swatch in the row so the user sees what is
+        # active (the preset swatches alone never reflect a custom pick).
+        self._ensure_custom_swatch(color)
+        self._set_color(color)
+
+    def _ensure_custom_swatch(self, color: QColor) -> None:
+        """Add a picked custom color as a selectable swatch before the "+".
+
+        Presets never change; custom swatches are deduped by RGB and capped, the
+        oldest dropped once full. The new swatch reuses the same machinery as the
+        presets, so _update_color_indicators highlights it as selected for free.
+        """
+        key = (color.red(), color.green(), color.blue())
+        if key in self._color_btns:
+            return
+        btn = QToolButton()
+        btn.setCursor(QtC.PointingHandCursor)
+        btn.setFocusPolicy(QtC.NoFocus)
+        btn.setFixedSize(_COLOR_DOT_PX + 6, _COLOR_DOT_PX + 6)
+        btn.setIconSize(QSize(_COLOR_DOT_PX, _COLOR_DOT_PX))
+        btn.setStyleSheet(self._dot_btn_style)
+        btn.setIcon(make_color_dot_icon(
+            color, selected=False, is_dark=is_dark_palette(self), dot_px=_COLOR_DOT_PX
+        ))
+        btn.setToolTip(color.name().upper())
+        btn.clicked.connect(
+            lambda _checked=False, c=color: self._set_color(c)
+        )
+        # Insert just before the "+" button so presets stay leftmost.
+        idx = self._color_row.indexOf(self._custom_color_btn)
+        self._color_row.insertWidget(idx, btn)
+        self._color_btns[key] = btn
+        self._custom_color_keys.append(key)
+        while len(self._custom_color_keys) > _MAX_CUSTOM_SWATCHES:
+            old = self._custom_color_keys.pop(0)
+            old_btn = self._color_btns.pop(old, None)
+            if old_btn is not None:
+                self._color_row.removeWidget(old_btn)
+                old_btn.deleteLater()
 
     def _set_color(self, color: QColor) -> None:
         self._color = color
