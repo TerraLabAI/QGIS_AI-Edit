@@ -129,11 +129,10 @@ def _compute_vector_features(
         )
 
     tr_r, tg_g, tb_b = target_rgb
-    mask = (
-        (np.abs(r.astype(np.int16) - tr_r) <= tolerance)
-        & (np.abs(g.astype(np.int16) - tg_g) <= tolerance)  # noqa: W503
-        & (np.abs(b.astype(np.int16) - tb_b) <= tolerance)  # noqa: W503
-    ).astype(np.uint8)
+    mask_r = np.abs(r.astype(np.int16) - tr_r) <= tolerance
+    mask_g = np.abs(g.astype(np.int16) - tg_g) <= tolerance
+    mask_b = np.abs(b.astype(np.int16) - tb_b) <= tolerance
+    mask = (mask_r & mask_g & mask_b).astype(np.uint8)
     if int(mask.sum()) == 0:
         raise AIEditError(
             ErrorCode.NO_PIXELS_MATCHED,
@@ -235,15 +234,13 @@ def _compute_vector_features(
         geoms = [geom]
         if not geom.isGeosValid():
             fixed = geom.makeValid()
-            parts = [
-                part
-                for part in (
-                    fixed.asGeometryCollection() if fixed.isMultipart() else [fixed]
-                )
-                if not part.isEmpty()
-                and part.type() == QgsWkbTypes.GeometryType.PolygonGeometry  # noqa: W503
-                and part.area() >= min_area  # noqa: W503
-            ]
+            source_parts = fixed.asGeometryCollection() if fixed.isMultipart() else [fixed]
+            parts = []
+            for part in source_parts:
+                if part.isEmpty():
+                    continue
+                if part.type() == QgsWkbTypes.GeometryType.PolygonGeometry and part.area() >= min_area:
+                    parts.append(part)
             geoms = parts or [geom]
         for part in geoms:
             area_m2 = float(measurer.measureArea(part))
@@ -554,11 +551,12 @@ def _set_layer_provenance(
     created = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     md = layer.metadata()
     md.setTitle(layer.name())
-    md.setAbstract(
-        f"Polygons traced from the color {color_hex} by AI Edit (TerraLab) Vectorize."
-        + (f" Source raster: {source_raster_name}." if source_raster_name else "")
-        + (f" Class: {class_label}." if class_label else "")
-    )
+    abstract = f"Polygons traced from the color {color_hex} by AI Edit (TerraLab) Vectorize."
+    if source_raster_name:
+        abstract += f" Source raster: {source_raster_name}."
+    if class_label:
+        abstract += f" Class: {class_label}."
+    md.setAbstract(abstract)
     history = [f"{created} vectorized from '{source_raster_name}' (color {color_hex})"]
     md.setHistory(history)
     layer.setMetadata(md)

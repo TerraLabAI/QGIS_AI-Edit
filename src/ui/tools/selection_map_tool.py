@@ -225,10 +225,7 @@ class _ZoneActionBadge(QgsMapCanvasItem):
         center = self.toCanvasCoordinates(self._anchor)
         cx = center.x() - self._offset_px
         cy = center.y()
-        return (
-            abs(canvas_pt.x() - cx) <= self._width / 2.0  # noqa: W503
-            and abs(canvas_pt.y() - cy) <= self.HEIGHT / 2.0  # noqa: W503
-        )
+        return abs(canvas_pt.x() - cx) <= self._width / 2.0 and abs(canvas_pt.y() - cy) <= self.HEIGHT / 2.0
 
     def updatePosition(self) -> None:  # noqa: N802 (Qt API)
         if self._anchor is None:
@@ -339,13 +336,8 @@ class RectangleSelectionTool(QgsMapTool):
         # Pan stays available even while locked (during generation) so the
         # user can move the map around. Drawing a new zone and deleting the
         # current one are the only actions blocked by the lock.
-        if (
-            not self._locked
-            and event.button() == QtC.LeftButton  # noqa: W503
-            and self._has_zone  # noqa: W503
-            and self._delete_badge is not None  # noqa: W503
-            and self._delete_badge.hit_test(QtC.event_pos(event))  # noqa: W503
-        ):
+        badge_hit = self._delete_badge is not None and self._delete_badge.hit_test(QtC.event_pos(event))
+        if not self._locked and event.button() == QtC.LeftButton and self._has_zone and badge_hit:
             self._on_delete_zone()
             return
         # Action pills (Compare / Vectorize) sit to the left of the × badge and

@@ -82,10 +82,9 @@ def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> N
         # crossing - mirror the projected path and don't flag it. A true wrap is
         # a narrow zone whose edges land in different 360-deg longitude cells.
         raw_width = extent.xMaximum() - extent.xMinimum()
-        crosses_antimeridian = raw_width < 180.0 and (
-            math.floor((extent.xMinimum() + 180.0) / 360.0)
-            != math.floor((extent.xMaximum() + 180.0) / 360.0)
-        )
+        lo_cell = math.floor((extent.xMinimum() + 180.0) / 360.0)
+        hi_cell = math.floor((extent.xMaximum() + 180.0) / 360.0)
+        crosses_antimeridian = raw_width < 180.0 and lo_cell != hi_cell
 
     if geographic_extent is not None:
         max_abs_lat = max(abs(geographic_extent.yMinimum()), abs(geographic_extent.yMaximum()))
@@ -94,11 +93,9 @@ def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> N
         # or a non-georeferenced layer tagged EPSG:4326, so latitude exceeds
         # +/-90 deg), neither concept applies - skip the guards and let the zone
         # through rather than block the user with a misleading refusal.
-        coords_in_range = (
-            max_abs_lat <= 90.0
-            and geographic_extent.xMinimum() >= -540.0
-            and geographic_extent.xMaximum() <= 540.0
-        )
+        lon_min = geographic_extent.xMinimum()
+        lon_max = geographic_extent.xMaximum()
+        coords_in_range = max_abs_lat <= 90.0 and lon_min >= -540.0 and lon_max <= 540.0
         if coords_in_range and crosses_antimeridian:
             raise AIEditError(
                 ErrorCode.ANTIMERIDIAN,

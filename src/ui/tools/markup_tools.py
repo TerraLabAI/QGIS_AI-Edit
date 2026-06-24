@@ -507,11 +507,7 @@ class CircleMapTool(_MarkupBaseMapTool):
             self._rubber.setToGeometry(geom, None)
 
     def canvasReleaseEvent(self, event):  # noqa: N802
-        if (
-            not self._active
-            or self._anchor is None
-            or event.button() != QtC.LeftButton
-        ):
+        if not self._active or self._anchor is None or event.button() != QtC.LeftButton:
             return
         self._active = False
         cur = self.toMapCoordinates(QtC.event_pos(event))

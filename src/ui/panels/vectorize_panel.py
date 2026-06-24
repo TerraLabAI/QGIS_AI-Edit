@@ -595,11 +595,7 @@ class VectorizePanel(QWidget):
 
         layer = self._layer_combo.currentLayer()
         is_raster = isinstance(layer, QgsRasterLayer)
-        has_file_source = (
-            is_raster
-            and bool(layer.source())  # noqa: W503
-            and os.path.exists(layer.source())  # noqa: W503
-        )
+        has_file_source = is_raster and bool(layer.source()) and os.path.exists(layer.source())
         is_valid = is_raster and layer.bandCount() >= 3 and has_file_source
 
         if is_valid:

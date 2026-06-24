@@ -1,4 +1,4 @@
-"""Stable, anonymous per-machine identifier for telemetry.
+"""Stable, pseudonymous per-machine identifier for telemetry.
 
 Produces an irreversible device hash so the backend can count how many distinct
 machines use a single activation key, without ever learning the machine's real

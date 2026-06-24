@@ -93,7 +93,7 @@ BTN_GREEN = "#43a047"
 BTN_GREEN_HOVER = "#2e7d32"
 BTN_GREEN_DISABLED = "#c8e6c9"
 
-# Brand accent green = the QGIS green (terralab-website --qgis-green). Lime
+# Brand accent green = the QGIS green (the --qgis-green brand token). Lime
 # fills use BRAND_GREEN; green text on light backgrounds uses BRAND_GREEN_TEXT
 # (#8bac27 only clears ~2.5:1 on white, the darker tone clears AA).
 BRAND_GREEN = "#8bac27"
@@ -599,10 +599,7 @@ class _SubmitTextEdit(QTextEdit):
         self.setAcceptRichText(False)
 
     def keyPressEvent(self, event):  # noqa: N802
-        if (
-            event.key() in (QtC.Key_Return, QtC.Key_Enter)
-            and not event.modifiers() & QtC.ShiftModifier  # noqa: W503
-        ):
+        if event.key() in (QtC.Key_Return, QtC.Key_Enter) and not event.modifiers() & QtC.ShiftModifier:
             self.submitted.emit()
             return
         super().keyPressEvent(event)
@@ -779,22 +776,22 @@ class _PromptContainer(QFrame):
         " background: transparent; border-color: rgba(128,128,128,0.20); }"
         "QToolButton::menu-indicator { image: none; width: 0; }"
     )
-    _CHIP_BTN_STYLE = (
-        _CHIP_REST
-        + f"QToolButton:hover {{ {_CHIP_HOVER} }}"
-        + f"QToolButton:pressed {{ {_CHIP_PRESSED} }}"
-        + f'QToolButton[active="true"] {{ {_CHIP_PRESSED} }}'
-        + _CHIP_TAIL
-    )
+    _CHIP_BTN_STYLE = "".join((
+        _CHIP_REST,
+        f"QToolButton:hover {{ {_CHIP_HOVER} }}",
+        f"QToolButton:pressed {{ {_CHIP_PRESSED} }}",
+        f'QToolButton[active="true"] {{ {_CHIP_PRESSED} }}',
+        _CHIP_TAIL,
+    ))
     # Same chip, but property-driven hover for buttons that pop a QMenu - Qt
     # eats the synthetic Leave event when a popup closes, leaving :hover stuck
     # on (see _FooterIconButton).
-    _CHIP_BTN_HOVERPROP_STYLE = (
-        _CHIP_REST
-        + f'QToolButton[hover="true"] {{ {_CHIP_HOVER} }}'
-        + f'QToolButton[active="true"] {{ {_CHIP_PRESSED} }}'
-        + _CHIP_TAIL
-    )
+    _CHIP_BTN_HOVERPROP_STYLE = "".join((
+        _CHIP_REST,
+        f'QToolButton[hover="true"] {{ {_CHIP_HOVER} }}',
+        f'QToolButton[active="true"] {{ {_CHIP_PRESSED} }}',
+        _CHIP_TAIL,
+    ))
     _MENU_STYLE = (
         "QMenu { background: palette(base); border: 1px solid rgba(128,128,128,0.35);"
         " border-radius: 6px; padding: 4px; }"
@@ -1760,12 +1757,13 @@ class AIEditDockWidget(QDockWidget):
             "font-size: 12px; font-weight: bold; color: palette(text);"
         )
         trial_layout.addWidget(self._trial_info_text)
-        self._trial_info_benefits = QLabel(
-            tr("Subscribe to unlock:") + "<br>"
-            + "&nbsp;&nbsp;✓&nbsp; " + tr("3,000 credits every month") + "<br>"
-            + "&nbsp;&nbsp;✓&nbsp; " + tr("Detailed and Maximum output") + "<br>"
-            + "&nbsp;&nbsp;✓&nbsp; " + tr("Cancel anytime")
-        )
+        benefits_html = "<br>".join((
+            tr("Subscribe to unlock:"),
+            "&nbsp;&nbsp;✓&nbsp; " + tr("3,000 credits every month"),
+            "&nbsp;&nbsp;✓&nbsp; " + tr("Detailed and Maximum output"),
+            "&nbsp;&nbsp;✓&nbsp; " + tr("Cancel anytime"),
+        ))
+        self._trial_info_benefits = QLabel(benefits_html)
         self._trial_info_benefits.setWordWrap(True)
         self._trial_info_benefits.setTextFormat(QtC.RichText)
         self._trial_info_benefits.setStyleSheet(
@@ -2469,10 +2467,7 @@ class AIEditDockWidget(QDockWidget):
         # the user out of QGIS. Anchoring to mainWindow() keeps the popup in
         # the same Space as QGIS itself.
         parent_window = self._main_window_for_dialog()
-        browse_only = (
-            self._prompt_container.is_readonly()
-            or self._result_prompt_container.is_readonly()  # noqa: W503
-        )
+        browse_only = self._prompt_container.is_readonly() or self._result_prompt_container.is_readonly()
         # Build inside the try so a failure here still clears _library_open
         # (otherwise the guard above would wedge the library shut for good).
         dlg = None
@@ -2503,11 +2498,7 @@ class AIEditDockWidget(QDockWidget):
                     self.history_restore.emit(restore)
                     return None
                 preset = dlg.get_selected_preset()
-                if (
-                    preset
-                    and not preset.get("from_recent")  # noqa: W503
-                    and not preset.get("from_favorites")  # noqa: W503
-                ):
+                if preset and not preset.get("from_recent") and not preset.get("from_favorites"):
                     self.template_selected.emit(
                         str(preset.get("id") or ""),
                         str(preset.get("label") or ""),
@@ -2994,13 +2985,9 @@ class AIEditDockWidget(QDockWidget):
             self._trial_info_box.setVisible(False)
 
     def _is_free_tier_exhausted(self) -> bool:
-        return bool(
-            self._is_free_tier
-            and self._cached_used is not None
-            and self._cached_limit is not None
-            and self._cached_limit > 0
-            and self._cached_used >= self._cached_limit
-        )
+        if self._cached_used is None or self._cached_limit is None:
+            return False
+        return self._is_free_tier and self._cached_limit > 0 and self._cached_used >= self._cached_limit
 
     def seed_version_strip(self, original_pixmap, prompt: str = "", meta: dict | None = None) -> None:
         """Seed the strip with the Original tile (selected). Called once per
@@ -3302,12 +3289,9 @@ class AIEditDockWidget(QDockWidget):
         the upsell copy/styling stays in one place.
         """
         subscribe_url = get_subscribe_url()
-        self._show_status_box(
-            message
-            + f' <a href="{subscribe_url}" style="color: {BRAND_BLUE}; font-weight: bold;">'
-            + tr("Subscribe") + "</a>",
-            "warning"
-        )
+        link_style = f"color: {BRAND_BLUE}; font-weight: bold;"
+        link = f'<a href="{subscribe_url}" style="{link_style}">{tr("Subscribe")}</a>'
+        self._show_status_box(f"{message} {link}", "warning")
         # 12 s banner; parented timer dies with the dock.
         if self._status_hide_timer is not None:
             self._status_hide_timer.stop()

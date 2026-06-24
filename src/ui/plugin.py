@@ -339,9 +339,9 @@ def _is_service_busy(message: str, normalized_code: str) -> bool:
 
 
 def _scrub_paths(text: str) -> str:
-    """Strip usernames from any /Users/<name> or \\Users\\<name> path."""
+    """Strip usernames from any /Users/<name>, \\Users\\<name>, or /home/<name> path."""
     import re
-    return re.sub(r"(?i)([/\\]Users[/\\])[^/\\]+", r"\1***", text or "")
+    return re.sub(r"(?i)([/\\](?:Users|home)[/\\])[^/\\]+", r"\1***", text or "")
 
 
 def _failure_stage(normalized_code: str) -> str:
@@ -2071,8 +2071,8 @@ class AIEditPlugin:
             self._dock_widget.set_reference_target_extent(QgsRectangle(extent), zone_crs)
         except Exception:  # nosec B110 - alignment is best-effort, never blocks selection.
             pass
-        # Zone-drawn is the biggest funnel blind spot: users who draw but never
-        # generate are invisible otherwise. Dimensions only, never coordinates.
+        # Captures the common case of drawing a zone without generating, which
+        # would otherwise go unmeasured. Dimensions only, never coordinates.
         try:
             mupp = self._canvas.mapSettings().mapUnitsPerPixel()
             w_px = int(round(extent.width() / mupp)) if mupp else 0
@@ -2420,18 +2420,12 @@ class AIEditPlugin:
         the selected extent before showing badges (they anchor to it)."""
         if self._map_tool is None:
             return
-        if (
-            getattr(self._map_tool, "_zone_rect", None) is None
-            and self._selected_extent is not None  # noqa: W503
-        ):
+        if getattr(self._map_tool, "_zone_rect", None) is None and self._selected_extent is not None:
             try:
                 self._map_tool.set_zone(QgsRectangle(self._selected_extent))
             except Exception as err:  # nosec B110
                 log_warning(f"zone rect restore for pills failed: {err}")
-        can_compare = (
-            self._swipe_controller is not None
-            and self._swipe_controller.can_swipe_now()  # noqa: W503
-        )
+        can_compare = self._swipe_controller is not None and self._swipe_controller.can_swipe_now()
         if not can_compare and self._swipe_controller is not None:
             layer = self._selected_version_layer()
             if layer is not None:
@@ -2772,10 +2766,7 @@ class AIEditPlugin:
         # is sent as a clean base so the model can restore the pixels under each
         # mark. With no markup, behave exactly as before (single clean render).
         markup_layer = None
-        if (
-            self._markup_manager is not None
-            and self._markup_manager.annotation_count() > 0
-        ):
+        if self._markup_manager is not None and self._markup_manager.annotation_count() > 0:
             try:
                 markup_layer = self._markup_manager.layer()
             except RuntimeError:
@@ -3015,15 +3006,13 @@ class AIEditPlugin:
         self._clear_markup_layer()
         normalized_code = (code or "").strip().upper()
         message_lower = (message or "").lower()
-        is_quota_error = (
-            normalized_code in {
-                "QUOTA_EXCEEDED",
-                "LIMIT_REACHED",
-                "USAGE_LIMIT_REACHED",
-                "MONTHLY_LIMIT_REACHED",
-            }
-            or "monthly limit reached" in message_lower  # noqa: W503
-        )
+        quota_codes = {
+            "QUOTA_EXCEEDED",
+            "LIMIT_REACHED",
+            "USAGE_LIMIT_REACHED",
+            "MONTHLY_LIMIT_REACHED",
+        }
+        is_quota_error = normalized_code in quota_codes or "monthly limit reached" in message_lower
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
         # error_code must never be empty: the polling path returns a bare
         # status=failed (model could not produce an image) with no code.
@@ -3048,7 +3037,7 @@ class AIEditPlugin:
                     "output_dir_len": len(output_dir),
                     "output_dir_has_unicode": not output_dir.isascii(),
                     "output_dir_has_spaces": " " in output_dir,
-                    "exception_msg": _scrub_paths((message or "")[:500]),
+                    "exception_msg": _scrub_paths((message or "")[:200]),
                 })
             except Exception:  # nosec B110
                 pass
@@ -3260,13 +3249,8 @@ class AIEditPlugin:
             )
             # Paid-tier monthly limit still needs the dedicated CTA (different
             # message + different URL than the free-tier upsell).
-            if (
-                isinstance(used, int)
-                and isinstance(limit, int)  # noqa: W503
-                and limit > 0  # noqa: W503
-                and used >= limit  # noqa: W503
-                and not is_free  # noqa: W503
-            ):
+            both_ints = isinstance(used, int) and isinstance(limit, int)
+            if both_ints and limit > 0 and used >= limit and not is_free:
                 self._dock_widget.show_usage_limit_info(
                     f"Monthly limit reached ({used}/{limit}).",
                     SUBSCRIBE_ERROR_URL,

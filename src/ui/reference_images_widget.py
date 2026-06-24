@@ -150,10 +150,7 @@ class _ThumbWidget(QFrame):
         # visible - otherwise the top-right corner would silently eat preview
         # clicks even though there is no button there.
         pos = QtC.event_pos(event)
-        if (
-            self._remove_btn.isVisible()
-            and self._remove_btn.geometry().contains(pos)  # noqa: W503
-        ):
+        if self._remove_btn.isVisible() and self._remove_btn.geometry().contains(pos):
             super().mousePressEvent(event)
             return
         self.preview_requested.emit(self._image_path)
@@ -396,16 +393,16 @@ class ReferenceImagesWidget(QWidget):
         # Parent on the top-level window (the dock), not self: this widget is
         # hidden while the store is empty, and a hidden parent causes the file
         # picker to silently fail to show up on Windows.
+        supported = tr(
+            "Supported files (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff "
+            "*.asc *.img *.vrt *.dem *.pdf *.shp *.gpkg *.geojson *.kml *.kmz)"
+        )
+        file_filter = f"{supported};;{tr('All files (*)')}"
         paths, _ = QFileDialog.getOpenFileNames(
             self.window(),
             tr("Select reference images or layers"),
             "",
-            tr(
-                "Supported files (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff "
-                "*.asc *.img *.vrt *.dem *.pdf *.shp *.gpkg *.geojson *.kml *.kmz)"
-            )
-            + ";;"
-            + tr("All files (*)"),
+            file_filter,
         )
         if paths:
             self._add_paths(paths)

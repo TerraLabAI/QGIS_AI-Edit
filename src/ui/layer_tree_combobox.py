@@ -212,9 +212,7 @@ class LayerTreeComboBox(QComboBox):
         for child in node.children():
             if QgsLayerTree.isLayer(child):
                 layer = child.layer()
-                if (layer and layer.type() == layer.RasterLayer
-                        and child.isVisible()  # noqa: W503
-                        and self._passes_filter(layer)):  # noqa: W503
+                if layer and layer.type() == layer.RasterLayer and child.isVisible() and self._passes_filter(layer):
                     return True
             elif QgsLayerTree.isGroup(child):
                 if child.isVisible() and self._has_visible_rasters(child):
@@ -240,9 +238,7 @@ class LayerTreeComboBox(QComboBox):
                     visible_children.append(child)
             elif QgsLayerTree.isLayer(child):
                 layer = child.layer()
-                if (layer and layer.type() == layer.RasterLayer
-                        and child.isVisible()  # noqa: W503
-                        and self._passes_filter(layer)):  # noqa: W503
+                if layer and layer.type() == layer.RasterLayer and child.isVisible() and self._passes_filter(layer):
                     visible_children.append(child)
 
         depth_role = _IndentDelegate.DEPTH_ROLE

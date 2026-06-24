@@ -149,11 +149,8 @@ class _VersionInfoPopup(QDialog):
             parts.append(definition)
         meta_html = " · ".join(parts)
         if not is_original and base_label:
-            meta_html += (
-                f" · <span style='color:{BRAND_BLUE}; font-weight:600;'>"
-                + tr("from {base}").format(base=base_label)
-                + "</span>"
-            )
+            from_label = tr("from {base}").format(base=base_label)
+            meta_html += f" · <span style='color:{BRAND_BLUE}; font-weight:600;'>{from_label}</span>"
         if is_original:
             meta_html += " · " + tr("clean source")
         meta = QLabel(meta_html, self)

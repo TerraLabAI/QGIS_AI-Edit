@@ -259,10 +259,7 @@ def most_recent_ai_edit_output(
     for child in root.children():
         if not isinstance(child, QgsLayerTreeGroup):
             continue
-        is_ai_edit_group = (
-            child.customProperty(_OWNERSHIP_PROPERTY)
-            or child.name() == AI_EDIT_GROUP_NAME  # noqa: W503
-        )
+        is_ai_edit_group = child.customProperty(_OWNERSHIP_PROPERTY) or child.name() == AI_EDIT_GROUP_NAME
         if not is_ai_edit_group:
             continue
         for sub in child.children():

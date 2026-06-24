@@ -1714,12 +1714,8 @@ class PromptTemplatesDialog(QDialog):
 
     def _on_gallery_show_more(self, key: str) -> None:
         st = self._gallery_state.get(key)
-        if (
-            key == "recent"
-            and st is not None
-            and st["visible"] >= len(st["entries"])
-            and self._recent_has_more
-        ):
+        recent_exhausted = st is not None and st["visible"] >= len(st["entries"])
+        if key == "recent" and recent_exhausted and self._recent_has_more:
             self._fetch_older_recent()
             return
         self._append_gallery_cards(key)
@@ -2068,11 +2064,8 @@ class PromptTemplatesDialog(QDialog):
             return
         # If the target is a collapsed category, expand the section first so its
         # highlighted button is actually visible (e.g. selected via search).
-        if (
-            not self._categories_expanded
-            and key in self._sidebar_buttons  # noqa: W503
-            and self._sidebar_buttons[key] in self._collapsed_category_btns  # noqa: W503
-        ):
+        collapsed_target = key in self._sidebar_buttons and self._sidebar_buttons[key] in self._collapsed_category_btns
+        if not self._categories_expanded and collapsed_target:
             self._on_toggle_categories()
         self._active_tab = key
         self._previous_tab = key

@@ -46,10 +46,11 @@ class AuthManager:
 
     def _fresh_cached_usage(self) -> dict | None:
         with self._usage_lock:
-            if (
-                self._usage_cache is not None
-                and time.monotonic() - self._usage_cache_monotonic < _USAGE_CACHE_TTL_S
-            ):
+            cache_fresh = all((
+                self._usage_cache is not None,
+                time.monotonic() - self._usage_cache_monotonic < _USAGE_CACHE_TTL_S,
+            ))
+            if cache_fresh:
                 return dict(self._usage_cache)
         return None
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 # Registry schema version this mirror was generated against.
 REGISTRY_VERSION = 1
 
-# Activation funnel
+# Activation events
 PLUGIN_OPENED = "plugin_opened"
 ACTIVATION_SCREEN_VIEWED = "activation_screen_viewed"
 LAUNCH_CLICKED = "launch_clicked"
@@ -25,7 +25,7 @@ AI_EDIT_PAIR_FAILED = "ai_edit_pair_failed"
 AI_EDIT_PAIR_TIMEOUT = "ai_edit_pair_timeout"
 AI_EDIT_PAIR_CANCELLED = "ai_edit_pair_cancelled"
 
-# Generation funnel
+# Generation events
 ZONE_DRAWN = "zone_drawn"
 TEMPLATE_SELECTED = "template_selected"
 GENERATION_STARTED = "generation_started"

@@ -7,9 +7,38 @@ from typing import Optional
 
 from qgis.core import QgsApplication, QgsTask
 
-# No user-generated content; ship pre-consent so the activation funnel stays
-# observable. plugin_error stays consent-gated (raw exception text can include paths).
-_NO_CONSENT_EVENTS = frozenset({
+# Global opt-out switch, shared across TerraLab plugins (AI Edit + AI Segmentation)
+# via the same QSettings key, so the user only has to disable telemetry once.
+# Mirrors AI Segmentation's telemetry opt-out.
+_TELEMETRY_ENABLED_KEY = "TerraLab/telemetry_enabled"
+
+
+def is_telemetry_enabled() -> bool:
+    """Whether anonymous usage telemetry is enabled. Opt-out: defaults to True.
+
+    Reads the shared TerraLab/telemetry_enabled QSettings key. Fails closed: if
+    the preference cannot be read, we do NOT send (privacy takes precedence over
+    a data point)."""
+    try:
+        from qgis.PyQt.QtCore import QSettings
+        return bool(QSettings().value(_TELEMETRY_ENABLED_KEY, True, type=bool))
+    except Exception:  # nosec B110
+        return False
+
+
+def set_telemetry_enabled(enabled: bool) -> None:
+    """Persist the global telemetry opt-out flag (shared across TerraLab plugins)."""
+    try:
+        from qgis.PyQt.QtCore import QSettings
+        QSettings().setValue(_TELEMETRY_ENABLED_KEY, bool(enabled))
+    except Exception:  # nosec B110
+        pass
+
+
+# Anonymous events with no user-generated content; they need no gate beyond the
+# global opt-out. plugin_error stays additionally gated (raw exception text can
+# include path fragments).
+_NO_CONTENT_EVENTS = frozenset({
     "plugin_opened",
     "plugin_activated",
     "activation_screen_viewed",
@@ -31,13 +60,12 @@ _NO_CONSENT_EVENTS = frozenset({
     "vectorize_completed",
     "swipe_armed",
     "swipe_disarmed",
-    # Refund visibility — without these the 199 WRITE_ERROR / 11 DOWNLOAD_ERROR
-    # billing-bleed bug stays invisible.
+    # Refund visibility — without these, failed-delivery refunds stay invisible.
     "generation_refund_attempted",
     "generation_refund_failed",
     # One-click connect onboarding. These fire pre-activation, so they sit in
-    # _pending_pre_auth until the first authenticated flush drains them. Server
-    # allow-list mirrored in terralab-website plugin/track route.
+    # _pending_pre_auth until the first authenticated flush drains them. The
+    # server's plugin/track endpoint mirrors this allow-list.
     "ai_edit_pair_started",
     "ai_edit_pair_succeeded",
     "ai_edit_pair_failed",
@@ -89,8 +117,8 @@ class TelemetryCollector:
         # flushes, so the list mutations must not race.
         self._lock = threading.Lock()
         self._batch: list = []
-        # Pre-auth lifecycle events parked here until first authenticated flush
-        # drains them, so the activation funnel stays observable. Capped to 50.
+        # Pre-auth lifecycle events parked here until the first authenticated
+        # flush drains them, so early anonymous events are not lost. Capped to 50.
         self._pending_pre_auth: list = []
         self._inflight: list[_TelemetryFlushTask] = []
         self._session_props = self._build_session_props()
@@ -136,6 +164,9 @@ class TelemetryCollector:
         )
 
     def track(self, event: str, properties: Optional[dict] = None):
+        # Global opt-out: when disabled, nothing is even queued.
+        if not is_telemetry_enabled():
+            return
         evt = {
             "event": event,
             "timestamp": self._now_iso(),
@@ -161,7 +192,7 @@ class TelemetryCollector:
 
             if not self._has_auth():
                 for evt in self._batch:
-                    if evt["event"] in _NO_CONSENT_EVENTS and len(self._pending_pre_auth) < 50:
+                    if evt["event"] in _NO_CONTENT_EVENTS and len(self._pending_pre_auth) < 50:
                         self._pending_pre_auth.append(evt)
                 self._batch.clear()
                 return
@@ -169,7 +200,7 @@ class TelemetryCollector:
             consented = self._has_consent()
             events_to_send = list(self._pending_pre_auth) + [
                 e for e in self._batch
-                if consented or e["event"] in _NO_CONSENT_EVENTS
+                if consented or e["event"] in _NO_CONTENT_EVENTS
             ]
             self._batch.clear()
             self._pending_pre_auth.clear()

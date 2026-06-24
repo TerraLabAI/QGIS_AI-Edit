@@ -137,15 +137,16 @@ def _looks_like_image(data: bytes) -> bool:
     """
     if len(data) < 12:
         return False
-    return (
-        data[:8] == b"\x89PNG\r\n\x1a\n"              # PNG
-        or data[:3] == b"\xff\xd8\xff"               # JPEG
-        or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")  # WebP
-        or data[:6] in (b"GIF87a", b"GIF89a")        # GIF
-        or (data[:2] in (b"II", b"MM") and data[2:4] in (b"\x2a\x00", b"\x00\x2a"))  # TIFF
-        or data[:2] == b"BM"                         # BMP
-        or data[4:8] == b"ftyp"                      # AVIF / HEIF (ISO-BMFF)
+    signatures = (
+        data[:8] == b"\x89PNG\r\n\x1a\n",  # PNG
+        data[:3] == b"\xff\xd8\xff",  # JPEG
+        data[:4] == b"RIFF" and data[8:12] == b"WEBP",  # WebP
+        data[:6] in (b"GIF87a", b"GIF89a"),  # GIF
+        data[:2] in (b"II", b"MM") and data[2:4] in (b"\x2a\x00", b"\x00\x2a"),  # TIFF
+        data[:2] == b"BM",  # BMP
+        data[4:8] == b"ftyp",  # AVIF / HEIF (ISO-BMFF)
     )
+    return any(signatures)
 
 
 class TerraLabClient:

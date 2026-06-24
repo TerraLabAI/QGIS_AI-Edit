@@ -4,6 +4,14 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>Share anonymous usage statistics</source>
+        <translation>Compartir estadísticas de uso anónimas</translation>
+    </message>
+    <message>
+        <source>Anonymous metrics (durations, error codes, OS, QGIS version) help us fix issues.</source>
+        <translation>Las métricas anónimas (duraciones, códigos de error, SO, versión de QGIS) nos ayudan a corregir problemas.</translation>
+    </message>
+    <message>
         <source>Cancelling sign-in</source>
         <translation>Cancelando el inicio de sesión</translation>
     </message>

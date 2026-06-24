@@ -5,3 +5,12 @@
 ### Follow this tutorial/documentation to use the plugin :
  https://terra-lab.ai/ai-edit
 ---
+
+## Data & privacy
+
+To generate an edit, the area you select and your prompt are sent to our cloud
+for AI processing. The plugin also sends optional anonymous usage stats (no
+personal data) you can switch off in *Account Settings*. See our
+[Privacy Policy](https://terra-lab.ai/privacy-policy).
+
+---

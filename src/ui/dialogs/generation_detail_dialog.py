@@ -556,18 +556,14 @@ class GenerationDetailDialog(QDialog):
         if self._is_generation:
             return tr("Your result")
         src = self._preset or {}
-        return (
-            str(src.get("category_label") or src.get("category") or "").strip()
-            or tr("Template")
-        )
+        label = str(src.get("category_label") or src.get("category") or "").strip()
+        return label or tr("Template")
 
     def _image_sources_present(self) -> bool:
         if self._is_generation:
             return bool(self._job.get("input_url") or self._job.get("output_url"))
-        has_url = bool(
-            (self._preset or {}).get("demo_url_before")
-            or (self._preset or {}).get("demo_url_after")  # noqa: W503
-        )
+        src = self._preset or {}
+        has_url = bool(src.get("demo_url_before") or src.get("demo_url_after"))
         return bool(has_url and self._demo_loader is not None)
 
     def _section_label(self, text: str) -> QLabel:
