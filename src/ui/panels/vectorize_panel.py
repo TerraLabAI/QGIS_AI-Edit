@@ -117,6 +117,16 @@ class VectorizePanel(QWidget):
         # Every Segment & Vectorize template paints classes in that exact
         # hue, so it's the right starting point on every fresh open.
         self._color = QColor(255, 0, 0)
+        # The other dominant color, treated as background to discard. Each pixel
+        # is assigned to whichever of (picked color, background) it is closer to,
+        # so the class boundary stays clean. Defaults to white (the canonical
+        # "class in color, everything else white" map); a palette-chip click
+        # repoints it at the actual other dominant color.
+        self._background: tuple[int, int, int] = (255, 255, 255)
+        # Dominant colors detected in the selected raster, for the one-click
+        # extract chips: [((r,g,b), fraction), ...]. Rebuilt per raster.
+        self._palette: list = []
+        self._palette_raster_id: str | None = None
         self._busy = False
         self._succeeded = False
         self._vectorize_task = None
@@ -179,16 +189,38 @@ class VectorizePanel(QWidget):
         # only controls; what the color means is explained in the tip above.
         self._color_section = QGroupBox(tr("Color to extract"))
         self._color_section.setStyleSheet(GROUP_BOX_QSS)
-        color_row = QHBoxLayout(self._color_section)
-        color_row.setContentsMargins(8, 6, 8, 8)
-        color_row.setSpacing(8)
+        color_outer = QVBoxLayout(self._color_section)
+        color_outer.setContentsMargins(8, 6, 8, 8)
+        color_outer.setSpacing(8)
+
+        # One-click chips of the colors actually present in the map. Click the
+        # one you want (e.g. the red buildings) and it vectorizes straight away;
+        # the other dominant color becomes the discarded background. Populated
+        # per raster by _rebuild_palette_chips; hidden when none are detected.
+        self._palette_label = QLabel(tr("Colors in this map - click one to extract:"))
+        self._palette_label.setStyleSheet(
+            "font-size: 11px; color: palette(text); background: transparent;"
+            " border: none;"
+        )
+        self._palette_label.setVisible(False)
+        color_outer.addWidget(self._palette_label)
+        self._palette_row = QHBoxLayout()
+        self._palette_row.setContentsMargins(0, 0, 0, 0)
+        self._palette_row.setSpacing(6)
+        self._palette_chips: list[QPushButton] = []
+        color_outer.addLayout(self._palette_row)
+
+        # Manual fallback: exact swatch + eyedropper, for a color the chips missed.
+        manual_row = QHBoxLayout()
+        manual_row.setContentsMargins(0, 0, 0, 0)
+        manual_row.setSpacing(8)
         self._color_btn = QPushButton()
         self._color_btn.setToolTip(tr("Pick a color from a dialog."))
         self._color_btn.setCursor(QtC.PointingHandCursor)
         self._color_btn.setFixedSize(40, 40)
         apply_swatch_style(self._color_btn, self._color)
         self._color_btn.clicked.connect(self._on_color_clicked)
-        color_row.addWidget(self._color_btn)
+        manual_row.addWidget(self._color_btn)
         # Glyph outside tr() so translators see clean text.
         self._eyedropper_btn = QPushButton("⌖ " + tr("Pick on map"))
         self._eyedropper_btn.setToolTip(
@@ -198,8 +230,9 @@ class VectorizePanel(QWidget):
         self._eyedropper_btn.setStyleSheet(_BTN_GHOST_QSS)
         self._eyedropper_btn.setMinimumHeight(34)
         self._eyedropper_btn.clicked.connect(self._on_eyedropper_clicked)
-        color_row.addWidget(self._eyedropper_btn)
-        color_row.addStretch()
+        manual_row.addWidget(self._eyedropper_btn)
+        manual_row.addStretch()
+        color_outer.addLayout(manual_row)
         layout.addWidget(self._color_section)
 
         # --- Refine box (hidden until first successful vectorization) ---
@@ -345,6 +378,9 @@ class VectorizePanel(QWidget):
         self._succeeded = False
         self._color = QColor(255, 0, 0)
         apply_swatch_style(self._color_btn, self._color)
+        self._background = (255, 255, 255)
+        # Force the chips to rebuild for whatever raster is picked next.
+        self._palette_raster_id = None
         self._status_label.setVisible(False)
         self._reset_refine_spinboxes()
         self._refine_group.setVisible(False)
@@ -475,10 +511,12 @@ class VectorizePanel(QWidget):
             content_layout,
             tr("Color tolerance:"),
             tr(
-                "How far a pixel's color can be from the picked color and still "
-                "match (per channel, 0-255). Higher catches more shades."
+                "How loosely the picked color is matched against the white "
+                "background. Each pixel goes to whichever is closer, so edges stay "
+                "clean even when the model's color drifts. Higher catches more "
+                "shades of the picked color; lower keeps only the purest ones."
             ),
-            0, 255, 40,
+            0, 255, 90,
         )
         self._sieve_spin = _spin_row(
             content_layout,
@@ -555,7 +593,7 @@ class VectorizePanel(QWidget):
 
     def _reset_refine_spinboxes(self) -> None:
         for spin, default in (
-            (self._tolerance_spin, 40),
+            (self._tolerance_spin, 90),
             (self._sieve_spin, 10),
             (self._simplify_spin, 1),
             (self._expand_spin, 0),
@@ -601,6 +639,7 @@ class VectorizePanel(QWidget):
         if is_valid:
             self._show_status("", is_error=False)
             self._run_btn.setEnabled(not self._busy)
+            self._rebuild_palette_chips(layer)
         else:
             self._show_status(
                 tr("Pick an AI Edit output to vectorize."),
@@ -609,12 +648,86 @@ class VectorizePanel(QWidget):
             )
             self._run_btn.setEnabled(False)
 
+    def _rebuild_palette_chips(self, raster: QgsRasterLayer) -> None:
+        """Detect the raster's dominant colors and show them as one-click chips.
+
+        Recomputes only when the raster changes (cheap, but no need to redo it on
+        every project signal). Hidden when detection finds nothing usable, so the
+        manual swatch stays the fallback."""
+        rid = raster.id()
+        if rid == self._palette_raster_id:
+            return
+        self._palette_raster_id = rid
+        # Clear the whole row (chips AND the trailing stretch) so repeated
+        # rebuilds never accumulate spacers that shove the chips out of place.
+        while self._palette_row.count():
+            item = self._palette_row.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+        self._palette_chips = []
+
+        path = (raster.source() or "").split("|", 1)[0]
+        try:
+            from ...core.generation.vectorization_service import dominant_palette
+            self._palette = dominant_palette(path)
+        except Exception:  # noqa: BLE001 - chips are a convenience, never block
+            self._palette = []
+
+        if len(self._palette) < 2:
+            # Nothing meaningful to offer (single flat color or detection failed).
+            self._palette_label.setVisible(False)
+            return
+        self._palette_label.setVisible(True)
+        for rgb, _frac in self._palette:
+            chip = QPushButton()
+            chip.setCursor(QtC.PointingHandCursor)
+            chip.setFixedSize(30, 30)
+            apply_swatch_style(chip, QColor(*rgb))
+            chip.setToolTip(
+                tr("Extract #{hex} as polygons").format(
+                    hex="{:02X}{:02X}{:02X}".format(*rgb)
+                )
+            )
+            chip.clicked.connect(lambda _checked=False, c=rgb: self._on_palette_chip(c))
+            self._palette_row.addWidget(chip)
+            self._palette_chips.append(chip)
+        self._palette_row.addStretch()
+
+    def _on_palette_chip(self, rgb: tuple[int, int, int]) -> None:
+        """Click a detected color -> extract it now. The most dominant OTHER
+        detected color becomes the discarded background, so the boundary between
+        the two classes is clean."""
+        if self._busy:
+            return
+        self._color = QColor(*rgb)
+        apply_swatch_style(self._color_btn, self._color)
+        self._background = self._infer_background(rgb)
+        if self._succeeded:
+            self._on_refine_changed()
+        else:
+            self._on_run_clicked()
+
+    def _infer_background(self, rgb: tuple[int, int, int]) -> tuple[int, int, int]:
+        """Background color to discard in nearest-mode matching: the most-dominant
+        detected color other than the picked one. Falls back to white (the
+        canonical "class in color, everything else white" map) when no palette was
+        detected, so a hand-picked or sampled color still gets a sane background
+        instead of always assuming white on a non-white map."""
+        others = [c for c, _ in self._palette if c != rgb]
+        return others[0] if others else (255, 255, 255)
+
     def _on_color_clicked(self) -> None:
         chosen = QColorDialog.getColor(self._color, self, tr("Pick color"))
         if not chosen.isValid():
             return
         self._color = QColor(chosen.red(), chosen.green(), chosen.blue())
         apply_swatch_style(self._color_btn, self._color)
+        # Discard the dominant OTHER color (usually the real background), not a
+        # hard-coded white, so a hand-picked color works on non-white maps too.
+        self._background = self._infer_background(
+            (self._color.red(), self._color.green(), self._color.blue())
+        )
         # In refine mode a new color re-runs detection on the same layer.
         if self._succeeded:
             self._on_refine_changed()
@@ -654,6 +767,11 @@ class VectorizePanel(QWidget):
     def _on_eyedropper_color(self, color: QColor) -> None:
         self._color = color
         apply_swatch_style(self._color_btn, self._color)
+        # Discard the dominant OTHER color (usually the real background), not a
+        # hard-coded white, so a sampled color works on non-white maps too.
+        self._background = self._infer_background(
+            (self._color.red(), self._color.green(), self._color.blue())
+        )
         self._show_status(
             tr("Sampled {hex}.").format(hex=self._color.name().upper()),
             is_error=False,
@@ -738,6 +856,13 @@ class VectorizePanel(QWidget):
             "expand_value": int(self._expand_spin.value()),
             "fill_holes": bool(self._fill_holes_check.isChecked()),
             "class_label": self._class_label,
+            # Foreground extraction against a white background: assign each pixel
+            # to the nearer of the picked color and white, so anti-aliased class
+            # edges split at the true boundary and a hue-drifted output (e.g. a
+            # "red" that renders as #D37523) is still captured. The 2-color
+            # "class in color, everything else white" map is the canonical case.
+            "match_mode": "nearest",
+            "background_rgb": self._background,
         }
         params = {
             "raster_id": raster.id(),

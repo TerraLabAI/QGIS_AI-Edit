@@ -3010,9 +3010,10 @@ class AIEditDockWidget(QDockWidget):
         self._version_strip.set_selected(index)
 
     def reveal_version_strip(self) -> None:
-        """Show the lineage in the main flow (its 'generating' slot) so a
-        restored session is visible before the next result arrives."""
-        self._place_version_strip("generating")
+        """Keep the restored lineage in its iterate home (above the Generate
+        row). Restoring already entered the iterate state; this just re-asserts
+        the strip's placement once its thumbnails arrive."""
+        self._place_version_strip("result")
 
     def get_cached_recent_jobs(self) -> list:
         """Session-cached past generations (newest first). Used to rebuild the
@@ -3391,19 +3392,54 @@ class AIEditDockWidget(QDockWidget):
             self._update_generate_enabled()
             self._adjust_prompt_height()
 
+    def _enter_iteration_state(self) -> None:
+        """Show the RESULT/iterate UI (prompt + version strip above the Generate
+        row) without the post-generation 'Saved as' line.
+
+        Restoring a past generation means 'resume iterating on this image', so it
+        lands in the same layout a fresh result does. This keeps the version
+        strip in its proper home above the action row instead of falling below
+        it (the old restore path used the in-flight 'generating' slot, which sits
+        under the Generate/Exit row in the prompt state)."""
+        self._stop_progress_animation()
+        self._progress_widget.setVisible(False)
+        self._hide_status_box()
+        self._vectorize_cta_section.setVisible(False)
+        self._vectorize_cta_pending = None
+        self._launch_section.setVisible(False)
+        self._select_zone_section.setVisible(False)
+        self._prompt_section.setVisible(False)
+        self._generate_btn.setVisible(False)
+        self._exit_btn.setVisible(False)
+        self._consent_widget.setVisible(False)
+        self._prompt_container.set_readonly(False)
+        self._result_section.setVisible(True)
+        self._result_prompt_widget.setVisible(True)
+        self._result_prompt_container.set_readonly(False)
+        self._place_version_strip("result")
+        self._version_strip.set_readonly(False)
+        self._place_reference_widget("result")
+        # Nothing was just saved on restore: keep the success line hidden.
+        self._layer_saved_label.setVisible(False)
+        self._refresh_resolution_triggers()
+        # Reconcile the upgrade CTA like set_generation_complete, so the two
+        # RESULT-entry paths can't leave a stale CTA on the iterate screen.
+        self._set_upgrade_cta_wanted(self._is_free_tier and self._activated)
+
     def restore_generation_context(
         self, prompt_text: str, template_id=None, template_name=None
     ) -> None:
-        """Fill the prompt for a generation being reproduced. The plugin has
-        already restored the zone (so the prompt section is visible)."""
+        """Reproduce a past generation: enter the iterate state and fill its
+        prompt. The plugin has already restored the zone."""
         self._active_template_id = str(template_id or "") or None
         self._active_template_name = str(template_name or "") or None
-        self._prompt_input.blockSignals(True)
-        self._prompt_input.setPlainText(format_template_prompt(prompt_text or ""))
-        self._prompt_input.blockSignals(False)
-        self._prompt_input.moveCursor(QtC.CursorEnd)
-        self._update_generate_enabled()
-        self._adjust_prompt_height()
+        self._enter_iteration_state()
+        self._result_prompt_input.blockSignals(True)
+        self._result_prompt_input.setPlainText(format_template_prompt(prompt_text or ""))
+        self._result_prompt_input.blockSignals(False)
+        self._result_prompt_input.moveCursor(QtC.CursorEnd)
+        self._update_result_generate_enabled()
+        self._adjust_result_prompt_height()
 
     def clear_references(self) -> None:
         """Drop every reference image (store + strip). Used when reusing a past

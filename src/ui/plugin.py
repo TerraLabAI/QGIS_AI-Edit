@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import time
+import uuid
 
 from qgis.core import Qgis, QgsApplication, QgsPointXY, QgsRectangle
 from qgis.gui import QgsRubberBand
@@ -38,6 +39,7 @@ from ..core.prompts.prompt_presets import (
     get_vector_hints,
     lookup_template_by_prompt,
 )
+from ..core.prompts.session_grouping import session_jobs_for
 from ..core.reference_image_store import ReferenceImageStore
 from ..workers.export_worker import ExportWorker
 from ..workers.generation_worker import GenerationWorker
@@ -428,6 +430,10 @@ class AIEditPlugin:
         # zone. The selected index picks the export base + parent_request_id.
         self._versions: list[dict] = []
         self._selected_version_index = 0
+        # Iteration session id: shared by every generation in one continuous
+        # flow on a zone. Minted on a fresh zone, re-entered on restore. Groups
+        # versions in history and rebuilds the strip. None until the first zone.
+        self._session_id: str | None = None
         self._key_validation_worker = None
         # One-click connect: polls the server for the browser handoff.
         self._pairing_worker = None
@@ -514,6 +520,8 @@ class AIEditPlugin:
             log_warning(f".env.local read failed, using defaults: {err}")
         self._dev_mode = env_vars.get("DEBUG", "").lower() == "true"
         self._skip_trial_check = env_vars.get("SKIP_TRIAL_CHECK", "").lower() == "true"
+        if env_vars.get("RAW_PROMPT", "").lower() == "true":
+            log_warning("DEV MODE: RAW_PROMPT is active - prompts sent bare (team allowlist enforced server side)")
         return TerraLabClient(env_vars=env_vars)
 
     @staticmethod
@@ -1692,6 +1700,12 @@ class AIEditPlugin:
         extent_dict, crs_wkt = geo
         if not self._restore_zone(extent_dict, crs_wkt):
             return
+        # Re-enter the restored generation's session so new edits continue it
+        # and group with its siblings. _restore_zone reset the lineage and
+        # minted a fresh id above; keep that fresh one for legacy jobs that
+        # carry no session.
+        if job.get("session_id"):
+            self._session_id = job.get("session_id")
         # Reuse means "replace what I have now", so wipe the current prompt
         # (restore_generation_context overwrites it) and any reference images
         # before loading the reused generation's own references.
@@ -1709,43 +1723,18 @@ class AIEditPlugin:
         self._notify(tr("Generation restored. Adjust and generate again."), duration=4)
 
     def _session_chain_for(self, job: dict) -> list[dict]:
-        """All cached generations connected to `job` through parent links,
-        oldest first. Falls back to just `job` when nothing links to it."""
-        rid = job.get("request_id")
-        if not rid:
+        """All cached generations from `job`'s iteration session, oldest first.
+
+        Keys on the client-minted session_id, so it groups chained iterations
+        AND multi-model siblings the user made in one flow on a zone. Falls back
+        to just `job` when it carries no session (legacy rows / older plugins)."""
+        if not job.get("request_id"):
             return []
         try:
             jobs = self._dock_widget.get_cached_recent_jobs()
         except Exception:  # nosec B110 - cache is best-effort.
             jobs = []
-        by_id = {j.get("request_id"): j for j in jobs if j.get("request_id")}
-        by_id.setdefault(rid, job)
-        children: dict[str, list[str]] = {}
-        for j in by_id.values():
-            parent = j.get("parent_request_id")
-            if parent and parent in by_id:
-                children.setdefault(parent, []).append(j["request_id"])
-        # Climb to the chain's root (cycle-safe), then collect everything below.
-        root = by_id[rid]
-        seen = {rid}
-        while True:
-            parent = root.get("parent_request_id")
-            if not parent or parent not in by_id or parent in seen:
-                break
-            seen.add(parent)
-            root = by_id[parent]
-        chain: list[dict] = []
-        stack = [root["request_id"]]
-        visited: set[str] = set()
-        while stack:
-            cid = stack.pop()
-            if cid in visited:
-                continue
-            visited.add(cid)
-            chain.append(by_id[cid])
-            stack.extend(children.get(cid, []))
-        chain.sort(key=lambda j: j.get("created_at") or "")
-        return chain
+        return session_jobs_for(job, jobs)
 
     def _restore_session_chain(self, job: dict) -> None:
         """Download the chain's thumbnails off-thread, then seed the version
@@ -1968,6 +1957,8 @@ class AIEditPlugin:
         # Retry on the same zone = iteration. Anchor on the previous result's
         # original input so the model keeps style coherence.
         ctx.parent_request_id = self._last_completed_request_id
+        # Same continuous flow on this zone = same session.
+        ctx.session_id = self._session_id
 
         # Armed template wins over text match so user edits keep vector hints.
         armed = self._dock_widget.get_active_template()
@@ -2134,9 +2125,13 @@ class AIEditPlugin:
         log_debug("Zone cleared")
 
     def _reset_version_lineage(self) -> None:
-        """Start a fresh lineage: empty the version list and clear the strip."""
+        """Start a fresh lineage: empty the version list and clear the strip.
+
+        A new zone (or Exit then a new zone) is a new session, so mint a fresh
+        session id here. Restore overrides it afterwards to re-enter a session."""
         self._versions = []
         self._selected_version_index = 0
+        self._session_id = uuid.uuid4().hex
         # Invalidate any in-flight session-restore download: its thumbnails
         # must not seed a lineage the user has since broken.
         self._pending_session_rid = None
@@ -2737,6 +2732,8 @@ class AIEditPlugin:
         )
         base_layer_id = base_version["layer_id"] if base_version else None
         ctx.parent_request_id = base_version["request_id"] if base_version else None
+        # Same continuous flow on this zone = same session.
+        ctx.session_id = self._session_id
 
         # Tag the job with template_id. The armed template (set when the
         # user picked a preset) wins so prompt edits keep the association;

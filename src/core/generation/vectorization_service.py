@@ -54,6 +54,8 @@ def _compute_vector_features(
     expand_value: int,
     fill_holes: bool,
     class_label: str,
+    match_mode: str = "box",
+    background_rgb: tuple[int, int, int] | None = None,
     is_cancelled=None,
 ) -> list | None:
     """Heavy, thread-safe core of Vectorize: GDAL read + mask + sieve +
@@ -129,10 +131,28 @@ def _compute_vector_features(
         )
 
     tr_r, tg_g, tb_b = target_rgb
-    mask_r = np.abs(r.astype(np.int16) - tr_r) <= tolerance
-    mask_g = np.abs(g.astype(np.int16) - tg_g) <= tolerance
-    mask_b = np.abs(b.astype(np.int16) - tb_b) <= tolerance
-    mask = (mask_r & mask_g & mask_b).astype(np.uint8)
+    ri = r.astype(np.int16)
+    gi = g.astype(np.int16)
+    bi = b.astype(np.int16)
+    if match_mode == "nearest":
+        # Foreground extraction. Assign each pixel to the nearer of the target
+        # color and the background (default white), so an anti-aliased boundary
+        # splits exactly down the middle: edges land at their true position
+        # (no eroded footprints, no pinhole gaps), and the match is robust to the
+        # model drifting off the requested hue (a "red" that renders as #D37523
+        # is still far closer to red than to white). `tolerance` becomes a max
+        # color distance guard (summed over channels) so genuinely different
+        # hues in a multi-color map are still rejected instead of swept in.
+        bg = background_rgb if background_rgb is not None else (255, 255, 255)
+        d_fg = np.abs(ri - tr_r) + np.abs(gi - tg_g) + np.abs(bi - tb_b)
+        d_bg = np.abs(ri - bg[0]) + np.abs(gi - bg[1]) + np.abs(bi - bg[2])
+        max_dist = int(tolerance) * 3
+        mask = ((d_fg < d_bg) & (d_fg <= max_dist)).astype(np.uint8)
+    else:
+        mask_r = np.abs(ri - tr_r) <= tolerance
+        mask_g = np.abs(gi - tg_g) <= tolerance
+        mask_b = np.abs(bi - tb_b) <= tolerance
+        mask = (mask_r & mask_g & mask_b).astype(np.uint8)
     if int(mask.sum()) == 0:
         raise AIEditError(
             ErrorCode.NO_PIXELS_MATCHED,
@@ -400,12 +420,18 @@ def vectorize_by_color(
     expand_value: int = 0,
     fill_holes: bool = False,
     class_label: str = "",
+    match_mode: str = "box",
+    background_rgb: tuple[int, int, int] | None = None,
 ) -> QgsVectorLayer:
-    """Extract pixels matching ``target_rgb`` (±tolerance per channel) as polygons.
+    """Extract pixels for ``target_rgb`` as polygons.
 
-    Synchronous (main-thread) convenience wrapper over the split compute/build
-    helpers, for callers not running inside a QgsTask. ``output_rgb`` controls
-    the outline colour (default: a vivid contrast). Returns a styled in-memory
+    ``match_mode="box"`` keeps the legacy per-channel ±tolerance match.
+    ``match_mode="nearest"`` extracts every pixel closer to ``target_rgb`` than
+    to ``background_rgb`` (default white) within a ``tolerance``-scaled distance,
+    which tracks the true class boundary and tolerates the model drifting off the
+    requested hue. Synchronous (main-thread) convenience wrapper over the split
+    compute/build helpers, for callers not running inside a QgsTask.
+    ``output_rgb`` controls the outline colour. Returns a styled in-memory
     ``QgsVectorLayer`` not yet added to the project.
     """
     project = QgsProject.instance()
@@ -423,12 +449,74 @@ def vectorize_by_color(
         expand_value=expand_value,
         fill_holes=fill_holes,
         class_label=class_label,
+        match_mode=match_mode,
+        background_rgb=background_rgb,
     )
     return _build_vector_layer(
         feats or [], raster_layer.crs(), layer_name or "Vector",
         target_rgb, output_rgb, class_label,
         source_raster_name=raster_layer.name() or "",
     )
+
+
+def dominant_palette(
+    raster_path: str,
+    max_colors: int = 4,
+    quant: int = 24,
+    merge_l1: int = 140,
+    min_fraction: float = 0.03,
+    sample_max: int = 1_000_000,
+) -> list[tuple[tuple[int, int, int], float]]:
+    """Detect the dominant flat colors in a generated map.
+
+    A "2-color" map actually carries thousands of anti-aliased shades, so this
+    quantizes, then merges near shades (within ``merge_l1`` summed-channel
+    distance) into their most-common base color. Returns ``[((r,g,b), fraction),
+    ...]`` sorted by coverage. Lets the Vectorize panel offer one-click
+    "extract this color" chips instead of an eyedropper hunt. Pure numpy + GDAL,
+    decimated to stay fast on 4K rasters; safe to call on the main thread.
+    """
+    if np is None or not raster_path or not os.path.exists(raster_path):
+        return []
+    ds = gdal.Open(raster_path)
+    if ds is None or ds.RasterCount < 3:
+        return []
+    width, height = ds.RasterXSize, ds.RasterYSize
+    # The palette is scale-invariant, so read a decimated buffer (at most
+    # ~sample_max px) to keep detection near-instant even on a 4K output.
+    scale = max(1, int((width * height / float(sample_max)) ** 0.5))
+    bw, bh = max(1, width // scale), max(1, height // scale)
+    r = ds.GetRasterBand(1).ReadAsArray(buf_xsize=bw, buf_ysize=bh)
+    g = ds.GetRasterBand(2).ReadAsArray(buf_xsize=bw, buf_ysize=bh)
+    b = ds.GetRasterBand(3).ReadAsArray(buf_xsize=bw, buf_ysize=bh)
+    ds = None
+    if r is None or g is None or b is None:
+        return []
+    a = np.stack([r, g, b], axis=-1).reshape(-1, 3).astype(np.int32)
+    q = (a // quant) * quant + quant // 2
+    keys = (q[:, 0] << 16) | (q[:, 1] << 8) | q[:, 2]
+    vals, counts = np.unique(keys, return_counts=True)
+    order = np.argsort(-counts)
+    total = int(keys.size) or 1
+    kept: list[list] = []  # [ [(r,g,b), count], ... ], representative = most common shade
+    for idx in order:
+        key = int(vals[idx])
+        rr, gg, bb = (key >> 16) & 255, (key >> 8) & 255, key & 255
+        cnt = int(counts[idx])
+        merged = False
+        for entry in kept:
+            kr, kg, kb = entry[0]
+            if abs(kr - rr) + abs(kg - gg) + abs(kb - bb) <= merge_l1:
+                entry[1] += cnt
+                merged = True
+                break
+        if not merged:
+            kept.append([(rr, gg, bb), cnt])
+        if len(kept) >= max_colors and cnt < total * 0.01:
+            break
+    out = [(rgb, c / total) for rgb, c in kept if c / total >= min_fraction]
+    out.sort(key=lambda t: -t[1])
+    return out
 
 
 def _refine_mask(

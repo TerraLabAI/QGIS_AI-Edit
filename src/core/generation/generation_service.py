@@ -306,6 +306,8 @@ class GenerationService:
                 geo_kwargs["basemap"] = ctx.basemap
             if ctx.parent_request_id:
                 geo_kwargs["parent_request_id"] = ctx.parent_request_id
+            if ctx.session_id:
+                geo_kwargs["session_id"] = ctx.session_id
             if ctx.template_id:
                 geo_kwargs["template_id"] = ctx.template_id
             if ctx.template_name:
@@ -407,6 +409,7 @@ class GenerationService:
             ctx.submitted_aspect_ratio = resp.get("aspect_ratio", aspect_ratio)
             ctx.submit_timestamp = time.time()
             ctx.request_id = request_id
+            ctx.model_name = resp.get("model_name") or None
             ctx.credit_cost = resp.get("credit_cost")
             ctx.estimated_time_seconds = estimated_time
             ctx.max_wait_seconds = max_wait

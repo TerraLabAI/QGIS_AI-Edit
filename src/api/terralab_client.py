@@ -166,6 +166,11 @@ class TerraLabClient:
             else:
                 base_url = self._read_base_url()
         self.base_url = base_url.rstrip("/")
+        # Dev-only raw-prompt mode: when RAW_PROMPT=true in .env.local, every
+        # submit carries raw_prompt so the server (TerraLab team allowlist only)
+        # sends the typed prompt alone, with no PREPROMPT or geo line. Lets the
+        # team compare models on identical raw input. Off for every normal user.
+        self._raw_prompt = str((env_vars or {}).get("RAW_PROMPT", "")).lower() == "true"
 
     @staticmethod
     def _read_base_url() -> str:
@@ -209,6 +214,7 @@ class TerraLabClient:
         export_height: int | None = None,
         basemap: str | None = None,
         parent_request_id: str | None = None,
+        session_id: str | None = None,
         template_id: str | None = None,
         template_name: str | None = None,
         idempotency_key: str | None = None,
@@ -279,10 +285,16 @@ class TerraLabClient:
             payload["basemap"] = basemap
         if parent_request_id:
             payload["parent_request_id"] = parent_request_id
+        if session_id:
+            payload["session_id"] = session_id
         if template_id:
             payload["template_id"] = template_id
         if template_name:
             payload["template_name"] = template_name
+        # Dev-only: bare-prompt comparison mode (team allowlist enforced server
+        # side). Absent for normal users, so older/standard servers ignore it.
+        if self._raw_prompt:
+            payload["raw_prompt"] = True
         body = json.dumps(payload).encode("utf-8")
         return self._request(
             "POST",

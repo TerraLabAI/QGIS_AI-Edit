@@ -48,6 +48,12 @@ class PipelineContext:
     # reference image to anchor coherence across edits.
     parent_request_id: str | None = None
 
+    # Iteration session: a client-minted id shared by every generation made in
+    # one continuous flow on a zone (new zone / Exit starts a fresh one). Used
+    # to group versions in history and rebuild the strip on restore. Distinct
+    # from parent_request_id (which is the input-image lineage).
+    session_id: str | None = None
+
     # Template attribution: set when the submitted prompt exactly matches a
     # curated preset (after whitespace normalization). Lets the dashboard
     # distinguish "ran Top Pick X" from "wrote custom prompt".
@@ -63,6 +69,11 @@ class PipelineContext:
 
     # Submit (populated by generation_service.py)
     request_id: str | None = None
+    # Human-readable name of the model the server actually ran (from the submit
+    # response). Stamped into the GeoTIFF + layer metadata for provenance. The
+    # server is the authority: it may steer a free-tier request to another model,
+    # so we record what ran, not what was requested.
+    model_name: str | None = None
     submitted_resolution: str | None = None
     submitted_aspect_ratio: str | None = None
     submit_timestamp: float | None = None

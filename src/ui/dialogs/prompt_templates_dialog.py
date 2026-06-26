@@ -55,6 +55,7 @@ from ...core.prompts.prompt_presets import (
     get_all_categories,
     lookup_template_by_prompt,
 )
+from ...core.prompts.session_grouping import group_recent_jobs
 from ..onboarding_hint import (
     HINT_LIBRARY_INTRO,
     DismissibleHint,
@@ -673,13 +674,15 @@ class _GenerationCard(QFrame):
     SLIDER_WIDTH = 300
     SLIDER_HEIGHT = 175
 
-    def __init__(self, job, demo_loader, on_open, parent=None, *, show_origin_pill=False):
+    def __init__(self, job, demo_loader, on_open, parent=None, *,
+                 show_origin_pill=False, version_count=1):
         super().__init__(parent)
         self.setObjectName("card")
         self._job = job
         self._request_id = str(job.get("request_id") or "")
         self._on_open = on_open
         self._demo_loader = demo_loader
+        self._version_badge = None
         self.setCursor(QtC.PointingHandCursor)
         self.setStyleSheet(_CARD_NORMAL)
         # Size to content (like the template cards) so the footer never leaves a
@@ -702,6 +705,12 @@ class _GenerationCard(QFrame):
         self._slider.setCursor(QtC.PointingHandCursor)
         self._slider.clicked.connect(self._emit_open)
         outer.addWidget(self._slider)
+
+        # Iteration session collapsed into one card: a corner badge shows how
+        # many versions share this session. Opening the card restores the whole
+        # session, so the user picks the exact version in the strip. Built here,
+        # refreshable later: older siblings can land on a later history page.
+        self.set_version_count(version_count)
 
         footer = QWidget(self)
         footer_v = QVBoxLayout(footer)
@@ -848,6 +857,44 @@ class _GenerationCard(QFrame):
     def deleteLater(self):  # noqa: N802 - Qt signature
         self._disconnect_loader()
         super().deleteLater()
+
+    def set_version_count(self, n: int) -> None:
+        """Show/update the 'N versions' badge. Created lazily so a card that first
+        rendered as a singleton (n==1, no badge) can still grow a badge when older
+        siblings of its session arrive on a later history page; hidden when n<=1."""
+        if n <= 1:
+            if self._version_badge is not None:
+                self._version_badge.hide()
+            return
+        if self._version_badge is None:
+            self._version_badge = QLabel(self)
+            self._version_badge.setStyleSheet(
+                "QLabel { background: rgba(0,0,0,0.66); color: white; "
+                "font-size: 10px; font-weight: 600; border-radius: 9px; "
+                "padding: 2px 8px; }"
+            )
+            # Let clicks through to the card so the badge corner isn't a dead
+            # zone (the card opens on click anywhere).
+            self._version_badge.setAttribute(QtC.WA_TransparentForMouseEvents)
+        self._version_badge.setText(tr("{n} versions").format(n=n))
+        self._version_badge.adjustSize()
+        self._version_badge.raise_()
+        self._version_badge.show()
+        self._position_version_badge()
+
+    def _position_version_badge(self):
+        if self._version_badge is None:
+            return
+        b = self._version_badge
+        b.move(max(8, self.width() - b.width() - 8), 8)
+
+    def resizeEvent(self, event):  # noqa: N802
+        super().resizeEvent(event)
+        self._position_version_badge()
+
+    def showEvent(self, event):  # noqa: N802
+        super().showEvent(event)
+        self._position_version_badge()
 
     def enterEvent(self, event):  # noqa: N802
         self.setStyleSheet(_CARD_HOVER)
@@ -1468,7 +1515,7 @@ class PromptTemplatesDialog(QDialog):
                 if empty is not None:
                     outer_v.addWidget(empty)
             else:
-                entries = [{"kind": "job", "data": j} for j in self._recent_jobs]
+                entries = self._grouped_recent_entries(self._recent_jobs)
                 self._build_card_gallery(key, entries, outer_v, scroll)
             outer_v.addStretch()
         elif key == "user_favorites":
@@ -1687,7 +1734,9 @@ class PromptTemplatesDialog(QDialog):
             if entry.get("kind") == "preset":
                 card = self._build_top_pick_card(entry["data"])
             else:
-                card = self._build_generation_card(entry["data"], show_origin)
+                card = self._build_generation_card(
+                    entry["data"], show_origin, entry.get("count", 1)
+                )
             grid.addWidget(card, row, col)
             cards.append(card)
         st["visible"] = end
@@ -1756,8 +1805,25 @@ class PromptTemplatesDialog(QDialog):
             self._recent_jobs.extend(fresh)
             st = self._gallery_state.get("recent")
             if st is not None:
-                st["entries"].extend({"kind": "job", "data": j} for j in fresh)
-                self._append_gallery_cards("recent")
+                # Re-group the full list. An older sibling on a later page can
+                # grow a session whose cover card is already on screen, so refresh
+                # the shown cards' counts (and badge) by session key, THEN append
+                # only the sessions not yet shown.
+                grouped = self._grouped_recent_entries(self._recent_jobs)
+                counts = {e.get("key"): e.get("count", 1) for e in grouped}
+                shown = {e.get("key") for e in st["entries"]}
+                for i, entry in enumerate(st["entries"]):
+                    new_count = counts.get(entry.get("key"), entry.get("count", 1))
+                    if new_count != entry.get("count", 1):
+                        entry["count"] = new_count
+                        if i < len(st["cards"]):
+                            card = st["cards"][i]
+                            if isinstance(card, _GenerationCard):
+                                card.set_version_count(new_count)
+                new_entries = [e for e in grouped if e.get("key") not in shown]
+                if new_entries:
+                    st["entries"].extend(new_entries)
+                    self._append_gallery_cards("recent")
             self._refresh_sidebar_button("recent")
         self._update_gallery_more_btn("recent")
         trigger = self._gallery_loaders.get("recent")
@@ -1769,12 +1835,29 @@ class PromptTemplatesDialog(QDialog):
         log_debug(f"Recent older-page fetch failed: {msg}")
         self._update_gallery_more_btn("recent")
 
-    def _build_generation_card(self, job: dict, show_origin_pill: bool = False) -> _GenerationCard:
+    def _grouped_recent_entries(self, jobs: list) -> list:
+        """Collapse the Recent list so all versions made on one zone share a
+        single card. The cover is the newest version; its badge shows the count.
+        Opening it restores the whole session (zone-grouped) for version pick."""
+        entries = []
+        for grp in group_recent_jobs(jobs):
+            entries.append({
+                "kind": "job",
+                "data": grp["cover"],
+                "key": grp["key"],
+                "count": grp["count"],
+            })
+        return entries
+
+    def _build_generation_card(
+        self, job: dict, show_origin_pill: bool = False, version_count: int = 1
+    ) -> _GenerationCard:
         return _GenerationCard(
             job,
             self._demo_loader,
             on_open=lambda j: self._open_detail(job=j),
             show_origin_pill=show_origin_pill,
+            version_count=version_count,
         )
 
     def _absolute_demo_url(self, rel: str) -> str:

@@ -483,7 +483,10 @@ def _write_geotiff_gdal(
             "AI_EDIT_RESOLUTION",
             (getattr(ctx, "submitted_resolution", None) or "unknown") if ctx else "unknown",
         )
-        dst_ds.SetMetadataItem("AI_EDIT_MODEL", "AI Edit")
+        dst_ds.SetMetadataItem(
+            "AI_EDIT_MODEL",
+            (getattr(ctx, "model_name", None) or "AI Edit") if ctx else "AI Edit",
+        )
         # Provenance lives in the GeoTIFF itself (no sidecar files): request
         # ids for support, template + geometry context for external tools.
         if ctx is not None:
@@ -649,7 +652,7 @@ def add_geotiff_to_project(
             log_warning(f"layer CRS fallback failed: {err}")
 
     _apply_default_raster_style(layer)
-    _set_raster_layer_metadata(layer, prompt)
+    _set_raster_layer_metadata(layer, prompt, _read_model_tag(geotiff_path))
 
     project.addMapLayer(layer, False)
     node = add_layer_to_ai_edit_top(layer)
@@ -659,15 +662,30 @@ def add_geotiff_to_project(
     return layer
 
 
-def _set_raster_layer_metadata(layer: QgsRasterLayer, prompt: str) -> None:
+def _read_model_tag(geotiff_path: str) -> str:
+    """Read the AI_EDIT_MODEL tag back from the written GeoTIFF (the single
+    source of truth). Empty string when absent or unreadable."""
+    try:
+        ds = gdal.Open(geotiff_path)
+        if ds is not None:
+            return ds.GetMetadataItem("AI_EDIT_MODEL") or ""
+    except Exception:  # nosec B110 - metadata is cosmetic
+        pass
+    return ""
+
+
+def _set_raster_layer_metadata(
+    layer: QgsRasterLayer, prompt: str, model_name: str = ""
+) -> None:
     """Mirror the GeoTIFF provenance tags into Layer Properties > Metadata,
     where QGIS users look first."""
     try:
         md = layer.metadata()
         md.setTitle(layer.name())
         prompt_part = f' Prompt: "{prompt}".' if prompt else ""
+        model_part = f" Model: {model_name}." if model_name and model_name != "AI Edit" else ""
         md.setAbstract(
-            f"AI-generated imagery created with AI Edit (TerraLab).{prompt_part}"
+            f"AI-generated imagery created with AI Edit (TerraLab).{model_part}{prompt_part}"
             " Synthetic imagery, not survey data."
         )
         created = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
