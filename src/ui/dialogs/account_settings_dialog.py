@@ -179,6 +179,7 @@ class AccountSettingsDialog(QDialog):
         self._worker = GenericRequestTask(
             "AI Edit account load",
             lambda: client.get_account(auth=auth),
+            silent=True,
         )
         self._worker.succeeded.connect(self._on_loaded)
         self._worker.failed.connect(self._on_failed)
@@ -208,6 +209,7 @@ class AccountSettingsDialog(QDialog):
         self._avatar_worker = GenericRequestTask(
             "AI Edit avatar load",
             lambda: client.download_image(url),
+            silent=True,
         )
         self._avatar_worker.succeeded.connect(self._on_avatar_loaded)
         # Any failure (no network, not an image) keeps the letter badge.

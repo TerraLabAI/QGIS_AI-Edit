@@ -11,6 +11,10 @@ from ..i18n import tr
 # network error fast instead of making the user wait the full API timeout.
 _PREFLIGHT_TIMEOUT_MS = 12_000
 
+# Credits refresh runs as a hidden background task; keep its ceiling short so an
+# unstable connection does not leave it hanging for the full 30s API timeout.
+_CREDITS_TIMEOUT_MS = 8_000
+
 # Credits are refetched on activation and after every generation, so a recent
 # snapshot is almost always available when the user clicks Generate. Reusing it
 # skips one network round-trip per generation; the server re-checks quota on
@@ -155,7 +159,9 @@ class AuthManager:
         if not self._activation_key:
             return {"error": tr("No activation key"), "code": ErrorCode.NO_KEY.value}
         try:
-            usage = self._client.get_usage(auth=self.get_auth_header())
+            usage = self._client.get_usage(
+                auth=self.get_auth_header(), timeout_ms=_CREDITS_TIMEOUT_MS
+            )
         except Exception:
             return {"error": tr("Connection error"), "code": ErrorCode.NO_NETWORK.value}
         self._store_usage(usage)

@@ -7,14 +7,36 @@ from qgis.core import QgsTask
 from qgis.PyQt.QtCore import pyqtSignal
 
 
+def silent_task_flags(can_cancel: bool = True):
+    """CanCancel plus Hidden/Silent when the running QGIS exposes them.
+
+    Hidden / Silent landed in QGIS 3.26; the plugin floor (metadata.txt
+    qgisMinimumVersion) is older, so resolve each flag defensively. Naming
+    QgsTask.Flag.Hidden directly would AttributeError at import on older builds;
+    there the task degrades to a plain (visible) cancellable task, which is
+    harmless. Keeping startup/background requests hidden stops the task-manager
+    widget from filling with alarming "AI Edit ..." rows on every launch.
+    """
+    flags = QgsTask.Flag.CanCancel if can_cancel else QgsTask.Flag(0)
+    for name in ("Hidden", "Silent"):
+        flag = getattr(QgsTask.Flag, name, None)
+        if flag is not None:
+            flags = flags | flag
+    return flags
+
+
 class GenericRequestTask(QgsTask):
-    """Run a no-args callable off the main thread. Raises or {"error",...} -> failed."""
+    """Run a no-args callable off the main thread. Raises or {"error",...} -> failed.
+
+    Pass ``silent=True`` for background/startup requests so they do not appear
+    in the QGIS task-manager widget.
+    """
 
     succeeded = pyqtSignal(object)
     failed = pyqtSignal(str, str)
 
-    def __init__(self, description: str, request_fn: Callable[[], Any]):
-        super().__init__(description, QgsTask.Flag.CanCancel)
+    def __init__(self, description: str, request_fn: Callable[[], Any], *, silent: bool = False):
+        super().__init__(description, silent_task_flags() if silent else QgsTask.Flag.CanCancel)
         self._request_fn = request_fn
         self._result: Any = None
         self._failure: tuple[str, str] | None = None

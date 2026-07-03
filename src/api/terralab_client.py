@@ -12,6 +12,10 @@ from ..core.logger import log_debug, log_warning
 
 # Timeout defaults (milliseconds)
 _TIMEOUT_API = 30_000
+# Lightweight startup/interactive GETs (bootstrap, export config, account,
+# credits): short so an unstable connection surfaces fast instead of hanging
+# a visible "checking..." for 30s.
+_TIMEOUT_STARTUP = 8_000
 _TIMEOUT_DOWNLOAD = 180_000
 _SUBMIT_TIMEOUTS_MS = {
     "1K": 45_000,
@@ -431,19 +435,27 @@ class TerraLabClient:
 
     def get_account(self, auth: dict) -> dict:
         """Get account info (email, subscriptions, usage)."""
-        return self._request("GET", "/api/plugin/account", auth=auth)
+        return self._request(
+            "GET", "/api/plugin/account", auth=auth, timeout_ms=_TIMEOUT_STARTUP
+        )
 
     def get_export_config(self) -> dict:
         """Fetch export config from the server (no auth required)."""
-        return self._request("GET", "/api/ai-edit/export-config")
+        return self._request(
+            "GET", "/api/ai-edit/export-config", timeout_ms=_TIMEOUT_STARTUP
+        )
 
     def get_bootstrap(self, auth: dict | None = None) -> dict:
         """One-call startup bundle: export config + preset catalog + usage
         (when auth is sent). Newer servers only; callers fall back to the
         individual endpoints when this 404s."""
         if auth:
-            return self._request("GET", "/api/plugin/bootstrap", auth=auth)
-        return self._request("GET", "/api/plugin/bootstrap")
+            return self._request(
+                "GET", "/api/plugin/bootstrap", auth=auth, timeout_ms=_TIMEOUT_STARTUP
+            )
+        return self._request(
+            "GET", "/api/plugin/bootstrap", timeout_ms=_TIMEOUT_STARTUP
+        )
 
     def get_config(self, product: str) -> dict:
         """Fetch server-driven plugin config (no auth required)."""

@@ -1,11 +1,13 @@
 """Prompt Library dialog.
 
 Tab-style navigation: clicking a sidebar entry swaps the right pane.
-Sidebar order: Favorites → Recent → (separator) → Top Picks → themed
-categories. The user's own lists (Favorites, Recent) sit at the top; the
-curated catalog follows. The themed categories are long (13 métiers), so only
-the first few show by default and the rest collapse behind a "show more"
-toggle. The dialog still opens on Top Picks regardless of sidebar order.
+Sidebar order: Favorites → Recent → Top Picks → (separator) → themed
+categories. The user's own lists (Favorites, Recent) and the Top Picks
+shortcut sit at the top; the themed catalog follows below the divider. The
+themed categories are long (13 métiers), so they are grouped under three
+high-level needs (Classify / Project / Render); each group folds via its
+header and remembers its state across sessions. The dialog still opens on Top
+Picks regardless of sidebar order.
 
 Recent and Favorites are the user's own past generations, fetched from the
 server in the background: each renders as a before/after card carrying the
@@ -26,7 +28,7 @@ try:  # SIP comes packaged with both PyQt5 and PyQt6 - used to detect dead C++ o
 except ImportError:  # pragma: no cover - defensive only
     _sip = None
 
-from qgis.PyQt.QtCore import QPoint, QSize, QThread, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import QPoint, QSettings, QSize, QThread, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QGuiApplication, QIcon
 from qgis.PyQt.QtWidgets import (
     QDialog,
@@ -53,6 +55,7 @@ from ...core.prompts import prompt_history
 from ...core.prompts.prompt_presets import (
     _CATEGORY_ORDER,
     get_all_categories,
+    get_need_groups,
     lookup_template_by_prompt,
 )
 from ...core.prompts.session_grouping import group_recent_jobs
@@ -135,16 +138,19 @@ _SIDEBAR_ITEM_ACTIVE = (
     "color: palette(text); background: rgba(128,128,128,0.18); }"
 )
 
-# The category expander is deliberately NOT styled like a sidebar item: it sits
-# at a smaller size in muted grey with the chevron inline next to the text (no
-# icon-column glyph), so it reads as a "show more" control rather than another
-# category in the list (#128).
-_CATEGORY_TOGGLE_BTN = (
+# Need-group headers (Classify / Project / Render): clickable rows that fold
+# their categories. These ARE the primary structure of the template list (the
+# redundant "Templates" divider is gone), so they follow the design system's
+# section-header spec - bold, palette(text), normal case, no letter-spacing -
+# rather than the faint grey small-caps used for the "Your prompts" divider.
+# That keeps them a clearly heavier tier than the divider above them instead
+# of a second stack of grey uppercase labels. Chevron sits inline with the
+# text (no icon column) so the fold affordance reads without a glyph column.
+_NEED_HEADER_BTN = (
     "QPushButton { text-align: left; border: none; border-radius: 4px; "
-    "padding: 8px 12px; font-size: 11px; color: rgba(128,128,128,0.9); "
-    "background: transparent; }"
-    "QPushButton:hover { background: rgba(128,128,128,0.10); "
-    "color: palette(text); }"
+    "padding: 10px 12px 4px 12px; font-size: 13px; font-weight: 700; "
+    "color: palette(text); background: transparent; }"
+    "QPushButton:hover { background: rgba(128,128,128,0.10); }"
 )
 
 _SEARCH_BOX = (
@@ -248,11 +254,9 @@ _TAB_ORDER = [
 # Tabs whose count is shown as "(N)" next to the label.
 _TABS_WITH_COUNT = {"recent", "user_favorites"}
 
-# Themed category keys (the long "métiers" list). The sidebar shows only the
-# first _SIDEBAR_VISIBLE_CATEGORIES of these up front and tucks the rest behind
-# a "show more" toggle so the 13-deep list doesn't overwhelm the panel (#128).
-_CATEGORY_KEYS = set(_CATEGORY_ORDER)
-_SIDEBAR_VISIBLE_CATEGORIES = 5
+# QSettings key remembering a need group's folded state across sessions.
+# Groups start expanded; only an explicit user fold is persisted.
+_NEED_COLLAPSED_SETTING = "AIEdit/library_need_collapsed_{key}"
 
 # Recent/Favorites galleries show this many generations first; the rest reveal
 # in batches behind a "Show more" button so the page stays light. 9 = a full
@@ -1165,11 +1169,13 @@ class PromptTemplatesDialog(QDialog):
         self._restore_job: dict | None = None
         self._categories_by_key: dict[str, dict] = {}
         self._sidebar_buttons: dict[str, _SidebarButton] = {}
-        # Collapsed themed-category sidebar buttons (beyond the visible few) and
-        # the toggle that reveals them. Populated in _build_ui.
-        self._collapsed_category_btns: list[_SidebarButton] = []
-        self._category_toggle_btn: QPushButton | None = None
-        self._categories_expanded: bool = False
+        # Need-group folding: header button + member category buttons + state,
+        # keyed by need key. Populated in _build_ui.
+        self._need_header_btns: dict[str, QPushButton] = {}
+        self._need_members: dict[str, list[_SidebarButton]] = {}
+        self._need_collapsed: dict[str, bool] = {}
+        # cat_key -> need key, to auto-unfold when a folded tab is targeted.
+        self._category_need: dict[str, str] = {}
         self._pages: dict[str, QWidget] = {}
         # Grid cards (_BeforeAfterCard) stored as generic widgets keyed by the
         # page they live on. Star refresh uses `card.star_button()` and
@@ -1273,31 +1279,17 @@ class PromptTemplatesDialog(QDialog):
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(2)
-        # Kept so the category toggle can relocate to the bottom when expanded.
-        self._sidebar_layout = sidebar_layout
 
         # Group the sidebar so the user's own entries read apart from curated
         # templates ("weird that Recent/Favorites are in here" feedback).
         sidebar_layout.addWidget(self._sidebar_section_header(tr("Your prompts")))
 
-        # Themed categories are long (13 deep); show only the first few and
-        # collapse the rest behind a toggle so the sidebar stays scannable.
-        themed_seen = 0
-        for key in _TAB_ORDER:
-            if key == "__separator__":
-                sep_wrap = QWidget()
-                sep_wrap.setFixedHeight(13)
-                sep_inner = QVBoxLayout(sep_wrap)
-                sep_inner.setContentsMargins(12, 6, 12, 6)
-                line = QFrame()
-                line.setFixedHeight(1)
-                line.setStyleSheet(
-                    "background: rgba(128,128,128,0.3); border: none;"
-                )
-                sep_inner.addWidget(line)
-                sidebar_layout.addWidget(sep_wrap)
-                sidebar_layout.addWidget(self._sidebar_section_header(tr("Templates")))
-                continue
+        # The user's own lists lead, and curated Top Picks sits right under them
+        # (no promoting divider above it - it's a personal shortcut, not the
+        # catalog headline). Then a divider, then the themed categories grouped
+        # under three foldable needs (Classify / Project / Render), which are
+        # the real structure of the template catalog.
+        for key in ("user_favorites", "recent", "favorites"):
             cat = self._categories_by_key.get(key)
             if cat is None:
                 continue
@@ -1305,21 +1297,45 @@ class PromptTemplatesDialog(QDialog):
             sidebar_layout.addWidget(btn)
             self._sidebar_buttons[key] = btn
 
-            if key in _CATEGORY_KEYS:
-                themed_seen += 1
-                if themed_seen == _SIDEBAR_VISIBLE_CATEGORIES:
-                    # Insert the toggle right after the last always-visible
-                    # category; the categories added after it start hidden.
-                    self._category_toggle_btn = self._build_category_toggle()
-                    sidebar_layout.addWidget(self._category_toggle_btn)
-                elif themed_seen > _SIDEBAR_VISIBLE_CATEGORIES:
-                    btn.setVisible(False)
-                    self._collapsed_category_btns.append(btn)
+        sep_wrap = QWidget()
+        sep_wrap.setFixedHeight(13)
+        sep_inner = QVBoxLayout(sep_wrap)
+        sep_inner.setContentsMargins(12, 6, 12, 6)
+        line = QFrame()
+        line.setFixedHeight(1)
+        line.setStyleSheet("background: rgba(128,128,128,0.3); border: none;")
+        sep_inner.addWidget(line)
+        sidebar_layout.addWidget(sep_wrap)
+        # No "Templates" divider here: the three need headers below are the
+        # template list's structure, so a grey small-caps divider on top of
+        # them just stacks two near-identical header tiers.
 
-        # No toggle needed when there are fewer categories than the cap.
-        if self._category_toggle_btn is not None and not self._collapsed_category_btns:
-            self._category_toggle_btn.setVisible(False)
-        self._update_category_toggle_text()
+        for group in get_need_groups(self._server_catalog):
+            need_key = group["key"]
+            members: list[_SidebarButton] = []
+            header = self._build_need_header(group)
+            sidebar_layout.addWidget(header)
+            self._need_header_btns[need_key] = header
+            for key in group["categories"]:
+                cat = self._categories_by_key.get(key)
+                if cat is None:
+                    continue
+                btn = self._build_sidebar_button(key, cat)
+                # Indent under the group header so the hierarchy reads at a
+                # glance (the header has no icon column of its own).
+                btn.layout().setContentsMargins(22, 6, 10, 6)
+                sidebar_layout.addWidget(btn)
+                self._sidebar_buttons[key] = btn
+                members.append(btn)
+                self._category_need[key] = need_key
+            self._need_members[need_key] = members
+            # Empty groups (offline first run without a cached catalog still
+            # lists local categories, so this is belt-and-braces) hide whole.
+            header.setVisible(bool(members))
+            if self._need_collapsed.get(need_key):
+                for btn in members:
+                    btn.setVisible(False)
+            self._update_need_header_text(need_key)
 
         sidebar_layout.addStretch()
         body.addWidget(sidebar)
@@ -1383,55 +1399,52 @@ class PromptTemplatesDialog(QDialog):
         btn.clicked.connect(lambda checked, k=key: self._on_sidebar_click(k))
         return btn
 
-    def _build_category_toggle(self) -> QPushButton:
-        """Expander that reveals/hides the extra themed categories. Styled as a
-        muted 'show more' control (not a _SidebarButton) so it doesn't read as
-        another category. Text is set by _update_category_toggle_text."""
+    def _build_need_header(self, group: dict) -> QPushButton:
+        """Foldable header for one need group. The tagline lives in the
+        tooltip so the 220px sidebar stays clean; the chevron sits inline
+        with the text (no icon column), keeping the row visually distinct
+        from the category entries below it."""
+        need_key = group["key"]
+        self._need_collapsed[need_key] = (
+            QSettings().value(
+                _NEED_COLLAPSED_SETTING.format(key=need_key), False, type=bool
+            )
+        )
         btn = QPushButton()
-        btn.setStyleSheet(_CATEGORY_TOGGLE_BTN)
+        btn.setStyleSheet(_NEED_HEADER_BTN)
         btn.setCursor(QtC.PointingHandCursor)
         btn.setSizePolicy(QtC.SizePolicyExpanding, QtC.SizePolicyFixed)
-        btn.clicked.connect(self._on_toggle_categories)
+        btn.setToolTip(group["tagline"])
+        btn.setProperty("_need_label", group["label"])
+        btn.clicked.connect(lambda checked, k=need_key: self._on_toggle_need(k))
         return btn
 
-    def _update_category_toggle_text(self):
-        """Refresh the toggle chevron + label to match the expanded state. The
-        chevron sits inline with the text (not in an icon column) so the row
-        stays distinct from the category entries above it."""
-        btn = self._category_toggle_btn
-        if btn is None:
+    def _update_need_header_text(self, need_key: str):
+        btn = self._need_header_btns.get(need_key)
+        if btn is None or not _is_alive(btn):
             return
-        hidden = len(self._collapsed_category_btns)
-        if self._categories_expanded:
-            btn.setText("▴  " + tr("Show fewer categories"))
-        else:
-            btn.setText("▾  " + tr("Show {n} more categories").format(n=hidden))
+        chevron = "▸" if self._need_collapsed.get(need_key) else "▾"
+        label = str(btn.property("_need_label") or "")
+        btn.setText(f"{chevron}  {label}")
 
-    def _on_toggle_categories(self):
-        """Reveal or hide the collapsed themed categories."""
-        self._categories_expanded = not self._categories_expanded
-        for btn in self._collapsed_category_btns:
+    def _on_toggle_need(self, need_key: str):
+        """Fold or unfold one need group and remember the choice."""
+        collapsed = not self._need_collapsed.get(need_key, False)
+        self._need_collapsed[need_key] = collapsed
+        QSettings().setValue(
+            _NEED_COLLAPSED_SETTING.format(key=need_key), collapsed
+        )
+        for btn in self._need_members.get(need_key, []):
             if _is_alive(btn):
-                btn.setVisible(self._categories_expanded)
-        self._reposition_category_toggle()
-        self._update_category_toggle_text()
+                btn.setVisible(not collapsed)
+        self._update_need_header_text(need_key)
 
-    def _reposition_category_toggle(self):
-        """Keep the toggle next to the boundary it controls: tucked under the
-        last always-visible category when collapsed, and pushed to the very
-        bottom (under the last revealed category) once expanded."""
-        layout = getattr(self, "_sidebar_layout", None)
-        toggle = self._category_toggle_btn
-        if layout is None or toggle is None or not self._collapsed_category_btns:
-            return
-        layout.removeWidget(toggle)
-        if self._categories_expanded:
-            # Just before the trailing stretch (last layout item).
-            layout.insertWidget(layout.count() - 1, toggle)
-        else:
-            # Back above the first collapsed category.
-            idx = layout.indexOf(self._collapsed_category_btns[0])
-            layout.insertWidget(idx if idx >= 0 else layout.count() - 1, toggle)
+    def _ensure_need_visible(self, cat_key: str):
+        """Unfold the need group holding `cat_key` (e.g. tab targeted from a
+        search result) so its highlighted button is actually visible."""
+        need_key = self._category_need.get(cat_key)
+        if need_key and self._need_collapsed.get(need_key):
+            self._on_toggle_need(need_key)
 
     def _on_sidebar_click(self, key: str):
         """Sidebar click is an explicit "leave search" - clear the box."""
@@ -2145,11 +2158,9 @@ class PromptTemplatesDialog(QDialog):
         responsibility (see _on_sidebar_click)."""
         if self._ensure_page(key) is None:
             return
-        # If the target is a collapsed category, expand the section first so its
+        # If the target sits in a folded need group, unfold it first so its
         # highlighted button is actually visible (e.g. selected via search).
-        collapsed_target = key in self._sidebar_buttons and self._sidebar_buttons[key] in self._collapsed_category_btns
-        if not self._categories_expanded and collapsed_target:
-            self._on_toggle_categories()
+        self._ensure_need_visible(key)
         self._active_tab = key
         self._previous_tab = key
         self._stack.setCurrentWidget(self._pages[key])

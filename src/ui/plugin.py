@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import time
+import urllib.parse
 import uuid
 
 from qgis.core import Qgis, QgsApplication, QgsPointXY, QgsRectangle
@@ -36,6 +37,7 @@ from ..core.logger import log, log_debug, log_warning
 from ..core.prompts import prompt_history
 from ..core.prompts.prompt_presets import (
     detect_freeform_vector_intent,
+    get_preset_by_id,
     get_vector_hints,
     lookup_template_by_prompt,
 )
@@ -65,6 +67,42 @@ from .tools.markup_tools import (
     PencilMapTool,
 )
 from .tools.selection_map_tool import RectangleSelectionTool
+
+# --- Onboarding basemaps (empty-canvas "Try it on an example") ----------------
+# Esri World Imagery: the key-free, ToS-clean global backdrop QGIS and
+# QuickMapServices ship. zmax=21 unlocks Esri's native sub-metre tiles in metro
+# areas, so a tight zone stays crisp instead of upsampling a z19 tile.
+_ESRI_WORLD_IMAGERY_URI = (
+    "type=xyz&url=https://server.arcgisonline.com/ArcGIS/rest/services/"
+    "World_Imagery/MapServer/tile/%7Bz%7D/%7By%7D/%7Bx%7D&zmax=21&zmin=0"
+)
+# IGN Géoplateforme orthophotos: key-free since the 2021 open-data switch,
+# Licence Ouverte Etalab 2.0 (commercial reuse + derivatives OK with
+# attribution), ~20cm over metropolitan France. Used only for the France demo
+# scene because coverage is France-only (blank tiles elsewhere); the WMTS-KVP
+# endpoint is consumed as XYZ with the standard PM (web-mercator) tile matrix.
+# HR.* is the current canonical layer id (verified serving image/jpeg tiles).
+_IGN_ORTHO_TILE_URL = (
+    "https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile"
+    "&LAYER=HR.ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM"
+    "&FORMAT=image/jpeg&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}"
+)
+# Encode only what would break the outer XYZ URI's own '&'/'=' separators (the
+# query's '&','=' and the {z}/{x}/{y} braces); keep '://', '/', '?' literal to
+# match the proven Esri form above, which is how QGIS's XYZ provider expects it.
+_IGN_ORTHO_URI = (
+    "type=xyz&url=" + urllib.parse.quote(_IGN_ORTHO_TILE_URL, safe=":/?") + "&zmax=21&zmin=0"
+)
+# Eiffel Tower + the Seine (tower ~48.8584, 2.2945), WGS84. The example zone is
+# framed and drawn here: Paris's most recognisable landmark with the river in
+# frame, so the pre-filled sea-level-rise prompt has real water to grow from and
+# the first result lands as a striking "flood around the Eiffel Tower".
+_DEMO_ZONE_WGS84 = {"xmin": 2.2895, "ymin": 48.8552, "xmax": 2.2990, "ymax": 48.8616}
+# Preset id (mirrored with the website catalog) pre-filled into the prompt:
+# photorealistic sea-level rise, a top-pick climate scenario that reads as an
+# instant "wow" on a waterfront scene. A no-op if the catalog isn't cached yet
+# (first run offline), so the zone is still drawn.
+_DEMO_PRESET_ID = "simulate_sea_level"
 
 
 class _MarkupUndoFilter(QObject):
@@ -403,6 +441,9 @@ class AIEditPlugin:
         self._pending_generation: dict | None = None
         self._selection_rubber_band = None
         self._selection_rubber_band_halo = None
+        # Onboarding tile-warm-up watchers (see _start_imagery_gate).
+        self._imagery_settle_timer = None
+        self._imagery_cap_timer = None
         self._previous_map_tool = None
         self._terralab_toolbar = None
         self._export_config_loader = None
@@ -472,6 +513,12 @@ class AIEditPlugin:
         # toggle from a real close (title-bar X) and skip the teardown.
         self._toggling_dock = False
         self._selection_tool_was_active = False
+        # Startup network (bootstrap) is deferred until the dock is first shown,
+        # so a user who never opens AI Edit this session makes zero network
+        # calls. Once-guarded so toggling the dock never refires it.
+        self._startup_bootstrap_done = False
+        # One transient "no connection" notice per startup episode (anti-spam).
+        self._connectivity_notice_shown = False
         # Fires once per QGIS session, on the first dock-open. Lifecycle event,
         # ships without explicit consent (no PII).
         self._plugin_opened_emitted = False
@@ -691,6 +738,7 @@ class AIEditPlugin:
         self._dock_widget.pairing_cancel_requested.connect(self._on_cancel_pairing)
         self._dock_widget.settings_clicked.connect(self._on_settings_clicked)
         self._dock_widget.launch_clicked.connect(self._on_launch_clicked)
+        self._dock_widget.try_example_requested.connect(self._on_try_example)
         self._dock_widget.exit_clicked.connect(self._on_exit_clicked)
         self._dock_widget.zone_clear_requested.connect(self._on_zone_delete_requested)
         self._dock_widget.markup_clicked.connect(self._on_markup_clicked)
@@ -771,9 +819,15 @@ class AIEditPlugin:
             telemetry.track(te.PLUGIN_OPENED, {"open_source": auto_open_source})
             telemetry.flush()
 
-        # One background call fetches export config + catalog + key/credits;
-        # falls back to the three legacy loaders on older servers.
-        self._bootstrap_startup()
+        # Startup network is deferred until the dock is actually shown (see
+        # _maybe_bootstrap_on_show), so a user who never opens AI Edit makes no
+        # network calls. The auto-open branch above shows the dock BEFORE
+        # visibilityChanged is connected, so fire it explicitly here when the
+        # dock is already visible; the once-guard makes the later signal a no-op.
+        # A QGIS-restored-open dock becomes visible after initGui, which the
+        # visibilityChanged handler then catches.
+        if self._dock_widget.isVisible():
+            self._maybe_bootstrap_on_show()
 
         if self._dev_mode:
             log("AI Edit plugin loaded [DEV MODE]")
@@ -787,6 +841,9 @@ class AIEditPlugin:
         # Make any pending plugin-update-check timer a no-op (belt-and-suspenders
         # alongside parenting it to the dock).
         self._update_check_done = True
+        # Tear down any in-flight onboarding tile-warm-up watcher (disconnects
+        # the canvas signal so it can't fire against a torn-down dock).
+        self._finish_imagery_gate()
         # Stop generation task. QgsTaskManager owns the task lifecycle, so we
         # request cancellation and drop our reference; the framework drains
         # the run() loop and emits taskTerminated on the main thread.
@@ -1058,7 +1115,12 @@ class AIEditPlugin:
                 self._toggling_dock = False
             log_debug("Dock hidden (toggle)")
         else:
-            self._check_activation_state()
+            # On the FIRST open the deferred bootstrap (fired by show() below via
+            # visibilityChanged) already validates the key + fetches credits, so
+            # skip this call to avoid a duplicate /usage. Later opens use it for
+            # the cheap 900s-guarded revalidation.
+            if self._startup_bootstrap_done:
+                self._check_activation_state()
             self._dock_widget.show()
             self._dock_widget.raise_()
             self._ensure_dock_height()
@@ -1134,6 +1196,7 @@ class AIEditPlugin:
         self._key_validation_worker = GenericRequestTask(
             "AI Edit key validation",
             lambda c=self._client, k=saved_key: _key_validation_request(c, k),
+            silent=True,
         )
         self._key_validation_worker.succeeded.connect(self._on_key_valid)
         self._key_validation_worker.failed.connect(self._on_key_invalid)
@@ -1143,6 +1206,8 @@ class AIEditPlugin:
         """Server confirmed the key is valid. The validation call IS a /usage
         fetch, so its payload feeds the credits display directly instead of
         firing a second, identical request."""
+        # Connection works again: re-arm the one-shot connectivity notice.
+        self._connectivity_notice_shown = False
         self._last_key_validation_unix = time.time()
         self._dock_widget.set_activated(True)
         self._settings_action.setEnabled(True)
@@ -1155,7 +1220,22 @@ class AIEditPlugin:
             self._refresh_credits()
 
     def _on_key_invalid(self, message: str, code: str):
-        """Server rejected the key - show activation screen."""
+        """Key validation came back negative.
+
+        A genuine auth rejection (INVALID_KEY, SUBSCRIPTION_*, ...) signs the
+        user out. A connectivity failure must NOT: clearing the key on a network
+        blip would dump an offline user back to the sign-up screen and lose their
+        stored key. On a network error we keep the optimistic-activated session
+        (the server re-checks on every real call) and show one quiet notice.
+        """
+        if (code or "").strip().upper() in NETWORK_ERROR_CODES:
+            self._dock_widget.set_activated(True)
+            self._settings_action.setEnabled(True)
+            # The optimistic path disabled Launch pending this check; restore it
+            # so an offline user can still open the tool from a cached session.
+            self._dock_widget.set_launch_enabled(True)
+            self._show_connectivity_notice(code)
+            return
         self._last_key_validation_unix = 0.0
         clear_activation()
         self._auth_manager.set_activation_key("")
@@ -1188,12 +1268,25 @@ class AIEditPlugin:
         self._export_config_loader = GenericRequestTask(
             "AI Edit export config",
             self._client.get_export_config,
+            silent=True,
         )
         self._export_config_loader.succeeded.connect(self._on_export_config_loaded)
         self._export_config_loader.failed.connect(
             lambda msg, code: self._on_export_config_failed(f"Server error: {msg}")
         )
         QgsApplication.taskManager().addTask(self._export_config_loader)
+
+    def _maybe_bootstrap_on_show(self):
+        """Run the startup bundle the first time the dock is shown this session.
+
+        Once-guarded so toggling the dock open/closed never refires a network
+        storm. Deferring here (instead of initGui) means an idle install makes
+        no network calls at all.
+        """
+        if self._startup_bootstrap_done:
+            return
+        self._startup_bootstrap_done = True
+        self._bootstrap_startup()
 
     def _bootstrap_startup(self):
         """One background call for export config + preset catalog + key
@@ -1203,6 +1296,7 @@ class AIEditPlugin:
         task = GenericRequestTask(
             "AI Edit bootstrap",
             lambda c=self._client, a=auth: c.get_bootstrap(a),
+            silent=True,
         )
         task.succeeded.connect(self._on_bootstrap_loaded)
         task.failed.connect(lambda _msg, _code: self._bootstrap_fallback())
@@ -1265,6 +1359,7 @@ class AIEditPlugin:
         self._catalog_loader = GenericRequestTask(
             "AI Edit preset catalog",
             lambda c=self._client: _server_catalog_request(c, force_refresh=True),
+            silent=True,
         )
         self._catalog_loader.succeeded.connect(self._on_server_catalog_loaded)
         self._catalog_loader.failed.connect(lambda _msg, _code: self._on_server_catalog_failed())
@@ -1279,22 +1374,36 @@ class AIEditPlugin:
 
     def _on_export_config_loaded(self, config):
         """Set global export config from server response."""
+        # Connection works again: re-arm the one-shot connectivity notice.
+        self._connectivity_notice_shown = False
         set_server_config(config)
         costs = config.get("resolution_credit_costs", {})
         if self._dock_widget:
             self._dock_widget.set_resolution_credit_costs(costs)
 
     def _on_export_config_failed(self, error_message: str):
-        """Handle export config loading failure."""
+        """Handle export config loading failure (fallback path)."""
         log_warning(f"Export config failed to load: {error_message}")
+        self._show_connectivity_notice()
+
+    def _show_connectivity_notice(self, code: str = "") -> None:
+        """Show ONE transient, dismissible 'no connection' notice per startup
+        episode. Non-blocking (message bar), deduped so the three fallback
+        loaders (config + catalog + key validation) never stack notices. The
+        flag resets on any successful startup fetch so a later real outage can
+        notify again."""
+        if self._connectivity_notice_shown:
+            return
+        self._connectivity_notice_shown = True
+        from qgis.core import Qgis
+        self._notify(
+            tr("AI Edit could not reach the server. Some features need an internet connection."),
+            level=Qgis.MessageLevel.Warning,
+            duration=8,
+        )
         if self._dock_widget:
-            self._dock_widget.set_status(
-                tr(
-                    "Warning: Cannot connect to server ({error}). "
-                    "Plugin requires internet connection to function."
-                ).format(error=error_message),
-                is_error=True
-            )
+            detail = _localize_server_error("", code) or tr("No internet connection.")
+            self._dock_widget.set_status(detail, is_error=True)
 
     def _activate_selection_tool(self):
         """Activate selection tool. Preserves any existing zone."""
@@ -1364,6 +1473,9 @@ class AIEditPlugin:
 
     def _on_dock_visibility_changed(self, visible: bool):
         if visible:
+            # First real show (toolbar, launch shortcut, or QGIS restoring the
+            # dock open at launch) is what kicks off the deferred startup network.
+            self._maybe_bootstrap_on_show()
             return
         # A toolbar toggle hide is non-destructive (see _toggle_dock): preserve
         # the in-progress generation and all dock state so re-opening restores
@@ -1885,6 +1997,117 @@ class AIEditPlugin:
         except Exception as err:  # nosec B110
             log_warning(f"zoom to restored zone failed: {err}")
         return True
+
+    # --- Empty-canvas onboarding ("Try it on an example") --------------------
+
+    def _on_try_example(self):
+        """Empty-canvas one-click onboarding. Drop a satellite basemap and, on a
+        blank project, frame a known demo scene, pre-draw an example zone and
+        pre-fill a land-cover prompt so the only remaining step is Generate. On
+        a project that already has layers, only add a global backdrop and leave
+        the user's view and inputs untouched."""
+        from qgis.core import QgsProject
+
+        was_empty = len(QgsProject.instance().mapLayers()) == 0
+        layer = self._add_backdrop_layer(demo=was_empty)
+        ok = layer is not None
+        if ok and was_empty:
+            # Defer past QGIS's zoom-to-first-layer (queued during addMapLayer),
+            # which would otherwise snap to the whole world and undo our framing.
+            QTimer.singleShot(0, self._prime_demo_scene)
+        elif not ok:
+            self._dock_widget.show_basemap_error()
+        telemetry.track(te.BASEMAP_CTA_CLICKED, {"success": ok})
+        telemetry.flush()
+
+    def _add_backdrop_layer(self, demo: bool):
+        """Add a satellite basemap at the bottom of the layer tree (AI Edit
+        outputs stack above it). On the demo path prefer IGN's sharp France
+        ortho, falling back to global Esri if it won't load; otherwise use Esri
+        directly. Returns the layer, or None if nothing loaded."""
+        from qgis.core import QgsProject, QgsRasterLayer
+
+        layer = None
+        source = ""
+        if demo:
+            candidate = QgsRasterLayer(_IGN_ORTHO_URI, "Orthophoto (IGN)", "wms")
+            if candidate.isValid():
+                layer, source = candidate, "ign"
+        if layer is None:
+            candidate = QgsRasterLayer(_ESRI_WORLD_IMAGERY_URI, "Satellite (Esri)", "wms")
+            if candidate.isValid():
+                layer, source = candidate, "esri"
+        if layer is None:
+            log_warning("onboarding basemap: no source loaded")
+            return None
+        project = QgsProject.instance()
+        project.addMapLayer(layer, False)
+        project.layerTreeRoot().insertLayer(-1, layer)
+        log(f"onboarding basemap added (source={source})")
+        return layer
+
+    def _prime_demo_scene(self):
+        """Frame the demo scene, pre-draw the example zone and pre-fill the
+        land-cover prompt, then hold Generate until the tiles have painted."""
+        from qgis.core import QgsCoordinateReferenceSystem
+
+        wgs84_wkt = QgsCoordinateReferenceSystem("EPSG:4326").toWkt()
+        # _restore_zone frames (zoom to zone x1.15), draws the rubber band and
+        # flips the dock into ZONE_SELECTED - exactly the demo framing we want.
+        if not self._restore_zone(dict(_DEMO_ZONE_WGS84), wgs84_wkt):
+            return
+        preset = get_preset_by_id(_DEMO_PRESET_ID)
+        if preset:
+            self._dock_widget.prime_prompt_from_preset(preset)
+        self._start_imagery_gate()
+
+    def _start_imagery_gate(self):
+        """Hold Generate while the online basemap's tiles warm. Online providers
+        fetch tiles async and repaint as they arrive, so exporting now would
+        ship a blank input (a crop error). We debounce mapCanvasRefreshed (tiles
+        settled once refreshes stop) with a hard cap so a slow or offline
+        network never traps the user."""
+        if self._dock_widget is None or self._canvas is None:
+            return
+        self._dock_widget.set_imagery_loading(True)
+        # Any failure while arming the watchers must release the gate, or
+        # Generate stays stuck on "Loading imagery…" forever.
+        try:
+            # Parent to the dock (a QObject); the plugin instance is not a
+            # QObject, and an unparented QTimer would be at risk of GC.
+            self._imagery_settle_timer = QTimer(self._dock_widget)
+            self._imagery_settle_timer.setSingleShot(True)
+            self._imagery_settle_timer.timeout.connect(self._finish_imagery_gate)
+            self._imagery_cap_timer = QTimer(self._dock_widget)
+            self._imagery_cap_timer.setSingleShot(True)
+            self._imagery_cap_timer.timeout.connect(self._finish_imagery_gate)
+            self._canvas.mapCanvasRefreshed.connect(self._on_imagery_refresh)
+            self._imagery_cap_timer.start(8000)
+            self._imagery_settle_timer.start(1200)
+        except Exception as err:  # noqa: BLE001 - release rather than trap Generate.
+            log_warning(f"imagery gate setup failed, releasing: {err}")
+            self._finish_imagery_gate()
+
+    def _on_imagery_refresh(self):
+        """Each finished render restarts the quiet window; when tiles stop
+        arriving the window elapses and the gate lifts."""
+        if self._imagery_settle_timer is not None:
+            self._imagery_settle_timer.start(1200)
+
+    def _finish_imagery_gate(self):
+        """Release Generate and tear down the warm-up watchers (idempotent)."""
+        for attr in ("_imagery_settle_timer", "_imagery_cap_timer"):
+            timer = getattr(self, attr, None)
+            if timer is not None:
+                timer.stop()
+                setattr(self, attr, None)
+        if self._canvas is not None:
+            try:
+                self._canvas.mapCanvasRefreshed.disconnect(self._on_imagery_refresh)
+            except (TypeError, RuntimeError):
+                pass  # nosec B110 - already disconnected.
+        if self._dock_widget is not None:
+            self._dock_widget.set_imagery_loading(False)
 
     def _load_reference_images(self, urls: list):
         """Download a past generation's reference images off-thread, then inject
@@ -2684,6 +2907,7 @@ class AIEditPlugin:
             task = GenericRequestTask(
                 tr("Cancelling sign-in"),
                 lambda c=code: self._client.cancel_pairing(c),
+                silent=True,
             )
             self._hold_history_task(task)
         telemetry.track(te.AI_EDIT_PAIR_CANCELLED)
@@ -3214,6 +3438,7 @@ class AIEditPlugin:
         self._credits_loader = GenericRequestTask(
             "AI Edit credits",
             self._auth_manager.get_usage_info,
+            silent=True,
         )
         self._credits_loader.succeeded.connect(self._on_credits_loaded)
         self._credits_loader.failed.connect(lambda _msg, _code: self._on_credits_failed())

@@ -180,20 +180,56 @@ _CATEGORY_LABELS = {
     "hydrology": "Water & hydrology",
 }
 
+# High-level needs grouping the themed categories in the library sidebar.
+# Mirrored with the website catalog (`needs` array + per-category `need`
+# field); these local tables are the offline fallback, resolved through
+# `get_need_groups` the same way category labels are.
+_NEED_LABELS = {
+    "classify": "Classify",
+    "project": "Project",
+    "render": "Render",
+}
+
+_NEED_TAGLINES = {
+    "classify": "Analyze the territory: detect, segment, count, map",
+    "project": "Simulate scenarios and possible futures",
+    "render": "From raw imagery to presentation visuals",
+}
+
+_NEED_ORDER = ["classify", "project", "render"]
+
+_CATEGORY_NEED = {
+    "landcover": "classify",
+    "segment": "classify",
+    "forestry": "classify",
+    "agriculture": "classify",
+    "geology": "classify",
+    "hydrology": "classify",
+    "climate": "project",
+    "urban": "project",
+    "energy": "project",
+    "cartography": "render",
+    "cleanup": "render",
+    "presentation": "render",
+    "archaeology": "render",
+}
+
+# Grouped by need (classify -> project -> render) so the sidebar and search
+# results walk the catalog in the same order the need groups display it.
 _CATEGORY_ORDER = [
-    "cartography",
-    "urban",
-    "segment",
     "landcover",
-    "cleanup",
-    "presentation",
+    "segment",
     "forestry",
     "agriculture",
-    "climate",
-    "energy",
-    "archaeology",
     "geology",
     "hydrology",
+    "climate",
+    "urban",
+    "energy",
+    "cartography",
+    "cleanup",
+    "presentation",
+    "archaeology",
 ]
 
 
@@ -597,6 +633,24 @@ def _build_preset_lookup(catalog: dict | None) -> dict[str, dict]:
     return lookup
 
 
+def get_preset_by_id(preset_id: str, server_catalog: dict | None = None) -> dict | None:
+    """Return the normalized preset (id + label + prompt) for `preset_id`.
+
+    Used to prime a prompt programmatically (the empty-canvas onboarding
+    pre-fills a land-cover preset). When `server_catalog` is None, falls back
+    to the locally-cached catalog. Returns None when the catalog is
+    unavailable (first install offline) or the id is absent, so callers can
+    skip the prompt fill and degrade gracefully."""
+    if not preset_id:
+        return None
+    if server_catalog is None:
+        server_catalog = _cached_catalog()
+    for cat_key, p in _iter_server_presets(server_catalog):
+        if p.get("id") == preset_id:
+            return _normalize_preset(p, cat_key)
+    return None
+
+
 def _build_recent_presets(catalog: dict | None) -> list[dict]:
     """Recent prompts from prompt_history, with template metadata re-attached
     when the prompt matches a known server preset."""
@@ -720,6 +774,51 @@ def _build_themed_category(cat_key: str, catalog: dict | None) -> list[dict]:
         for p in (cat.get("presets") or [])
         if isinstance(p, dict)
     ]
+
+
+def _category_need(cat_key: str, catalog: dict | None) -> str:
+    """Need key for a category: the server's assignment first (so future
+    categories land in the right group without a plugin update), else the
+    local fallback table."""
+    cat = _find_server_category(catalog, cat_key)
+    if cat is not None:
+        need = cat.get("need")
+        if isinstance(need, str) and need in _NEED_LABELS:
+            return need
+    return _CATEGORY_NEED.get(cat_key, _NEED_ORDER[0])
+
+
+def get_need_groups(server_catalog: dict | None = None) -> list[dict]:
+    """Ordered need groups for the library sidebar.
+
+    Each group is ``{key, label, tagline, categories: [cat_key, ...]}``.
+    Labels and taglines prefer the server catalog's polyglot ``needs``
+    entries and fall back to the local tables, mirroring how category
+    labels resolve."""
+    if server_catalog is None:
+        server_catalog = _cached_catalog()
+
+    server_needs: dict[str, dict] = {}
+    if isinstance(server_catalog, dict):
+        for entry in server_catalog.get("needs", []) or []:
+            if isinstance(entry, dict) and isinstance(entry.get("key"), str):
+                server_needs[entry["key"]] = entry
+
+    groups: list[dict] = []
+    for need_key in _NEED_ORDER:
+        srv = server_needs.get(need_key) or {}
+        groups.append({
+            "key": need_key,
+            "label": _pick_label(srv.get("label"), "") or tr(_NEED_LABELS[need_key]),
+            "tagline": (
+                _pick_label(srv.get("tagline"), "") or tr(_NEED_TAGLINES[need_key])
+            ),
+            "categories": [
+                c for c in _CATEGORY_ORDER
+                if _category_need(c, server_catalog) == need_key
+            ],
+        })
+    return groups
 
 
 def get_all_categories(server_catalog: dict | None = None) -> list[dict]:

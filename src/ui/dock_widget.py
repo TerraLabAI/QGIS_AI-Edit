@@ -1175,6 +1175,7 @@ class AIEditDockWidget(QDockWidget):
     pairing_cancel_requested = pyqtSignal(str)  # user cancelled the browser handoff (emits the code)
     settings_clicked = pyqtSignal()
     launch_clicked = pyqtSignal()          # user clicked "Launch AI Edit" on entry screen
+    try_example_requested = pyqtSignal()   # empty-canvas one-click onboarding (basemap + demo zone + prompt)
     exit_clicked = pyqtSignal()            # user clicked the always-visible Exit button
     zone_clear_requested = pyqtSignal()    # Escape pressed while a zone was selected
     markup_clicked = pyqtSignal()          # user picked Tools → Mark up
@@ -1985,6 +1986,9 @@ class AIEditDockWidget(QDockWidget):
 
         # State
         self._zone_selected = False
+        # While an onboarding basemap warms its online tiles, Generate is held
+        # so the first-run demo cannot export a blank input (crop error).
+        self._imagery_loading = False
         self._activated = False
         self._checking_credits = False
         self._swipe_eligible = False
@@ -2325,7 +2329,13 @@ class AIEditDockWidget(QDockWidget):
             pass  # nosec B110
 
     def _build_warning_widget(self) -> QWidget:
-        """Build yellow warning widget for when no layers are available."""
+        """Build yellow warning widget for when no layers are available.
+
+        Carries a one-click "Try it on an example" CTA: the empty-canvas
+        gate is the top first-run drop-off (85% of generation failures are
+        crop errors on blank canvases), so the warning must offer the fix,
+        not just describe it. The click is handled by the plugin, which adds a
+        basemap, frames a demo scene, pre-draws a zone and pre-fills a prompt."""
         widget = QWidget()
         widget.setStyleSheet(
             "QWidget { background-color: rgb(255, 230, 150); "
@@ -2343,14 +2353,85 @@ class AIEditDockWidget(QDockWidget):
         icon_label.setFixedSize(16, 16)
         warning_layout.addWidget(icon_label, 0, QtC.AlignTop)
 
+        text_col = QVBoxLayout()
+        text_col.setContentsMargins(0, 0, 0, 0)
+        text_col.setSpacing(6)
+
         self._warning_text = QLabel(tr(
-            "No visible imagery. Add a GeoTIFF, image file, or online basemap "
-            "(WMS, XYZ) to your project."
+            "No visible imagery. Add your own layer (GeoTIFF, WMS, XYZ), or "
+            "try AI Edit on a ready-made example."
         ))
         self._warning_text.setWordWrap(True)
-        warning_layout.addWidget(self._warning_text, 1)
+        text_col.addWidget(self._warning_text)
+
+        self._basemap_btn = QPushButton(tr("Try it on an example"))
+        self._basemap_btn.setCursor(QtC.PointingHandCursor)
+        self._basemap_btn.setStyleSheet(
+            "QPushButton { background: rgba(255,255,255,0.85); "
+            "border: 1px solid rgba(180,110,0,0.55); border-radius: 4px; "
+            "padding: 5px 10px; color: #333333; font-weight: 600; "
+            "font-size: 12px; }"
+            "QPushButton:hover { background: #ffffff; }"
+        )
+        self._basemap_btn.clicked.connect(self._on_try_example_clicked)
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 0, 0, 0)
+        btn_row.addWidget(self._basemap_btn)
+        btn_row.addStretch()
+        text_col.addLayout(btn_row)
+
+        warning_layout.addLayout(text_col, 1)
 
         return widget
+
+    def _on_try_example_clicked(self):
+        """One-click unblock for the empty-canvas gate. The heavy lifting (add a
+        basemap, frame a demo scene, pre-draw a zone, pre-fill a prompt) lives
+        in the plugin, which owns the map tool, canvas and template state. The
+        dock only asks for it; it stays a pure state machine."""
+        self.try_example_requested.emit()
+
+    def show_basemap_error(self):
+        """Surface a load failure in the warning box (called by the plugin when
+        neither the demo nor the fallback basemap could be added)."""
+        self._warning_text.setText(tr(
+            "Couldn't load the example basemap. Check your internet "
+            "connection, or add your own layer (GeoTIFF, WMS, XYZ)."
+        ))
+
+    def set_imagery_loading(self, loading: bool):
+        """Hold or release Generate while an onboarding basemap warms its tiles.
+
+        Exporting the canvas before the online tiles have painted would ship a
+        blank input (a crop error), so during warm-up Generate is disabled and
+        labelled, then re-enabled once the plugin reports the imagery settled."""
+        self._imagery_loading = bool(loading)
+        self._update_generate_enabled()
+        self._update_generate_button_text()
+
+    def prime_prompt_from_preset(self, preset: dict):
+        """Fill the active prompt input from a preset dict (id/label/prompt) and
+        arm the template so later edits keep the association. Used by the
+        onboarding to pre-load a land-cover prompt; a no-op if the preset or its
+        prompt text is missing (catalog unavailable offline)."""
+        if not preset or not preset.get("prompt"):
+            return
+        self._active_template_id = str(preset.get("id") or "") or None
+        self._active_template_name = str(preset.get("label") or "") or None
+        if self._result_section.isVisible():
+            target = self._result_prompt_input
+            update_enabled = self._update_result_generate_enabled
+            adjust_height = self._adjust_result_prompt_height
+        else:
+            target = self._prompt_input
+            update_enabled = self._update_generate_enabled
+            adjust_height = self._adjust_prompt_height
+        target.blockSignals(True)
+        target.setPlainText(format_template_prompt(preset["prompt"]))
+        target.blockSignals(False)
+        target.moveCursor(QtC.CursorEnd)
+        update_enabled()
+        adjust_height()
 
     def _place_reference_widget(self, target: str) -> None:
         """Inject the shared refs strip into the active prompt container.
@@ -3140,6 +3221,7 @@ class AIEditDockWidget(QDockWidget):
         if self._zone_selected:
             self._warning_widget.setVisible(False)
             self._launch_btn.setEnabled(True)
+            self._launch_btn.setToolTip("")
             return
         root = QgsProject.instance().layerTreeRoot()
         has_visible = any(
@@ -3148,6 +3230,13 @@ class AIEditDockWidget(QDockWidget):
         )
         self._warning_widget.setVisible(not has_visible)
         self._launch_btn.setEnabled(has_visible)
+        # A disabled button with no explanation reads as broken; say why.
+        self._launch_btn.setToolTip(
+            "" if has_visible else tr(
+                "Add a visible imagery layer first, or click "
+                "'Try it on an example' above."
+            )
+        )
 
     def _on_project_loaded(self, *_args):
         """Re-bind to the fresh layerTreeRoot and re-evaluate the Launch gate.
@@ -3330,8 +3419,14 @@ class AIEditDockWidget(QDockWidget):
         """Keep the first Generate label stable. The result-state button reflects
         which version the next edit builds on (see _update_result_generate_label).
         """
-        self._generate_btn.setText(tr("Generate"))
-        self._generate_btn.setToolTip(tr("Run the AI edit on your selected zone"))
+        if self._imagery_loading:
+            self._generate_btn.setText(tr("Loading imagery…"))
+            self._generate_btn.setToolTip(tr(
+                "Waiting for the example basemap to finish loading before you generate"
+            ))
+        else:
+            self._generate_btn.setText(tr("Generate"))
+            self._generate_btn.setToolTip(tr("Run the AI edit on your selected zone"))
         self._update_result_generate_label()
 
     def _update_result_generate_label(self):
@@ -3371,26 +3466,12 @@ class AIEditDockWidget(QDockWidget):
         if not preset:
             return
 
-        # Arm the template so subsequent prompt edits keep the association.
-        self._active_template_id = str(preset.get("id") or "") or None
-        self._active_template_name = str(preset.get("label") or "") or None
-
-        if self._result_section.isVisible():
-            self._result_prompt_input.blockSignals(True)
-            self._result_prompt_input.setPlainText(format_template_prompt(preset["prompt"]))
-            self._result_prompt_input.blockSignals(False)
-            self._result_prompt_input.moveCursor(QtC.CursorEnd)
-            self._result_prompt_input.setFocus()
-            self._update_result_generate_enabled()
-            self._adjust_result_prompt_height()
-        else:
-            self._prompt_input.blockSignals(True)
-            self._prompt_input.setPlainText(format_template_prompt(preset["prompt"]))
-            self._prompt_input.blockSignals(False)
-            self._prompt_input.moveCursor(QtC.CursorEnd)
-            self._prompt_input.setFocus()
-            self._update_generate_enabled()
-            self._adjust_prompt_height()
+        self.prime_prompt_from_preset(preset)
+        # The dialog is a deliberate user action, so put the caret in the prompt
+        # they just picked (the onboarding path skips this to avoid stealing
+        # focus from the canvas the user is about to draw on).
+        target = self._result_prompt_input if self._result_section.isVisible() else self._prompt_input
+        target.setFocus()
 
     def _enter_iteration_state(self) -> None:
         """Show the RESULT/iterate UI (prompt + version strip above the Generate
@@ -4057,7 +4138,9 @@ class AIEditDockWidget(QDockWidget):
     def _update_generate_enabled(self):
         has_prompt = bool(self.get_prompt())
         consent_ok = has_consent() or self._consent_check.isChecked()
-        enabled = self._zone_selected and has_prompt and consent_ok
+        # Held while an onboarding basemap's online tiles are still warming, so
+        # the guided first generation can't export a blank input.
+        enabled = self._zone_selected and has_prompt and consent_ok and not self._imagery_loading
         self._generate_btn.setEnabled(enabled)
         self._update_generate_style()
         self._update_generate_button_text()

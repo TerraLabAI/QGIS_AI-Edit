@@ -1955,5 +1955,9 @@ We'd love to hear from you!</source>
         <source>More detail</source>
         <translation>Más detalle</translation>
     </message>
+    <message>
+        <source>AI Edit could not reach the server. Some features need an internet connection.</source>
+        <translation>AI Edit no pudo conectar con el servidor. Algunas funciones necesitan conexión a Internet.</translation>
+    </message>
 </context>
 </TS>

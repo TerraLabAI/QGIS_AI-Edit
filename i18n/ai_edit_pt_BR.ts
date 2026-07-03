@@ -1955,5 +1955,9 @@ Adoraríamos receber seu retorno!</translation>
         <source>More detail</source>
         <translation>Mais detalhe</translation>
     </message>
+    <message>
+        <source>AI Edit could not reach the server. Some features need an internet connection.</source>
+        <translation>O AI Edit não conseguiu acessar o servidor. Alguns recursos exigem conexão com a internet.</translation>
+    </message>
 </context>
 </TS>

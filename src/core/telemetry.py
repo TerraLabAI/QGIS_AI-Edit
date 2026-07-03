@@ -78,7 +78,8 @@ class _TelemetryFlushTask(QgsTask):
     """Sends one batch. Failures swallowed: telemetry must never break the plugin."""
 
     def __init__(self, client, events: list, auth: dict):
-        super().__init__("AI Edit telemetry flush", QgsTask.Flag.CanCancel)
+        from ..workers.generic_request_task import silent_task_flags
+        super().__init__("AI Edit telemetry flush", silent_task_flags())
         self._client = client
         self._events = events
         self._auth = auth

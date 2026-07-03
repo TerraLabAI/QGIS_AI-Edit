@@ -15,6 +15,7 @@ REGISTRY_VERSION = 1
 PLUGIN_OPENED = "plugin_opened"
 ACTIVATION_SCREEN_VIEWED = "activation_screen_viewed"
 LAUNCH_CLICKED = "launch_clicked"
+BASEMAP_CTA_CLICKED = "basemap_cta_clicked"
 ACTIVATION_ATTEMPTED = "activation_attempted"
 PLUGIN_ACTIVATED = "plugin_activated"
 
@@ -64,6 +65,7 @@ ALL_EVENTS = frozenset({
     PLUGIN_OPENED,
     ACTIVATION_SCREEN_VIEWED,
     LAUNCH_CLICKED,
+    BASEMAP_CTA_CLICKED,
     ACTIVATION_ATTEMPTED,
     PLUGIN_ACTIVATED,
     AI_EDIT_PAIR_STARTED,
@@ -101,6 +103,7 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     PLUGIN_OPENED: (),
     ACTIVATION_SCREEN_VIEWED: (),
     LAUNCH_CLICKED: (),
+    BASEMAP_CTA_CLICKED: ("success",),
     ACTIVATION_ATTEMPTED: ("success",),
     PLUGIN_ACTIVATED: (),
     AI_EDIT_PAIR_STARTED: (),
