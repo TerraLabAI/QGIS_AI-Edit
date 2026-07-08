@@ -29,7 +29,7 @@ from ..panel_helpers import (
     make_hidpi_pixmap,
     panel_section_label,
 )
-from .style import _tinted_svg_icon
+from .style import _BTN_BLUE, _BTN_GREEN, _tinted_svg_icon
 
 
 class DockToolsFooterMixin:
@@ -47,33 +47,51 @@ class DockToolsFooterMixin:
         QtC.safe_single_shot(0, self, self._update_layer_warning)
 
     def _update_layer_warning(self, *_args):
-        """Show/hide the 'no visible layer' notice and lock the Launch button
-        until at least one layer is actually checked in the legend.
+        """Show/hide the empty-canvas hero and keep the entry flow coherent with
+        what is actually visible on the map.
 
         We check ``isVisible()`` on the layer tree, not just registered layers
         in the project - a layer that exists but is unchecked produces no
         canvas pixels for AI Edit to capture, so launching from that state
         would just send an empty rectangle to the model.
+
+        When nothing is visible we FIRST drive the flow back to the canonical
+        empty baseline (``set_launch_state`` hides the zone / prompt / result /
+        progress sections and clears ``_zone_selected``), so a raster deleted
+        mid-flow (SELECTING_ZONE, PROMPT, RESULT) converges on the exact same
+        centered hero as a fresh start, instead of stranding a half-open flow
+        over a blank canvas (the old ``if self._zone_selected`` early-out kept
+        the stale flow and suppressed the hero). Then the hero shows and Launch
+        hides.
         """
-        if self._zone_selected:
-            self._warning_widget.setVisible(False)
-            self._launch_btn.setEnabled(True)
-            self._launch_btn.setToolTip("")
+        # During generation the entry chrome is intentionally hidden by
+        # set_generating; never reset the flow out from under a running edit.
+        if self._progress_widget.isVisible():
             return
         root = QgsProject.instance().layerTreeRoot()
         has_visible = any(
             node.isVisible() for node in root.findLayers()
             if node.layer() is not None
         )
-        self._warning_widget.setVisible(not has_visible)
-        self._launch_btn.setEnabled(has_visible)
-        # A disabled button with no explanation reads as broken; say why.
-        self._launch_btn.setToolTip(
-            "" if has_visible else tr(
-                "Add a visible imagery layer first, or click "
-                "'Try it on an example' above."
-            )
-        )
+        if not has_visible:
+            # Reset first, then reveal the hero. One info per state (Yvann
+            # 2026-07-08): the empty screen shows ONLY the hero card - a big
+            # greyed Launch under it read as clutter, so Launch hides (not
+            # grays) instead.
+            self.set_launch_state()
+            self._warning_widget.setVisible(True)
+            self._launch_btn.setVisible(False)
+            self._launch_btn.setEnabled(False)
+        else:
+            self._warning_widget.setVisible(False)
+            self._launch_btn.setVisible(True)
+            self._launch_btn.setEnabled(True)
+        # The first-steps banner follows the same rule: never stacked on the
+        # hero card, back once imagery exists.
+        try:
+            self._update_first_steps_visibility()
+        except (RuntimeError, AttributeError):
+            pass
 
     def _on_project_loaded(self, *_args):
         """Re-bind to the fresh layerTreeRoot and re-evaluate the Launch gate.
@@ -393,15 +411,23 @@ class DockToolsFooterMixin:
         lay.setSpacing(10)
         lay.setContentsMargins(16, 16, 16, 16)
 
+        # Same design as the AI Segmentation Contact dialog: styled labels,
+        # green primary (copy email), blue secondary (book a call), so support
+        # surfaces match across the TerraLab plugins.
         msg = QLabel(tr("Bug, question, feature request?\nWe'd love to hear from you!"))
         msg.setWordWrap(True)
+        msg.setStyleSheet("font-size: 12px; color: palette(text);")
         lay.addWidget(msg)
 
         email_label = QLabel(f"<b>{SUPPORT_EMAIL}</b>")
         email_label.setTextInteractionFlags(QtC.TextSelectableByMouse)
+        email_label.setStyleSheet("font-size: 12px; color: palette(text);")
         lay.addWidget(email_label)
 
+        # Primary action: green filled CTA, like the dock's own primary buttons.
         copy_btn = QPushButton(tr("Copy email address"))
+        copy_btn.setStyleSheet(_BTN_GREEN)
+        copy_btn.setCursor(QtC.PointingHandCursor)
         copy_btn.clicked.connect(
             lambda: (
                 QApplication.clipboard().setText(SUPPORT_EMAIL),
@@ -412,10 +438,13 @@ class DockToolsFooterMixin:
 
         or_label = QLabel(tr("or"))
         or_label.setAlignment(QtC.AlignCenter)
-        or_label.setStyleSheet("color: palette(text);")
+        or_label.setStyleSheet("color: palette(text); font-size: 11px;")
         lay.addWidget(or_label)
 
+        # Secondary action: blue filled, one step down from the green primary.
         call_btn = QPushButton(tr("Book a video call"))
+        call_btn.setStyleSheet(_BTN_BLUE)
+        call_btn.setCursor(QtC.PointingHandCursor)
         call_btn.clicked.connect(
             lambda: QDesktopServices.openUrl(QUrl(calendly_url))
         )

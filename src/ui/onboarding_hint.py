@@ -61,6 +61,9 @@ GUIDE_URL_BASE = "https://terra-lab.ai/blog/ai-edit-complete-guide"
 # callouts to stay consistent with the sibling plugin.
 GREEN_TINT = (139, 172, 39)
 BLUE_TINT = (25, 118, 210)
+# Discreet neutral grey for low-key guidance (the guide tip): a quiet card
+# that does not shout for attention (Yvann 2026-07-08).
+NEUTRAL_TINT = (128, 132, 138)
 
 # Live hint widgets, so "Show guidance tips again" can re-show them without a
 # dock rebuild. Weak refs: closing/destroying a hint drops out on its own.
@@ -123,8 +126,8 @@ def reset_hints() -> None:
 def _card_qss(tint: tuple[int, int, int]) -> str:
     r, g, b = tint
     return (
-        f"QFrame#hintCard {{ background: rgba({r},{g},{b},0.12); "
-        f"border: 1px solid rgba({r},{g},{b},0.38); border-radius: 11px; }}"
+        f"QFrame#hintCard {{ background: rgba({r},{g},{b},0.10); "
+        f"border: 1px solid rgba({r},{g},{b},0.28); border-radius: 7px; }}"
     )
 
 
@@ -181,6 +184,7 @@ class DismissibleHint(QWidget):
         action_text: str | None = None,
         visibility_gate=None,
         tint: tuple[int, int, int] | None = None,
+        action_color: tuple[int, int, int] | None = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -201,8 +205,8 @@ class DismissibleHint(QWidget):
         outer.addWidget(card)
 
         col = QVBoxLayout(card)
-        col.setContentsMargins(16, 13, 12, 14)
-        col.setSpacing(7)
+        col.setContentsMargins(12, 8, 10, 9)
+        col.setSpacing(6)
 
         close_btn = QToolButton(card)
         close_btn.setText("✕")  # x glyph
@@ -218,14 +222,18 @@ class DismissibleHint(QWidget):
 
         act_btn = None
         if action_text:
-            r, g, b = tint
+            r, g, b = action_color or tint
             act_btn = QToolButton(card)
             act_btn.setText(action_text)
             act_btn.setCursor(QtC.PointingHandCursor)
+            # Filled pill in a color that contrasts with the card (blue on the
+            # green guide tip), white text: unmistakably a button, not a
+            # hanging bit of text (Yvann 2026-07-08).
             act_btn.setStyleSheet(
-                f"QToolButton {{ background: transparent; border: none;"
-                f" font-size: 12px; font-weight: 700; padding: 0px;"
-                f" color: rgb({r},{g},{b}); }}"
+                f"QToolButton {{ background: rgb({r},{g},{b}); color: white;"
+                f" border: none; border-radius: 4px; padding: 3px 10px;"
+                f" font-size: 11px; font-weight: 700; }}"
+                f"QToolButton:hover {{ background: rgba({r},{g},{b},0.85); }}"
             )
             act_btn.clicked.connect(self.action.emit)
 

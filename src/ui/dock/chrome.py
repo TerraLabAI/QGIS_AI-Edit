@@ -8,6 +8,7 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QStyle,
     QToolButton,
     QVBoxLayout,
@@ -116,11 +117,40 @@ class DockChromeMixin:
         self._connect_btn.clicked.connect(self._on_connect_clicked)
         connect_layout.addWidget(self._connect_btn)
 
-        connect_hint = QLabel(tr("5 free AI Edits, no credit card"))
-        connect_hint.setAlignment(QtC.AlignCenter)
-        connect_hint.setWordWrap(True)
-        connect_hint.setStyleSheet("font-size: 11px; color: palette(text);")
-        connect_layout.addWidget(connect_hint)
+        # Value proposition in words, pixel-matched to the AI Segmentation
+        # sign-in screen's checkmark card (same neutral frame, same rows) so
+        # the two docks read as one family. An illustrative image and a
+        # "5 free AI Edits" hint were tried here and rejected: text only.
+        hint_card = QFrame()
+        hint_card.setObjectName("signinHintCard")
+        hint_card.setStyleSheet(
+            "QFrame#signinHintCard {"
+            " border: 1px solid rgba(128,128,128,0.35);"
+            " border-radius: 6px;"
+            " background-color: rgba(128,128,128,0.08); }")
+        hint_card_layout = QVBoxLayout(hint_card)
+        hint_card_layout.setContentsMargins(10, 8, 10, 8)
+        hint_card_layout.setSpacing(5)
+        for line in (
+            tr("Free account - sign up takes 15 seconds in your browser."),
+            tr("Then type what to change on your imagery, and get the result "
+               "back as a georeferenced layer."),
+        ):
+            row = QHBoxLayout()
+            row.setSpacing(7)
+            check = QLabel("✓")
+            check.setStyleSheet(
+                "font-size: 11px; font-weight: 600; color: #43a047;"
+                " border: none; background: transparent;")
+            row.addWidget(check, 0, QtC.AlignTop)
+            lbl = QLabel(line)
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet(
+                "font-size: 11px; color: palette(text);"
+                " border: none; background: transparent;")
+            row.addWidget(lbl, 1)
+            hint_card_layout.addLayout(row)
+        connect_layout.addWidget(hint_card)
 
         layout.addWidget(self._connect_section)
 
@@ -336,60 +366,93 @@ class DockChromeMixin:
             pass  # nosec B110
 
     def _build_warning_widget(self) -> QWidget:
-        """Build yellow warning widget for when no layers are available.
+        """Build the empty-canvas first-run hero (shown when no visible layer).
 
-        Carries a one-click "Try it on an example" CTA: the empty-canvas
-        gate is the top first-run drop-off (85% of generation failures are
-        crop errors on blank canvases), so the warning must offer the fix,
-        not just describe it. The click is handled by the plugin, which adds a
-        basemap, frames a demo scene, pre-draws a zone and pre-fills a prompt."""
-        widget = QWidget()
-        widget.setStyleSheet(
-            "QWidget { background-color: rgb(255, 230, 150); "
-            "border: 1px solid rgba(255, 152, 0, 0.6); border-radius: 4px; }"
-            "QLabel { background: transparent; border: none; color: #333333; }"
+        The empty state IS the onboarding. It leads with the truth the user
+        must act on - the imagery is THEIRS to bring (any GeoTIFF / WMS / XYZ) -
+        and keeps a one-click "Try it on an example" demo as the reassurance
+        fallback for someone with no data on hand (Yvann 2026-07-08). It mirrors
+        the AI Segmentation hero pixel for pixel so the two docks read as one
+        family. No illustrative preview image: real product output only, a
+        glyph is fine. The plugin handles the demo: adds a basemap, frames the
+        scene, pre-draws a zone and pre-fills the most-used preset.
+
+        Layout: a transparent, vertically-EXPANDING wrapper holds the compact
+        blue-tinted card at the TOP with a single stretch below it, so when it
+        is added with stretch factor 1 the card pins to the top and the surplus
+        falls below. The plugin reads top-to-bottom, so the empty state starts
+        at the top too (Yvann 2026-07-08), never centered."""
+        wrapper = QWidget()
+        wrapper.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
         )
-        warning_layout = QHBoxLayout(widget)
-        warning_layout.setContentsMargins(8, 8, 8, 8)
-        warning_layout.setSpacing(8)
+        outer = QVBoxLayout(wrapper)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
 
-        icon_label = QLabel()
-        style = widget.style()
-        warning_icon = style.standardIcon(QStyle.StandardPixmap.SP_MessageBoxWarning)
-        icon_label.setPixmap(warning_icon.pixmap(16, 16))
-        icon_label.setFixedSize(16, 16)
-        warning_layout.addWidget(icon_label, 0, QtC.AlignTop)
+        card = QWidget()
+        card.setObjectName("firstRunHero")
+        card.setStyleSheet(
+            "QWidget#firstRunHero { background-color: rgba(30, 136, 229, 0.08); "
+            "border: 1px solid rgba(30, 136, 229, 0.28); border-radius: 6px; }"
+            "QLabel { background: transparent; border: none; color: palette(text); }"
+        )
+        col = QVBoxLayout(card)
+        col.setContentsMargins(16, 16, 16, 16)
+        col.setSpacing(7)
 
-        text_col = QVBoxLayout()
-        text_col.setContentsMargins(0, 0, 0, 0)
-        text_col.setSpacing(6)
+        glyph = QLabel("🗺️")
+        glyph.setAlignment(QtC.AlignCenter)
+        glyph.setStyleSheet("font-size: 26px;")
+        col.addWidget(glyph)
 
-        self._warning_text = QLabel(tr(
-            "No visible imagery. Add your own layer (GeoTIFF, WMS, XYZ), or "
-            "try AI Edit on a ready-made example."
-        ))
+        title = QLabel(tr("Load your own imagery"))
+        title.setWordWrap(True)
+        title.setAlignment(QtC.AlignCenter)
+        title.setStyleSheet("font-weight: 700; font-size: 15px;")
+        col.addWidget(title)
+
+        # One quiet line, one job: name what counts as imagery. No workflow
+        # prose. Kept as _warning_text so show_basemap_error can swap it.
+        self._warning_text = QLabel(tr("Any GeoTIFF, WMS or XYZ basemap."))
         self._warning_text.setWordWrap(True)
-        text_col.addWidget(self._warning_text)
+        self._warning_text.setAlignment(QtC.AlignCenter)
+        self._warning_text.setStyleSheet(
+            "font-size: 11px; color: rgba(128, 128, 128, 0.95);")
+        col.addWidget(self._warning_text)
+
+        # 'or' divider: the structural device that splits the two real paths
+        # (bring your own vs. try a sample), so the example reads as the
+        # fallback without a sentence spelling it out.
+        def _rule():
+            line = QFrame()
+            line.setFixedHeight(1)
+            line.setStyleSheet(
+                "background-color: rgba(128, 128, 128, 0.28); border: none;")
+            return line
+
+        div = QHBoxLayout()
+        div.setContentsMargins(0, 0, 0, 0)
+        div.setSpacing(8)
+        or_lbl = QLabel(tr("or"))
+        or_lbl.setStyleSheet("font-size: 10px; color: rgba(128, 128, 128, 0.8);")
+        div.addWidget(_rule(), 1)
+        div.addWidget(or_lbl, 0)
+        div.addWidget(_rule(), 1)
+        col.addSpacing(2)
+        col.addLayout(div)
+        col.addSpacing(2)
 
         self._basemap_btn = QPushButton(tr("Try it on an example"))
         self._basemap_btn.setCursor(QtC.PointingHandCursor)
-        self._basemap_btn.setStyleSheet(
-            "QPushButton { background: rgba(255,255,255,0.85); "
-            "border: 1px solid rgba(180,110,0,0.55); border-radius: 4px; "
-            "padding: 5px 10px; color: #333333; font-weight: 600; "
-            "font-size: 12px; }"
-            "QPushButton:hover { background: #ffffff; }"
-        )
+        self._basemap_btn.setMinimumHeight(30)
+        self._basemap_btn.setStyleSheet(_BTN_GREEN_AUTH)
         self._basemap_btn.clicked.connect(self._on_try_example_clicked)
-        btn_row = QHBoxLayout()
-        btn_row.setContentsMargins(0, 0, 0, 0)
-        btn_row.addWidget(self._basemap_btn)
-        btn_row.addStretch()
-        text_col.addLayout(btn_row)
+        col.addWidget(self._basemap_btn)
 
-        warning_layout.addLayout(text_col, 1)
-
-        return widget
+        outer.addWidget(card)
+        outer.addStretch(1)
+        return wrapper
 
     def _on_try_example_clicked(self):
         """One-click unblock for the empty-canvas gate. The heavy lifting (add a

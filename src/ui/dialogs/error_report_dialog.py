@@ -27,6 +27,9 @@ from qgis.PyQt.QtWidgets import (
 from ...core import qt_compat as QtC
 from ...core.i18n import tr
 
+# Muted flow hint between the two step buttons (same as AI Segmentation).
+_ARROW_STYLE = "color: rgba(128,128,128,0.65); font-size: 10px;"
+
 # Single source of truth for the support address. dock_widget imports it here.
 SUPPORT_EMAIL = "yvann.barbot@terra-lab.ai"
 
@@ -179,8 +182,15 @@ class ErrorReportDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
+        # Same layout, colors and copy as the AI Segmentation report dialog
+        # (green primary step, muted arrow, blue secondary step) so support
+        # flows look identical across the TerraLab plugins. Button styles are
+        # imported lazily: a module-top import of ..dock.style pulls the dock
+        # package __init__, which imports back here -> circular import.
+        from ..dock.style import _BTN_BLUE, _BTN_GREEN
+
         layout = QVBoxLayout(self)
-        layout.setSpacing(8)
+        layout.setSpacing(10)
         layout.setContentsMargins(16, 16, 16, 16)
 
         if self._error_message:
@@ -200,18 +210,25 @@ class ErrorReportDialog(QDialog):
 
         help_label = QLabel(help_text)
         help_label.setWordWrap(True)
+        help_label.setStyleSheet("font-size: 12px; color: palette(text);")
         layout.addWidget(help_label)
 
-        self._copy_btn = QPushButton(tr("1. Copy logs"))
+        self._copy_btn = QPushButton(tr("1. Click to copy logs"))
+        self._copy_btn.setStyleSheet(_BTN_GREEN)
+        self._copy_btn.setCursor(QtC.PointingHandCursor)
         self._copy_btn.clicked.connect(self._on_copy)
         layout.addWidget(self._copy_btn)
 
         arrow_label = QLabel("▼")
         arrow_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        arrow_label.setStyleSheet(_ARROW_STYLE)
         layout.addWidget(arrow_label)
 
-        self._email_btn = QPushButton(tr("2. Send to {email}").format(email=SUPPORT_EMAIL))
+        self._email_btn = QPushButton(
+            tr("2. Click to send to {email}").format(email=SUPPORT_EMAIL))
         self._email_btn.setToolTip(tr("Open email client"))
+        self._email_btn.setStyleSheet(_BTN_BLUE)
+        self._email_btn.setCursor(QtC.PointingHandCursor)
         self._email_btn.clicked.connect(self._on_open_email)
         layout.addWidget(self._email_btn)
 
@@ -224,7 +241,7 @@ class ErrorReportDialog(QDialog):
 
     def _restore_copy_label(self):
         try:
-            self._copy_btn.setText(tr("1. Copy logs"))
+            self._copy_btn.setText(tr("1. Click to copy logs"))
         except RuntimeError:
             pass
 

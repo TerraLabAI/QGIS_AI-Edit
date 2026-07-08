@@ -146,6 +146,52 @@ class ZoneVersionsMixin:
         # User wipes them explicitly via the Clear all button.
         self._dock_widget.set_launch_state()
 
+    def _on_project_layers_changed(self, *_args):
+        """Re-check the canvas after the layer tree settles on a layer removal.
+
+        Deferred one event-loop tick so QGIS finishes syncing the tree before
+        we read visibility (same reason as the dock's
+        _schedule_layer_warning_update). Parented to the dock so it can't fire
+        into a torn-down plugin.
+        """
+        if self._dock_widget is None:
+            return
+        QtC.safe_single_shot(0, self._dock_widget, self._reset_canvas_if_empty)
+
+    def _reset_canvas_if_empty(self):
+        """When the user deletes the last visible layer, converge the CANVAS on
+        the same empty baseline the dock shows.
+
+        The dock resets its own view (see _update_layer_warning ->
+        set_launch_state), but the selection map tool and the zone rubber band
+        are plugin-owned. Without this teardown, deleting the last raster mid-
+        flow (SELECTING_ZONE or ZONE_SELECTED) would leave the rectangle tool
+        armed and a stale zone frame floating over a blank canvas. Mirrors the
+        tail of _on_exit_clicked, minus the generation cancel (a background run
+        already works off captured bytes, so a removed layer must not abort it).
+        """
+        from qgis.core import QgsProject
+
+        if self._dock_widget is None or self._canvas is None:
+            return
+        # A live generation owns the flow; never tear it down from here.
+        if self._worker is not None and self._worker.is_active():
+            return
+        root = QgsProject.instance().layerTreeRoot()
+        has_visible = any(
+            node.isVisible() for node in root.findLayers()
+            if node.layer() is not None
+        )
+        if has_visible:
+            return
+        self._disarm_swipe()
+        self._pills_armed = False
+        self._clear_selection_rectangle()
+        self._selected_extent = None
+        if self._map_tool is not None:
+            self._map_tool.set_has_zone(False)
+        self._deactivate_selection_tool()
+
     def _on_base_version_selected(self, index: int):
         """A version tile was clicked: mirror it on the canvas.
 

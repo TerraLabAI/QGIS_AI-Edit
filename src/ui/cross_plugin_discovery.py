@@ -58,42 +58,71 @@ def open_plugin_manager(plugin_name: str, fallback_url: str) -> None:
         if mgr is None:
             raise RuntimeError("plugin manager unavailable")
         mgr.showPluginManager(2)  # 0 All, 1 Installed, 2 Not installed, 3 Upgradeable
+        # Start the poll (see _prefill_plugin_filter) rather than a lone setText:
+        # on the FIRST open the dialog is still being built and repopulated.
         QTimer.singleShot(0, lambda: _prefill_plugin_filter(plugin_name))
     except Exception:
         QDesktopServices.openUrl(QUrl(fallback_url))
 
 
-def _prefill_plugin_filter(text: str) -> None:
-    """Best-effort: set the Plugin Manager's search field (C++ internal dialog,
-    no public API). The dialog has several line edits (e.g. a hidden install-from
-    -ZIP picker), so target the named search box, then the first VISIBLE filter;
-    no-ops silently if not found, leaving the manager open."""
+def _prefill_plugin_filter(text: str, attempts: int = 14, confirmed: int = 0) -> None:
+    """Set the Plugin Manager's search field, retrying until it sticks.
+
+    The manager is a C++ internal dialog with no public filter API. On its FIRST
+    open it is constructed and then repopulates its plugin list across several
+    event-loop turns, and each repopulation clears the filter, so the old lone
+    ``singleShot(0)`` setText landed too early and got wiped, which is why the
+    filter only appeared on the SECOND click (once the dialog already existed).
+
+    We poll on a short cadence and re-assert the text only while the box is still
+    empty (never clobbering something the user typed), stopping once it has
+    survived two consecutive polls. The dialog has several line edits (e.g. a
+    hidden install-from-ZIP picker), so target the named search box first, then
+    the first VISIBLE filter; no-ops silently if never found."""
+    from qgis.PyQt.QtCore import QTimer
+    from qgis.PyQt.QtWidgets import QApplication, QLineEdit
+
     try:
-        from qgis.PyQt.QtWidgets import QApplication, QLineEdit
         dialog = next(
             (w for w in QApplication.instance().topLevelWidgets()
              if w.metaObject().className() == "QgsPluginManager"),
             None,
         )
-        if dialog is None:
-            return
         edit = None
-        for name in ("leFilter", "mLeFilter", "mFilterLineEdit"):
-            edit = dialog.findChild(QLineEdit, name)
-            if edit is not None:
-                break
-        if edit is None:
-            try:
-                from qgis.gui import QgsFilterLineEdit
-                edit = next((e for e in dialog.findChildren(QgsFilterLineEdit) if e.isVisible()), None)
-            except Exception:
-                edit = None
-        if edit is None:
-            edit = next((e for e in dialog.findChildren(QLineEdit) if e.isVisible()), None)
+        if dialog is not None:
+            for name in ("leFilter", "mLeFilter", "mFilterLineEdit"):
+                edit = dialog.findChild(QLineEdit, name)
+                if edit is not None:
+                    break
+            if edit is None:
+                try:
+                    from qgis.gui import QgsFilterLineEdit
+                    edit = next(
+                        (e for e in dialog.findChildren(QgsFilterLineEdit)
+                         if e.isVisible()),
+                        None,
+                    )
+                except Exception:
+                    edit = None
+            if edit is None:
+                edit = next(
+                    (e for e in dialog.findChildren(QLineEdit) if e.isVisible()),
+                    None,
+                )
         if edit is not None:
-            edit.setText(text)
+            current = edit.text()
+            if current == text:
+                confirmed += 1  # it stuck; make sure it survives one more poll
+            elif current == "":
+                edit.setText(text)  # fresh or just repopulated: (re)assert
+                confirmed = 0
+            else:
+                return  # user typed their own filter: leave it alone
     except Exception:
         pass  # nosec B110
+    if confirmed < 2 and attempts > 0:
+        QTimer.singleShot(
+            70, lambda: _prefill_plugin_filter(text, attempts - 1, confirmed))
 
 
 def make_ai_seg_action(parent, iface, label: str, tooltip: str,

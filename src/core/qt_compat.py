@@ -108,7 +108,11 @@ LineWrapWidgetWidth = _resolve(QTextEdit, "LineWrapMode", "WidgetWidth")
 
 # Qt.AspectRatioMode / Qt.TransformationMode
 KeepAspectRatio = _resolve(Qt, "AspectRatioMode", "KeepAspectRatio")
+KeepAspectRatioByExpanding = _resolve(Qt, "AspectRatioMode", "KeepAspectRatioByExpanding")
 SmoothTransformation = _resolve(Qt, "TransformationMode", "SmoothTransformation")
+
+# Qt.PenStyle
+NoPen = _resolve(Qt, "PenStyle", "NoPen")
 
 # Qt.TextInteractionFlag
 TextSelectableByMouse = _resolve(Qt, "TextInteractionFlag", "TextSelectableByMouse")

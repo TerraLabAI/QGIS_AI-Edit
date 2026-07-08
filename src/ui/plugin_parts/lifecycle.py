@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 
+from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QSettings, QTimer
 from qgis.PyQt.QtGui import QAction, QIcon, QKeySequence, QShortcut
 
@@ -195,6 +196,12 @@ class PluginLifecycleMixin:
         # underlying visibility change to keep the map tool / cursor in sync.
         self._dock_widget.visibilityChanged.connect(self._on_dock_visibility_changed)
 
+        # Deleting the last visible raster must return the canvas to the same
+        # empty baseline as a fresh start. The dock resets its own view, but the
+        # selection map tool + zone rubber band are plugin-owned, so listen for
+        # layer removal and tear them down when nothing visible remains.
+        QgsProject.instance().layersRemoved.connect(self._on_project_layers_changed)
+
         # Global launch shortcut: Ctrl+Alt+E on Win/Linux, Cmd+Alt+E (⌥⌘E)
         # on macOS. WindowShortcut scope fires from anywhere inside QGIS
         # without us having to focus a particular widget first.
@@ -336,6 +343,14 @@ class PluginLifecycleMixin:
             except Exception:  # nosec B110
                 pass
         self._history_tasks.clear()
+
+        # Drop the layer-removal listener before the plugin objects vanish.
+        try:
+            QgsProject.instance().layersRemoved.disconnect(
+                self._on_project_layers_changed
+            )
+        except (RuntimeError, TypeError):
+            pass
 
         self._clear_selection_rectangle()
 

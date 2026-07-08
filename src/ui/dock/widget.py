@@ -24,7 +24,13 @@ from ...core import qt_compat as QtC
 from ...core.i18n import tr
 from ...core.reference_image_store import ReferenceImageStore
 from ..credit_ring import CreditRing
-from ..onboarding_hint import HINT_FIRST_STEPS, DismissibleHint, open_guide
+from ..onboarding_hint import (
+    BLUE_TINT,
+    HINT_FIRST_STEPS,
+    NEUTRAL_TINT,
+    DismissibleHint,
+    open_guide,
+)
 from ..panel_helpers import make_section_header
 from ..panels.markup_panel import MarkupPanel
 from ..panels.vectorize_panel import VectorizePanel
@@ -201,10 +207,13 @@ class AIEditDockWidget(
         # a generation runs (see _place_version_strip).
         self._main_layout = main_layout
 
-        # Warning widget (no visible layer) - above prompt
+        # Empty-canvas hero (no visible layer). Added with stretch factor 1 and
+        # built as a vertically-expanding wrapper so the card CENTERS in the
+        # otherwise-blank panel (same pattern as _select_zone_section below)
+        # instead of clinging to the top.
         self._warning_widget = self._build_warning_widget()
         self._warning_widget.setVisible(False)
-        main_layout.addWidget(self._warning_widget)
+        main_layout.addWidget(self._warning_widget, 1)
 
         # --- Launch section (entry screen, matches AI Segmentation pattern) ---
         self._launch_section = QWidget()
@@ -379,6 +388,10 @@ class AIEditDockWidget(
         # Consent checkbox (shown only until first generation). Use native
         # QGIS style so the checkmark glyph renders correctly.
         self._consent_check = QCheckBox()
+        # Pre-ticked to cut first-run friction: the box shows checked, Generate
+        # is enabled, and the affirmative act (clicking Generate with the terms
+        # right there) is what records consent. Unticking re-adds the gate.
+        self._consent_check.setChecked(True)
         self._consent_check.setText("")  # text set via label below
         # Bigger, easier-to-hit indicator (the default is tiny and hard to click).
         # Size only, no border/background, so the native checkmark still renders.
@@ -761,8 +774,14 @@ class AIEditDockWidget(
         self._first_steps_hint = DismissibleHint(
             HINT_FIRST_STEPS,
             "",
-            tr("New here? The 5-minute guide shows a full edit, step by step."),
-            action_text=tr("Open the guide"),
+            # Says "tutorial", medium-neutral (the tutorial page has a video
+            # too, so no "read"); quiet grey card + small blue button so it
+            # never shouts (Yvann 2026-07-08).
+            tr("New here? Our 5-minute tutorial walks you through a full "
+               "edit, step by step."),
+            action_text=tr("Open the tutorial"),
+            tint=NEUTRAL_TINT,
+            action_color=BLUE_TINT,
             visibility_gate=self._should_show_first_steps,
         )
         self._first_steps_hint.action.connect(lambda: open_guide("post_signin"))

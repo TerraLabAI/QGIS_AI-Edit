@@ -86,6 +86,13 @@ class DockGenerationStateMixin:
         if is_hint_dismissed(HINT_FIRST_STEPS):
             return False
         try:
+            # The empty state shows ONLY the hero card (one info per state):
+            # the guide banner waits until imagery exists.
+            if self._warning_widget.isVisibleTo(self):
+                return False
+        except (RuntimeError, AttributeError):
+            pass
+        try:
             # isVisibleTo (not isVisible) so the gate reflects the INTENDED
             # state even if the dock window is not on-screen right now.
             return bool(self._launch_section.isVisibleTo(self))
