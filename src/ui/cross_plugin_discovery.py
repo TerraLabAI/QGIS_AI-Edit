@@ -74,11 +74,16 @@ def _prefill_plugin_filter(text: str, attempts: int = 14, confirmed: int = 0) ->
     ``singleShot(0)`` setText landed too early and got wiped, which is why the
     filter only appeared on the SECOND click (once the dialog already existed).
 
-    We poll on a short cadence and re-assert the text only while the box is still
-    empty (never clobbering something the user typed), stopping once it has
-    survived two consecutive polls. The dialog has several line edits (e.g. a
-    hidden install-from-ZIP picker), so target the named search box first, then
-    the first VISIBLE filter; no-ops silently if never found."""
+    We poll on a short cadence and re-assert the text whenever the box does not
+    already hold it, overriding BOTH an empty box (fresh open or a mid-open
+    repopulation that wiped the filter) AND a stale filter left over from a
+    previous session: the manager is a persistent singleton that keeps its last
+    search, so clicking this CTA after searching something else must replace
+    that old query, not defer to it. The poll runs only right after the CTA
+    click, so there is no in-progress user typing to preserve. It stops once the
+    text has survived two consecutive polls. The dialog has several line edits
+    (e.g. a hidden install-from-ZIP picker), so target the named search box
+    first, then the first VISIBLE filter; no-ops silently if never found."""
     from qgis.PyQt.QtCore import QTimer
     from qgis.PyQt.QtWidgets import QApplication, QLineEdit
 
@@ -113,11 +118,13 @@ def _prefill_plugin_filter(text: str, attempts: int = 14, confirmed: int = 0) ->
             current = edit.text()
             if current == text:
                 confirmed += 1  # it stuck; make sure it survives one more poll
-            elif current == "":
-                edit.setText(text)  # fresh or just repopulated: (re)assert
-                confirmed = 0
             else:
-                return  # user typed their own filter: leave it alone
+                # (Re)assert our text, overriding whatever is there: an empty box
+                # (fresh open / repopulation clear) OR a stale query the manager
+                # kept from a previous open. The CTA means "take me to THIS
+                # plugin", so a leftover filter must be replaced.
+                edit.setText(text)
+                confirmed = 0
     except Exception:
         pass  # nosec B110
     if confirmed < 2 and attempts > 0:
