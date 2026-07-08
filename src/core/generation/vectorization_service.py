@@ -32,11 +32,68 @@ from qgis.core import (
     QgsVectorLayer,
     QgsWkbTypes,
 )
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import QDate, QLocale, Qt
 
 from ..errors import AIEditError, ErrorCode
 from ..i18n import tr
 from ..logger import log_debug, log_warning
+
+# One GeoPackage next to the generated rasters holds every vectorize run (one
+# table per run). Hoisted to a constant so the filename lives in exactly one
+# place instead of being spelled inline at the call site.
+AI_EDIT_GPKG_FILENAME = "ai_edit.gpkg"
+
+
+def _plugin_version() -> str:
+    """Plugin version from metadata.txt (best-effort, '' if unreadable)."""
+    root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    )
+    try:
+        with open(os.path.join(root, "metadata.txt"), encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("version="):
+                    return line.split("=", 1)[1].strip()
+    except OSError:
+        pass  # nosec B110 - version is cosmetic provenance, never block a run
+    return ""
+
+
+def _project_layer_names() -> set[str]:
+    """Names of every layer currently in the project (for name dedup)."""
+    names: set[str] = set()
+    try:
+        for layer in QgsProject.instance().mapLayers().values():
+            if layer is not None:
+                names.add(layer.name())
+    except Exception:  # nosec B110 - dedup is best-effort, never block a run
+        pass
+    return names
+
+
+def friendly_vector_layer_name(class_label: str, raster_name: str) -> str:
+    """Friendly, dated tree name for a vectorize result, e.g. "Buildings (3 Jul)".
+
+    Uses the class label when known (only the first letter is capitalized, the
+    rest stays as typed), else falls back to "<raster> (vector)". The date is
+    locale-short, and a same-name-same-day rerun becomes "Buildings 2 (3 Jul)"
+    by scanning existing project layer names. Mirrors AI Segmentation's
+    friendly_layer_name."""
+    label = (class_label or "").strip()
+    if label:
+        base = label[0].upper() + label[1:]
+    else:
+        raster = (raster_name or "").strip()
+        base = f"{raster} (vector)" if raster else tr("Vector")
+    date_str = QLocale().toString(QDate.currentDate(), "d MMM")
+    existing = _project_layer_names()
+    candidate = f"{base} ({date_str})"
+    counter = 2
+    while candidate in existing:
+        candidate = f"{base} {counter} ({date_str})"
+        counter += 1
+    return candidate
 
 
 def _compute_vector_features(
@@ -221,7 +278,11 @@ def _compute_vector_features(
     measurer = QgsDistanceArea()
     if raster_crs is not None and raster_crs.isValid():
         measurer.setSourceCrs(raster_crs, transform_context)
-    measurer.setEllipsoid(ellipsoid or "EPSG:7030")
+    # QgsProject.ellipsoid() returns "NONE" (truthy) when no measurement
+    # ellipsoid is set; treat it like empty so area_m2 stays geodesic metres.
+    if not ellipsoid or ellipsoid == "NONE":
+        ellipsoid = "EPSG:7030"
+    measurer.setEllipsoid(ellipsoid)
 
     class_color_hex = "#{:02X}{:02X}{:02X}".format(*target_rgb)
 
@@ -644,9 +705,19 @@ def _set_layer_provenance(
         abstract += f" Source raster: {source_raster_name}."
     if class_label:
         abstract += f" Class: {class_label}."
+    version = _plugin_version()
+    if version:
+        abstract += f" Plugin version: {version}."
     md.setAbstract(abstract)
     history = [f"{created} vectorized from '{source_raster_name}' (color {color_hex})"]
     md.setHistory(history)
+    # Keywords make the layer discoverable in the QGIS Metadata search; kept
+    # defensive so a metadata quirk can never block a (paid) vectorize.
+    try:
+        keywords = [k for k in ("AI Edit", "Vectorize", class_label, source_raster_name) if k]
+        md.addKeywords("AI Edit", keywords)
+    except Exception:  # nosec B110 - metadata is cosmetic, never block a run
+        pass
     layer.setMetadata(md)
 
 

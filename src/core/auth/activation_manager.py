@@ -130,9 +130,8 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
     if "error" in result:
         code = (result.get("code", "") or "").strip().upper()
         error_msg = result.get("error", tr("Validation failed."))
-        error_lower = error_msg.lower()
 
-        if code == "TRIAL_EXHAUSTED" or "free credits used" in error_lower:
+        if code == "TRIAL_EXHAUSTED":
             return False, error_msg, "TRIAL_EXHAUSTED", None
 
         if code in {
@@ -140,7 +139,7 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
             "LIMIT_REACHED",
             "USAGE_LIMIT_REACHED",
             "MONTHLY_LIMIT_REACHED",
-        } or "monthly limit reached" in error_lower:
+        }:
             return False, error_msg, "QUOTA_EXCEEDED", None
 
         if code == "INVALID_KEY":

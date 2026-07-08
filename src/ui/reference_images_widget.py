@@ -572,6 +572,11 @@ class ReferenceImagesWidget(QWidget):
         return tr("Reference image")
 
     def _open_preview(self, image_path: str) -> None:
+        # A null pixmap would open an empty, content-less modal that still
+        # blocks the user (reject() in the dialog's __init__ doesn't stop a
+        # later exec()), so bail before building it.
+        if QPixmap(image_path).isNull():
+            return
         # Parent to QGIS main window, not to this widget. On macOS fullscreen,
         # a dialog parented to a widget inside a (possibly floating) dock can
         # open in a different Mission Control Space and yank the user out of
@@ -588,3 +593,6 @@ class ReferenceImagesWidget(QWidget):
             image_path, parent_window, title=self._build_preview_title(image_path)
         )
         dlg.exec()
+        # Parented to the long-lived main window, so free it explicitly instead
+        # of leaking one dialog plus its large scaled pixmap per open.
+        dlg.deleteLater()

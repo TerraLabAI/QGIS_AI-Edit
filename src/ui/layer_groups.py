@@ -256,24 +256,26 @@ def most_recent_ai_edit_output(
     outputs nested under their source raster are reachable too.
     """
     root = QgsProject.instance().layerTreeRoot()
-    for child in root.children():
-        if not isinstance(child, QgsLayerTreeGroup):
-            continue
-        is_ai_edit_group = child.customProperty(_OWNERSHIP_PROPERTY) or child.name() == AI_EDIT_GROUP_NAME
-        if not is_ai_edit_group:
-            continue
-        for sub in child.children():
-            if isinstance(sub, QgsLayerTreeLayer):
-                layer = sub.layer()
-                if layer is not None and (predicate is None or predicate(layer)):
-                    return layer
-            elif isinstance(sub, QgsLayerTreeGroup):
-                for leaf in sub.children():
-                    if isinstance(leaf, QgsLayerTreeLayer):
-                        layer = leaf.layer()
-                        if layer is not None and (predicate is None or predicate(layer)):
-                            return layer
-        break
+    # Find the AI-Edit group anywhere in the tree (the user may have dragged it
+    # into a folder), not only among root's direct children.
+    group = next(
+        (g for g in _walk_groups(root)
+         if g.customProperty(_OWNERSHIP_PROPERTY) or g.name() == AI_EDIT_GROUP_NAME),
+        None,
+    )
+    if group is None:
+        return None
+    for sub in group.children():
+        if isinstance(sub, QgsLayerTreeLayer):
+            layer = sub.layer()
+            if layer is not None and (predicate is None or predicate(layer)):
+                return layer
+        elif isinstance(sub, QgsLayerTreeGroup):
+            for leaf in sub.children():
+                if isinstance(leaf, QgsLayerTreeLayer):
+                    layer = leaf.layer()
+                    if layer is not None and (predicate is None or predicate(layer)):
+                        return layer
     return None
 
 

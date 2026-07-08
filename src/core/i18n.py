@@ -56,6 +56,15 @@ def _load_translations():
         "pt_PT": "pt_BR",
         "es_MX": "es",
         "es_AR": "es",
+        # Chinese: route bare/script/region variants to Simplified or Traditional.
+        # Order in locale_variants ensures Hant/HK/MO resolve to zh_TW before the
+        # generic "zh" -> zh_CN fallback is reached.
+        "zh": "zh_CN",
+        "zh_Hans": "zh_CN",
+        "zh_SG": "zh_CN",
+        "zh_Hant": "zh_TW",
+        "zh_HK": "zh_TW",
+        "zh_MO": "zh_TW",
     }
 
     locale_variants = []

@@ -48,6 +48,9 @@ class GenerationService:
         self._poll_interval = poll_interval
         self._max_polls = max_polls
         self._cancelled = False
+        # Optional bridge to the task's own isCanceled(), so a native QGIS
+        # task-manager Cancel is honored, not just the plugin's Stop/Exit.
+        self._is_cancelled_cb = None
 
     def cancel(self):
         """Stop the local polling loop only. We deliberately do NOT cancel the
@@ -61,17 +64,23 @@ class GenerationService:
 
     def reset(self):
         self._cancelled = False
+        self._is_cancelled_cb = None
+
+    def _is_cancelled(self) -> bool:
+        """True if the plugin cancelled locally OR the QgsTask was cancelled
+        (e.g. the native task-manager Cancel button)."""
+        return self._cancelled or bool(self._is_cancelled_cb and self._is_cancelled_cb())
 
     def _sleep_or_cancelled(self, seconds: float) -> bool:
         """Sleep in small chunks so a Cancel is picked up quickly. Returns True
         if cancellation was requested during the wait (caller should bail)."""
         if seconds <= 0:
-            return self._cancelled
+            return self._is_cancelled()
         for _ in range(int(seconds * 5)):
-            if self._cancelled:
+            if self._is_cancelled():
                 return True
             time.sleep(0.2)
-        return self._cancelled
+        return self._is_cancelled()
 
     def _wait_with_progress(
         self, seconds, on_progress, status, polls, max_polls, estimated_time, submit_time
@@ -194,9 +203,11 @@ class GenerationService:
         context_images: list[str] | None = None,
         guidance_image: str | None = None,
         guidance_format: str | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
     ) -> GenerationResult:
         """Submit image for generation and poll until complete."""
-        if self._cancelled:
+        self._is_cancelled_cb = is_cancelled
+        if self._is_cancelled():
             return GenerationResult(
                 success=False,
                 error=tr("Generation cancelled"),
@@ -324,7 +335,7 @@ class GenerationService:
         )
         resp: dict = {}
         for _attempt in range(2):
-            if self._cancelled:
+            if self._is_cancelled():
                 return GenerationResult(
                     success=False,
                     error=tr("Generation cancelled"),
@@ -433,7 +444,7 @@ class GenerationService:
         consecutive_poll_errors = 0
         polls = 0
         while polls < HARD_CAP and (time.time() - submit_time) < budget_s:
-            if self._cancelled:
+            if self._is_cancelled():
                 return GenerationResult(
                     success=False,
                     error=tr("Generation cancelled"),
@@ -539,7 +550,7 @@ class GenerationService:
         # generation that actually finished. Capped at 2 attempts: this asks the
         # server to hit the provider queue, so we must not hammer it.
         for _attempt in range(2):
-            if self._cancelled:
+            if self._is_cancelled():
                 break
             try:
                 final = self._client.poll_status(request_id, auth=auth, force_fallback=True)

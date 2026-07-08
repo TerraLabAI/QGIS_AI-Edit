@@ -6,6 +6,18 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from qgis.core import QgsApplication, QgsTask
+from qgis.PyQt.QtCore import QThread
+
+
+def _on_main_thread() -> bool:
+    """True when called on the GUI thread. flush() ends in the task manager,
+    which is main-thread-only, so worker threads must only track()."""
+    try:
+        app = QgsApplication.instance()
+        return app is not None and QThread.currentThread() == app.thread()
+    except Exception:
+        return False
+
 
 # Global opt-out switch, shared across TerraLab plugins (AI Edit + AI Segmentation)
 # via the same QSettings key, so the user only has to disable telemetry once.
@@ -46,6 +58,9 @@ _NO_CONTENT_EVENTS = frozenset({
     "launch_clicked",
     "subscribe_link_clicked",
     "trial_exhausted_viewed",
+    # Tutorial/guide opens can happen signed-out (footer button is always
+    # visible), so they must park pre-auth like the other lifecycle pings.
+    "tutorial_opened",
     "template_selected",
     "generation_started",
     "generation_completed",
@@ -85,24 +100,28 @@ class _TelemetryFlushTask(QgsTask):
         self._auth = auth
 
     def run(self) -> bool:
-        # One retry with a short backoff covers a transient network blip without
-        # a disk queue; a hard-offline session still loses the batch (accepted).
         if self.isCanceled():
             return False
-        try:
-            self._client.send_telemetry_batch(self._events, self._auth)
-        except Exception:  # nosec B110
-            if self.isCanceled():
-                return False
+        # One retry with a short backoff covers a transient network blip without
+        # a disk queue; a hard-offline session still loses the batch (accepted).
+        if not self._post() and not self.isCanceled():
             import time
             time.sleep(2)
             if self.isCanceled():
                 return False
-            try:
-                self._client.send_telemetry_batch(self._events, self._auth)
-            except Exception:  # nosec B110
-                pass
+            self._post()
         return True
+
+    def _post(self) -> bool:
+        """Send the batch; True only on a successful post. The client returns an
+        error dict and never raises, so a failed batch has to be detected from
+        the RESULT. Ignoring it made run()'s retry dead code: a failed batch
+        returned True and was silently dropped."""
+        try:
+            result = self._client.send_telemetry_batch(self._events, self._auth)
+        except Exception:  # nosec B110 - telemetry must never break the plugin
+            return False
+        return not (isinstance(result, dict) and result.get("error"))
 
     def finished(self, result: bool) -> None:
         return
@@ -185,7 +204,10 @@ class TelemetryCollector:
 
         MAIN THREAD ONLY: it ends in QgsApplication.taskManager().addTask(),
         which is main-thread-only. Worker threads must only telemetry.track()
-        and let the next main-thread flush ship the batch (see generation_worker)."""
+        and let the next main-thread flush ship the batch (see generation_worker).
+        A stray off-thread call is now a safe no-op rather than a hard crash."""
+        if not _on_main_thread():
+            return
         task = None
         with self._lock:
             if not self._batch and not self._pending_pre_auth:

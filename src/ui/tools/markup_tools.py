@@ -116,7 +116,9 @@ class MarkupLayerManager(QObject):
     def _on_project_crs_changed(self) -> None:
         if self._layer is not None:
             log_debug("Mark up: project CRS changed, rebuilding layer")
-            self._layer = None
+            # Remove the stale layer, don't just drop the reference: nulling it
+            # alone orphans the memory layer (wrong CRS) in the project forever.
+            self.remove_layer()
 
     def _on_layers_removed(self, layer_ids: list[str]) -> None:
         if self._layer is None:

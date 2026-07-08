@@ -262,6 +262,7 @@ class GenerationTask(QgsTask):
             context_images=self._context_images,
             guidance_image=self._guidance_image,
             guidance_format=self._guidance_format,
+            is_cancelled=self.isCanceled,
         )
 
         if self.isCanceled():

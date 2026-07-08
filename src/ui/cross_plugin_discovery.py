@@ -5,8 +5,7 @@ open the product page.
 from __future__ import annotations
 
 from qgis.PyQt.QtCore import QUrl
-from qgis.PyQt.QtGui import QDesktopServices, QIcon
-from qgis.PyQt.QtWidgets import QAction
+from qgis.PyQt.QtGui import QAction, QDesktopServices, QIcon
 
 _AI_SEG_KEYS = ("AI_Segmentation", "QGIS_AI-Segmentation", "QGIS_AI-Segmentation-Team")
 _AI_SEG_PRODUCT_URL = (

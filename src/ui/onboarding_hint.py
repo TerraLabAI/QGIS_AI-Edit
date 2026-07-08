@@ -8,13 +8,14 @@ tips again"). One hint per screen at most, so guidance never becomes clutter.
 Pattern (how mature apps do onboarding without burdening the UI):
   - inline callout, never a modal that blocks work,
   - dismissible and remembered (QSettings), not nagging,
-  - re-showable on demand from settings,
+  - re-showable on demand from settings (live, if the dock is open),
   - short, action-oriented copy with an optional 1-2-3 step row.
 """
 
 from __future__ import annotations
 
 import os
+import weakref
 
 from qgis.PyQt.QtCore import QSettings, pyqtSignal
 from qgis.PyQt.QtGui import QIcon
@@ -39,14 +40,59 @@ HINT_PROMPT = "flow_prompt"
 HINT_TOOLS = "flow_tools"
 HINT_MARKUP = "flow_markup"
 HINT_VECTORIZE = "flow_vectorize"
+# Post-sign-in first-steps banner pointing at the step-by-step guide.
+HINT_FIRST_STEPS = "first_steps"
 ALL_HINTS = [
     HINT_LIBRARY_INTRO, HINT_ZONE, HINT_PROMPT, HINT_TOOLS,
-    HINT_MARKUP, HINT_VECTORIZE,
+    HINT_MARKUP, HINT_VECTORIZE, HINT_FIRST_STEPS,
 ]
 
 _ICONS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "resources", "icons"
 )
+
+# Step-by-step written guide. Defined once here; every touchpoint derives its
+# own variant via guide_url(<utm_content>) so the base + UTM stem never gets
+# copy-pasted.
+GUIDE_URL_BASE = "https://terra-lab.ai/blog/ai-edit-complete-guide"
+
+# Card tints as RGB components: the TerraLab leaf green is the default (matches
+# the rest of the AI Edit dock chrome); blue is available for automatic-style
+# callouts to stay consistent with the sibling plugin.
+GREEN_TINT = (139, 172, 39)
+BLUE_TINT = (25, 118, 210)
+
+# Live hint widgets, so "Show guidance tips again" can re-show them without a
+# dock rebuild. Weak refs: closing/destroying a hint drops out on its own.
+_LIVE_HINTS: list[weakref.ref[DismissibleHint]] = []
+
+
+def guide_url(content: str) -> str:
+    """Written-guide URL with the shared UTM stem and a per-touchpoint content."""
+    return (
+        f"{GUIDE_URL_BASE}"
+        "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit"
+        f"&utm_content={content}"
+    )
+
+
+def open_guide(content: str) -> None:
+    """Open the written guide in the system browser and record the open.
+
+    ``content`` is the touchpoint id (also the utm_content and telemetry
+    source): footer_tutorial, post_signin, ... The URL always opens, even if
+    telemetry is disabled or unavailable.
+    """
+    from qgis.PyQt.QtCore import QUrl
+    from qgis.PyQt.QtGui import QDesktopServices
+
+    QDesktopServices.openUrl(QUrl(guide_url(content)))
+    try:
+        from ..core import telemetry
+        from ..core import telemetry_events as te
+        telemetry.track(te.TUTORIAL_OPENED, {"tutorial_source": content})
+    except Exception:  # nosec B110  Telemetry is best-effort, never blocks the open.
+        pass
 
 
 def is_hint_dismissed(hint_id: str) -> bool:
@@ -58,16 +104,30 @@ def dismiss_hint(hint_id: str) -> None:
 
 
 def reset_hints() -> None:
-    """Re-enable every hint so the user sees the guidance again."""
+    """Re-enable every hint so the user sees the guidance again.
+
+    Also re-shows any hint widget currently alive (a dock open behind the
+    account dialog), so the change is visible immediately, not only next open.
+    """
     s = QSettings()
     for hint_id in ALL_HINTS:
         s.remove(_SETTINGS_PREFIX + hint_id)
+    for ref in list(_LIVE_HINTS):
+        widget = ref()
+        if widget is None:
+            _LIVE_HINTS.remove(ref)
+            continue
+        widget.reshow()
 
 
-_CARD_STYLE = (
-    "QFrame#hintCard { background: rgba(139,172,39,0.12); "
-    "border: 1px solid rgba(139,172,39,0.38); border-radius: 11px; }"
-)
+def _card_qss(tint: tuple[int, int, int]) -> str:
+    r, g, b = tint
+    return (
+        f"QFrame#hintCard {{ background: rgba({r},{g},{b},0.12); "
+        f"border: 1px solid rgba({r},{g},{b},0.38); border-radius: 11px; }}"
+    )
+
+
 _TITLE_STYLE = (
     "color: palette(text); font-size: 14px; font-weight: 800; "
     "background: transparent; border: none;"
@@ -99,14 +159,18 @@ _STEP_SUB_STYLE = (
 
 
 class DismissibleHint(QWidget):
-    """A green-tinted inline guidance callout with an optional step row.
+    """A tinted inline guidance callout with an optional step row and link.
 
     ``steps`` is a list of ``(glyph, title, subtitle)`` tuples rendered as a
-    1-2-3 row. Closing the card stores the dismissal so it stays hidden until
-    the user resets guidance from settings.
+    1-2-3 row. ``action_text`` (optional) renders a small link-style button
+    whose click emits ``action``. ``visibility_gate`` (optional callable ->
+    bool) constrains ``reshow()`` so a guidance reset never flashes a pinned
+    banner into a state where it does not belong. Closing the card stores the
+    dismissal so it stays hidden until the user resets guidance from settings.
     """
 
     dismissed = pyqtSignal()
+    action = pyqtSignal()
 
     def __init__(
         self,
@@ -114,17 +178,26 @@ class DismissibleHint(QWidget):
         title: str,
         body: str,
         steps: list[tuple[str, str, str]] | None = None,
+        action_text: str | None = None,
+        visibility_gate=None,
+        tint: tuple[int, int, int] | None = None,
         parent=None,
     ):
         super().__init__(parent)
         self._hint_id = hint_id
+        # Optional callable -> bool. When set, a guidance reset only re-shows the
+        # hint if the gate allows it. Banners pinned to the dock (always mounted,
+        # no hidden parent) use this so "Show guidance again" can never reveal
+        # them in the wrong state.
+        self._visibility_gate = visibility_gate
+        tint = tint or GREEN_TINT
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
 
         card = QFrame(self)
         card.setObjectName("hintCard")
-        card.setStyleSheet(_CARD_STYLE)
+        card.setStyleSheet(_card_qss(tint))
         outer.addWidget(card)
 
         col = QVBoxLayout(card)
@@ -143,6 +216,19 @@ class DismissibleHint(QWidget):
         body_lbl.setWordWrap(True)
         body_lbl.setStyleSheet(_BODY_STYLE)
 
+        act_btn = None
+        if action_text:
+            r, g, b = tint
+            act_btn = QToolButton(card)
+            act_btn.setText(action_text)
+            act_btn.setCursor(QtC.PointingHandCursor)
+            act_btn.setStyleSheet(
+                f"QToolButton {{ background: transparent; border: none;"
+                f" font-size: 12px; font-weight: 700; padding: 0px;"
+                f" color: rgb({r},{g},{b}); }}"
+            )
+            act_btn.clicked.connect(self.action.emit)
+
         if title:
             head = QHBoxLayout()
             head.setContentsMargins(0, 0, 0, 0)
@@ -154,13 +240,18 @@ class DismissibleHint(QWidget):
             head.addWidget(close_btn, 0, QtC.AlignTop)
             col.addLayout(head)
             col.addWidget(body_lbl)
+            if act_btn is not None:
+                col.addWidget(act_btn, 0, QtC.AlignLeft)
         else:
-            # No title: the close button floats at the body's top-right so the
-            # text starts at the very top - no empty title band above it.
+            # No title: one compact row - body text, then (optional) action
+            # link, then the tiny x. Top-aligned to match the pre-existing
+            # no-title hints exactly (markup / vectorize panels).
             head = QHBoxLayout()
             head.setContentsMargins(0, 0, 0, 0)
             head.setSpacing(8)
             head.addWidget(body_lbl, 1, QtC.AlignTop)
+            if act_btn is not None:
+                head.addWidget(act_btn, 0, QtC.AlignTop)
             head.addWidget(close_btn, 0, QtC.AlignTop)
             col.addLayout(head)
 
@@ -171,6 +262,9 @@ class DismissibleHint(QWidget):
             for i, (glyph, step_title, step_sub) in enumerate(steps, start=1):
                 row.addWidget(self._step(i, glyph, step_title, step_sub), 1)
             col.addLayout(row)
+
+        self.setVisible(not is_hint_dismissed(hint_id))
+        _LIVE_HINTS.append(weakref.ref(self))
 
     def _step(self, n: int, glyph: str, title: str, sub: str) -> QFrame:
         box = QFrame(self)
@@ -196,6 +290,22 @@ class DismissibleHint(QWidget):
             txt.addWidget(s)
         h.addLayout(txt, 1)
         return box
+
+    def reshow(self) -> None:
+        """Re-show after a guidance reset, honoring the optional visibility gate.
+
+        A gate that returns False keeps the hint hidden (its owner shows it when
+        the relevant screen is next active), so a reset never flashes a pinned
+        banner into a state where it does not belong.
+        """
+        gate = self._visibility_gate
+        if gate is not None:
+            try:
+                if not gate():
+                    return
+            except Exception:  # nosec B110 -- a broken gate must not block the reset
+                pass
+        self.show()
 
     def _on_close(self) -> None:
         dismiss_hint(self._hint_id)

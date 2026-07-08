@@ -39,6 +39,14 @@ FIRST_GENERATION_MILESTONE = "first_generation_milestone"
 TRIAL_EXHAUSTED_VIEWED = "trial_exhausted_viewed"
 SUBSCRIBE_LINK_CLICKED = "subscribe_link_clicked"
 
+# Onboarding / guidance
+# tutorial_source is the touchpoint id (footer_tutorial, post_signin, ...).
+# NOTE: the per-event prop is tutorial_source, NOT source: `source` is a
+# reserved session/universal dimension here (server-injected origin surface),
+# so reusing it would collide with that enum. Mirrors AI Segmentation's
+# tutorial_opened, adapted to this plugin's registry.
+TUTORIAL_OPENED = "tutorial_opened"
+
 # Tools
 MARKUP_OPENED = "markup_opened"
 VECTORIZE_PANEL_OPENED = "vectorize_panel_opened"
@@ -82,6 +90,7 @@ ALL_EVENTS = frozenset({
     FIRST_GENERATION_MILESTONE,
     TRIAL_EXHAUSTED_VIEWED,
     SUBSCRIBE_LINK_CLICKED,
+    TUTORIAL_OPENED,
     MARKUP_OPENED,
     VECTORIZE_PANEL_OPENED,
     VECTORIZE_SUGGESTION_CLICKED,
@@ -120,6 +129,7 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     FIRST_GENERATION_MILESTONE: (),
     TRIAL_EXHAUSTED_VIEWED: ("is_free_tier",),
     SUBSCRIBE_LINK_CLICKED: (),
+    TUTORIAL_OPENED: ("tutorial_source",),
     MARKUP_OPENED: (),
     VECTORIZE_PANEL_OPENED: (),
     VECTORIZE_SUGGESTION_CLICKED: (),
