@@ -3,12 +3,17 @@ name=AI Edit by TerraLab
 description=Edit aerial & satellite imagery with AI: land cover classification, building footprint extraction, super-resolution upscaling, object removal, cloud removal and flood simulation, all from a text prompt. Georeferenced output.
 qgisMinimumVersion=3.0
 qgisMaximumVersion=4.99
-version=1.5.1
+version=1.6.0
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.6.0
+    - New first-run experience, built around starting from your own imagery
+    - Cleaner Report a problem and Contact us dialogs
+    - Startup reliability fixes
+
     1.5.0
     - Now available in 8 more languages (German, Chinese, Italian, Indonesian, Polish, Japanese, Dutch)
     - Guided onboarding with a built-in guide button and first-run tips
