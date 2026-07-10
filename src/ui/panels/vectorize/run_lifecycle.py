@@ -267,6 +267,7 @@ class RunLifecycleMixin:
                     "is_initial": is_initial,
                 },
             )
+            telemetry.flush()
         except AIEditError as err:
             self._handle_run_error(err.message, err.code)
         except Exception as e:
@@ -317,6 +318,21 @@ class RunLifecycleMixin:
         """
         from ....core.errors import ErrorCode as _EC
         is_zero_match = code == _EC.NO_PIXELS_MATCHED
+        # Stable, non-localized error code per failure kind for the failure
+        # surface (was previously silent).
+        if is_zero_match and self._succeeded:
+            error_code = "no_shapes_after_filter"
+        elif is_zero_match:
+            error_code = "zero_matches"
+        elif code == _EC.WRITE_ERROR:
+            error_code = "write_error"
+        else:
+            error_code = "vectorize_failed"
+        telemetry.track(te.PLUGIN_ERROR, {
+            "stage": "vectorize",
+            "error_code": error_code,
+        })
+        telemetry.flush()
         if is_zero_match and self._succeeded:
             # Active refine: detection is fixed, so a re-run only zeroes out
             # when the outline/selection filters drop everything. Steer the

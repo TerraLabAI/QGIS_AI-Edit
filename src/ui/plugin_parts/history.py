@@ -50,6 +50,10 @@ class HistoryMixin:
         if task in self._history_tasks:
             self._history_tasks.remove(task)
 
+    def _track_history_error(self, error_code: str) -> None:
+        """Stable, non-localized failure code for a Library history action."""
+        telemetry.track(te.PLUGIN_ERROR, {"stage": "history", "error_code": error_code})
+
     def _on_history_add_to_map(self, job: dict):
         """Re-add a past generation's output as a georeferenced layer.
 
@@ -77,13 +81,13 @@ class HistoryMixin:
 
         task = GenericRequestTask(tr("Adding past generation to the map"), _work)
         task.succeeded.connect(self._on_history_layer_ready)
-        task.failed.connect(
-            lambda msg, _code: self._notify(
-                tr("Could not add to map: {msg}").format(msg=msg), duration=6
-            )
-        )
+        task.failed.connect(self._on_history_add_to_map_failed)
         self._notify(tr("Adding to map..."), duration=2)
         self._hold_history_task(task)
+
+    def _on_history_add_to_map_failed(self, msg, _code):
+        self._track_history_error("add_to_map_download_failed")
+        self._notify(tr("Could not add to map: {msg}").format(msg=msg), duration=6)
 
     def _on_history_layer_ready(self, result):
         from qgis.core import Qgis
@@ -98,6 +102,7 @@ class HistoryMixin:
                 crs_wkt=(result or {}).get("crs_wkt", ""),
             )
         except Exception as err:  # noqa: BLE001
+            self._track_history_error("add_to_map_layer_failed")
             self._notify(tr("Could not add layer: {msg}").format(msg=err), duration=6)
             return
         if layer is not None:
@@ -108,6 +113,7 @@ class HistoryMixin:
             except Exception as err:  # nosec B110
                 log_warning(f"focus added history layer failed: {err}")
         self._notify(tr("Added to map."), level=Qgis.MessageLevel.Success, duration=4)
+        telemetry.track(te.HISTORY_RESTORED, {"kind": "add_to_map"})
 
     def _on_history_download(self, job: dict):
         """Save a past generation to a file the user picks. When location data
@@ -177,22 +183,26 @@ class HistoryMixin:
 
         task = GenericRequestTask(tr("Downloading generation"), _work)
         task.succeeded.connect(self._on_history_download_done)
-        task.failed.connect(
-            lambda msg, _code: self._notify(
-                tr("Download failed: {msg}").format(msg=msg), duration=6
-            )
-        )
+        task.failed.connect(self._on_history_download_failed)
         self._hold_history_task(task)
+
+    def _on_history_download_failed(self, msg, _code):
+        self._track_history_error("download_failed")
+        self._notify(tr("Download failed: {msg}").format(msg=msg), duration=6)
 
     def _on_history_download_done(self, result):
         from qgis.core import Qgis
 
         path = (result or {}).get("path", "")
+        # A georeferenced .tif exports as geotiff; the raw-image fallback keeps
+        # its own extension (png/jpg/webp).
+        fmt = "geotiff" if path.lower().endswith(".tif") else "image"
         self._notify(
             tr("Saved to {path}").format(path=path),
             level=Qgis.MessageLevel.Success,
             duration=5,
         )
+        telemetry.track(te.HISTORY_EXPORTED, {"format": fmt})
 
     def _on_history_restore(self, job: dict):
         """Reproduce a past generation: restore the zone at its original spot,
@@ -202,10 +212,12 @@ class HistoryMixin:
             return
         geo = extent_and_crs_from_job(job)
         if geo is None:
+            self._track_history_error("restore_no_location")
             self._notify(tr("Location data unavailable for this generation."), duration=4)
             return
         extent_dict, crs_wkt = geo
         if not self._restore_zone(extent_dict, crs_wkt):
+            self._track_history_error("restore_zone_failed")
             return
         # Re-enter the restored generation's session so new edits continue it
         # and group with its siblings. _restore_zone reset the lineage and
@@ -228,6 +240,7 @@ class HistoryMixin:
         # a blank lineage. Thumbnails arrive async; the strip appears then.
         self._restore_session_chain(job)
         self._notify(tr("Generation restored. Adjust and generate again."), duration=4)
+        telemetry.track(te.HISTORY_RESTORED, {"kind": "restore"})
 
     def _session_chain_for(self, job: dict) -> list[dict]:
         """All cached generations from `job`'s iteration session, oldest first.

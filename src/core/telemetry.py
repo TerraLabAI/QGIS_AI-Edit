@@ -69,6 +69,9 @@ _NO_CONTENT_EVENTS = frozenset({
     "first_generation_milestone",
     "favorite_toggled",
     "recent_selected",
+    # Library history restore/export: enum-only props, no user content.
+    "history_restored",
+    "history_exported",
     "markup_opened",
     "vectorize_panel_opened",
     "vectorize_suggestion_clicked",
@@ -254,10 +257,26 @@ class TelemetryCollector:
                 pass
 
     def shutdown(self):
+        # Best-effort final drain of the in-memory batch BEFORE cancelling
+        # anything. flush() (main-thread only, a safe no-op off it) appends one
+        # fresh QgsTask the task manager owns; on unload it may not run to
+        # completion, so this is a last attempt, never a guarantee. We snapshot
+        # the tasks already in flight and cancel ONLY those, so this final batch
+        # is not cancelled out from under itself. Never let telemetry break
+        # unload.
         with self._lock:
-            inflight = list(self._inflight)
-            self._inflight.clear()
-        for task in inflight:
+            stale = list(self._inflight)
+        try:
+            self.flush()
+        except Exception:  # nosec B110 - telemetry must never break unload
+            pass
+        with self._lock:
+            for task in stale:
+                try:
+                    self._inflight.remove(task)
+                except ValueError:
+                    pass
+        for task in stale:
             try:
                 task.cancel()
             except Exception:  # nosec B110

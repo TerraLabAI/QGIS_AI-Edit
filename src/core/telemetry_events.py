@@ -58,6 +58,10 @@ SWIPE_DISARMED = "swipe_disarmed"
 # Library
 FAVORITE_TOGGLED = "favorite_toggled"
 RECENT_SELECTED = "recent_selected"
+# Cross-product history events (name-keyed globally; AI Segmentation registers
+# these too). Restore = re-add/reuse a past generation; export = download it.
+HISTORY_RESTORED = "history_restored"
+HISTORY_EXPORTED = "history_exported"
 
 # Refund visibility
 GENERATION_REFUND_ATTEMPTED = "generation_refund_attempted"
@@ -99,6 +103,8 @@ ALL_EVENTS = frozenset({
     SWIPE_DISARMED,
     FAVORITE_TOGGLED,
     RECENT_SELECTED,
+    HISTORY_RESTORED,
+    HISTORY_EXPORTED,
     GENERATION_REFUND_ATTEMPTED,
     GENERATION_REFUND_FAILED,
     EXPORT_FAILED,
@@ -138,6 +144,8 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     SWIPE_DISARMED: (),
     FAVORITE_TOGGLED: ("now_favorited",),
     RECENT_SELECTED: (),
+    HISTORY_RESTORED: (),
+    HISTORY_EXPORTED: (),
     GENERATION_REFUND_ATTEMPTED: (),
     GENERATION_REFUND_FAILED: (),
     EXPORT_FAILED: ("stage", "error_code"),

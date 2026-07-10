@@ -102,6 +102,20 @@ def _classify_network_error(
             "Too much image data to send. Remove a reference image or lower the resolution, then try again.",
         )
 
+    # The server DID answer, with a failure status whose body was not
+    # parseable JSON (typically a bare infrastructure incident page). The
+    # user's connection worked, so "check your internet" points them at the
+    # wrong side. SERVER_ERROR is already a known transient code (localizer,
+    # report policy), and the activation flow keeps the session on it.
+    if http_status is not None and http_status >= 500:
+        return (
+            "SERVER_ERROR",
+            tr(
+                "The service is temporarily unavailable (server error). "
+                "Your connection is fine - please try again in a few minutes."
+            ),
+        )
+
     # Fallback. Canonical code is NO_NETWORK (ErrorCode enum) so every consumer
     # (inline-only set, retry list, message localizer) treats it as a handled
     # network failure instead of opening the bug-report dialog.

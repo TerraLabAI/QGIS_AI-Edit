@@ -16,7 +16,7 @@ from ...core.auth.activation_manager import (
     save_activation,
     validate_key_with_server,
 )
-from ...core.errors import NETWORK_ERROR_CODES
+from ...core.errors import NETWORK_ERROR_CODES, TRANSIENT_SERVER_ERROR_CODES
 from ...core.i18n import tr
 from ...core.logger import log, log_debug, log_warning
 from ...workers.generic_request_task import GenericRequestTask
@@ -110,8 +110,11 @@ class ActivationMixin:
         blip would dump an offline user back to the sign-up screen and lose their
         stored key. On a network error we keep the optimistic-activated session
         (the server re-checks on every real call) and show one quiet notice.
+        A transient server-side failure (5xx incident, rate limit) says nothing
+        about the key either, so it takes the same keep-session path.
         """
-        if (code or "").strip().upper() in NETWORK_ERROR_CODES:
+        code_up = (code or "").strip().upper()
+        if code_up in NETWORK_ERROR_CODES or code_up in TRANSIENT_SERVER_ERROR_CODES:
             self._dock_widget.set_activated(True)
             self._settings_action.setEnabled(True)
             # The optimistic path disabled Launch pending this check; restore it
@@ -119,6 +122,15 @@ class ActivationMixin:
             self._dock_widget.set_launch_enabled(True)
             self._show_connectivity_notice(code)
             return
+        # Genuine auth rejection (INVALID_KEY / KEY_REVOKED / SUBSCRIPTION_EXPIRED
+        # / DEVICE_LIMIT_EXCEEDED). Record the machine code only, never the
+        # localized message.
+        rejection_code = (code or "").strip().upper() or "KEY_REJECTED"
+        telemetry.track(te.PLUGIN_ERROR, {
+            "stage": "activate",
+            "error_code": rejection_code,
+        })
+        telemetry.flush()
         self._last_key_validation_unix = 0.0
         clear_activation()
         self._auth_manager.set_activation_key("")
@@ -222,9 +234,21 @@ class ActivationMixin:
         self._pairing_worker.pairing_browser_seen.connect(self._on_pairing_browser_seen)
         self._pairing_worker.pairing_stalled.connect(self._on_pairing_stalled)
         QgsApplication.taskManager().addTask(self._pairing_worker)
+        # Anchor the wait clock + reset the stalled flag on a genuine start (this
+        # branch is skipped on a browser re-open), so the terminal pairing event
+        # can report how long the user waited and whether it stalled first.
+        self._pairing_started_unix = time.time()
+        self._pairing_stalled = False
         telemetry.track(te.AI_EDIT_PAIR_STARTED)
         telemetry.flush()
         log("Pairing started")
+
+    def _pairing_duration_ms(self) -> int:
+        """Milliseconds since AI_EDIT_PAIR_STARTED, or 0 if never started."""
+        start = getattr(self, "_pairing_started_unix", 0.0)
+        if not start:
+            return 0
+        return int((time.time() - start) * 1000)
 
     def _on_pairing_succeeded(self, key: str):
         self._apply_activation(key)
@@ -236,7 +260,10 @@ class ActivationMixin:
             self._dock_widget.raise_()
         except Exception:  # nosec B110
             pass
-        telemetry.track(te.AI_EDIT_PAIR_SUCCEEDED)
+        telemetry.track(te.AI_EDIT_PAIR_SUCCEEDED, {
+            "duration_ms": self._pairing_duration_ms(),
+            "stalled": bool(getattr(self, "_pairing_stalled", False)),
+        })
         telemetry.track(te.PLUGIN_ACTIVATED, {"activation_method": "pairing"})
         telemetry.flush()
         log("Pairing successful")
@@ -244,7 +271,11 @@ class ActivationMixin:
     def _on_pairing_failed(self, message: str, code: str):
         self._dock_widget.show_pairing_idle()
         self._dock_widget.set_activation_message(message, is_error=True)
-        telemetry.track(te.AI_EDIT_PAIR_FAILED, {"error_code": (code or "UNKNOWN")})
+        telemetry.track(te.AI_EDIT_PAIR_FAILED, {
+            "error_code": (code or "UNKNOWN"),
+            "duration_ms": self._pairing_duration_ms(),
+            "stalled": bool(getattr(self, "_pairing_stalled", False)),
+        })
         telemetry.flush()
         log_warning("Pairing failed")
 
@@ -253,6 +284,7 @@ class ActivationMixin:
             self._dock_widget.show_pairing_browser_seen()
 
     def _on_pairing_stalled(self):
+        self._pairing_stalled = True
         if self._dock_widget:
             self._dock_widget.show_pairing_stalled_hint()
         log_warning("Pairing stalled: browser never reached /connect")
@@ -264,7 +296,10 @@ class ActivationMixin:
                "or enter your key manually."),
             is_error=True,
         )
-        telemetry.track(te.AI_EDIT_PAIR_TIMEOUT)
+        telemetry.track(te.AI_EDIT_PAIR_TIMEOUT, {
+            "duration_ms": self._pairing_duration_ms(),
+            "stalled": bool(getattr(self, "_pairing_stalled", False)),
+        })
         telemetry.flush()
         log("Pairing timed out")
 
@@ -279,7 +314,10 @@ class ActivationMixin:
                 silent=True,
             )
             self._hold_history_task(task)
-        telemetry.track(te.AI_EDIT_PAIR_CANCELLED)
+        telemetry.track(te.AI_EDIT_PAIR_CANCELLED, {
+            "duration_ms": self._pairing_duration_ms(),
+            "stalled": bool(getattr(self, "_pairing_stalled", False)),
+        })
         telemetry.flush()
         log("Pairing cancelled")
 

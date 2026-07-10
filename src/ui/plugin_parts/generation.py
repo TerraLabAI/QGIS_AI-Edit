@@ -138,7 +138,9 @@ class GenerationMixin:
                 tr("Cannot retry: no zone selected."), is_error=True
             )
             return
-        self._on_generate(prompt)
+        # Carry the retry flag through the export hand-off so
+        # generation_started/completed/failed are all tagged is_retry=True.
+        self._on_generate(prompt, is_retry=True)
 
     def _run_generation_from_stored(self, prompt: str):
         """Run generation using previously stored zone data (for retry)."""
@@ -248,7 +250,7 @@ class GenerationMixin:
         self._generation_cancel_handled = False
         QgsApplication.taskManager().addTask(self._worker)
 
-    def _on_generate(self, prompt: str):
+    def _on_generate(self, prompt: str, is_retry: bool = False):
         if self._worker is not None and self._worker.is_active():
             self._dock_widget.set_status(tr("Generation already in progress"), is_error=True)
             return
@@ -374,6 +376,7 @@ class GenerationMixin:
             "prep": prep,
             "suggested_res": suggested_res,
             "crs_wkt": map_settings.destinationCrs().toWkt(),
+            "is_retry": is_retry,
         }
 
         worker = ExportWorker(prep)
@@ -421,6 +424,7 @@ class GenerationMixin:
         prompt = pending["prompt"]
         suggested_res = pending["suggested_res"]
         crs_wkt = pending["crs_wkt"]
+        is_retry = pending.get("is_retry", False)
 
         log_debug(
             f"Export completed: main_b64={len(image_b64)}, "
@@ -496,7 +500,7 @@ class GenerationMixin:
         # here or we'd reset the prep ticker phase + bar back to 1%.
         self._generation_service.reset()
         self._generation_start_time = time.time()
-        self._last_generation_is_retry = False
+        self._last_generation_is_retry = is_retry
         used_markup = bool(guidance_b64)
         telemetry.track(te.GENERATION_STARTED, self._enrich_generation_props({
             "prompt_length": len(prompt),
@@ -506,7 +510,7 @@ class GenerationMixin:
             "zone_height_px": img_h,
             "input_image_bytes": size_bytes,
             "input_image_format": input_format,
-            "is_retry": False,
+            "is_retry": is_retry,
             "has_geo_context": self._reference_store.count() > 0,
             "template_id": ctx.template_id,
             "template_name": ctx.template_name,

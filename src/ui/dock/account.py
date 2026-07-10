@@ -171,12 +171,18 @@ class DockAccountMixin:
         from ...core import telemetry
         from ...core import telemetry_events as te
         telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {"source": "upgrade_cta"})
+        # The user leaves QGIS for the browser right after; ship now or the
+        # batch dies with the session.
+        telemetry.flush()
         QDesktopServices.openUrl(QUrl(get_subscribe_url()))
 
     def _on_trial_info_subscribe_clicked(self):
         from ...core import telemetry
         from ...core import telemetry_events as te
         telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {"source": "trial_exhausted_box"})
+        # The user leaves QGIS for the browser right after; ship now or the
+        # batch dies with the session.
+        telemetry.flush()
         url = self._trial_info_url or get_subscribe_url()
         QDesktopServices.openUrl(QUrl(url))
 
@@ -268,6 +274,9 @@ class DockAccountMixin:
             from ...core import telemetry
             from ...core import telemetry_events as te
             telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {"source": "limit_cta"})
+            # The user leaves QGIS for the browser right after; ship now or the
+            # batch dies with the session.
+            telemetry.flush()
             QDesktopServices.openUrl(QUrl(self._limit_cta_url))
 
     def _on_activation_limit_cta_clicked(self):
@@ -275,6 +284,9 @@ class DockAccountMixin:
             from ...core import telemetry
             from ...core import telemetry_events as te
             telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {"source": "activation_limit_cta"})
+            # The user leaves QGIS for the browser right after; ship now or the
+            # batch dies with the session.
+            telemetry.flush()
             QDesktopServices.openUrl(QUrl(self._activation_limit_cta_url))
 
     def _hide_limit_cta(self):

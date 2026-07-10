@@ -87,9 +87,15 @@ class GenerationResultsMixin:
             dashboard = config.get("upgrade_url", get_dashboard_url())
             self._dock_widget.show_trial_exhausted_info(message, dashboard)
             telemetry.track(te.TRIAL_EXHAUSTED_VIEWED, {"is_free_tier": True})
+            # The user typically heads to the browser to subscribe next; ship
+            # now so the batch is not lost with the session.
+            telemetry.flush()
         elif is_quota_error:
             self._dock_widget.show_usage_limit_info(message, SUBSCRIBE_ERROR_URL)
             telemetry.track(te.TRIAL_EXHAUSTED_VIEWED, {"is_free_tier": False})
+            # The user typically heads to the browser to subscribe next; ship
+            # now so the batch is not lost with the session.
+            telemetry.flush()
         elif _is_model_failure(message, normalized_code):
             # The model couldn't produce an image (no-output / safety block). The
             # server already marked the job failed and refunded the credit, so we
@@ -239,6 +245,22 @@ class GenerationResultsMixin:
             self._refresh_credits()
             log(f"Generation complete ({round(duration, 1)}s): {result_info['geotiff_path']}")
         except Exception as e:
+            # The generation itself succeeded and was billed; only the local
+            # layer-add failed. Still emit generation_completed (with the same
+            # props as the success path plus layer_add_failed) so a billed run
+            # is never miscounted as a failure, and keep the plugin_error for
+            # the write-side diagnosis.
+            telemetry.track(te.GENERATION_COMPLETED, self._enrich_generation_props({
+                "duration_ms": int(duration * 1000),
+                "resolution": getattr(self, "_last_suggested_res", ""),
+                "is_retry": self._last_generation_is_retry,
+                "used_markup": self._last_generation_used_markup,
+                "output_rescued": bool(result_info.get("output_rescued")),
+                "template_id": template_id,
+                "template_name": template_name,
+                "used_template": bool(template_id),
+                "layer_add_failed": True,
+            }))
             telemetry.track(te.PLUGIN_ERROR, {
                 "stage": "write",
                 "error_code": "layer_add_failed",

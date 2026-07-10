@@ -64,6 +64,19 @@ NETWORK_ERROR_CODES = frozenset(
     }
 )
 
+# Server-side transient failures (incident, rate limiting): the backend could
+# not answer, which says NOTHING about the stored key. Auth flows must treat
+# these like a network blip (keep the session, retry later), never as a key
+# rejection that signs the user out.
+TRANSIENT_SERVER_ERROR_CODES = frozenset(
+    {
+        ErrorCode.SERVER_ERROR.value,
+        "RATE_LIMITED",
+        "RATE_LIMITER_DOWN",
+        "UPSTREAM_UNAVAILABLE",
+    }
+)
+
 
 class AIEditError(Exception):
     """Stable code + human message so callers can branch without substring matches."""
