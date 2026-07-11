@@ -601,6 +601,19 @@ class AccountSettingsDialog(QDialog):
         manage_btn.clicked.connect(self._open_dashboard)
         card_layout.addWidget(manage_btn)
 
+        # A team/organization buy (several seats, one invoice, a purchase order)
+        # has no self-serve path yet, so surface a human contact at the account
+        # screen. Selectable so the email can be copied.
+        contact = QLabel(
+            tr("Team or organization?") + " "
+            + tr("Write to us:") + " <b>yvann.barbot@terra-lab.ai</b>"
+        )
+        contact.setAlignment(QtC.AlignCenter)
+        contact.setWordWrap(True)
+        contact.setTextInteractionFlags(QtC.TextSelectableByMouse)
+        contact.setStyleSheet("font-size: 10px; color: rgba(128,128,128,0.9);")
+        card_layout.addWidget(contact)
+
         return card
 
     # -- Helpers --

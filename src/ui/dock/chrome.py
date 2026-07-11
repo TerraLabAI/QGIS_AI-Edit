@@ -374,8 +374,9 @@ class DockChromeMixin:
         fallback for someone with no data on hand (Yvann 2026-07-08). It mirrors
         the AI Segmentation hero pixel for pixel so the two docks read as one
         family. No illustrative preview image: real product output only, a
-        glyph is fine. The plugin handles the demo: adds a basemap, frames the
-        scene, pre-draws a zone and pre-fills the most-used preset.
+        glyph is fine. The plugin handles the demo: it only adds a basemap
+        and frames the scene; drawing a zone and writing a prompt stays the
+        user's own step, same as with any imagery they bring in.
 
         Layout: a transparent, vertically-EXPANDING wrapper holds the compact
         blue-tinted card at the TOP with a single stretch below it, so when it
@@ -455,10 +456,10 @@ class DockChromeMixin:
         return wrapper
 
     def _on_try_example_clicked(self):
-        """One-click unblock for the empty-canvas gate. The heavy lifting (add a
-        basemap, frame a demo scene, pre-draw a zone, pre-fill a prompt) lives
-        in the plugin, which owns the map tool, canvas and template state. The
-        dock only asks for it; it stays a pure state machine."""
+        """One-click unblock for the empty-canvas gate. The heavy lifting (add
+        a basemap, frame the demo scene) lives in the plugin, which owns the
+        canvas; the dock only asks for it and stays a pure state machine. The
+        user still draws their own zone and prompt from there."""
         self.try_example_requested.emit()
 
     def show_basemap_error(self):

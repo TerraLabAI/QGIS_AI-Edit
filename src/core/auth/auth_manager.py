@@ -133,8 +133,14 @@ class AuthManager:
                 )
             return False, usage.get("error", tr("Unknown error")), code
 
-        used = usage.get("images_used", 0)
-        limit = usage.get("images_limit", 0)
+        used = usage.get("images_used")
+        limit = usage.get("images_limit")
+
+        # A payload missing either field must never block: defaulting a missing
+        # limit to 0 read as "quota exhausted" for a valid paid user. The server
+        # re-checks quota on submit anyway, so allow and let it arbitrate.
+        if not isinstance(used, int) or not isinstance(limit, int):
+            return True, "usage unavailable", ""
 
         if used >= limit:
             is_free = usage.get("is_free_tier", False)

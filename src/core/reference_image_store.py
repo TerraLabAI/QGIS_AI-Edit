@@ -35,6 +35,21 @@ _TMP_PREFIX = "qgis-ai-edit-refs-"
 _SUPPORTED_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
 
+def encode_references_b64(paths: list[str]) -> list[str]:
+    """Base64-encode reference files. Runs in the generation worker so up to
+    12 file reads never stall the UI thread at dispatch. A file gone between
+    snapshot and run is skipped (removed reference or cleaned temp dir); a
+    missing side-context image must never fail the generation."""
+    out: list[str] = []
+    for path in paths:
+        try:
+            with open(path, "rb") as f:
+                out.append(base64.b64encode(f.read()).decode("ascii"))
+        except OSError as err:
+            log_debug(f"Reference image skipped (unreadable): {path} ({err})")
+    return out
+
+
 @dataclass(frozen=True)
 class ReferenceImage:
     id: str
@@ -225,22 +240,25 @@ class ReferenceImageStore:
     def count(self) -> int:
         return len(self._refs)
 
-    def get_all_b64(self, include_markup: bool = False) -> list[str]:
-        """Return the context-image references as base64, in insertion order.
+    def snapshot_paths(self, include_markup: bool = False) -> list[str]:
+        """Return the context-image file paths, in insertion order. Cheap
+        main-thread snapshot handed to the generation worker, which encodes
+        via encode_references_b64() off-thread.
 
         The Mark up composite is excluded by default (it ships through the
         guidance channel, so including it here would send the marks twice). Pass
         ``include_markup=True`` to get truly everything."""
-        out: list[str] = []
-        for record in self._refs.values():
-            if not include_markup and record.id == self._markup_id:
-                continue
-            try:
-                with open(record.path, "rb") as f:
-                    out.append(base64.b64encode(f.read()).decode("ascii"))
-            except OSError as err:
-                log_warning(f"Failed to read reference image {record.id}: {err}")
-        return out
+        return [
+            record.path
+            for record in self._refs.values()
+            if include_markup or record.id != self._markup_id
+        ]
+
+    def get_all_b64(self, include_markup: bool = False) -> list[str]:
+        """Return the context-image references as base64, in insertion order.
+        Reads every file inline; prefer snapshot_paths() + off-thread encoding
+        on any UI-thread path."""
+        return encode_references_b64(self.snapshot_paths(include_markup=include_markup))
 
     def get_markup_b64(self) -> tuple[str | None, str | None]:
         """Return ``(base64, format)`` of the Mark up composite, or (None, None)

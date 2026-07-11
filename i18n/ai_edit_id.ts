@@ -1959,5 +1959,265 @@ Kami senang mendengar dari Anda!</translation>
         <source>AI Edit could not reach the server. Some features need an internet connection.</source>
         <translation>AI Edit tidak dapat menjangkau server. Beberapa fitur memerlukan koneksi internet.</translation>
     </message>
+    <message>
+        <source>0 matches for the checked classes. Adjust a color, or use 'Add color from map' to sample one from the raster.</source>
+        <translation>0 kecocokan untuk kelas yang dicentang. Sesuaikan warna, atau gunakan 'Tambahkan warna dari peta' untuk mengambil sampel dari raster.</translation>
+    </message>
+    <message>
+        <source>1. Click to copy logs</source>
+        <translation>1. Klik untuk menyalin log</translation>
+    </message>
+    <message>
+        <source>2. Click to send to {email}</source>
+        <translation>2. Klik untuk mengirim ke {email}</translation>
+    </message>
+    <message>
+        <source>Add color from map</source>
+        <translation>Tambahkan warna dari peta</translation>
+    </message>
+    <message>
+        <source>Added {hex} to the class list.</source>
+        <translation>{hex} ditambahkan ke daftar kelas.</translation>
+    </message>
+    <message>
+        <source>Adjust this color.</source>
+        <translation>Sesuaikan warna ini.</translation>
+    </message>
+    <message>
+        <source>Any GeoTIFF, WMS or XYZ basemap.</source>
+        <translation>GeoTIFF, WMS, atau peta dasar XYZ apa pun.</translation>
+    </message>
+    <message>
+        <source>Check at least one class to vectorize.</source>
+        <translation>Centang minimal satu kelas untuk divektorkan.</translation>
+    </message>
+    <message>
+        <source>Checking imagery availability</source>
+        <translation>Memeriksa ketersediaan citra</translation>
+    </message>
+    <message>
+        <source>Class name</source>
+        <translation>Nama kelas</translation>
+    </message>
+    <message>
+        <source>Class {n}</source>
+        <translation>Kelas {n}</translation>
+    </message>
+    <message>
+        <source>Classes</source>
+        <translation>Kelas</translation>
+    </message>
+    <message>
+        <source>Cleanup</source>
+        <translation>Pembersihan</translation>
+    </message>
+    <message>
+        <source>Colors detected in this map - each checked one becomes a polygon class:</source>
+        <translation>Warna yang terdeteksi di peta ini - setiap yang dicentang menjadi kelas poligon:</translation>
+    </message>
+    <message>
+        <source>Could not read raster pixels (the file may be incomplete).</source>
+        <translation>Tidak dapat membaca piksel raster (file mungkin tidak lengkap).</translation>
+    </message>
+    <message>
+        <source>Couldn't load the example basemap. Check your internet connection, or add your own layer (GeoTIFF, WMS, XYZ).</source>
+        <translation>Tidak dapat memuat peta dasar contoh. Periksa koneksi internet Anda, atau tambahkan lapisan Anda sendiri (GeoTIFF, WMS, XYZ).</translation>
+    </message>
+    <message>
+        <source>Couldn't open your browser. Copy the link and open it manually.</source>
+        <translation>Tidak dapat membuka browser Anda. Salin tautannya dan buka secara manual.</translation>
+    </message>
+    <message>
+        <source>Couldn't save the updated features to the file.</source>
+        <translation>Tidak dapat menyimpan fitur yang diperbarui ke file.</translation>
+    </message>
+    <message>
+        <source>Credit refunded.</source>
+        <translation>Kredit dikembalikan.</translation>
+    </message>
+    <message>
+        <source>Downloading reference image</source>
+        <translation>Mengunduh gambar referensi</translation>
+    </message>
+    <message>
+        <source>Draw on your zone to point the AI where to act. Your marks guide the edit and are removed from the result.</source>
+        <translation>Gambar di zona Anda untuk menunjukkan kepada AI di mana harus bertindak. Tanda Anda memandu pengeditan dan akan dihapus dari hasil.</translation>
+    </message>
+    <message>
+        <source>Each pixel goes to the closest class color, so edges stay clean even when the model's colors drift. This caps how far a pixel may sit from its class: higher sweeps in noisy shades, lower leaves them out of every class.</source>
+        <translation>Setiap piksel masuk ke warna kelas terdekat, sehingga tepi tetap rapi meski warna model bergeser. Nilai ini membatasi seberapa jauh sebuah piksel boleh berada dari kelasnya: nilai lebih tinggi ikut menangkap rona yang tidak seragam, nilai lebih rendah membiarkannya di luar semua kelas.</translation>
+    </message>
+    <message>
+        <source>Edit classes</source>
+        <translation>Edit kelas</translation>
+    </message>
+    <message>
+        <source>Failed to download result image after 3 attempts: {err}.</source>
+        <translation>Gagal mengunduh gambar hasil setelah 3 kali percobaan: {err}.</translation>
+    </message>
+    <message>
+        <source>Fill interior holes in each shape</source>
+        <translation>Isi lubang di bagian dalam setiap bentuk</translation>
+    </message>
+    <message>
+        <source>Free account - sign up takes 15 seconds in your browser.</source>
+        <translation>Akun gratis - pendaftaran hanya 15 detik di browser Anda.</translation>
+    </message>
+    <message>
+        <source>Free-text label written to each polygon's class_name attribute.</source>
+        <translation>Label teks bebas yang ditulis ke atribut class_name setiap poligon.</translation>
+    </message>
+    <message>
+        <source>Go back to the class list to check, rename or recolor classes, then vectorize again.</source>
+        <translation>Kembali ke daftar kelas untuk mencentang, mengganti nama, atau mengubah warna kelas, lalu vektorkan lagi.</translation>
+    </message>
+    <message>
+        <source>If a credit was charged, it will be refunded.</source>
+        <translation>Jika kredit sudah terpotong, kredit akan dikembalikan.</translation>
+    </message>
+    <message>
+        <source>Keep your marks on the zone to guide the edit, and close Mark up</source>
+        <translation>Biarkan tanda Anda di zona untuk memandu pengeditan, lalu tutup Anotasi</translation>
+    </message>
+    <message>
+        <source>Load your own imagery</source>
+        <translation>Muat citra Anda sendiri</translation>
+    </message>
+    <message>
+        <source>Loading imagery…</source>
+        <translation>Memuat citra…</translation>
+    </message>
+    <message>
+        <source>New here?</source>
+        <translation>Baru di sini?</translation>
+    </message>
+    <message>
+        <source>New here? Our 5-minute tutorial walks you through a full edit, step by step.</source>
+        <translation>Baru di sini? Tutorial 5 menit kami memandu Anda langkah demi langkah melalui satu pengeditan lengkap.</translation>
+    </message>
+    <message>
+        <source>No flat color classes found - this image looks photo-realistic. Vectorize works best on maps with solid colors (Segment or Land cover results). You can still sample a color below.</source>
+        <translation>Tidak ditemukan kelas warna datar - gambar ini tampak fotorealistis. Vektorkan bekerja paling baik pada peta dengan warna solid (hasil Segment atau Tutupan lahan). Anda tetap bisa mengambil sampel warna di bawah.</translation>
+    </message>
+    <message>
+        <source>No polygons found for the selected colors (try a wider tolerance or smaller min size)</source>
+        <translation>Tidak ditemukan poligon untuk warna yang dipilih (coba toleransi lebih besar atau ukuran minimum lebih kecil)</translation>
+    </message>
+    <message>
+        <source>No shapes left after filtering. Raise 'Color tolerance' or lower 'Min polygon size' below.</source>
+        <translation>Tidak ada bentuk yang tersisa setelah penyaringan. Naikkan 'Toleransi warna' atau turunkan 'Ukuran minimum poligon' di bawah.</translation>
+    </message>
+    <message>
+        <source>Open the step-by-step tutorial</source>
+        <translation>Buka tutorial langkah demi langkah</translation>
+    </message>
+    <message>
+        <source>Open the tutorial</source>
+        <translation>Buka tutorial</translation>
+    </message>
+    <message>
+        <source>Raster has no usable georeferencing.</source>
+        <translation>Raster tidak memiliki georeferensi yang dapat digunakan.</translation>
+    </message>
+    <message>
+        <source>Refine</source>
+        <translation>Perhalus</translation>
+    </message>
+    <message>
+        <source>Sample a color directly from the source raster and add it as a class.</source>
+        <translation>Ambil sampel warna langsung dari raster sumber dan tambahkan sebagai kelas.</translation>
+    </message>
+    <message>
+        <source>Select at least one color to vectorize.</source>
+        <translation>Pilih minimal satu warna untuk divektorkan.</translation>
+    </message>
+    <message>
+        <source>Server returned a non-image response, retrying download</source>
+        <translation>Server mengembalikan respons yang bukan gambar, mencoba mengunduh lagi</translation>
+    </message>
+    <message>
+        <source>Share of the map covered by this color.</source>
+        <translation>Bagian peta yang tercakup oleh warna ini.</translation>
+    </message>
+    <message>
+        <source>Still waiting. If the page did not open or shows an error, click Open again or copy the link into another browser.</source>
+        <translation>Masih menunggu. Jika halaman tidak terbuka atau menampilkan error, klik Buka lagi atau salin tautannya ke browser lain.</translation>
+    </message>
+    <message>
+        <source>Team or organization?</source>
+        <translation>Tim atau organisasi?</translation>
+    </message>
+    <message>
+        <source>The server did not confirm your request. If a credit was charged it will be refunded shortly. Check the Recent tab before retrying.</source>
+        <translation>Server tidak mengonfirmasi permintaan Anda. Jika kredit telah terpotong, kredit akan segera dikembalikan. Periksa tab Terbaru sebelum mencoba lagi.</translation>
+    </message>
+    <message>
+        <source>The service is temporarily unavailable (server error). Your connection is fine - please try again in a few minutes.</source>
+        <translation>Layanan sementara tidak tersedia (error server). Koneksi Anda baik-baik saja - coba lagi dalam beberapa menit.</translation>
+    </message>
+    <message>
+        <source>Then type what to change on your imagery, and get the result back as a georeferenced layer.</source>
+        <translation>Lalu ketik apa yang ingin diubah pada citra Anda, dan dapatkan hasilnya sebagai lapisan bergeoreferensi.</translation>
+    </message>
+    <message>
+        <source>Trace this color as polygons. Unchecked colors are treated as background.</source>
+        <translation>Jiplak warna ini sebagai poligon. Warna yang tidak dicentang diperlakukan sebagai latar belakang.</translation>
+    </message>
+    <message>
+        <source>Try it on an example</source>
+        <translation>Coba dengan contoh</translation>
+    </message>
+    <message>
+        <source>Vector</source>
+        <translation>Vektor</translation>
+    </message>
+    <message>
+        <source>Vectorize turns a flat-color map (Segment, Land cover, masks, site plans...) into editable polygons - one class per color, ready to select, measure, style and export. It reads colors, so it works on colored maps, not photo-realistic images.</source>
+        <translation>Vektorkan mengubah peta warna datar (Segment, Tutupan lahan, mask, denah lokasi...) menjadi poligon yang dapat diedit - satu kelas per warna, siap dipilih, diukur, diberi gaya, dan diekspor. Fitur ini membaca warna, jadi bekerja pada peta berwarna, bukan gambar fotorealistis.</translation>
+    </message>
+    <message>
+        <source>Waiting for the example basemap to finish loading before you generate</source>
+        <translation>Menunggu peta dasar contoh selesai dimuat sebelum Anda memulai proses generate</translation>
+    </message>
+    <message>
+        <source>Watch the tutorial</source>
+        <translation>Tonton tutorialnya</translation>
+    </message>
+    <message>
+        <source>Write to us:</source>
+        <translation>Hubungi kami:</translation>
+    </message>
+    <message>
+        <source>background</source>
+        <translation>latar belakang</translation>
+    </message>
+    <message>
+        <source>paved</source>
+        <translation>perkerasan</translation>
+    </message>
+    <message>
+        <source>vegetation</source>
+        <translation>vegetasi</translation>
+    </message>
+    <message>
+        <source>water</source>
+        <translation>air</translation>
+    </message>
+    <message>
+        <source>{n} mark. Click Done to guide the edit with it.</source>
+        <translation>{n} tanda. Klik Selesai untuk memandu pengeditan dengannya.</translation>
+    </message>
+    <message>
+        <source>{n} marks. Click Done to guide the edit with them.</source>
+        <translation>{n} tanda. Klik Selesai untuk memandu pengeditan dengan semuanya.</translation>
+    </message>
+    <message>
+        <source>{n} polygons across {k} classes</source>
+        <translation>{n} poligon dalam {k} kelas</translation>
+    </message>
+    <message>
+        <source>{n} versions</source>
+        <translation>{n} versi</translation>
+    </message>
 </context>
 </TS>

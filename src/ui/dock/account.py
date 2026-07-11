@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from qgis.PyQt.QtCore import QUrl
-from qgis.PyQt.QtGui import QDesktopServices
-
 from ...core import qt_compat as QtC
 from ...core.auth.activation_manager import get_subscribe_url
 from ...core.i18n import tr
+from ..external_url import open_external
 from .style import ERROR_TEXT, SUCCESS_TEXT
 
 
@@ -96,9 +94,17 @@ class DockAccountMixin:
         # Keep the reference-image gate in sync with the confirmed tier.
         if self._reference_widget is not None:
             self._reference_widget.set_free_tier(is_free_tier)
-        # No free→paid resolution bump: every tier defaults to "1K". Paid users
-        # raise it to 2K/4K by hand if they want, so we never override their
-        # current selection on a tier change.
+        # Paid default is "2K" (Detailed): better results out of the box.
+        # Applied only on a confirmed paid credits payload, and never over a
+        # resolution the user picked themselves. Free tier keeps its "1K"
+        # coercion in _refresh_resolution_triggers.
+        if (
+            used is not None
+            and limit is not None
+            and not is_free_tier
+            and not self._resolution_user_choice
+        ):
+            self._selected_resolution = "2K"
         if used is not None and limit is not None:
             remaining = max(0, limit - used)
             self._credits_label.setText(f"{remaining} / {limit}")
@@ -174,7 +180,7 @@ class DockAccountMixin:
         # The user leaves QGIS for the browser right after; ship now or the
         # batch dies with the session.
         telemetry.flush()
-        QDesktopServices.openUrl(QUrl(get_subscribe_url()))
+        open_external(get_subscribe_url())
 
     def _on_trial_info_subscribe_clicked(self):
         from ...core import telemetry
@@ -184,14 +190,11 @@ class DockAccountMixin:
         # batch dies with the session.
         telemetry.flush()
         url = self._trial_info_url or get_subscribe_url()
-        QDesktopServices.openUrl(QUrl(url))
+        open_external(url)
 
     def _on_exit_clicked(self):
         """Exit: ask the plugin to cancel + return to LAUNCH state."""
         self.exit_clicked.emit()
-
-    def _on_key_toggle(self, checked: bool):
-        pass
 
     def _on_connect_clicked(self):
         """Start the one-click browser handoff. Mints a high-entropy pairing
@@ -277,7 +280,7 @@ class DockAccountMixin:
             # The user leaves QGIS for the browser right after; ship now or the
             # batch dies with the session.
             telemetry.flush()
-            QDesktopServices.openUrl(QUrl(self._limit_cta_url))
+            open_external(self._limit_cta_url)
 
     def _on_activation_limit_cta_clicked(self):
         if self._activation_limit_cta_url:
@@ -287,7 +290,7 @@ class DockAccountMixin:
             # The user leaves QGIS for the browser right after; ship now or the
             # batch dies with the session.
             telemetry.flush()
-            QDesktopServices.openUrl(QUrl(self._activation_limit_cta_url))
+            open_external(self._activation_limit_cta_url)
 
     def _hide_limit_cta(self):
         self._limit_cta_btn.setVisible(False)

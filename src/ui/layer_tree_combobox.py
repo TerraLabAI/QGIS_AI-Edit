@@ -56,6 +56,11 @@ class LayerTreeComboBox(QComboBox):
         # are skipped during _traverse. Used by Vectorize to restrict the
         # picker to AI-Edit-generated outputs.
         self._layer_filter = None
+        # When True, unchecked (hidden) layers stay listed. Vectorize needs
+        # this: it hides the source raster after tracing it, and a visible-only
+        # combo would then claim "no output yet" on the very layer the user
+        # wants to re-vectorize.
+        self._include_hidden = False
 
         from qgis.PyQt.QtCore import QSize
         self.setIconSize(QSize(16, 16))
@@ -106,6 +111,11 @@ class LayerTreeComboBox(QComboBox):
     def count_layers(self):
         """Return the number of selectable (non-header) items."""
         return len(self._layer_ids)
+
+    def set_include_hidden(self, include: bool) -> None:
+        """Also list layers whose tree checkbox is off. The combo refreshes."""
+        self._include_hidden = bool(include)
+        self._refresh()
 
     def set_layer_filter(self, predicate) -> None:
         """Restrict the combo to layers passing ``predicate(layer) -> bool``.
@@ -212,10 +222,12 @@ class LayerTreeComboBox(QComboBox):
         for child in node.children():
             if QgsLayerTree.isLayer(child):
                 layer = child.layer()
-                if layer and layer.type() == layer.RasterLayer and child.isVisible() and self._passes_filter(layer):
+                if (layer and layer.type() == layer.RasterLayer
+                        and (child.isVisible() or self._include_hidden)
+                        and self._passes_filter(layer)):
                     return True
             elif QgsLayerTree.isGroup(child):
-                if child.isVisible() and self._has_visible_rasters(child):
+                if (child.isVisible() or self._include_hidden) and self._has_visible_rasters(child):
                     return True
         return False
 
@@ -234,11 +246,13 @@ class LayerTreeComboBox(QComboBox):
         visible_children = []
         for child in node.children():
             if QgsLayerTree.isGroup(child):
-                if child.isVisible() and self._has_visible_rasters(child):
+                if (child.isVisible() or self._include_hidden) and self._has_visible_rasters(child):
                     visible_children.append(child)
             elif QgsLayerTree.isLayer(child):
                 layer = child.layer()
-                if layer and layer.type() == layer.RasterLayer and child.isVisible() and self._passes_filter(layer):
+                if (layer and layer.type() == layer.RasterLayer
+                        and (child.isVisible() or self._include_hidden)
+                        and self._passes_filter(layer)):
                     visible_children.append(child)
 
         depth_role = _IndentDelegate.DEPTH_ROLE

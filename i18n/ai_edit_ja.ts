@@ -1959,5 +1959,265 @@ We'd love to hear from you!</source>
         <source>AI Edit could not reach the server. Some features need an internet connection.</source>
         <translation>AI Editがサーバーに接続できませんでした。一部の機能にはインターネット接続が必要です。</translation>
     </message>
+    <message>
+        <source>0 matches for the checked classes. Adjust a color, or use 'Add color from map' to sample one from the raster.</source>
+        <translation>チェックしたクラスに一致するものが0件です。色を調整するか、「マップから色を追加」でラスタから色を採取してください。</translation>
+    </message>
+    <message>
+        <source>1. Click to copy logs</source>
+        <translation>1. クリックしてログをコピー</translation>
+    </message>
+    <message>
+        <source>2. Click to send to {email}</source>
+        <translation>2. クリックして{email}に送信</translation>
+    </message>
+    <message>
+        <source>Add color from map</source>
+        <translation>マップから色を追加</translation>
+    </message>
+    <message>
+        <source>Added {hex} to the class list.</source>
+        <translation>{hex}をクラスリストに追加しました。</translation>
+    </message>
+    <message>
+        <source>Adjust this color.</source>
+        <translation>この色を調整します。</translation>
+    </message>
+    <message>
+        <source>Any GeoTIFF, WMS or XYZ basemap.</source>
+        <translation>GeoTIFF、WMS、XYZベースマップのいずれでも使えます。</translation>
+    </message>
+    <message>
+        <source>Check at least one class to vectorize.</source>
+        <translation>ベクトル化するクラスを少なくとも1つチェックしてください。</translation>
+    </message>
+    <message>
+        <source>Checking imagery availability</source>
+        <translation>画像の利用可否を確認中</translation>
+    </message>
+    <message>
+        <source>Class name</source>
+        <translation>クラス名</translation>
+    </message>
+    <message>
+        <source>Class {n}</source>
+        <translation>クラス{n}</translation>
+    </message>
+    <message>
+        <source>Classes</source>
+        <translation>クラス</translation>
+    </message>
+    <message>
+        <source>Cleanup</source>
+        <translation>クリーンアップ</translation>
+    </message>
+    <message>
+        <source>Colors detected in this map - each checked one becomes a polygon class:</source>
+        <translation>このマップで検出された色 - チェックした色がポリゴンクラスになります:</translation>
+    </message>
+    <message>
+        <source>Could not read raster pixels (the file may be incomplete).</source>
+        <translation>ラスタのピクセルを読み取れませんでした（ファイルが不完全な可能性があります）。</translation>
+    </message>
+    <message>
+        <source>Couldn't load the example basemap. Check your internet connection, or add your own layer (GeoTIFF, WMS, XYZ).</source>
+        <translation>サンプルのベースマップを読み込めませんでした。インターネット接続を確認するか、独自のレイヤ（GeoTIFF、WMS、XYZ）を追加してください。</translation>
+    </message>
+    <message>
+        <source>Couldn't open your browser. Copy the link and open it manually.</source>
+        <translation>ブラウザを開けませんでした。リンクをコピーして手動で開いてください。</translation>
+    </message>
+    <message>
+        <source>Couldn't save the updated features to the file.</source>
+        <translation>更新された地物をファイルに保存できませんでした。</translation>
+    </message>
+    <message>
+        <source>Credit refunded.</source>
+        <translation>クレジットは返還されました。</translation>
+    </message>
+    <message>
+        <source>Downloading reference image</source>
+        <translation>参照画像をダウンロード中</translation>
+    </message>
+    <message>
+        <source>Draw on your zone to point the AI where to act. Your marks guide the edit and are removed from the result.</source>
+        <translation>ゾーン上に描画して、AIに作業箇所を指示します。マークは編集のガイドとなり、結果からは削除されます。</translation>
+    </message>
+    <message>
+        <source>Each pixel goes to the closest class color, so edges stay clean even when the model's colors drift. This caps how far a pixel may sit from its class: higher sweeps in noisy shades, lower leaves them out of every class.</source>
+        <translation>各ピクセルは最も近いクラスの色に割り当てられるため、モデルの色が多少ずれてもエッジはきれいに保たれます。この値は、ピクセルがクラスの色からどれだけ離れてもよいかの上限です。高くするとノイズの多い色調も取り込まれ、低くするとどのクラスにも含まれなくなります。</translation>
+    </message>
+    <message>
+        <source>Edit classes</source>
+        <translation>クラスを編集</translation>
+    </message>
+    <message>
+        <source>Failed to download result image after 3 attempts: {err}.</source>
+        <translation>3回試行しましたが、結果画像をダウンロードできませんでした: {err}。</translation>
+    </message>
+    <message>
+        <source>Fill interior holes in each shape</source>
+        <translation>各図形の内側の穴を埋める</translation>
+    </message>
+    <message>
+        <source>Free account - sign up takes 15 seconds in your browser.</source>
+        <translation>無料アカウント - ブラウザで15秒で登録できます。</translation>
+    </message>
+    <message>
+        <source>Free-text label written to each polygon's class_name attribute.</source>
+        <translation>各ポリゴンのclass_name属性に書き込まれる自由記述のラベルです。</translation>
+    </message>
+    <message>
+        <source>Go back to the class list to check, rename or recolor classes, then vectorize again.</source>
+        <translation>クラスリストに戻ってクラスのチェック、名前変更、色変更を行い、もう一度ベクトル化してください。</translation>
+    </message>
+    <message>
+        <source>If a credit was charged, it will be refunded.</source>
+        <translation>クレジットが消費された場合は返還されます。</translation>
+    </message>
+    <message>
+        <source>Keep your marks on the zone to guide the edit, and close Mark up</source>
+        <translation>マークをゾーンに残して編集をガイドし、マークアップを閉じてください</translation>
+    </message>
+    <message>
+        <source>Load your own imagery</source>
+        <translation>独自の画像を読み込む</translation>
+    </message>
+    <message>
+        <source>Loading imagery…</source>
+        <translation>画像を読み込み中…</translation>
+    </message>
+    <message>
+        <source>New here?</source>
+        <translation>初めてですか？</translation>
+    </message>
+    <message>
+        <source>New here? Our 5-minute tutorial walks you through a full edit, step by step.</source>
+        <translation>初めてですか？5分間のチュートリアルで、編集の一連の流れをステップごとに説明します。</translation>
+    </message>
+    <message>
+        <source>No flat color classes found - this image looks photo-realistic. Vectorize works best on maps with solid colors (Segment or Land cover results). You can still sample a color below.</source>
+        <translation>単色のクラスが見つかりませんでした。この画像は実写のように見えます。ベクトル化は、単色で塗られたマップ（Segmentや土地被覆の結果）で最も効果を発揮します。下で色を採取することもできます。</translation>
+    </message>
+    <message>
+        <source>No polygons found for the selected colors (try a wider tolerance or smaller min size)</source>
+        <translation>選択した色のポリゴンが見つかりませんでした（許容範囲を広げるか、最小サイズを小さくしてみてください）</translation>
+    </message>
+    <message>
+        <source>No shapes left after filtering. Raise 'Color tolerance' or lower 'Min polygon size' below.</source>
+        <translation>フィルタ後に残った図形がありません。下の「色の許容範囲」を上げるか、「最小ポリゴンサイズ」を小さくしてください。</translation>
+    </message>
+    <message>
+        <source>Open the step-by-step tutorial</source>
+        <translation>ステップごとのチュートリアルを開く</translation>
+    </message>
+    <message>
+        <source>Open the tutorial</source>
+        <translation>チュートリアルを開く</translation>
+    </message>
+    <message>
+        <source>Raster has no usable georeferencing.</source>
+        <translation>ラスタに使用可能な位置情報がありません。</translation>
+    </message>
+    <message>
+        <source>Refine</source>
+        <translation>調整</translation>
+    </message>
+    <message>
+        <source>Sample a color directly from the source raster and add it as a class.</source>
+        <translation>元のラスタから直接色を採取して、クラスとして追加します。</translation>
+    </message>
+    <message>
+        <source>Select at least one color to vectorize.</source>
+        <translation>ベクトル化する色を少なくとも1つ選択してください。</translation>
+    </message>
+    <message>
+        <source>Server returned a non-image response, retrying download</source>
+        <translation>サーバーが画像以外の応答を返しました。ダウンロードを再試行しています</translation>
+    </message>
+    <message>
+        <source>Share of the map covered by this color.</source>
+        <translation>このマップに占めるこの色の割合です。</translation>
+    </message>
+    <message>
+        <source>Still waiting. If the page did not open or shows an error, click Open again or copy the link into another browser.</source>
+        <translation>まだ待機中です。ページが開かない、またはエラーが表示される場合は、もう一度「開く」をクリックするか、リンクを別のブラウザにコピーしてください。</translation>
+    </message>
+    <message>
+        <source>Team or organization?</source>
+        <translation>チームや組織でのご利用ですか？</translation>
+    </message>
+    <message>
+        <source>The server did not confirm your request. If a credit was charged it will be refunded shortly. Check the Recent tab before retrying.</source>
+        <translation>サーバーがリクエストを確認できませんでした。クレジットが消費された場合はまもなく返還されます。再試行する前に「最近使用」タブを確認してください。</translation>
+    </message>
+    <message>
+        <source>The service is temporarily unavailable (server error). Your connection is fine - please try again in a few minutes.</source>
+        <translation>サービスが一時的に利用できません（サーバーエラー）。接続に問題はありません。数分後にもう一度お試しください。</translation>
+    </message>
+    <message>
+        <source>Then type what to change on your imagery, and get the result back as a georeferenced layer.</source>
+        <translation>次に画像で変更したい内容を入力すると、結果が位置情報付きレイヤとして返されます。</translation>
+    </message>
+    <message>
+        <source>Trace this color as polygons. Unchecked colors are treated as background.</source>
+        <translation>この色をポリゴンとしてトレースします。チェックされていない色は背景として扱われます。</translation>
+    </message>
+    <message>
+        <source>Try it on an example</source>
+        <translation>サンプルで試す</translation>
+    </message>
+    <message>
+        <source>Vector</source>
+        <translation>ベクトル</translation>
+    </message>
+    <message>
+        <source>Vectorize turns a flat-color map (Segment, Land cover, masks, site plans...) into editable polygons - one class per color, ready to select, measure, style and export. It reads colors, so it works on colored maps, not photo-realistic images.</source>
+        <translation>ベクトル化は、単色で塗られたマップ（Segment、土地被覆、マスク、配置図など）を編集可能なポリゴンに変換します。色ごとに1クラスで、すぐに選択、計測、スタイル設定、エクスポートできます。色を読み取る仕組みのため、彩色されたマップで機能し、実写のような画像には向きません。</translation>
+    </message>
+    <message>
+        <source>Waiting for the example basemap to finish loading before you generate</source>
+        <translation>生成の前に、サンプルのベースマップの読み込み完了を待っています</translation>
+    </message>
+    <message>
+        <source>Watch the tutorial</source>
+        <translation>チュートリアルを見る</translation>
+    </message>
+    <message>
+        <source>Write to us:</source>
+        <translation>お問い合わせ:</translation>
+    </message>
+    <message>
+        <source>background</source>
+        <translation>背景</translation>
+    </message>
+    <message>
+        <source>paved</source>
+        <translation>舗装</translation>
+    </message>
+    <message>
+        <source>vegetation</source>
+        <translation>植生</translation>
+    </message>
+    <message>
+        <source>water</source>
+        <translation>水域</translation>
+    </message>
+    <message>
+        <source>{n} mark. Click Done to guide the edit with it.</source>
+        <translation>{n}件のマーク。「完了」をクリックすると、それを使って編集をガイドします。</translation>
+    </message>
+    <message>
+        <source>{n} marks. Click Done to guide the edit with them.</source>
+        <translation>{n}件のマーク。「完了」をクリックすると、それらを使って編集をガイドします。</translation>
+    </message>
+    <message>
+        <source>{n} polygons across {k} classes</source>
+        <translation>{k}クラスで{n}個のポリゴン</translation>
+    </message>
+    <message>
+        <source>{n} versions</source>
+        <translation>{n}件のバージョン</translation>
+    </message>
 </context>
 </TS>

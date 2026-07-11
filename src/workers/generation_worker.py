@@ -13,7 +13,8 @@ from ..core.generation.pipeline_context import save_debug_artifacts
 from ..core.i18n import tr
 from ..core.logger import log_debug
 from ..core.prompts.loading_messages import get_phase_messages
-from ..ui.raster_writer import write_geotiff
+from ..core.raster_writer import write_geotiff
+from ..core.reference_image_store import encode_references_b64
 
 DEFAULT_ESTIMATED_TIME = 25
 # Only admit "taking a bit longer than usual" once elapsed is well past the
@@ -57,7 +58,7 @@ class GenerationTask(QgsTask):
         debug_mode=False,
         plugin_dir="",
         skip_trial_check=False,
-        context_images=None,
+        context_image_paths=None,
         guidance_image=None,
         guidance_format=None,
     ):
@@ -76,7 +77,9 @@ class GenerationTask(QgsTask):
         self._plugin_dir = plugin_dir
         self._skip_trial_check = skip_trial_check
         self._suggested_resolution = suggested_resolution
-        self._context_images = context_images or []
+        # Paths only at dispatch; run() base64-encodes them off the UI thread.
+        self._context_image_paths = list(context_image_paths or [])
+        self._context_images: list[str] = []
         self._guidance_image = guidance_image
         self._guidance_format = guidance_format
 
@@ -109,15 +112,17 @@ class GenerationTask(QgsTask):
         error_code: str | None = None,
         error_message: str | None = None,
         stream_fallback_used: bool | None = None,
-    ) -> None:
+    ) -> bool:
+        """Request a refund once. Returns True only when the server confirmed
+        it, so callers never promise the user a refund that did not happen."""
         if not request_id:
             self._track_refund_event(
                 "generation_refund_attempted",
                 {"reason": reason, "outcome": "no_request_id"},
             )
-            return
+            return False
         if self._ctx is not None and getattr(self._ctx, "refund_emitted", False):
-            return
+            return False
         attempt_props = {"reason": reason, "request_id": request_id}
         if error_code:
             attempt_props["error_code"] = error_code
@@ -145,6 +150,8 @@ class GenerationTask(QgsTask):
                         "error_message": str(response.get("error", ""))[:200],
                     },
                 )
+                return False
+            return True
         except Exception as refund_err:
             log_debug(f"Refund request failed (server may retry via cron): {refund_err}")
             self._track_refund_event(
@@ -156,6 +163,7 @@ class GenerationTask(QgsTask):
                     "error_message": str(refund_err)[:200],
                 },
             )
+            return False
 
     @staticmethod
     def _track_refund_event(event: str, properties: dict) -> None:
@@ -188,6 +196,9 @@ class GenerationTask(QgsTask):
             return False
 
         self.progress.emit(tr("Preparing..."), 0)
+
+        # Reads up to 12 files; tolerates any that vanished since dispatch.
+        self._context_images = encode_references_b64(self._context_image_paths)
 
         if not self._skip_trial_check:
             try:
@@ -311,18 +322,23 @@ class GenerationTask(QgsTask):
             request_id = getattr(result, "request_id", None) or (
                 self._ctx.request_id if self._ctx is not None else None
             )
-            self._refund_if_needed(
+            refunded = self._refund_if_needed(
                 request_id,
                 "download_failed",
                 error_code=getattr(last_download_err, "code", None),
                 error_message=str(last_download_err) if last_download_err else None,
                 stream_fallback_used=stream_fallback_used,
             )
+            # Only promise a refund the server actually confirmed.
+            credit_note = (
+                tr("Credit refunded.")
+                if refunded
+                else tr("If a credit was charged, it will be refunded.")
+            )
             return self._mark_failed(
                 tr(
-                    "Failed to download result image after 3 attempts: {err}. "
-                    "Credit refunded."
-                ).format(err=last_download_err),
+                    "Failed to download result image after 3 attempts: {err}."
+                ).format(err=last_download_err) + " " + credit_note,
                 ErrorCode.DOWNLOAD_FAILED.value,
             )
 

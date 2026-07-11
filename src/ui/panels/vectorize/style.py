@@ -1,12 +1,15 @@
 """Shared colors and button stylesheets for the Vectorize panel."""
 from __future__ import annotations
 
-BRAND_BLUE = "#1e88e5"
-BRAND_BLUE_HOVER = "#1976d2"
-BRAND_DISABLED = "#b0bec5"
-DISABLED_TEXT = "#666666"
-ERROR_TEXT = "#ef5350"
-SUCCESS_TEXT = "#66bb6a"
+# Design-system tokens from the dock single source (one-way import, dock.style has no back-edge).
+from ...dock.style import (  # noqa: F401
+    BRAND_BLUE,
+    BRAND_BLUE_HOVER,
+    BRAND_DISABLED,
+    DISABLED_TEXT,
+    ERROR_TEXT,
+    SUCCESS_TEXT,
+)
 
 _BTN_BLUE_QSS = (
     f"QPushButton {{ background-color: {BRAND_BLUE}; color: #000000;"

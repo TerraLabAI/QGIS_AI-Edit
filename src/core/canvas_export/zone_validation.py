@@ -10,8 +10,8 @@ from qgis.core import (
     QgsRectangle,
 )
 
-from ...core.errors import AIEditError, ErrorCode
-from ...core.i18n import tr
+from ..errors import AIEditError, ErrorCode
+from ..i18n import tr
 
 # Above this absolute latitude the Mercator world distortion makes
 # ground_resolution estimates unreliable and most basemaps stop. Refuse to
@@ -20,7 +20,10 @@ _POLAR_ABS_LAT_DEG = 85.0
 
 
 def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> None:
-    """Raise AIEditError if the zone can't be exported safely (CRS, rotation, antimeridian, polar, area)."""
+    """Raise AIEditError if the zone can't be exported safely (CRS, rotation, antimeridian, polar).
+
+    No area guard here: oversized zones are handled downstream (sizing caps the
+    export resolution; the submit path refuses oversized request bodies)."""
     if map_crs is None or not map_crs.isValid():
         raise AIEditError(
             ErrorCode.INVALID_CRS,

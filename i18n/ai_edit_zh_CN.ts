@@ -1959,5 +1959,265 @@ We'd love to hear from you!</source>
         <source>AI Edit could not reach the server. Some features need an internet connection.</source>
         <translation>AI Edit 无法连接到服务器。部分功能需要互联网连接。</translation>
     </message>
+    <message>
+        <source>0 matches for the checked classes. Adjust a color, or use 'Add color from map' to sample one from the raster.</source>
+        <translation>勾选的类别没有匹配项。请调整颜色,或使用“从地图添加颜色”从栅格中取样。</translation>
+    </message>
+    <message>
+        <source>1. Click to copy logs</source>
+        <translation>1. 点击复制日志</translation>
+    </message>
+    <message>
+        <source>2. Click to send to {email}</source>
+        <translation>2. 点击发送至 {email}</translation>
+    </message>
+    <message>
+        <source>Add color from map</source>
+        <translation>从地图添加颜色</translation>
+    </message>
+    <message>
+        <source>Added {hex} to the class list.</source>
+        <translation>已将 {hex} 添加到类别列表。</translation>
+    </message>
+    <message>
+        <source>Adjust this color.</source>
+        <translation>调整此颜色。</translation>
+    </message>
+    <message>
+        <source>Any GeoTIFF, WMS or XYZ basemap.</source>
+        <translation>任意 GeoTIFF、WMS 或 XYZ 底图。</translation>
+    </message>
+    <message>
+        <source>Check at least one class to vectorize.</source>
+        <translation>请勾选至少一个要矢量化的类别。</translation>
+    </message>
+    <message>
+        <source>Checking imagery availability</source>
+        <translation>正在检查影像可用性</translation>
+    </message>
+    <message>
+        <source>Class name</source>
+        <translation>类别名称</translation>
+    </message>
+    <message>
+        <source>Class {n}</source>
+        <translation>类别 {n}</translation>
+    </message>
+    <message>
+        <source>Classes</source>
+        <translation>类别</translation>
+    </message>
+    <message>
+        <source>Cleanup</source>
+        <translation>清理</translation>
+    </message>
+    <message>
+        <source>Colors detected in this map - each checked one becomes a polygon class:</source>
+        <translation>在此地图中检测到的颜色,勾选的每种颜色都会成为一个多边形类别:</translation>
+    </message>
+    <message>
+        <source>Could not read raster pixels (the file may be incomplete).</source>
+        <translation>无法读取栅格像素(文件可能不完整)。</translation>
+    </message>
+    <message>
+        <source>Couldn't load the example basemap. Check your internet connection, or add your own layer (GeoTIFF, WMS, XYZ).</source>
+        <translation>无法加载示例底图。请检查网络连接,或添加您自己的图层(GeoTIFF、WMS、XYZ)。</translation>
+    </message>
+    <message>
+        <source>Couldn't open your browser. Copy the link and open it manually.</source>
+        <translation>无法打开浏览器。请复制链接并手动打开。</translation>
+    </message>
+    <message>
+        <source>Couldn't save the updated features to the file.</source>
+        <translation>无法将更新后的要素保存到文件。</translation>
+    </message>
+    <message>
+        <source>Credit refunded.</source>
+        <translation>积分已退还。</translation>
+    </message>
+    <message>
+        <source>Downloading reference image</source>
+        <translation>正在下载参考图像</translation>
+    </message>
+    <message>
+        <source>Draw on your zone to point the AI where to act. Your marks guide the edit and are removed from the result.</source>
+        <translation>在区域上绘制,指示 AI 在哪里操作。您的标注会引导编辑,并会从结果中移除。</translation>
+    </message>
+    <message>
+        <source>Each pixel goes to the closest class color, so edges stay clean even when the model's colors drift. This caps how far a pixel may sit from its class: higher sweeps in noisy shades, lower leaves them out of every class.</source>
+        <translation>每个像素都会归入最接近的类别颜色,因此即使模型的颜色有偏差,边缘也能保持干净。此值限制像素与其类别颜色之间的最大距离:调高会纳入含噪的色调,调低则将它们排除在所有类别之外。</translation>
+    </message>
+    <message>
+        <source>Edit classes</source>
+        <translation>编辑类别</translation>
+    </message>
+    <message>
+        <source>Failed to download result image after 3 attempts: {err}.</source>
+        <translation>尝试 3 次后仍无法下载结果图像:{err}。</translation>
+    </message>
+    <message>
+        <source>Fill interior holes in each shape</source>
+        <translation>填充每个形状内部的孔洞</translation>
+    </message>
+    <message>
+        <source>Free account - sign up takes 15 seconds in your browser.</source>
+        <translation>免费账户,在浏览器中注册只需 15 秒。</translation>
+    </message>
+    <message>
+        <source>Free-text label written to each polygon's class_name attribute.</source>
+        <translation>写入每个多边形 class_name 属性的自由文本标签。</translation>
+    </message>
+    <message>
+        <source>Go back to the class list to check, rename or recolor classes, then vectorize again.</source>
+        <translation>返回类别列表以勾选、重命名或修改类别颜色,然后重新矢量化。</translation>
+    </message>
+    <message>
+        <source>If a credit was charged, it will be refunded.</source>
+        <translation>如果扣除了积分,将会退还。</translation>
+    </message>
+    <message>
+        <source>Keep your marks on the zone to guide the edit, and close Mark up</source>
+        <translation>保留区域上的标注以引导编辑,然后关闭“标注”</translation>
+    </message>
+    <message>
+        <source>Load your own imagery</source>
+        <translation>加载您自己的影像</translation>
+    </message>
+    <message>
+        <source>Loading imagery…</source>
+        <translation>正在加载影像…</translation>
+    </message>
+    <message>
+        <source>New here?</source>
+        <translation>第一次使用?</translation>
+    </message>
+    <message>
+        <source>New here? Our 5-minute tutorial walks you through a full edit, step by step.</source>
+        <translation>第一次使用?我们的 5 分钟教程将逐步带您完成一次完整的编辑。</translation>
+    </message>
+    <message>
+        <source>No flat color classes found - this image looks photo-realistic. Vectorize works best on maps with solid colors (Segment or Land cover results). You can still sample a color below.</source>
+        <translation>未找到纯色类别,此图像看起来是照片级效果。矢量化最适合纯色地图(Segment 或地表覆盖的结果)。您仍可在下方取样颜色。</translation>
+    </message>
+    <message>
+        <source>No polygons found for the selected colors (try a wider tolerance or smaller min size)</source>
+        <translation>未找到所选颜色的多边形(请尝试更大的容差或更小的最小尺寸)</translation>
+    </message>
+    <message>
+        <source>No shapes left after filtering. Raise 'Color tolerance' or lower 'Min polygon size' below.</source>
+        <translation>筛选后没有剩余形状。请提高下方的“颜色容差”或降低“最小多边形尺寸”。</translation>
+    </message>
+    <message>
+        <source>Open the step-by-step tutorial</source>
+        <translation>打开分步教程</translation>
+    </message>
+    <message>
+        <source>Open the tutorial</source>
+        <translation>打开教程</translation>
+    </message>
+    <message>
+        <source>Raster has no usable georeferencing.</source>
+        <translation>栅格没有可用的地理配准信息。</translation>
+    </message>
+    <message>
+        <source>Refine</source>
+        <translation>微调</translation>
+    </message>
+    <message>
+        <source>Sample a color directly from the source raster and add it as a class.</source>
+        <translation>直接从源栅格取样颜色并将其添加为类别。</translation>
+    </message>
+    <message>
+        <source>Select at least one color to vectorize.</source>
+        <translation>请选择至少一种要矢量化的颜色。</translation>
+    </message>
+    <message>
+        <source>Server returned a non-image response, retrying download</source>
+        <translation>服务器返回了非图像响应,正在重试下载</translation>
+    </message>
+    <message>
+        <source>Share of the map covered by this color.</source>
+        <translation>此颜色在地图中所占的比例。</translation>
+    </message>
+    <message>
+        <source>Still waiting. If the page did not open or shows an error, click Open again or copy the link into another browser.</source>
+        <translation>仍在等待。如果页面未打开或显示错误,请再次点击“打开”,或将链接复制到其他浏览器。</translation>
+    </message>
+    <message>
+        <source>Team or organization?</source>
+        <translation>属于团队或组织?</translation>
+    </message>
+    <message>
+        <source>The server did not confirm your request. If a credit was charged it will be refunded shortly. Check the Recent tab before retrying.</source>
+        <translation>服务器未确认您的请求。如果扣除了积分,将很快退还。重试前请查看“最近”标签页。</translation>
+    </message>
+    <message>
+        <source>The service is temporarily unavailable (server error). Your connection is fine - please try again in a few minutes.</source>
+        <translation>服务暂时不可用(服务器错误)。您的网络连接正常,请几分钟后重试。</translation>
+    </message>
+    <message>
+        <source>Then type what to change on your imagery, and get the result back as a georeferenced layer.</source>
+        <translation>然后输入要在影像上更改的内容,结果将作为地理配准图层返回。</translation>
+    </message>
+    <message>
+        <source>Trace this color as polygons. Unchecked colors are treated as background.</source>
+        <translation>将此颜色描绘为多边形。未勾选的颜色将被视为背景。</translation>
+    </message>
+    <message>
+        <source>Try it on an example</source>
+        <translation>用示例试一试</translation>
+    </message>
+    <message>
+        <source>Vector</source>
+        <translation>矢量</translation>
+    </message>
+    <message>
+        <source>Vectorize turns a flat-color map (Segment, Land cover, masks, site plans...) into editable polygons - one class per color, ready to select, measure, style and export. It reads colors, so it works on colored maps, not photo-realistic images.</source>
+        <translation>矢量化可将纯色地图(Segment、地表覆盖、掩膜、场地平面图等)转换为可编辑的多边形,每种颜色一个类别,可直接选择、测量、设置样式和导出。它读取的是颜色,因此适用于彩色地图,而不是照片级图像。</translation>
+    </message>
+    <message>
+        <source>Waiting for the example basemap to finish loading before you generate</source>
+        <translation>正在等待示例底图加载完成后再生成</translation>
+    </message>
+    <message>
+        <source>Watch the tutorial</source>
+        <translation>观看教程</translation>
+    </message>
+    <message>
+        <source>Write to us:</source>
+        <translation>联系我们:</translation>
+    </message>
+    <message>
+        <source>background</source>
+        <translation>背景</translation>
+    </message>
+    <message>
+        <source>paved</source>
+        <translation>铺装</translation>
+    </message>
+    <message>
+        <source>vegetation</source>
+        <translation>植被</translation>
+    </message>
+    <message>
+        <source>water</source>
+        <translation>水体</translation>
+    </message>
+    <message>
+        <source>{n} mark. Click Done to guide the edit with it.</source>
+        <translation>{n} 处标注。点击“完成”即可用它引导编辑。</translation>
+    </message>
+    <message>
+        <source>{n} marks. Click Done to guide the edit with them.</source>
+        <translation>{n} 处标注。点击“完成”即可用它们引导编辑。</translation>
+    </message>
+    <message>
+        <source>{n} polygons across {k} classes</source>
+        <translation>{k} 个类别共 {n} 个多边形</translation>
+    </message>
+    <message>
+        <source>{n} versions</source>
+        <translation>{n} 个版本</translation>
+    </message>
 </context>
 </TS>

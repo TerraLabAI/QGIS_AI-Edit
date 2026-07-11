@@ -7,8 +7,8 @@ from qgis.PyQt.QtCore import QTimer
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
+from ...core.i18n import tr
 from ...core.logger import log, log_warning
-from ...core.prompts.prompt_presets import get_preset_by_id
 
 # --- Onboarding basemaps (empty-canvas "Try it on an example") ----------------
 # Esri World Imagery: the key-free, ToS-clean global backdrop QGIS and
@@ -44,24 +44,14 @@ _IGN_ORTHO_URI = (
 # domain, corporate proxy, outage) would get a valid-but-blank demo instead of
 # the global Esri fallback.
 _IGN_PROBE_URL = _IGN_ORTHO_TILE_URL.format(z=17, y=45091, x=66371)
-# Curated demo scene(s) for the first-run hero. One scene, chosen so the user
-# can keep iterating with other prompts on the same imagery afterwards: the
-# Eiffel Tower block has buildings, roads, vegetation and water in frame, and
-# IGN's 20cm ortho keeps it crisp. The pre-filled preset is the most-selected
-# template in production (style_site_plan, per the 60-day template_selected
-# breakdown), not a demo gimmick.
+# Curated demo scene(s) for the first-run hero. One scene: the Eiffel Tower
+# block has buildings, roads, vegetation and water in frame, and IGN's 20cm
+# ortho keeps it crisp. The demo only brings the imagery into view; drawing a
+# zone and writing a prompt stays entirely up to the user, same as with their
+# own imagery.
 _DEMO_SCENES: dict[str, dict] = {
     "paris": {
-        "zone": {"xmin": 2.2895, "ymin": 48.8552, "xmax": 2.2990, "ymax": 48.8616},
-        # Preset id mirrored with the website catalog, with a literal fallback
-        # so the demo still has a prompt when the catalog isn't cached yet
-        # (first run offline or before the first fetch).
-        "preset_id": "style_site_plan",
-        "fallback_preset": {
-            "id": "style_site_plan",
-            "label": "Clean architectural site plan",
-            "prompt": "Redraw this area as a clean architectural site plan",
-        },
+        "extent": {"xmin": 2.2895, "ymin": 48.8552, "xmax": 2.2990, "ymax": 48.8616},
         "prefer_ign": True,
     },
 }
@@ -73,12 +63,21 @@ class OnboardingMixin:
 
     def _on_try_example(self, scene_id: str = ""):
         """Empty-canvas one-click onboarding. Drop a satellite basemap and,
-        when no imagery is visible, frame the chosen demo scene, pre-draw an
-        example zone and pre-fill its prompt so the only remaining step is
-        Generate. When a visible layer already exists, only add a global
-        backdrop and leave the user's view and inputs untouched."""
-        from qgis.core import QgsProject
+        when no imagery is visible, zoom to the chosen demo scene so there is
+        real imagery to work with. The user still draws their own zone,
+        writes their own prompt and clicks Generate themselves, exactly like
+        with any imagery they bring in. When a visible layer already exists,
+        only add a global backdrop and leave the user's view and inputs
+        untouched. France scenes first probe IGN off-thread (a blocking probe
+        would freeze the click for up to 4s); the click finishes in
+        _finish_try_example once the source is decided."""
+        from qgis.core import QgsApplication, QgsProject
 
+        from ...workers.generic_request_task import GenericRequestTask
+
+        probe = getattr(self, "_basemap_probe_task", None)
+        if probe is not None and probe.is_active():
+            return  # a previous click's probe is still deciding the source
         scene_id = scene_id if scene_id in _DEMO_SCENES else _DEFAULT_SCENE_ID
         scene = _DEMO_SCENES[scene_id]
         # The hero shows when nothing is VISIBLE; layers may still exist
@@ -88,31 +87,58 @@ class OnboardingMixin:
         has_visible = any(
             node.isVisible() for node in root.findLayers() if node.layer() is not None
         )
-        layer = self._add_backdrop_layer(prefer_ign=bool(scene.get("prefer_ign")))
+        if not scene.get("prefer_ign"):
+            self._finish_try_example(scene_id, has_visible, ign_ok=False)
+            return
+        task = GenericRequestTask(
+            tr("Checking imagery availability"),
+            lambda: {"ok": self._probe_tile(_IGN_PROBE_URL)},
+            silent=True,
+        )
+        task.succeeded.connect(
+            lambda result, sid=scene_id, hv=has_visible: self._finish_try_example(
+                sid, hv, ign_ok=bool((result or {}).get("ok"))
+            )
+        )
+        # A probe failure just means the global fallback provider is used.
+        task.failed.connect(
+            lambda _msg, _code, sid=scene_id, hv=has_visible: self._finish_try_example(
+                sid, hv, ign_ok=False
+            )
+        )
+        # Hard ref: a QgsTask GC'd mid-run aborts QGIS.
+        self._basemap_probe_task = task
+        QgsApplication.taskManager().addTask(task)
+
+    def _finish_try_example(self, scene_id: str, has_visible: bool, ign_ok: bool):
+        """Main-thread second half of the demo click, once the probe answered."""
+        self._basemap_probe_task = None
+        if self._dock_widget is None:
+            return  # plugin unloaded while the probe was in flight
+        layer = self._add_backdrop_layer(use_ign=ign_ok)
         ok = layer is not None
         if ok and not has_visible:
             self._pending_demo_scene_id = scene_id
             # Defer past QGIS's zoom-to-first-layer (queued during addMapLayer),
             # which would otherwise snap to the whole world and undo our framing.
-            QTimer.singleShot(0, self._prime_demo_scene)
+            QTimer.singleShot(0, self._frame_demo_scene)
         elif not ok:
             self._dock_widget.show_basemap_error()
         telemetry.track(te.BASEMAP_CTA_CLICKED, {"success": ok, "scene": scene_id})
         telemetry.flush()
 
-    def _add_backdrop_layer(self, prefer_ign: bool):
+    def _add_backdrop_layer(self, use_ign: bool):
         """Add a satellite basemap at the bottom of the layer tree (AI Edit
-        outputs stack above it). France scenes prefer IGN's sharp 20cm ortho,
-        falling back to global Esri when the IGN service is unreachable from
-        the user's network (probed with one real tile, since XYZ validity
-        never touches the network); other scenes go straight to Esri (IGN
-        serves blank tiles outside France). Returns the layer, or None if
-        nothing loaded."""
+        outputs stack above it). ``use_ign`` is True when the off-thread probe
+        confirmed IGN's sharp 20cm ortho answers on the user's network (one
+        real tile, since XYZ validity never touches the network); anything
+        else goes to global Esri (IGN serves blank tiles outside France).
+        Returns the layer, or None if nothing loaded."""
         from qgis.core import QgsProject, QgsRasterLayer
 
         layer = None
         source = ""
-        if prefer_ign and self._probe_tile(_IGN_PROBE_URL):
+        if use_ign:
             candidate = QgsRasterLayer(_IGN_ORTHO_URI, "Orthophoto (IGN)", "wms")
             if candidate.isValid():
                 layer, source = candidate, "ign"
@@ -132,9 +158,9 @@ class OnboardingMixin:
     @staticmethod
     def _probe_tile(url: str) -> bool:
         """True when one real tile answers over the user's actual network
-        path (QGIS proxy settings included). Bounded by a short timeout so
-        the demo click never hangs; any failure just means the global
-        fallback provider is used instead."""
+        path (QGIS proxy settings included). Blocking, so it must run inside
+        a worker task; the timeout only bounds how long that task waits.
+        Any failure just means the global fallback provider is used."""
         from qgis.core import QgsBlockingNetworkRequest
         from qgis.PyQt.QtCore import QUrl
         from qgis.PyQt.QtNetwork import QNetworkRequest
@@ -148,22 +174,40 @@ class OnboardingMixin:
             log_warning(f"basemap probe failed: {err}")
             return False
 
-    def _prime_demo_scene(self):
-        """Frame the demo scene, pre-draw the example zone and pre-fill its
-        prompt, then hold Generate until the tiles have painted."""
-        from qgis.core import QgsCoordinateReferenceSystem
+    def _frame_demo_scene(self):
+        """Zoom the canvas to the demo scene's location (scaled out a touch,
+        matching the framing used elsewhere) and hold Generate until the
+        tiles have painted. Nothing else is pre-filled: the user draws their
+        own zone and writes their own prompt from here, same as with any
+        imagery they bring in themselves."""
+        from qgis.core import (
+            QgsCoordinateReferenceSystem,
+            QgsCoordinateTransform,
+            QgsProject,
+            QgsRectangle,
+        )
 
         scene = _DEMO_SCENES.get(
             getattr(self, "_pending_demo_scene_id", ""), _DEMO_SCENES[_DEFAULT_SCENE_ID]
         )
-        wgs84_wkt = QgsCoordinateReferenceSystem("EPSG:4326").toWkt()
-        # _restore_zone frames (zoom to zone x1.15), draws the rubber band and
-        # flips the dock into ZONE_SELECTED - exactly the demo framing we want.
-        if not self._restore_zone(dict(scene["zone"]), wgs84_wkt):
-            return
-        preset = get_preset_by_id(scene.get("preset_id", "")) or scene.get("fallback_preset")
-        if preset:
-            self._dock_widget.prime_prompt_from_preset(preset)
+        extent = scene["extent"]
+        wgs84 = QgsCoordinateReferenceSystem("EPSG:4326")
+        rect = QgsRectangle(
+            float(extent["xmin"]), float(extent["ymin"]),
+            float(extent["xmax"]), float(extent["ymax"]),
+        )
+        canvas_crs = self._canvas.mapSettings().destinationCrs()
+        if wgs84 != canvas_crs:
+            try:
+                xform = QgsCoordinateTransform(wgs84, canvas_crs, QgsProject.instance())
+                rect = xform.transformBoundingBox(rect)
+            except Exception as err:  # noqa: BLE001 - a broken transform must not block the demo.
+                log_warning(f"demo scene transform failed: {err}")
+                self._start_imagery_gate()
+                return
+        rect.scale(1.15)
+        self._canvas.setExtent(rect)
+        self._canvas.refresh()
         self._start_imagery_gate()
 
     def _start_imagery_gate(self):

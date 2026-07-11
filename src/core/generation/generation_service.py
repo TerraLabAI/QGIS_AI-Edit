@@ -30,6 +30,12 @@ _MAX_CONSECUTIVE_POLL_ERRORS = 5
 # fail opaquely. Headroom left for JSON keys, the prompt and geo fields.
 _MAX_INLINE_BODY_BYTES = 4_200_000
 
+# Time-based budget: per-poll sleeps vary now that the server sends an
+# adaptive retry_after hint, so counting iterations would under- or
+# over-wait. An iteration hard cap still guards against a misconfigured
+# tiny interval producing a multi-hour loop.
+_POLL_HARD_CAP = 1000
+
 
 @dataclass
 class GenerationResult:
@@ -222,6 +228,57 @@ class GenerationService:
             f"guidance={'yes' if guidance_image else 'no'}"
         )
 
+        prepared = self._prepare_uploads(
+            image_b64, auth, ctx, context_images, guidance_image, guidance_format
+        )
+        if isinstance(prepared, GenerationResult):
+            return prepared
+        upload_token, guidance_upload_token, guidance_inline = prepared
+
+        submitted = self._submit(
+            prompt=prompt,
+            suggested_resolution=suggested_resolution,
+            aspect_ratio=aspect_ratio,
+            auth=auth,
+            image_b64=image_b64,
+            upload_token=upload_token,
+            context_images=context_images,
+            guidance_inline=guidance_inline,
+            guidance_upload_token=guidance_upload_token,
+            geo_kwargs=self._build_geo_kwargs(ctx),
+        )
+        if isinstance(submitted, GenerationResult):
+            return submitted
+        resp, request_id, submit_time = submitted
+
+        plan = self._resolve_poll_plan(resp, request_id, suggested_resolution, aspect_ratio, ctx)
+        if isinstance(plan, GenerationResult):
+            return plan
+        poll_interval, estimated_time, budget_s, max_polls = plan
+
+        result, polls = self._poll_until_done(
+            request_id, auth, ctx, on_progress, poll_interval,
+            estimated_time, budget_s, max_polls, submit_time,
+        )
+        if result is not None:
+            return result
+
+        return self._rescue_or_timeout(request_id, auth, ctx, polls, submit_time)
+
+    def _prepare_uploads(
+        self,
+        image_b64: str,
+        auth: dict,
+        ctx,
+        context_images: list[str] | None,
+        guidance_image: str | None,
+        guidance_format: str | None,
+    ) -> tuple[str | None, str | None, str | None] | GenerationResult:
+        """Offload the main and guidance images to presigned upload when large.
+
+        Returns (upload_token, guidance_upload_token, guidance_inline), or a
+        failed GenerationResult when the inline body would overflow the cap.
+        """
         # Preferred path: upload the image straight to remote storage via a
         # short-lived presigned URL, then submit only a tiny token. Skips the
         # serverless body-size cap entirely so multi-MB inputs go through
@@ -286,7 +343,10 @@ class GenerationService:
                 ),
                 error_code=ErrorCode.TOO_LARGE.value,
             )
+        return upload_token, guidance_upload_token, guidance_inline
 
+    def _build_geo_kwargs(self, ctx) -> dict:
+        """Optional submit fields sourced from the pipeline context."""
         # Pull geospatial + iteration context off the pipeline ctx so the
         # backend can use it. All fields optional - old backends ignore
         # them, no plugin re-release needed for backwards compat.
@@ -323,7 +383,24 @@ class GenerationService:
                 geo_kwargs["template_id"] = ctx.template_id
             if ctx.template_name:
                 geo_kwargs["template_name"] = ctx.template_name
+        return geo_kwargs
 
+    def _submit(
+        self,
+        prompt: str,
+        suggested_resolution: str,
+        aspect_ratio: str,
+        auth: dict,
+        image_b64: str,
+        upload_token: str | None,
+        context_images: list[str] | None,
+        guidance_inline: str | None,
+        guidance_upload_token: str | None,
+        geo_kwargs: dict,
+    ) -> tuple[dict, str, float] | GenerationResult:
+        """Submit the job, retrying one network blip. Returns
+        (resp, request_id, submit_time) or a failed GenerationResult.
+        """
         # One idempotency key for this whole generation attempt: a submit retried
         # after a dropped response reuses it so the server dedupes instead of
         # creating a second paid job. Old servers ignore the field.
@@ -396,16 +473,25 @@ class GenerationService:
             f"max_wait={resp.get('max_wait', '?')}s, "
             f"credits={resp.get('credit_cost', '?')}"
         )
+        return resp, request_id, submit_time
 
+    def _resolve_poll_plan(
+        self,
+        resp: dict,
+        request_id: str,
+        suggested_resolution: str,
+        aspect_ratio: str,
+        ctx,
+    ) -> tuple[float, float | None, float, int] | GenerationResult:
+        """Derive the poll budget from the submit response and stamp ctx.
+
+        Returns (poll_interval, estimated_time, budget_s, max_polls), or a
+        completed GenerationResult when submit already carried the image.
+        """
         # Use server-suggested polling config if available
         poll_interval = resp.get("poll_interval", self._poll_interval)
         estimated_time = resp.get("estimated_time")
         max_wait = resp.get("max_wait")  # Server-driven hard ceiling (seconds)
-        # Time-based budget: per-poll sleeps vary now that the server sends an
-        # adaptive retry_after hint, so counting iterations would under- or
-        # over-wait. An iteration hard cap still guards against a misconfigured
-        # tiny interval producing a multi-hour loop.
-        HARD_CAP = 1000
         if max_wait:
             budget_s = float(max_wait)
         elif estimated_time:
@@ -413,7 +499,7 @@ class GenerationService:
         else:
             budget_s = 360.0
         # Poll-count estimate kept for the progress callback signature.
-        max_polls = min(int(budget_s / poll_interval), HARD_CAP)
+        max_polls = min(int(budget_s / poll_interval), _POLL_HARD_CAP)
 
         if ctx is not None:
             ctx.submitted_resolution = resp.get("resolution", suggested_resolution)
@@ -436,21 +522,38 @@ class GenerationService:
                 image_url=resp["image_url"],
                 request_id=request_id,
             )
+        return poll_interval, estimated_time, budget_s, max_polls
 
+    def _poll_until_done(
+        self,
+        request_id: str,
+        auth: dict,
+        ctx,
+        on_progress: Callable,
+        poll_interval: float,
+        estimated_time: float | None,
+        budget_s: float,
+        max_polls: int,
+        submit_time: float,
+    ) -> tuple[GenerationResult | None, int]:
+        """Poll until a terminal state, cancellation, or budget exhaustion.
+
+        Returns (result, polls); result is None when the budget ran out.
+        """
         # Poll. Pending responses from newer servers carry an adaptive
         # retry_after hint (slower early in the job, fast near completion);
         # without one we keep the fixed interval, so older servers work
         # unchanged.
         consecutive_poll_errors = 0
         polls = 0
-        while polls < HARD_CAP and (time.time() - submit_time) < budget_s:
+        while polls < _POLL_HARD_CAP and (time.time() - submit_time) < budget_s:
             if self._is_cancelled():
                 return GenerationResult(
                     success=False,
                     error=tr("Generation cancelled"),
                     error_code=ErrorCode.GENERATION_CANCELLED.value,
                     request_id=request_id,
-                )
+                ), polls
 
             status_resp = self._client.poll_status(request_id, auth=auth)
             polls += 1
@@ -479,7 +582,7 @@ class GenerationService:
                                 error=tr("Generation cancelled"),
                                 error_code=ErrorCode.GENERATION_CANCELLED.value,
                                 request_id=request_id,
-                            )
+                            ), polls
                         continue
                 # Non-retryable server/app error, or too many consecutive blips.
                 if ctx is not None:
@@ -491,7 +594,7 @@ class GenerationService:
                     error=status_resp.get("error") or tr("Status check failed"),
                     error_code=code,
                     request_id=request_id,
-                )
+                ), polls
 
             # A good response clears the transient-error streak.
             consecutive_poll_errors = 0
@@ -512,7 +615,7 @@ class GenerationService:
                     success=True,
                     image_url=status_resp.get("image_url"),
                     request_id=request_id,
-                )
+                ), polls
 
             if status == "failed":
                 if ctx is not None:
@@ -523,7 +626,7 @@ class GenerationService:
                     success=False,
                     error=status_resp.get("error") or tr("Generation failed"),
                     request_id=request_id,
-                )
+                ), polls
 
             sleep_s = poll_interval
             hint = status_resp.get("retry_after")
@@ -540,8 +643,18 @@ class GenerationService:
                     error=tr("Generation cancelled"),
                     error_code=ErrorCode.GENERATION_CANCELLED.value,
                     request_id=request_id,
-                )
+                ), polls
+        return None, polls
 
+    def _rescue_or_timeout(
+        self,
+        request_id: str,
+        auth: dict,
+        ctx,
+        polls: int,
+        submit_time: float,
+    ) -> GenerationResult:
+        """Final force_fallback polls after budget exhaustion, else time out."""
         # Last-ditch poll with force_fallback=true: the plugin exhausted its
         # poll budget but the server may have a terminal state cached, or can
         # close it via the provider queue now. Saves the user the round-trip to the

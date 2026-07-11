@@ -636,11 +636,11 @@ def _build_preset_lookup(catalog: dict | None) -> dict[str, dict]:
 def get_preset_by_id(preset_id: str, server_catalog: dict | None = None) -> dict | None:
     """Return the normalized preset (id + label + prompt) for `preset_id`.
 
-    Used to prime a prompt programmatically (the empty-canvas onboarding
-    pre-fills a land-cover preset). When `server_catalog` is None, falls back
-    to the locally-cached catalog. Returns None when the catalog is
-    unavailable (first install offline) or the id is absent, so callers can
-    skip the prompt fill and degrade gracefully."""
+    Used to prime a prompt programmatically (e.g. reopening a template from
+    the library). When `server_catalog` is None, falls back to the
+    locally-cached catalog. Returns None when the catalog is unavailable
+    (first install offline) or the id is absent, so callers can skip the
+    prompt fill and degrade gracefully."""
     if not preset_id:
         return None
     if server_catalog is None:

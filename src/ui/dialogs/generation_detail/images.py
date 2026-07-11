@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import os
 
+from qgis.core import QgsApplication
 from qgis.PyQt.QtWidgets import QFileDialog
 
 from ....core.i18n import tr
 from ....core.logger import log_warning
+from ....workers.generic_request_task import GenericRequestTask
 from .widgets import _ImageLightbox
 
 
@@ -139,7 +141,7 @@ class ImageLoadMixin:
 
     def _download_reference(self, index: int) -> None:
         urls = self._job.get("reference_image_urls") or []
-        if index >= len(urls) or not urls[index]:
+        if index >= len(urls) or not urls[index] or self._client is None:
             return
         from urllib.parse import urlparse
 
@@ -151,31 +153,45 @@ class ImageLoadMixin:
         )
         if not dest:
             return
-        from qgis.PyQt.QtCore import Qt
-        from qgis.PyQt.QtWidgets import QApplication
 
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            from qgis.core import QgsNetworkAccessManager
-            from qgis.PyQt.QtCore import QUrl
-            from qgis.PyQt.QtNetwork import QNetworkRequest
-
-            request = QNetworkRequest(QUrl(url))
-            # Bound the blocking call so a stalled link can't hang QGIS forever.
-            request.setTransferTimeout(60_000)
-            reply = QgsNetworkAccessManager.instance().blockingGet(request)
-            data = bytes(reply.content())
+        def _work(client=self._client, u=url, path=dest):
+            # Worker thread: fetch and write here so a stalled link never
+            # freezes QGIS (the old blockingGet held the UI for up to 60s).
+            data = client.download_image(u)
             if not data:
                 raise OSError("empty response")
-            with open(dest, "wb") as f:
+            tmp = path + ".part"
+            with open(tmp, "wb") as f:
                 f.write(data)
-        except Exception as err:  # noqa: BLE001
-            log_warning(f"Reference download failed: {err}")
-            from qgis.PyQt.QtWidgets import QMessageBox
+            os.replace(tmp, path)
+            return {"path": path}
 
-            QMessageBox.warning(
-                self, tr("Download failed"),
-                tr("Could not download the reference image."),
-            )
-        finally:
-            QApplication.restoreOverrideCursor()
+        task = GenericRequestTask(tr("Downloading reference image"), _work)
+        task.succeeded.connect(lambda _res, t=task: self._release_ref_download(t))
+        task.failed.connect(lambda msg, _code, t=task: self._on_ref_download_failed(t, msg))
+        # Hard ref until the task settles: a QgsTask GC'd mid-run aborts QGIS.
+        if getattr(self, "_ref_download_tasks", None) is None:
+            self._ref_download_tasks = []
+        self._ref_download_tasks.append(task)
+        QgsApplication.taskManager().addTask(task)
+
+    def _release_ref_download(self, task) -> None:
+        tasks = getattr(self, "_ref_download_tasks", None)
+        if tasks and task in tasks:
+            tasks.remove(task)
+
+    def _on_ref_download_failed(self, task, msg: str) -> None:
+        self._release_ref_download(task)
+        log_warning(f"Reference download failed: {msg}")
+        try:
+            visible = self.isVisible()
+        except RuntimeError:
+            return  # dialog destroyed while the download was in flight
+        if not visible:
+            return
+        from qgis.PyQt.QtWidgets import QMessageBox
+
+        QMessageBox.warning(
+            self, tr("Download failed"),
+            tr("Could not download the reference image."),
+        )

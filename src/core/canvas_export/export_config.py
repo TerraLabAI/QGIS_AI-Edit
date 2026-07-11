@@ -5,7 +5,7 @@ from qgis.PyQt.QtGui import QImageWriter
 
 def set_server_config(config: dict):
     """Set server export config fetched at plugin startup."""
-    from ...core.config_store import get_store
+    from ..config_store import get_store
     store = get_store()
     if store is not None:
         store.set_server_export_config(config)
@@ -13,13 +13,13 @@ def set_server_config(config: dict):
 
 def has_server_config() -> bool:
     """Check if server config has been loaded."""
-    from ...core.config_store import get_store
+    from ..config_store import get_store
     store = get_store()
     return store is not None and store.has_server_export_config()
 
 
 def _get_server_config() -> dict | None:
-    from ...core.config_store import get_store
+    from ..config_store import get_store
     store = get_store()
     return store.get_server_export_config() if store is not None else None
 

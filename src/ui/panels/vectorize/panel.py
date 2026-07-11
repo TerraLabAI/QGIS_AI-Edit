@@ -1,8 +1,9 @@
 """Vectorize panel widget.
 
 Self-contained QWidget that runs the color-based raster-to-polygon
-workflow. Manages its own active-layer tracking, refine debounce, and
-busy state.
+workflow: detect the map's flat colors as classes, trace every selected
+class in one click, then refine live. Manages its own active-layer
+tracking, refine debounce, and busy state.
 """
 from __future__ import annotations
 
@@ -25,12 +26,9 @@ from ....core.i18n import tr
 from ...layer_groups import pick_default_layer
 from ...layer_tree_combobox import LayerTreeComboBox
 from ...onboarding_hint import HINT_VECTORIZE, DismissibleHint, is_hint_dismissed
-from ...panel_helpers import (
-    GROUP_BOX_QSS,
-    apply_swatch_style,
-    build_panel_header,
-)
+from ...panel_helpers import GROUP_BOX_QSS, build_panel_header
 from ...tools.eyedropper_tool import EyedropperMapTool
+from .class_list import ClassListWidget
 from .color_controls import ColorControlsMixin
 from .layer_filters import _is_ai_edit_output, _is_visible_ai_edit_output
 from .refine_ui import RefineUiMixin
@@ -39,37 +37,24 @@ from .style import _BTN_BLUE_QSS, _BTN_GHOST_QSS, ERROR_TEXT, SUCCESS_TEXT
 
 
 class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidget):
-    """Color-based raster-to-polygon workflow. Refine box re-runs via debounce."""
+    """Class-based raster-to-polygon workflow. Refine box re-runs via debounce."""
 
     done_clicked = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        # Snap the swatch back to the canonical template red (#FF0000).
-        # Every Segment & Vectorize template paints classes in that exact
-        # hue, so it's the right starting point on every fresh open.
-        self._color = QColor(255, 0, 0)
-        # The other dominant color, treated as background to discard. Each pixel
-        # is assigned to whichever of (picked color, background) it is closer to,
-        # so the class boundary stays clean. Defaults to white (the canonical
-        # "class in color, everything else white" map); a palette-chip click
-        # repoints it at the actual other dominant color.
-        self._background: tuple[int, int, int] = (255, 255, 255)
-        # Dominant colors detected in the selected raster, for the one-click
-        # extract chips: [((r,g,b), fraction), ...]. Rebuilt per raster.
-        self._palette: list = []
-        self._palette_raster_id: str | None = None
+        # Colors detected for the current raster live in the class list; this
+        # id gates re-detection so project signals don't re-run it needlessly.
+        self._classes_raster_id: str | None = None
         self._busy = False
         self._succeeded = False
         self._vectorize_task = None
         self._last_layer_id: str | None = None
         self._last_raster_id: str | None = None
-        self._last_target_rgb: tuple[int, int, int] | None = None
-        # Pre-fill written to the class_name attribute for every polygon.
-        # Set by preconfigure() from the template metadata; empty for
-        # manual runs so the user fills it inline in the attribute table.
-        self._class_label: str = ""
+        # Snapshot of the traced classes for the last run; a differing
+        # signature on refine means the style must be rebuilt.
+        self._last_signature: tuple | None = None
         self._eyedropper_tool: EyedropperMapTool | None = None
 
         layout = QVBoxLayout(self)
@@ -79,16 +64,16 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
         layout.addWidget(build_panel_header(tr("Vectorize")))
 
         # Dismissible tip at the top (same pattern as Mark up / the prompt
-        # library): the "what does this do" explanation lives here, kept out
-        # of the controls. Restorable from Account Settings; activate()
-        # re-checks its state.
+        # library): the "what does this do / when to use it" explanation lives
+        # here, kept out of the controls. Restorable from Account Settings;
+        # activate() re-checks its state.
         self._hint = DismissibleHint(
             HINT_VECTORIZE,
             "",
-            tr("After a Segment or Land cover template colors your zone "
-               "(buildings, parcels, classes...), Vectorize traces each color "
-               "into editable vector polygons - select, measure, style and "
-               "export them."),
+            tr("Vectorize turns a flat-color map (Segment, Land cover, masks, "
+               "site plans...) into editable polygons - one class per color, "
+               "ready to select, measure, style and export. It reads colors, "
+               "so it works on colored maps, not photo-realistic images."),
         )
         layout.addWidget(self._hint)
 
@@ -102,6 +87,9 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
         layer_box.setSpacing(6)
         self._layer_combo = LayerTreeComboBox()
         self._layer_combo.setToolTip(tr("Pick an AI Edit output to vectorize."))
+        # Hidden outputs stay listed: vectorizing hides the source raster, and
+        # the user must still be able to re-vectorize that very result.
+        self._layer_combo.set_include_hidden(True)
         self._layer_combo.set_layer_filter(_is_ai_edit_output)
         self._layer_combo.layerChanged.connect(self._refresh_panel_state)
         layer_box.addWidget(self._layer_combo)
@@ -117,56 +105,63 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
         layer_box.addWidget(self._empty_state_label)
         layout.addWidget(self._layer_group)
 
-        # Color picker, grouped like Mark up. Hidden on success (refine
-        # re-runs reuse the locked color). The swatch + eyedropper are the
-        # only controls; what the color means is explained in the tip above.
-        self._color_section = QGroupBox(tr("Color to extract"))
-        self._color_section.setStyleSheet(GROUP_BOX_QSS)
-        color_outer = QVBoxLayout(self._color_section)
-        color_outer.setContentsMargins(8, 6, 8, 8)
-        color_outer.setSpacing(8)
+        # Detected classes: one row per flat color found in the map, all real
+        # classes pre-checked so the primary flow is a single click on
+        # Vectorize. Unchecked rows (background) still absorb their pixels so
+        # traced classes never bleed.
+        self._classes_group = QGroupBox(tr("Classes"))
+        self._classes_group.setStyleSheet(GROUP_BOX_QSS)
+        classes_box = QVBoxLayout(self._classes_group)
+        classes_box.setContentsMargins(8, 6, 8, 8)
+        classes_box.setSpacing(6)
 
-        # One-click chips of the colors actually present in the map. Click the
-        # one you want (e.g. the red buildings) and it vectorizes straight away;
-        # the other dominant color becomes the discarded background. Populated
-        # per raster by _rebuild_palette_chips; hidden when none are detected.
-        self._palette_label = QLabel(tr("Colors in this map - click one to extract:"))
-        self._palette_label.setStyleSheet(
+        self._classes_intro = QLabel(
+            tr("Colors detected in this map - each checked one becomes "
+               "a polygon class:")
+        )
+        self._classes_intro.setWordWrap(True)
+        self._classes_intro.setStyleSheet(
             "font-size: 11px; color: palette(text); background: transparent;"
             " border: none;"
         )
-        self._palette_label.setVisible(False)
-        color_outer.addWidget(self._palette_label)
-        self._palette_row = QHBoxLayout()
-        self._palette_row.setContentsMargins(0, 0, 0, 0)
-        self._palette_row.setSpacing(6)
-        self._palette_chips: list[QPushButton] = []
-        color_outer.addLayout(self._palette_row)
+        classes_box.addWidget(self._classes_intro)
 
-        # Manual fallback: exact swatch + eyedropper, for a color the chips missed.
-        manual_row = QHBoxLayout()
-        manual_row.setContentsMargins(0, 0, 0, 0)
-        manual_row.setSpacing(8)
-        self._color_btn = QPushButton()
-        self._color_btn.setToolTip(tr("Pick a color from a dialog."))
-        self._color_btn.setCursor(QtC.PointingHandCursor)
-        self._color_btn.setFixedSize(40, 40)
-        apply_swatch_style(self._color_btn, self._color)
-        self._color_btn.clicked.connect(self._on_color_clicked)
-        manual_row.addWidget(self._color_btn)
+        self._class_list = ClassListWidget()
+        classes_box.addWidget(self._class_list)
+
+        # Photo-realistic input: no flat palette to offer. Explain instead of
+        # showing an empty list; the eyedropper below stays as the power path.
+        self._photo_hint = QLabel(
+            tr("No flat color classes found - this image looks "
+               "photo-realistic. Vectorize works best on maps with solid "
+               "colors (Segment or Land cover results). You can still sample "
+               "a color below.")
+        )
+        self._photo_hint.setWordWrap(True)
+        self._photo_hint.setStyleSheet(
+            "font-size: 11px; color: palette(text); background: transparent;"
+            " border: none;"
+        )
+        self._photo_hint.setVisible(False)
+        classes_box.addWidget(self._photo_hint)
+
+        eyedropper_row = QHBoxLayout()
+        eyedropper_row.setContentsMargins(0, 0, 0, 0)
+        eyedropper_row.setSpacing(8)
         # Glyph outside tr() so translators see clean text.
-        self._eyedropper_btn = QPushButton("⌖ " + tr("Pick on map"))
+        self._eyedropper_btn = QPushButton("⌖ " + tr("Add color from map"))
         self._eyedropper_btn.setToolTip(
-            tr("Sample a color directly from the source raster.")
+            tr("Sample a color directly from the source raster and add it "
+               "as a class.")
         )
         self._eyedropper_btn.setCursor(QtC.PointingHandCursor)
         self._eyedropper_btn.setStyleSheet(_BTN_GHOST_QSS)
-        self._eyedropper_btn.setMinimumHeight(34)
+        self._eyedropper_btn.setMinimumHeight(30)
         self._eyedropper_btn.clicked.connect(self._on_eyedropper_clicked)
-        manual_row.addWidget(self._eyedropper_btn)
-        manual_row.addStretch()
-        color_outer.addLayout(manual_row)
-        layout.addWidget(self._color_section)
+        eyedropper_row.addWidget(self._eyedropper_btn)
+        eyedropper_row.addStretch()
+        classes_box.addLayout(eyedropper_row)
+        layout.addWidget(self._classes_group)
 
         # --- Refine box (hidden until first successful vectorization) ---
         # Refining only makes sense once polygons exist, so the whole group
@@ -176,7 +171,7 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
         self._refine_group.setVisible(False)
         layout.addWidget(self._refine_group)
 
-        # 150 ms debounce so dragging a spinbox doesn't fire 60 vectorizations.
+        # Debounce so dragging a spinbox doesn't fire 60 vectorizations.
         self._refine_timer = QTimer(self)
         self._refine_timer.setSingleShot(True)
         self._refine_timer.timeout.connect(self._on_refine_apply)
@@ -218,6 +213,20 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
         self._exit_btn.setMinimumWidth(80)
         self._exit_btn.clicked.connect(self.done_clicked.emit)
         action_row.addWidget(self._exit_btn)
+
+        # Refine state's way back: swaps the panel to the setup page (layer +
+        # classes) without touching the traced layer. Glyph outside tr().
+        self._back_btn = QPushButton("‹ " + tr("Edit classes"))
+        self._back_btn.setStyleSheet(_BTN_GHOST_QSS)
+        self._back_btn.setCursor(QtC.PointingHandCursor)
+        self._back_btn.setMinimumHeight(34)
+        self._back_btn.setToolTip(
+            tr("Go back to the class list to check, rename or recolor "
+               "classes, then vectorize again.")
+        )
+        self._back_btn.clicked.connect(self._on_back_clicked)
+        self._back_btn.setVisible(False)
+        action_row.addWidget(self._back_btn)
         action_row.addStretch()
 
         self._run_btn = QPushButton(tr("Vectorize"))
@@ -273,27 +282,24 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
         color_hex: str | None = None,
         class_label: str | None = None,
     ) -> None:
-        """Pre-fill the source layer, target color, and class label before show.
+        """Pre-fill the source layer and highlight the template's class.
 
-        Used when the user enters the panel from the result-panel CTA so
-        the swatch is already set to the template's vector_color and the
-        combo is locked on the just-generated raster. class_label seeds
-        the class_name attribute on every produced polygon so the table
-        opens with a meaningful semantic label instead of blank rows.
-        Call AFTER activate().
+        Used when the user enters the panel from the result-panel CTA: the
+        combo is locked on the just-generated raster and the template's
+        vector_color is made sure to sit checked in the class list, carrying
+        the template's class label. Call AFTER activate().
         """
-        if color_hex:
-            qc = QColor(color_hex)
-            if qc.isValid():
-                self._color = QColor(qc.red(), qc.green(), qc.blue())
-                apply_swatch_style(self._color_btn, self._color)
-        if class_label is not None:
-            self._class_label = class_label
         if layer_id:
             layer = QgsProject.instance().mapLayer(layer_id)
             if layer is not None:
                 self._layer_combo.setLayer(layer)
                 self._refresh_panel_state()
+        if color_hex:
+            qc = QColor(color_hex)
+            if qc.isValid():
+                self._class_list.ensure_class(
+                    (qc.red(), qc.green(), qc.blue()), class_label or ""
+                )
 
     def deactivate(self) -> None:
         """Leaving the panel: stop the pending refine debounce and cancel any
@@ -307,24 +313,38 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
         """Wipe last-run state so the panel re-enters at Step 1."""
         self._last_layer_id = None
         self._last_raster_id = None
-        self._last_target_rgb = None
-        self._class_label = ""
+        self._last_signature = None
         self._succeeded = False
-        self._color = QColor(255, 0, 0)
-        apply_swatch_style(self._color_btn, self._color)
-        self._background = (255, 255, 255)
-        # Force the chips to rebuild for whatever raster is picked next.
-        self._palette_raster_id = None
+        # Force the class list to rebuild for whatever raster is picked next.
+        self._classes_raster_id = None
         self._status_label.setVisible(False)
         self._reset_refine_spinboxes()
         self._refine_group.setVisible(False)
         self._run_btn.setText(tr("Vectorize"))
         self._exit_btn.setVisible(True)
+        self._back_btn.setVisible(False)
         self._layer_group.setVisible(True)
-        self._color_section.setVisible(True)
+        self._classes_group.setVisible(True)
         # LayerTreeComboBox auto-refreshes via project signals; no manual
         # repopulation needed here. Combo visibility is re-asserted by
         # _refresh_panel_state right after this in activate().
+
+    def _on_back_clicked(self) -> None:
+        """Refine -> setup: re-show the layer + class page so the user can
+        reshape the selection, then vectorize again. The traced layer stays on
+        the map; the next run on the same raster updates it in place."""
+        self._refine_timer.stop()
+        self.cancel_pending_task()
+        self._succeeded = False
+        self._refine_group.setVisible(False)
+        self._layer_group.setVisible(True)
+        self._classes_group.setVisible(True)
+        self._hint.setVisible(not is_hint_dismissed(HINT_VECTORIZE))
+        self._run_btn.setText(tr("Vectorize"))
+        self._exit_btn.setVisible(True)
+        self._back_btn.setVisible(False)
+        self._status_label.setVisible(False)
+        self._refresh_panel_state()
 
     def _on_refine_changed(self, _value=None) -> None:
         if self._last_layer_id is None:
@@ -342,7 +362,7 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
         none, swap the combo for the empty-state hint and disable Vectorize.
         """
         if self._succeeded:
-            # Refine mode: the layer + color are locked and their pickers are
+            # Refine mode: the layer + classes are locked and their pickers are
             # hidden. Bail so a project-signal refresh can't re-show the combo
             # or fight the Done button's enabled state.
             return
@@ -356,6 +376,13 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
             return
 
         layer = self._layer_combo.currentLayer()
+        # Back then a different raster picked: forget the previous run so the
+        # next Vectorize starts a fresh layer instead of transplanting this
+        # raster's polygons into the other raster's result.
+        if layer is not None and self._last_raster_id and layer.id() != self._last_raster_id:
+            self._last_layer_id = None
+            self._last_raster_id = None
+            self._last_signature = None
         is_raster = isinstance(layer, QgsRasterLayer)
         has_file_source = is_raster and bool(layer.source()) and os.path.exists(layer.source())
         is_valid = is_raster and layer.bandCount() >= 3 and has_file_source
@@ -363,7 +390,7 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
         if is_valid:
             self._show_status("", is_error=False)
             self._run_btn.setEnabled(not self._busy)
-            self._rebuild_palette_chips(layer)
+            self._rebuild_class_list(layer)
         else:
             self._show_status(
                 tr("Pick an AI Edit output to vectorize."),

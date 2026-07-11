@@ -18,7 +18,11 @@ from qgis.PyQt.QtWidgets import (
 from ...core import qt_compat as QtC
 from ...core.i18n import tr
 from ...core.logger import log_debug
-from ...core.resolution_labels import resolution_chip_label, resolution_quality_name
+from ...core.resolution_labels import (
+    DEFAULT_RESOLUTION_CREDIT_COSTS,
+    resolution_chip_label,
+    resolution_quality_name,
+)
 from .mime import _file_paths_from_mime, _layers_from_mime, _mime_has_droppable
 from .style import _CHIP_HEIGHT, _pencil_icon, _picture_plus_icon
 from .widgets import _FooterIconButton, _ResolutionMenuItem, _SubmitTextEdit
@@ -106,7 +110,7 @@ class _PromptContainer(QFrame):
         # Resolution state mirrored from the dock widget so the popup can be
         # rebuilt locally without re-reaching into the parent.
         self._selected_resolution = "1K"
-        self._resolution_costs: dict[str, int] = {"1K": 20, "2K": 30, "4K": 40}
+        self._resolution_costs: dict[str, int] = dict(DEFAULT_RESOLUTION_CREDIT_COSTS)
         self._free_tier = False
 
         # No graphics effect attached at init: applying QGraphicsDropShadowEffect

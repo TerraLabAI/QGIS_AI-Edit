@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from qgis.core import QgsProject
-from qgis.PyQt.QtCore import QRectF, Qt, QUrl
+from qgis.PyQt.QtCore import QRectF, Qt
 from qgis.PyQt.QtGui import (
     QBrush,
     QColor,
-    QDesktopServices,
     QIcon,
     QKeySequence,
     QPainter,
@@ -23,6 +22,7 @@ from ..dialogs.error_report_dialog import (
     SUPPORT_EMAIL,
     show_error_report,
 )
+from ..external_url import open_external
 from ..panel_helpers import (
     apply_swatch_style,
     build_panel_header,
@@ -114,7 +114,7 @@ class DockToolsFooterMixin:
 
     def _on_open_tutorial(self):
         """Open the tutorial URL in the user's default browser."""
-        QDesktopServices.openUrl(QUrl(get_tutorial_url()))
+        open_external(get_tutorial_url())
 
     def _on_open_guide_footer(self):
         """Footer book button: open the step-by-step written guide (with UTM +
@@ -446,7 +446,7 @@ class DockToolsFooterMixin:
         call_btn.setStyleSheet(_BTN_BLUE)
         call_btn.setCursor(QtC.PointingHandCursor)
         call_btn.clicked.connect(
-            lambda: QDesktopServices.openUrl(QUrl(calendly_url))
+            lambda: open_external(calendly_url)
         )
         lay.addWidget(call_btn)
 
@@ -463,14 +463,14 @@ class DockToolsFooterMixin:
 
     def _on_status_link(self, href: str) -> None:
         """Route a clicked link in the status box: the report sentinel opens the
-        in-app log dialog; any real URL opens in the browser."""
+        in-app log dialog; any real URL opens in the browser (http/https only)."""
         if href == REPORT_PROBLEM_HREF:
             show_error_report(
                 self._main_window_for_dialog(),
                 request_id=getattr(self, "_pending_report_request_id", "") or "",
             )
             return
-        QDesktopServices.openUrl(QUrl(href))
+        open_external(href)
 
     def _on_show_shortcuts(self, _link=None):
         from qgis.PyQt.QtWidgets import QDialog

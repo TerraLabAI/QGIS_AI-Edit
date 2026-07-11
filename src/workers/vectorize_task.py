@@ -13,7 +13,7 @@ from qgis.core import QgsTask
 from qgis.PyQt.QtCore import pyqtSignal
 
 from ..core.errors import AIEditError
-from ..core.generation.vectorization_service import _compute_vector_features
+from ..core.generation.vectorization_service import compute_class_features
 from ..core.logger import log_warning
 
 
@@ -47,7 +47,7 @@ class VectorizeTask(QgsTask):
         if self.isCanceled():
             return False
         try:
-            feats = _compute_vector_features(
+            feats = compute_class_features(
                 is_cancelled=self.isCanceled, **self._compute_kwargs
             )
         except AIEditError as err:

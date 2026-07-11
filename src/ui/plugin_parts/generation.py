@@ -235,7 +235,7 @@ class GenerationMixin:
             plugin_dir=plugin_dir,
             skip_trial_check=self._skip_trial_check,
             suggested_resolution=self._last_suggested_res or "1K",
-            context_images=self._reference_store.get_all_b64(),
+            context_image_paths=self._reference_store.snapshot_paths(),
             guidance_image=self._last_guidance_b64,
             guidance_format=self._last_guidance_format,
         )
@@ -382,6 +382,12 @@ class GenerationMixin:
         worker = ExportWorker(prep)
         worker.completed.connect(self._on_export_completed)
         worker.failed.connect(self._on_export_failed)
+        # Drop our reference once the task ends (runs after the handlers above;
+        # the identity guard keeps a late signal from nulling a newer worker).
+        # Otherwise the finished task and its ExportPrep render payload stay
+        # alive until the next generation.
+        worker.completed.connect(lambda *_a, w=worker: self._cleanup_export_worker(w))
+        worker.failed.connect(lambda *_a, w=worker: self._cleanup_export_worker(w))
         self._export_worker = worker
         QgsApplication.taskManager().addTask(worker)
 
@@ -537,7 +543,7 @@ class GenerationMixin:
             plugin_dir=plugin_dir,
             skip_trial_check=self._skip_trial_check,
             suggested_resolution=suggested_res,
-            context_images=self._reference_store.get_all_b64(),
+            context_image_paths=self._reference_store.snapshot_paths(),
             guidance_image=guidance_b64 or None,
             guidance_format=guidance_format or None,
         )

@@ -264,6 +264,8 @@ class ActivationMixin:
             "duration_ms": self._pairing_duration_ms(),
             "stalled": bool(getattr(self, "_pairing_stalled", False)),
         })
+        # Funnel step between activation_screen_viewed and plugin_activated.
+        telemetry.track(te.ACTIVATION_ATTEMPTED, {"success": True})
         telemetry.track(te.PLUGIN_ACTIVATED, {"activation_method": "pairing"})
         telemetry.flush()
         log("Pairing successful")
@@ -276,6 +278,7 @@ class ActivationMixin:
             "duration_ms": self._pairing_duration_ms(),
             "stalled": bool(getattr(self, "_pairing_stalled", False)),
         })
+        telemetry.track(te.ACTIVATION_ATTEMPTED, {"success": False})
         telemetry.flush()
         log_warning("Pairing failed")
 

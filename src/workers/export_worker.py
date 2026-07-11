@@ -4,7 +4,7 @@ from __future__ import annotations
 from qgis.core import QgsTask
 from qgis.PyQt.QtCore import pyqtSignal
 
-from ..ui.canvas_exporter import ExportPrep, render_clean_base, render_export
+from ..core.canvas_export import ExportPrep, render_clean_base, render_export
 
 
 class ExportWorker(QgsTask):

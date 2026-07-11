@@ -1,6 +1,8 @@
 """Cross-category search page and its debounced rebuild."""
 from __future__ import annotations
 
+import html
+
 from qgis.PyQt.QtWidgets import QLabel, QScrollArea, QVBoxLayout, QWidget
 
 from ....core import qt_compat as QtC
@@ -84,10 +86,11 @@ class SearchMixin:
 
     def _search_section_header(self, key: str, match_count: int) -> QLabel:
         category = self._categories_by_key[key]
+        # The label comes from the server catalog: escape it before the RichText span.
         label_html = (
             f'{_sidebar_icon_html(key)}&nbsp;&nbsp;'
             f'<span style="font-size:13px; font-weight:bold; color:palette(text);">'
-            f'{category["label"]}</span>'
+            f'{html.escape(str(category["label"]))}</span>'
             f'&nbsp;<span style="color:rgba(128,128,128,0.7); font-size:11px;">'
             f'({match_count})</span>'
         )

@@ -11,6 +11,9 @@ from __future__ import annotations
 
 from .i18n import tr
 
+# Fallback until the server config loads; server values override via set_resolution_credit_costs.
+DEFAULT_RESOLUTION_CREDIT_COSTS: dict[str, int] = {"1K": 20, "2K": 30, "4K": 40}
+
 
 def resolution_quality_name(resolution: str | None) -> str | None:
     """Map an internal resolution key to its user-facing quality tier name.

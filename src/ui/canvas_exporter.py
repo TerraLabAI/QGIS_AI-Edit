@@ -1,8 +1,8 @@
-"""Facade for the canvas export pipeline. Implementation lives in ``canvas_export/``.
+"""Facade for the canvas export pipeline. Implementation lives in ``core/canvas_export/``.
 
 Every name that was ever importable from this module stays importable here.
 """
-from .canvas_export.context_metadata import (  # noqa: F401
+from ..core.canvas_export.context_metadata import (  # noqa: F401
     _BASEMAP_HOSTS,
     _basemap_label,
     _bbox_wgs84,
@@ -12,7 +12,7 @@ from .canvas_export.context_metadata import (  # noqa: F401
     apply_export_context,
     estimate_native_ground_resolution_m,
 )
-from .canvas_export.export_config import (  # noqa: F401
+from ..core.canvas_export.export_config import (  # noqa: F401
     _DEFAULT_INPUT_FORMAT,
     _DEFAULT_INPUT_QUALITY,
     _get_align,
@@ -23,7 +23,7 @@ from .canvas_export.export_config import (  # noqa: F401
     has_server_config,
     set_server_config,
 )
-from .canvas_export.native_resolution import (  # noqa: F401
+from ..core.canvas_export.native_resolution import (  # noqa: F401
     _WEBMERC_M_PX_Z0,
     QgsVectorTileLayer,
     _best_native_longest_px,
@@ -37,7 +37,7 @@ from .canvas_export.native_resolution import (  # noqa: F401
     _xyz_zmax,
     _zone_dims_meters,
 )
-from .canvas_export.render import (  # noqa: F401
+from ..core.canvas_export.render import (  # noqa: F401
     ExportPrep,
     _clone_map_settings,
     _encode_image,
@@ -47,7 +47,7 @@ from .canvas_export.render import (  # noqa: F401
     render_clean_base,
     render_export,
 )
-from .canvas_export.sizing import (  # noqa: F401
+from ..core.canvas_export.sizing import (  # noqa: F401
     _INPUT_BUDGET_HEADROOM,
     _RESOLUTION_TARGET_PX,
     _adjust_extent_to_aspect,
@@ -55,7 +55,7 @@ from .canvas_export.sizing import (  # noqa: F401
     _budget_dims,
     get_zone_pixel_size,
 )
-from .canvas_export.zone_validation import (  # noqa: F401
+from ..core.canvas_export.zone_validation import (  # noqa: F401
     _POLAR_ABS_LAT_DEG,
     validate_zone,
 )

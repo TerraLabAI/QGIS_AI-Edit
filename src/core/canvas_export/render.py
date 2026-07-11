@@ -12,8 +12,8 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QBuffer, QSize
 from qgis.PyQt.QtGui import QColor, QImage, QPainter
 
-from ...core import qt_compat as QtC
-from ...core.logger import log_debug, log_warning
+from .. import qt_compat as QtC
+from ..logger import log_debug, log_warning
 from .export_config import _get_align, _get_max_dimension, chosen_input_format
 from .native_resolution import _best_native_longest_px
 from .sizing import (

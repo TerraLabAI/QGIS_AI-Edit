@@ -303,3 +303,21 @@ def pick_default_layer(
         except Exception:  # nosec B110
             pass
     return None
+
+
+def drop_from_snapping(layer: QgsMapLayer) -> None:
+    """Scrub a scratch layer from the project snapping config, right AFTER it
+    is registered (addMapLayer auto-enrolls vector layers there).
+
+    QgsSnappingConfig keeps raw layer pointers: a freed working layer leaves a
+    dangling entry that crashes the NEXT project save, typically the
+    save-on-exit (upstream qgis/QGIS#37505, #42651). A layer with no entry can
+    never dangle, and scratch layers have no business being snap targets.
+    """
+    try:
+        project = QgsProject.instance()
+        cfg = project.snappingConfig()
+        cfg.removeLayers([layer])
+        project.setSnappingConfig(cfg)
+    except Exception:  # nosec B110
+        pass

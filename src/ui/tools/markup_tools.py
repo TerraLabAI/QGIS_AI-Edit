@@ -40,7 +40,7 @@ from qgis.PyQt.QtGui import QColor, QKeySequence
 
 from ...core import qt_compat as QtC
 from ...core.logger import log_debug
-from ..layer_groups import MARKUP_LAYER_PROPERTY
+from ..layer_groups import MARKUP_LAYER_PROPERTY, drop_from_snapping
 
 MARKUP_LAYER_NAME = "AI Edit guidance markup"
 _MARKUP_PROPERTY = MARKUP_LAYER_PROPERTY
@@ -118,7 +118,13 @@ class MarkupLayerManager(QObject):
             log_debug("Mark up: project CRS changed, rebuilding layer")
             # Remove the stale layer, don't just drop the reference: nulling it
             # alone orphans the memory layer (wrong CRS) in the project forever.
-            self.remove_layer()
+            # Deferred one event-loop turn: QgsProject applies its stored CRS
+            # (emitting crsChanged) WHILE a project is still being restored, so
+            # removing a layer synchronously here races the snapping-config
+            # restore and leaves a dangling layer pointer in QgsSnappingConfig,
+            # which then crashes the NEXT project save (often the save-on-exit;
+            # upstream qgis/QGIS#37505, #42651).
+            QtC.safe_single_shot(0, self, self.remove_layer)
 
     def _on_layers_removed(self, layer_ids: list[str]) -> None:
         if self._layer is None:
@@ -167,6 +173,9 @@ class MarkupLayerManager(QObject):
         # the opaque rasters; addMapLayer(False) blocks auto-insertion at the
         # root.
         QgsProject.instance().addMapLayer(layer, False)
+        # Keep this scratch layer out of the snapping config: a dangling
+        # pointer there crashes the NEXT project save (see drop_from_snapping).
+        drop_from_snapping(layer)
         # Markup sits at the very top of the tree, above the AI-Edit group, so
         # its annotations always render over the generated rasters. Inside the
         # group an opaque output layer would hide them.

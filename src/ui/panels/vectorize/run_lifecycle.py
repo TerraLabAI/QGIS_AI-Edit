@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from qgis.core import QgsFeature, QgsProject, QgsRasterLayer
+from qgis.core import QgsProject, QgsRasterLayer
 
 from ....core import telemetry
 from ....core import telemetry_events as te
@@ -39,13 +39,18 @@ class RunLifecycleMixin:
                 tr("This raster needs at least 3 bands (RGB)."), is_error=True
             )
             return
+        if not self._class_list.selected_classes():
+            self._show_status(
+                tr("Check at least one class to vectorize."), is_error=True
+            )
+            return
 
-        target_rgb = (self._color.red(), self._color.green(), self._color.blue())
-        self._run_vectorize(raster, target_rgb, is_initial=True)
+        self._run_vectorize(raster, is_initial=True)
 
     def _on_refine_apply(self) -> None:
-        """Debounced re-run on the same raster + extracted color."""
-        if self._last_raster_id is None or self._last_target_rgb is None:
+        """Debounced re-run on the same raster with the CURRENT class list, so
+        toggling a class or adjusting a color re-runs with the new selection."""
+        if self._last_raster_id is None:
             return
         raster = QgsProject.instance().mapLayer(self._last_raster_id)
         if not isinstance(raster, QgsRasterLayer):
@@ -53,25 +58,24 @@ class RunLifecycleMixin:
                 tr("Source raster is no longer available."), is_error=True
             )
             return
-        # Use the CURRENT swatch color so re-picking the color (or the eyedropper)
-        # re-runs detection with the new target, not the originally locked one.
-        target_rgb = (self._color.red(), self._color.green(), self._color.blue())
-        self._run_vectorize(raster, target_rgb, is_initial=False)
+        if not self._class_list.selected_classes():
+            self._show_status(
+                tr("Check at least one class to vectorize."), is_error=True
+            )
+            return
+        self._run_vectorize(raster, is_initial=False)
 
-    def _run_vectorize(
-        self,
-        raster: QgsRasterLayer,
-        target_rgb: tuple[int, int, int],
-        is_initial: bool,
-    ) -> None:
-        # Friendly, dated tree name ("Buildings (3 Jul)" when a class is known,
+    def _run_vectorize(self, raster: QgsRasterLayer, is_initial: bool) -> None:
+        # Friendly, dated tree name ("Buildings (3 Jul)" for a single class,
         # else "<raster> (vector)"), deduped against existing layers. Only used
         # on the initial run; refine re-runs transplant into the existing layer
         # and keep its name.
-        from ....core.generation.vectorization_service import (
-            friendly_vector_layer_name,
-        )
-        layer_name = friendly_vector_layer_name(self._class_label, raster.name())
+        from ....core.generation.vectorize_layer import friendly_vector_layer_name
+
+        classes = self._class_list.selected_classes()
+        competitors = self._class_list.competitor_colors()
+        single_label = classes[0]["label"] if len(classes) == 1 else ""
+        layer_name = friendly_vector_layer_name(single_label, raster.name())
 
         # Supersede any in-flight run (e.g. a debounced refine tick) so the
         # latest parameters win and runs never overlap.
@@ -85,7 +89,12 @@ class RunLifecycleMixin:
             "raster_crs": raster.crs(),
             "transform_context": project.transformContext(),
             "ellipsoid": project.ellipsoid() or "EPSG:7030",
-            "target_rgb": target_rgb,
+            # Every pixel is assigned to the nearest color among ALL detected
+            # classes (checked = traced, unchecked = absorbed as background),
+            # so class edges split at the true boundary and no class bleeds
+            # into a neighbor even when the model drifts off the exact hue.
+            "classes": classes,
+            "competitors": competitors,
             "tolerance": int(self._tolerance_spin.value()),
             "sieve_threshold": int(self._sieve_spin.value()),
             "min_pixels": int(self._min_pixels_spin.value()),
@@ -93,20 +102,13 @@ class RunLifecycleMixin:
             "round_corners": bool(self._round_corners_check.isChecked()),
             "expand_value": int(self._expand_spin.value()),
             "fill_holes": bool(self._fill_holes_check.isChecked()),
-            "class_label": self._class_label,
-            # Foreground extraction against a white background: assign each pixel
-            # to the nearer of the picked color and white, so anti-aliased class
-            # edges split at the true boundary and a hue-drifted output (e.g. a
-            # "red" that renders as #D37523) is still captured. The 2-color
-            # "class in color, everything else white" map is the canonical case.
-            "match_mode": "nearest",
-            "background_rgb": self._background,
         }
         params = {
             "raster_id": raster.id(),
             "raster_name": raster.name() or "",
             "raster_crs": raster.crs(),
-            "target_rgb": target_rgb,
+            "classes": classes,
+            "signature": self._class_list.selection_signature(),
             "is_initial": is_initial,
             "layer_name": layer_name,
             "tolerance": compute_kwargs["tolerance"],
@@ -123,7 +125,6 @@ class RunLifecycleMixin:
         if is_initial:
             self._busy = True
             self._run_btn.setEnabled(False)
-            self._color_btn.setEnabled(False)
             self._run_btn.setText(tr("Vectorizing..."))
             self._show_status(
                 tr("Vectorizing “{name}”...").format(name=raster.name()),
@@ -156,13 +157,18 @@ class RunLifecycleMixin:
         it and update the panel. Layer/project work must stay on this thread."""
         self._vectorize_task = None
         is_initial = params["is_initial"]
+        classes = params["classes"]
         try:
-            from ....core.generation.vectorization_service import _build_vector_layer
+            from ....core.generation.vectorize_layer import (
+                apply_class_style,
+                build_vector_layer,
+                set_layer_provenance,
+                transplant_features,
+            )
 
-            new_layer = _build_vector_layer(
+            new_layer = build_vector_layer(
                 feats, params["raster_crs"], params["layer_name"],
-                params["target_rgb"], None, self._class_label,
-                source_raster_name=params.get("raster_name", ""),
+                classes, source_raster_name=params.get("raster_name", ""),
             )
 
             previous_id = self._last_layer_id
@@ -178,17 +184,15 @@ class RunLifecycleMixin:
                     new_layer = persisted
             if existing is not None:
                 # Re-run: transplant the new geometries into the existing layer
-                # so the user's symbology, name and layer id all survive.
-                provider = existing.dataProvider()
-                old_ids = [f.id() for f in existing.getFeatures()]
-                delete_ok = provider.deleteFeatures(old_ids) if old_ids else True
-                fresh_feats = [QgsFeature(f) for f in new_layer.getFeatures()]
-                add_ok = provider.addFeatures(fresh_feats)
+                # (mapping attributes by field name, never by position: the
+                # GeoPackage adds its own fid column) so the user's symbology,
+                # name and layer id all survive.
+                transplant_ok = transplant_features(existing, new_layer)
                 if existing.providerType() == "ogr":
                     # OGR edits write straight to the GeoPackage, so a False
                     # return means the disk write failed. Surface it instead of
                     # reporting success on a silently-emptied layer.
-                    if not (delete_ok and add_ok):
+                    if not transplant_ok:
                         raise AIEditError(
                             ErrorCode.WRITE_ERROR,
                             tr("Couldn't save the updated features to the file."),
@@ -197,17 +201,13 @@ class RunLifecycleMixin:
                     # so feature count and ids reflect the file.
                     existing.reload()
                 existing.updateExtents()
-                # Re-pick of a different colour: restyle so the trace matches the
-                # new selection. Same colour keeps the user's symbology untouched.
-                if params["target_rgb"] != self._last_target_rgb:
-                    from ....core.generation.vectorization_service import (
-                        _apply_style,
-                        _set_layer_provenance,
-                    )
-                    _apply_style(existing, params["target_rgb"])
-                    _set_layer_provenance(
-                        existing, params.get("raster_name", ""),
-                        params["target_rgb"], self._class_label,
+                # A changed class selection (color tweak, class toggled on/off)
+                # needs a rebuilt legend; an identical selection keeps the
+                # user's own symbology tweaks untouched.
+                if params["signature"] != self._last_signature:
+                    apply_class_style(existing, classes)
+                    set_layer_provenance(
+                        existing, params.get("raster_name", ""), classes
                     )
                 existing.triggerRepaint()
                 final_layer = existing
@@ -226,8 +226,8 @@ class RunLifecycleMixin:
                 final_layer = new_layer
 
             # Hide the source raster so the freshly traced polygons read clearly
-            # on top. With the vector now in the picked colour, leaving the raster
-            # visible underneath would make the trace hard to see against it.
+            # on top. With the vector now in the map's own colors, leaving the
+            # raster visible underneath would make the trace hard to see.
             raster_id = params["raster_id"]
             if raster_id:
                 node = QgsProject.instance().layerTreeRoot().findLayer(raster_id)
@@ -236,31 +236,47 @@ class RunLifecycleMixin:
 
             self._last_layer_id = final_layer.id()
             self._last_raster_id = params["raster_id"]
-            self._last_target_rgb = params["target_rgb"]
+            self._last_signature = params["signature"]
 
             polygon_count = final_layer.featureCount()
-            self._show_status(
-                "✓ " + tr("{n} polygons added").format(n=polygon_count),
-                is_error=False,
-                is_success=True,
-            )
+            # Count classes that actually produced polygons, not classes asked
+            # for: "4 classes" when one matched nothing would be a lie.
+            traced_count = len({f.attributes()[1] for f in feats})
+            if traced_count > 1:
+                self._show_status(
+                    "✓ " + tr("{n} polygons across {k} classes").format(
+                        n=polygon_count, k=traced_count
+                    ),
+                    is_error=False,
+                    is_success=True,
+                )
+            else:
+                self._show_status(
+                    "✓ " + tr("{n} polygons added").format(n=polygon_count),
+                    is_error=False,
+                    is_success=True,
+                )
             self._succeeded = True
             if is_initial:
                 self._activate_layer_in_panel(final_layer)
+                # One page, one action: the setup page (hint, layer, classes)
+                # swaps out entirely and only the refine knobs remain. The
+                # 'Edit classes' ghost button is the way back.
                 self._refine_group.setVisible(True)
                 self._run_btn.setText(tr("Done"))
                 self._exit_btn.setVisible(False)
-                # Color section stays visible so the user can re-pick the color
-                # / tolerance and refine without restarting. Only the source
-                # layer is locked in (you refine one raster at a time).
+                self._back_btn.setVisible(True)
                 self._layer_group.setVisible(False)
+                self._classes_group.setVisible(False)
+                self._hint.setVisible(False)
             telemetry.track(
                 te.VECTORIZE_COMPLETED,
                 {
                     "polygon_count": polygon_count,
+                    "class_count": len(classes),
                     "tolerance": params["tolerance"],
                     "sieve": params["sieve_threshold"],
-                    "simplify": int(params["simplify_factor"]),
+                    "simplify": float(params["simplify_factor"]),
                     "round_corners": params["round_corners"],
                     "expand": params["expand_value"],
                     "fill_holes": params["fill_holes"],
@@ -280,21 +296,22 @@ class RunLifecycleMixin:
         (lowercase ASCII names per the GeoPackage spec)."""
         import time
 
-        from ....core.generation.vectorization_service import (
+        from ....core.generation.vectorize_layer import (
             AI_EDIT_GPKG_FILENAME,
             make_layer_permanent,
         )
         from ....core.slug import slugify
         from ...raster_writer import get_output_dir
 
-        base = slugify(self._class_label or params.get("raster_name", ""))[:40] or "result"
+        classes = params["classes"]
+        single_label = classes[0]["label"] if len(classes) == 1 else ""
+        base = slugify(single_label or params.get("raster_name", ""))[:40] or "result"
         table_name = f"vectorize_{base}_{time.strftime('%Y%m%d_%H%M%S')}"
         return make_layer_permanent(
             mem_layer,
             os.path.join(get_output_dir(), AI_EDIT_GPKG_FILENAME),
             table_name,
-            params["target_rgb"],
-            self._class_label,
+            classes,
             params.get("raster_name", ""),
         )
 
@@ -334,13 +351,13 @@ class RunLifecycleMixin:
         })
         telemetry.flush()
         if is_zero_match and self._succeeded:
-            # Active refine: detection is fixed, so a re-run only zeroes out
-            # when the outline/selection filters drop everything. Steer the
-            # user to the lever that usually did it - min polygon size.
+            # Active refine: the classes are fixed, so a re-run only zeroes out
+            # when the tolerance / size filters drop everything. Steer the user
+            # to the levers that usually did it.
             self._show_status(
                 tr(
-                    "No shapes left after filtering. Lower 'Min polygon "
-                    "size' below."
+                    "No shapes left after filtering. Raise 'Color tolerance' "
+                    "or lower 'Min polygon size' below."
                 ),
                 is_error=True,
             )
@@ -349,14 +366,14 @@ class RunLifecycleMixin:
         elif is_zero_match:
             # Cold 0-match: nothing was vectorized yet, so the refine knobs
             # would be editing polygons that don't exist. Keep them hidden
-            # and steer the user back to the color picker (their recovery
+            # and steer the user back to the class list (their recovery
             # path stays visible above). Showing 8 dead controls here just
             # confuses (issue #164).
             self._refine_group.setVisible(False)
             self._show_status(
                 tr(
-                    "0 matches. Pick a closer color above, or use "
-                    "Pick on map to sample one from the raster."
+                    "0 matches for the checked classes. Adjust a color, or "
+                    "use 'Add color from map' to sample one from the raster."
                 ),
                 is_error=True,
             )
@@ -375,7 +392,6 @@ class RunLifecycleMixin:
     def _reset_button(self) -> None:
         self._busy = False
         self._run_btn.setEnabled(True)
-        self._color_btn.setEnabled(True)
         # If we succeeded, the run text was already set to "Done" upstream
         # and we must NOT overwrite it here (otherwise refine re-runs would
         # silently flip the label back to "Vectorize").

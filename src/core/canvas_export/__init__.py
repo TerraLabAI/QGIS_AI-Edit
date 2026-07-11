@@ -1,4 +1,4 @@
-"""Canvas export package. Import via ``src.ui.canvas_exporter`` (the facade)."""
+"""Canvas export package. UI code imports via the ``src.ui.canvas_exporter`` facade."""
 from .context_metadata import (  # noqa: F401
     _BASEMAP_HOSTS,
     _basemap_label,

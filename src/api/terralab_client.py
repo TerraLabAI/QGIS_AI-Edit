@@ -127,7 +127,7 @@ def _classify_network_error(
 
 class DownloadError(RuntimeError):
     """A failed image download, carrying a structured `code` so the refund
-    event / Discord alert can say WHY (TIMEOUT, SSL_ERROR, INCOMPLETE, ...)
+    event / ops alert can say WHY (TIMEOUT, SSL_ERROR, INCOMPLETE, ...)
     instead of a bare "download_failed".
     """
 
@@ -147,7 +147,7 @@ def _looks_like_image(data: bytes) -> bool:
     """True if the bytes start with a known raster image signature.
 
     The image proxy can answer a slow/transient backend with a 200 and a tiny
-    JSON/HTML error body (a GCS hiccup, an upstream 503 surfaced as a branded
+    JSON/HTML error body (a storage hiccup, an upstream 503 surfaced as a branded
     page). Those bytes are not an image: writing them produces a corrupt
     GeoTIFF that fails later as a write error. Detecting them here instead lets
     the caller's retry loop re-download (escalating to the stream=1 bypass),
@@ -529,7 +529,7 @@ class TerraLabClient:
         error). The server returns 'already_refunded' if previously called.
         Reason must be one of: download_failed, write_error, disk_full, unknown.
         `error_code` is the optional fine-grained cause (TIMEOUT, SSL_ERROR,
-        INCOMPLETE, ...) the server surfaces in the Discord alert.
+        INCOMPLETE, ...) the server surfaces in the ops alert.
         """
         payload = {"request_id": request_id, "reason": reason}
         if error_code:

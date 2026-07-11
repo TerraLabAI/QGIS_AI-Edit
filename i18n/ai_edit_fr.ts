@@ -1959,5 +1959,265 @@ Nous serions ravis d'avoir votre retour !</translation>
         <source>AI Edit could not reach the server. Some features need an internet connection.</source>
         <translation>AI Edit n'a pas pu joindre le serveur. Certaines fonctions nécessitent une connexion Internet.</translation>
     </message>
+    <message>
+        <source>0 matches for the checked classes. Adjust a color, or use 'Add color from map' to sample one from the raster.</source>
+        <translation>0 correspondance pour les classes cochées. Ajustez une couleur, ou utilisez 'Ajouter une couleur depuis la carte' pour en échantillonner une depuis le raster.</translation>
+    </message>
+    <message>
+        <source>1. Click to copy logs</source>
+        <translation>1. Cliquez pour copier les journaux</translation>
+    </message>
+    <message>
+        <source>2. Click to send to {email}</source>
+        <translation>2. Cliquez pour envoyer à {email}</translation>
+    </message>
+    <message>
+        <source>Add color from map</source>
+        <translation>Ajouter une couleur depuis la carte</translation>
+    </message>
+    <message>
+        <source>Added {hex} to the class list.</source>
+        <translation>{hex} ajouté à la liste des classes.</translation>
+    </message>
+    <message>
+        <source>Adjust this color.</source>
+        <translation>Ajustez cette couleur.</translation>
+    </message>
+    <message>
+        <source>Any GeoTIFF, WMS or XYZ basemap.</source>
+        <translation>N'importe quel GeoTIFF, WMS ou fond de carte XYZ.</translation>
+    </message>
+    <message>
+        <source>Check at least one class to vectorize.</source>
+        <translation>Cochez au moins une classe à vectoriser.</translation>
+    </message>
+    <message>
+        <source>Checking imagery availability</source>
+        <translation>Vérification de la disponibilité de l'imagerie</translation>
+    </message>
+    <message>
+        <source>Class name</source>
+        <translation>Nom de la classe</translation>
+    </message>
+    <message>
+        <source>Class {n}</source>
+        <translation>Classe {n}</translation>
+    </message>
+    <message>
+        <source>Classes</source>
+        <translation>Classes</translation>
+    </message>
+    <message>
+        <source>Cleanup</source>
+        <translation>Nettoyage</translation>
+    </message>
+    <message>
+        <source>Colors detected in this map - each checked one becomes a polygon class:</source>
+        <translation>Couleurs détectées dans cette carte - chaque couleur cochée devient une classe de polygones :</translation>
+    </message>
+    <message>
+        <source>Could not read raster pixels (the file may be incomplete).</source>
+        <translation>Impossible de lire les pixels du raster (le fichier est peut-être incomplet).</translation>
+    </message>
+    <message>
+        <source>Couldn't load the example basemap. Check your internet connection, or add your own layer (GeoTIFF, WMS, XYZ).</source>
+        <translation>Impossible de charger le fond de carte d'exemple. Vérifiez votre connexion internet, ou ajoutez votre propre couche (GeoTIFF, WMS, XYZ).</translation>
+    </message>
+    <message>
+        <source>Couldn't open your browser. Copy the link and open it manually.</source>
+        <translation>Impossible d'ouvrir votre navigateur. Copiez le lien et ouvrez-le manuellement.</translation>
+    </message>
+    <message>
+        <source>Couldn't save the updated features to the file.</source>
+        <translation>Impossible d'enregistrer les entités mises à jour dans le fichier.</translation>
+    </message>
+    <message>
+        <source>Credit refunded.</source>
+        <translation>Crédit remboursé.</translation>
+    </message>
+    <message>
+        <source>Downloading reference image</source>
+        <translation>Téléchargement de l'image de référence</translation>
+    </message>
+    <message>
+        <source>Draw on your zone to point the AI where to act. Your marks guide the edit and are removed from the result.</source>
+        <translation>Dessinez sur votre zone pour indiquer à l'IA où agir. Vos annotations guident la modification et sont retirées du résultat.</translation>
+    </message>
+    <message>
+        <source>Each pixel goes to the closest class color, so edges stay clean even when the model's colors drift. This caps how far a pixel may sit from its class: higher sweeps in noisy shades, lower leaves them out of every class.</source>
+        <translation>Chaque pixel est affecté à la couleur de classe la plus proche, les bords restent donc nets même si les couleurs du modèle dérivent. Cette valeur limite la distance entre un pixel et sa classe : plus haut, les teintes bruitées sont incluses, plus bas, elles restent hors de toute classe.</translation>
+    </message>
+    <message>
+        <source>Edit classes</source>
+        <translation>Modifier les classes</translation>
+    </message>
+    <message>
+        <source>Failed to download result image after 3 attempts: {err}.</source>
+        <translation>Échec du téléchargement de l'image du résultat après 3 tentatives : {err}.</translation>
+    </message>
+    <message>
+        <source>Fill interior holes in each shape</source>
+        <translation>Remplir les trous intérieurs de chaque forme</translation>
+    </message>
+    <message>
+        <source>Free account - sign up takes 15 seconds in your browser.</source>
+        <translation>Compte gratuit - l'inscription prend 15 secondes dans votre navigateur.</translation>
+    </message>
+    <message>
+        <source>Free-text label written to each polygon's class_name attribute.</source>
+        <translation>Libellé libre écrit dans l'attribut class_name de chaque polygone.</translation>
+    </message>
+    <message>
+        <source>Go back to the class list to check, rename or recolor classes, then vectorize again.</source>
+        <translation>Revenez à la liste des classes pour cocher, renommer ou recolorer des classes, puis vectorisez à nouveau.</translation>
+    </message>
+    <message>
+        <source>If a credit was charged, it will be refunded.</source>
+        <translation>Si un crédit a été débité, il sera remboursé.</translation>
+    </message>
+    <message>
+        <source>Keep your marks on the zone to guide the edit, and close Mark up</source>
+        <translation>Gardez vos annotations sur la zone pour guider la modification, et fermez Annoter</translation>
+    </message>
+    <message>
+        <source>Load your own imagery</source>
+        <translation>Chargez votre propre imagerie</translation>
+    </message>
+    <message>
+        <source>Loading imagery…</source>
+        <translation>Chargement de l'imagerie…</translation>
+    </message>
+    <message>
+        <source>New here?</source>
+        <translation>Nouveau par ici ?</translation>
+    </message>
+    <message>
+        <source>New here? Our 5-minute tutorial walks you through a full edit, step by step.</source>
+        <translation>Nouveau par ici ? Notre tutoriel de 5 minutes vous guide pas à pas dans une modification complète.</translation>
+    </message>
+    <message>
+        <source>No flat color classes found - this image looks photo-realistic. Vectorize works best on maps with solid colors (Segment or Land cover results). You can still sample a color below.</source>
+        <translation>Aucune classe de couleur unie trouvée - cette image semble photoréaliste. Vectoriser fonctionne mieux sur des cartes aux couleurs unies (résultats de Segment ou Couverture du sol). Vous pouvez quand même échantillonner une couleur ci-dessous.</translation>
+    </message>
+    <message>
+        <source>No polygons found for the selected colors (try a wider tolerance or smaller min size)</source>
+        <translation>Aucun polygone trouvé pour les couleurs sélectionnées (essayez une tolérance plus large ou une taille minimale plus petite)</translation>
+    </message>
+    <message>
+        <source>No shapes left after filtering. Raise 'Color tolerance' or lower 'Min polygon size' below.</source>
+        <translation>Aucune forme ne reste après le filtrage. Augmentez 'Tolérance de couleur' ou baissez 'Taille minimale du polygone' ci-dessous.</translation>
+    </message>
+    <message>
+        <source>Open the step-by-step tutorial</source>
+        <translation>Ouvrir le tutoriel pas à pas</translation>
+    </message>
+    <message>
+        <source>Open the tutorial</source>
+        <translation>Ouvrir le tutoriel</translation>
+    </message>
+    <message>
+        <source>Raster has no usable georeferencing.</source>
+        <translation>Le raster n'a pas de géoréférencement utilisable.</translation>
+    </message>
+    <message>
+        <source>Refine</source>
+        <translation>Affiner</translation>
+    </message>
+    <message>
+        <source>Sample a color directly from the source raster and add it as a class.</source>
+        <translation>Échantillonnez une couleur directement depuis le raster source et ajoutez-la comme classe.</translation>
+    </message>
+    <message>
+        <source>Select at least one color to vectorize.</source>
+        <translation>Sélectionnez au moins une couleur à vectoriser.</translation>
+    </message>
+    <message>
+        <source>Server returned a non-image response, retrying download</source>
+        <translation>Le serveur a renvoyé une réponse qui n'est pas une image, nouvelle tentative de téléchargement</translation>
+    </message>
+    <message>
+        <source>Share of the map covered by this color.</source>
+        <translation>Part de la carte couverte par cette couleur.</translation>
+    </message>
+    <message>
+        <source>Still waiting. If the page did not open or shows an error, click Open again or copy the link into another browser.</source>
+        <translation>Toujours en attente. Si la page ne s'est pas ouverte ou affiche une erreur, cliquez à nouveau sur Ouvrir ou copiez le lien dans un autre navigateur.</translation>
+    </message>
+    <message>
+        <source>Team or organization?</source>
+        <translation>Une équipe ou une organisation ?</translation>
+    </message>
+    <message>
+        <source>The server did not confirm your request. If a credit was charged it will be refunded shortly. Check the Recent tab before retrying.</source>
+        <translation>Le serveur n'a pas confirmé votre demande. Si un crédit a été débité, il sera remboursé sous peu. Vérifiez l'onglet Récents avant de réessayer.</translation>
+    </message>
+    <message>
+        <source>The service is temporarily unavailable (server error). Your connection is fine - please try again in a few minutes.</source>
+        <translation>Le service est temporairement indisponible (erreur serveur). Votre connexion fonctionne - réessayez dans quelques minutes.</translation>
+    </message>
+    <message>
+        <source>Then type what to change on your imagery, and get the result back as a georeferenced layer.</source>
+        <translation>Tapez ensuite ce qu'il faut changer sur votre imagerie, et récupérez le résultat en couche géoréférencée.</translation>
+    </message>
+    <message>
+        <source>Trace this color as polygons. Unchecked colors are treated as background.</source>
+        <translation>Tracer cette couleur en polygones. Les couleurs non cochées sont traitées comme de l'arrière-plan.</translation>
+    </message>
+    <message>
+        <source>Try it on an example</source>
+        <translation>Essayez sur un exemple</translation>
+    </message>
+    <message>
+        <source>Vector</source>
+        <translation>Vecteur</translation>
+    </message>
+    <message>
+        <source>Vectorize turns a flat-color map (Segment, Land cover, masks, site plans...) into editable polygons - one class per color, ready to select, measure, style and export. It reads colors, so it works on colored maps, not photo-realistic images.</source>
+        <translation>Vectoriser transforme une carte en couleurs unies (Segment, Couverture du sol, masques, plans de site...) en polygones modifiables - une classe par couleur, prêts à sélectionner, mesurer, styliser et exporter. Il lit les couleurs, il fonctionne donc sur des cartes colorées, pas sur des images photoréalistes.</translation>
+    </message>
+    <message>
+        <source>Waiting for the example basemap to finish loading before you generate</source>
+        <translation>En attente de la fin du chargement du fond de carte d'exemple avant de générer</translation>
+    </message>
+    <message>
+        <source>Watch the tutorial</source>
+        <translation>Voir le tutoriel</translation>
+    </message>
+    <message>
+        <source>Write to us:</source>
+        <translation>Écrivez-nous :</translation>
+    </message>
+    <message>
+        <source>background</source>
+        <translation>arrière-plan</translation>
+    </message>
+    <message>
+        <source>paved</source>
+        <translation>revêtement</translation>
+    </message>
+    <message>
+        <source>vegetation</source>
+        <translation>végétation</translation>
+    </message>
+    <message>
+        <source>water</source>
+        <translation>eau</translation>
+    </message>
+    <message>
+        <source>{n} mark. Click Done to guide the edit with it.</source>
+        <translation>{n} annotation. Cliquez sur Terminé pour guider la modification avec elle.</translation>
+    </message>
+    <message>
+        <source>{n} marks. Click Done to guide the edit with them.</source>
+        <translation>{n} annotations. Cliquez sur Terminé pour guider la modification avec elles.</translation>
+    </message>
+    <message>
+        <source>{n} polygons across {k} classes</source>
+        <translation>{n} polygones répartis en {k} classes</translation>
+    </message>
+    <message>
+        <source>{n} versions</source>
+        <translation>{n} versions</translation>
+    </message>
 </context>
 </TS>

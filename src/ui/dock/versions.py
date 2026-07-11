@@ -54,8 +54,9 @@ class DockVersionsMixin:
         """Push the current selection / costs / tier into both prompt containers.
 
         Also coerces the selection to "1K" when a free-tier user is ever
-        confirmed (downgrades from the seeded "2K" paid default), so the
-        Generate button never quotes a price the user can't actually pay.
+        confirmed (downgrades the "2K" default that set_credits applies to
+        paid accounts), so the Generate button never quotes a price the user
+        can't actually pay.
         """
         if self._is_free_tier and self._selected_resolution != "1K":
             self._selected_resolution = "1K"
@@ -106,6 +107,9 @@ class DockVersionsMixin:
         self._hide_status_box()
 
         self._selected_resolution = label
+        # A manual pick is sticky: tier refreshes stop applying the paid
+        # "2K" default over it (set_credits).
+        self._resolution_user_choice = True
         self._refresh_resolution_triggers()
         self._update_generate_button_text()
 

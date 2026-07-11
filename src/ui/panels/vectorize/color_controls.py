@@ -1,102 +1,39 @@
-"""Palette chips, color swatch, and eyedropper handling for the Vectorize panel."""
+"""Class detection and eyedropper handling for the Vectorize panel."""
 from __future__ import annotations
 
 from qgis.core import QgsRasterLayer
 from qgis.PyQt.QtGui import QColor
-from qgis.PyQt.QtWidgets import QColorDialog, QPushButton
 
-from ....core import qt_compat as QtC
 from ....core.i18n import tr
-from ...panel_helpers import apply_swatch_style
 from ...tools.eyedropper_tool import EyedropperMapTool
 
 
 class ColorControlsMixin:
-    """Detected-color chips plus the manual swatch and canvas eyedropper."""
+    """Populates the detected-class list and runs the canvas eyedropper."""
 
-    def _rebuild_palette_chips(self, raster: QgsRasterLayer) -> None:
-        """Detect the raster's dominant colors and show them as one-click chips.
+    def _rebuild_class_list(self, raster: QgsRasterLayer) -> None:
+        """Detect the raster's flat colors and fill the class list.
 
-        Recomputes only when the raster changes (cheap, but no need to redo it on
-        every project signal). Hidden when detection finds nothing usable, so the
-        manual swatch stays the fallback."""
+        Recomputes only when the raster changes (cheap, but no need to redo it
+        on every project signal). When detection finds nothing usable the map is
+        probably photo-realistic; say so instead of showing a dead list."""
         rid = raster.id()
-        if rid == self._palette_raster_id:
+        if rid == self._classes_raster_id:
             return
-        self._palette_raster_id = rid
-        # Clear the whole row (chips AND the trailing stretch) so repeated
-        # rebuilds never accumulate spacers that shove the chips out of place.
-        while self._palette_row.count():
-            item = self._palette_row.takeAt(0)
-            w = item.widget()
-            if w is not None:
-                w.deleteLater()
-        self._palette_chips = []
+        self._classes_raster_id = rid
 
         path = (raster.source() or "").split("|", 1)[0]
         try:
-            from ....core.generation.vectorization_service import dominant_palette
-            self._palette = dominant_palette(path)
-        except Exception:  # noqa: BLE001 - chips are a convenience, never block
-            self._palette = []
+            from ....core.generation.vectorize_palette import detect_classes
+            entries = detect_classes(path)
+        except Exception:  # noqa: BLE001 - detection is a convenience, never block
+            entries = []
 
-        if len(self._palette) < 2:
-            # Nothing meaningful to offer (single flat color or detection failed).
-            self._palette_label.setVisible(False)
-            return
-        self._palette_label.setVisible(True)
-        for rgb, _frac in self._palette:
-            chip = QPushButton()
-            chip.setCursor(QtC.PointingHandCursor)
-            chip.setFixedSize(30, 30)
-            apply_swatch_style(chip, QColor(*rgb))
-            chip.setToolTip(
-                tr("Extract #{hex} as polygons").format(
-                    hex="{:02X}{:02X}{:02X}".format(*rgb)
-                )
-            )
-            chip.clicked.connect(lambda _checked=False, c=rgb: self._on_palette_chip(c))
-            self._palette_row.addWidget(chip)
-            self._palette_chips.append(chip)
-        self._palette_row.addStretch()
-
-    def _on_palette_chip(self, rgb: tuple[int, int, int]) -> None:
-        """Click a detected color -> extract it now. The most dominant OTHER
-        detected color becomes the discarded background, so the boundary between
-        the two classes is clean."""
-        if self._busy:
-            return
-        self._color = QColor(*rgb)
-        apply_swatch_style(self._color_btn, self._color)
-        self._background = self._infer_background(rgb)
-        if self._succeeded:
-            self._on_refine_changed()
-        else:
-            self._on_run_clicked()
-
-    def _infer_background(self, rgb: tuple[int, int, int]) -> tuple[int, int, int]:
-        """Background color to discard in nearest-mode matching: the most-dominant
-        detected color other than the picked one. Falls back to white (the
-        canonical "class in color, everything else white" map) when no palette was
-        detected, so a hand-picked or sampled color still gets a sane background
-        instead of always assuming white on a non-white map."""
-        others = [c for c, _ in self._palette if c != rgb]
-        return others[0] if others else (255, 255, 255)
-
-    def _on_color_clicked(self) -> None:
-        chosen = QColorDialog.getColor(self._color, self, tr("Pick color"))
-        if not chosen.isValid():
-            return
-        self._color = QColor(chosen.red(), chosen.green(), chosen.blue())
-        apply_swatch_style(self._color_btn, self._color)
-        # Discard the dominant OTHER color (usually the real background), not a
-        # hard-coded white, so a hand-picked color works on non-white maps too.
-        self._background = self._infer_background(
-            (self._color.red(), self._color.green(), self._color.blue())
-        )
-        # In refine mode a new color re-runs detection on the same layer.
-        if self._succeeded:
-            self._on_refine_changed()
+        self._class_list.set_classes(entries)
+        flat_map = len(entries) >= 2
+        self._class_list.setVisible(flat_map)
+        self._classes_intro.setVisible(flat_map)
+        self._photo_hint.setVisible(not flat_map)
 
     def _on_eyedropper_clicked(self) -> None:
         """Arm the canvas eyedropper bound to the currently-picked raster."""
@@ -131,21 +68,18 @@ class ColorControlsMixin:
         )
 
     def _on_eyedropper_color(self, color: QColor) -> None:
-        self._color = color
-        apply_swatch_style(self._color_btn, self._color)
-        # Discard the dominant OTHER color (usually the real background), not a
-        # hard-coded white, so a sampled color works on non-white maps too.
-        self._background = self._infer_background(
-            (self._color.red(), self._color.green(), self._color.blue())
-        )
+        rgb = (color.red(), color.green(), color.blue())
+        # A sampled color joins the class list (or checks its near-twin); it
+        # takes effect on the next Vectorize click.
+        self._class_list.add_class(rgb)
+        self._class_list.setVisible(True)
+        self._classes_intro.setVisible(True)
+        self._photo_hint.setVisible(False)
         self._show_status(
-            tr("Sampled {hex}.").format(hex=self._color.name().upper()),
+            tr("Added {hex} to the class list.").format(hex=color.name().upper()),
             is_error=False,
         )
         self._eyedropper_tool = None
-        # In refine mode, sampling a new color re-runs detection on the same layer.
-        if self._succeeded:
-            self._on_refine_changed()
 
     def _on_eyedropper_miss(self) -> None:
         self._show_status(

@@ -35,6 +35,49 @@ def _is_visible_raster(layer) -> bool:
 _is_visible_ai_edit_output = _is_visible_raster
 
 
+def _iter_ai_edit_rasters() -> list:
+    """(tree node, raster) pairs under the AI-Edit group, tree order (the
+    group inserts newest generations first)."""
+    from ..layer_groups import AI_EDIT_GROUP_NAME
+
+    root = QgsProject.instance().layerTreeRoot()
+    group = root.findGroup(AI_EDIT_GROUP_NAME)
+    if group is None:
+        return []
+    pairs = []
+    for node in group.findLayers():
+        layer = node.layer()
+        if isinstance(layer, QgsRasterLayer) and layer.isValid():
+            pairs.append((node, layer))
+    return pairs
+
+
+def _resolve_swipe_target() -> tuple:
+    """The raster the swipe should compare, plus whether it is currently
+    hidden and must be re-shown to arm.
+
+    The active layer wins when it is a visible raster. Otherwise fall back to
+    the newest AI-Edit result: tools routinely leave a VECTOR layer active
+    (Vectorize even hides the source raster), which used to permanently grey
+    out Before/After until the user manually re-picked a raster - the
+    "compare no longer works" report. Returns ``(layer | None, was_hidden)``.
+    """
+    try:
+        from qgis.utils import iface as _iface
+        active = _iface.activeLayer() if _iface is not None else None
+    except Exception:
+        active = None
+    if _is_visible_raster(active):
+        return active, False
+    pairs = _iter_ai_edit_rasters()
+    for node, layer in pairs:
+        if node.isVisible():
+            return layer, False
+    for _node, layer in pairs:
+        return layer, True
+    return None, False
+
+
 class _SwipeOverlay(QgsMapCanvasItem):
     """Canvas overlay that paints the underlying layers (everything except
     the AI-Edit top layer) on the right side of a vertical divider,
@@ -399,11 +442,17 @@ class SwipeController(QObject):
         self._tool: _SwipeMapTool | None = None
         self._previous_tool = None
         self._top_layer_id: str | None = None
+        # Result raster that start() had to re-show (hidden by Vectorize);
+        # stop() hides it back so the user returns to the state they left.
+        self._revealed_layer_id: str | None = None
         self._extents_connected: bool = False
         self._iface_layer_connected: bool = False
         self._project_connected: bool = False
         self._maptool_set_connected: bool = False
         self._render_debounce_timer: QTimer | None = None
+        # The layerTreeRoot the eligibility tracker is bound to (project
+        # open/clear replaces the root, so disconnect must target this one).
+        self._eligibility_root = None
         # Always-on eligibility tracker so the button enable state
         # follows the active layer even when the swipe is off.
         self._connect_eligibility_tracker()
@@ -414,13 +463,10 @@ class SwipeController(QObject):
         return self._tool is not None
 
     def can_swipe_now(self) -> bool:
-        """True when iface.activeLayer() is a visible AI-Edit output."""
-        try:
-            from qgis.utils import iface as _iface
-            active = _iface.activeLayer() if _iface is not None else None
-        except Exception:
-            return False
-        return _is_visible_ai_edit_output(active)
+        """True when a swipe target can be resolved: the active layer if it is
+        a visible raster, else any AI-Edit result raster in the project."""
+        target, _was_hidden = _resolve_swipe_target()
+        return target is not None
 
     def toggle(self) -> None:
         if self.is_active():
@@ -437,16 +483,29 @@ class SwipeController(QObject):
             return
         if _iface is None:
             return
-        active = _iface.activeLayer()
-        if not _is_visible_ai_edit_output(active):
+        target, was_hidden = _resolve_swipe_target()
+        if target is None:
             return  # Caller should have gated this on can_swipe_now()
+        if was_hidden:
+            # Vectorize hides the result raster once it is traced; comparing
+            # is exactly the moment to reveal it again. Remembered so stop()
+            # re-hides it and the user returns to their polygons untouched.
+            node = QgsProject.instance().layerTreeRoot().findLayer(target.id())
+            if node is not None:
+                node.setItemVisibilityChecked(True)
+                self._revealed_layer_id = target.id()
+        if _iface.activeLayer() is not target:
+            try:
+                _iface.setActiveLayer(target)
+            except Exception:  # nosec B110 - retarget is cosmetic
+                pass
 
         canvas = _iface.mapCanvas()
         self._previous_tool = canvas.mapTool()
-        self._top_layer_id = active.id()
+        self._top_layer_id = target.id()
 
         self._overlay = _SwipeOverlay(canvas)
-        self._overlay.set_top_layer(active)
+        self._overlay.set_top_layer(target)
         self._tool = _SwipeMapTool(canvas, self._overlay, on_overlay_click)
         # Esc on the canvas disarms the swipe; the controller routes that
         # back into stop() so button state stays in sync.
@@ -556,6 +615,16 @@ class SwipeController(QObject):
         self._tool = None
         self._previous_tool = None
         self._top_layer_id = None
+        if self._revealed_layer_id is not None:
+            try:
+                node = QgsProject.instance().layerTreeRoot().findLayer(
+                    self._revealed_layer_id
+                )
+                if node is not None:
+                    node.setItemVisibilityChecked(False)
+            except RuntimeError:
+                pass
+            self._revealed_layer_id = None
         self.deactivated.emit()
 
     def cleanup(self) -> None:
@@ -634,12 +703,52 @@ class SwipeController(QObject):
     # ----- internals: button enable/disable tracker ----------------------
 
     def _connect_eligibility_tracker(self) -> None:
+        # Eligibility depends on the active layer AND on which rasters exist /
+        # are visible (the fallback target), so track all three change sources.
         try:
             from qgis.utils import iface as _iface
             if _iface is not None:
                 _iface.currentLayerChanged.connect(self._emit_eligibility)
         except (ImportError, TypeError, RuntimeError):
             pass
+        try:
+            project = QgsProject.instance()
+            project.layersAdded.connect(self._emit_eligibility)
+            project.layersRemoved.connect(self._emit_eligibility)
+            # New-project / open-project replace the layerTreeRoot (see
+            # tools_footer._on_project_loaded), so rebind on project lifecycle.
+            project.readProject.connect(self._on_project_loaded)
+            project.cleared.connect(self._on_project_loaded)
+        except (TypeError, RuntimeError):
+            pass
+        self._connect_eligibility_root()
+
+    def _connect_eligibility_root(self) -> None:
+        """Bind visibilityChanged on the current layerTreeRoot and remember it."""
+        try:
+            root = QgsProject.instance().layerTreeRoot()
+            root.visibilityChanged.connect(self._emit_eligibility)
+            self._eligibility_root = root
+        except (TypeError, RuntimeError):
+            self._eligibility_root = None
+
+    def _disconnect_eligibility_root(self) -> None:
+        """Unbind from the root we actually connected to, not the current one."""
+        if self._eligibility_root is None:
+            return
+        try:
+            self._eligibility_root.visibilityChanged.disconnect(
+                self._emit_eligibility
+            )
+        except (TypeError, RuntimeError):
+            pass
+        self._eligibility_root = None
+
+    def _on_project_loaded(self, *_args) -> None:
+        """Re-bind to the fresh layerTreeRoot and re-evaluate eligibility."""
+        self._disconnect_eligibility_root()
+        self._connect_eligibility_root()
+        self._emit_eligibility()
 
     def _disconnect_eligibility_tracker(self) -> None:
         try:
@@ -648,6 +757,15 @@ class SwipeController(QObject):
                 _iface.currentLayerChanged.disconnect(self._emit_eligibility)
         except (ImportError, TypeError, RuntimeError):
             pass
+        try:
+            project = QgsProject.instance()
+            project.layersAdded.disconnect(self._emit_eligibility)
+            project.layersRemoved.disconnect(self._emit_eligibility)
+            project.readProject.disconnect(self._on_project_loaded)
+            project.cleared.disconnect(self._on_project_loaded)
+        except (TypeError, RuntimeError):
+            pass
+        self._disconnect_eligibility_root()
 
-    def _emit_eligibility(self, layer) -> None:
-        self.eligibility_changed.emit(_is_visible_ai_edit_output(layer))
+    def _emit_eligibility(self, *_args) -> None:
+        self.eligibility_changed.emit(self.can_swipe_now())

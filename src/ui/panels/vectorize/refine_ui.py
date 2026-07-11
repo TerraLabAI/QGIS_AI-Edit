@@ -9,46 +9,26 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QSpinBox,
     QVBoxLayout,
-    QWidget,
 )
 
 from ....core.i18n import tr
+from ...panel_helpers import GROUP_BOX_QSS
 
 
 class RefineUiMixin:
     """Builds the refine controls group and its spinbox/checkbox rows."""
 
     def _build_refine_group(self) -> QGroupBox:
-        """Refine group - always fully expanded, no disclosure arrow.
+        """Refine group, shown alone once a vectorization succeeds.
 
-        The whole group stays hidden until the first successful Vectorize
-        click; once visible, every control is shown at once with no toggle.
+        Same bordered group box as Layer / Classes so the two panel states
+        read as one surface. Sections follow the pipeline: how pixels match
+        (Detection), how edges look (Outline), what gets dropped (Cleanup).
         """
-        group = QGroupBox(tr("Refine vectorization"))
-        group.setCheckable(False)
-        group.setStyleSheet(
-            "QGroupBox { background-color: transparent; border: none;"
-            " border-radius: 0px; margin: 0px; padding: 0px; padding-top: 20px; }"
-            "QGroupBox::title { subcontrol-origin: padding;"
-            " subcontrol-position: top left; padding: 2px 4px;"
-            " background-color: transparent; border: none;"
-            " font-weight: bold; }"
-        )
-        outer = QVBoxLayout(group)
-        outer.setSpacing(0)
-        outer.setContentsMargins(0, 0, 0, 0)
-
-        content = QWidget()
-        content.setObjectName("vectorizeRefineContent")
-        content.setStyleSheet(
-            "QWidget#vectorizeRefineContent {"
-            " background-color: rgba(128, 128, 128, 0.08);"
-            " border: 1px solid rgba(128, 128, 128, 0.2);"
-            " border-radius: 4px; }"
-            "QLabel { background: transparent; border: none; }"
-        )
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(10, 10, 10, 10)
+        group = QGroupBox(tr("Refine"))
+        group.setStyleSheet(GROUP_BOX_QSS)
+        content_layout = QVBoxLayout(group)
+        content_layout.setContentsMargins(8, 6, 8, 8)
         content_layout.setSpacing(6)
 
         def _section(text: str) -> QLabel:
@@ -129,26 +109,19 @@ class RefineUiMixin:
         )
         content_layout.addWidget(refine_hint)
 
-        # Detection: how the color is matched. Tolerance is per-channel (0-255),
-        # so the range is bounded and every step is meaningful. The color itself
-        # is re-picked in the swatch above; changing it re-runs the same way.
+        # Detection: how pixels are matched to classes. Tolerance is
+        # per-channel (0-255), so the range is bounded and every step counts.
         content_layout.addWidget(_section(tr("Detection")))
         self._tolerance_spin = _spin_row(
             content_layout,
             tr("Color tolerance:"),
             tr(
-                "How loosely the picked color is matched against the white "
-                "background. Each pixel goes to whichever is closer, so edges stay "
-                "clean even when the model's color drifts. Higher catches more "
-                "shades of the picked color; lower keeps only the purest ones."
+                "Each pixel goes to the closest class color, so edges stay "
+                "clean even when the model's colors drift. This caps how far a "
+                "pixel may sit from its class: higher sweeps in noisy shades, "
+                "lower leaves them out of every class."
             ),
             0, 255, 90,
-        )
-        self._sieve_spin = _spin_row(
-            content_layout,
-            tr("Remove speckle:"),
-            tr("Drop connected blobs smaller than this many pixels before tracing."),
-            0, 2000, 10,
         )
 
         content_layout.addWidget(_section(tr("Outline")))
@@ -167,8 +140,6 @@ class RefineUiMixin:
             ),
             default=False,
         )
-
-        content_layout.addWidget(_section(tr("Selection")))
         self._expand_spin = _spin_row(
             content_layout,
             tr("Expand/Contract:"),
@@ -176,10 +147,18 @@ class RefineUiMixin:
             -1000, 1000, 0,
         )
         self._expand_spin.setSuffix(" px")
+
+        content_layout.addWidget(_section(tr("Cleanup")))
+        self._sieve_spin = _spin_row(
+            content_layout,
+            tr("Remove speckle:"),
+            tr("Drop connected blobs smaller than this many pixels before tracing."),
+            0, 2000, 10,
+        )
         self._fill_holes_check = _check_row(
             content_layout,
             tr("Fill holes:"),
-            tr("Fill interior holes in the selection"),
+            tr("Fill interior holes in each shape"),
             default=False,
         )
         self._min_pixels_spin = _spin_row(
@@ -192,8 +171,6 @@ class RefineUiMixin:
             0, 100000, 50,
         )
         self._min_pixels_spin.setSuffix(" px")
-
-        outer.addWidget(content)
 
         # Every refine control re-runs the vectorize (debounced) on change.
         for spin in (

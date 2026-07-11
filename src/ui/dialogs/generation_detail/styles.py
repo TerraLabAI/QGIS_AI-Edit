@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import os
 
+from ...dock.style import BRAND_GREEN
+
 _PLUGIN_DIR = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 )
@@ -62,7 +64,7 @@ _ACTION_BTN = (
     "border-color: rgba(128,128,128,0.15); }"
 )
 _PRIMARY_BTN = (
-    "QPushButton { background: #8bac27; border: none; border-radius: 4px; "
+    f"QPushButton {{ background: {BRAND_GREEN}; border: none; border-radius: 4px; "
     "padding: 8px 14px; font-size: 12px; font-weight: 600; color: #14210A; }"
     "QPushButton:hover { background: #76a32a; }"
     "QPushButton:disabled { background: rgba(128,128,128,0.25); color: rgba(128,128,128,0.6); }"

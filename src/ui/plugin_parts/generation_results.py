@@ -78,8 +78,12 @@ class GenerationResultsMixin:
                 })
             except Exception:  # nosec B110
                 pass
-        telemetry.track(te.GENERATION_FAILED, self._enrich_generation_props(extra_props))
-        telemetry.flush()
+        # Running out of credits is a monetization outcome, not a product
+        # failure: it ships as TRIAL_EXHAUSTED_VIEWED below. Emitting it as
+        # generation_failed too made healthy releases read as regressions.
+        if normalized_code != "TRIAL_EXHAUSTED" and not is_quota_error:
+            telemetry.track(te.GENERATION_FAILED, self._enrich_generation_props(extra_props))
+            telemetry.flush()
         if normalized_code == "TRIAL_EXHAUSTED":
             # Cache-only (no client): pre-warmed off-thread at startup, so this
             # never blocks the UI thread. Falls back to the default upgrade URL.
@@ -172,6 +176,7 @@ class GenerationResultsMixin:
         self._clear_markup_layer()
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
 
+        completed_emitted = False
         try:
             layer = add_geotiff_to_project(
                 result_info["geotiff_path"],
@@ -198,6 +203,7 @@ class GenerationResultsMixin:
                 "used_template": bool(template_id),
             }))
             telemetry.flush()
+            completed_emitted = True
             self._maybe_emit_first_generation_milestone()
             self._dock_widget.set_generation_complete(layer.name(), layer.id())
             # Append this result to the lineage and let the strip show + select
@@ -245,6 +251,20 @@ class GenerationResultsMixin:
             self._refresh_credits()
             log(f"Generation complete ({round(duration, 1)}s): {result_info['geotiff_path']}")
         except Exception as e:
+            if completed_emitted:
+                # The run was already counted complete; a cosmetic post-complete
+                # UI step failed. Never re-emit generation_completed and never
+                # blame the layer-add (it succeeded): log, unlock the UI, keep
+                # the result layer in the project.
+                telemetry.track(te.PLUGIN_ERROR, {
+                    "stage": "write",
+                    "error_code": "post_complete_ui",
+                    "error_message": _scrub_paths(str(e))[:200],
+                })
+                telemetry.flush()
+                self._dock_widget.set_generating(False)
+                log_warning(f"Post-completion UI step failed: {e}")
+                return
             # The generation itself succeeded and was billed; only the local
             # layer-add failed. Still emit generation_completed (with the same
             # props as the success path plus layer_add_failed) so a billed run

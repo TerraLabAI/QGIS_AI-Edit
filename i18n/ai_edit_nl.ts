@@ -1959,5 +1959,265 @@ We horen graag van u!</translation>
         <source>AI Edit could not reach the server. Some features need an internet connection.</source>
         <translation>AI Edit kon de server niet bereiken. Sommige functies hebben een internetverbinding nodig.</translation>
     </message>
+    <message>
+        <source>0 matches for the checked classes. Adjust a color, or use 'Add color from map' to sample one from the raster.</source>
+        <translation>0 overeenkomsten voor de aangevinkte klassen. Pas een kleur aan of gebruik 'Kleur van kaart toevoegen' om er een uit het raster te bemonsteren.</translation>
+    </message>
+    <message>
+        <source>1. Click to copy logs</source>
+        <translation>1. Klik om de logs te kopiëren</translation>
+    </message>
+    <message>
+        <source>2. Click to send to {email}</source>
+        <translation>2. Klik om naar {email} te sturen</translation>
+    </message>
+    <message>
+        <source>Add color from map</source>
+        <translation>Kleur van kaart toevoegen</translation>
+    </message>
+    <message>
+        <source>Added {hex} to the class list.</source>
+        <translation>{hex} toegevoegd aan de klassenlijst.</translation>
+    </message>
+    <message>
+        <source>Adjust this color.</source>
+        <translation>Deze kleur aanpassen.</translation>
+    </message>
+    <message>
+        <source>Any GeoTIFF, WMS or XYZ basemap.</source>
+        <translation>Elke GeoTIFF, WMS of XYZ-basiskaart.</translation>
+    </message>
+    <message>
+        <source>Check at least one class to vectorize.</source>
+        <translation>Vink minstens één klasse aan om te vectoriseren.</translation>
+    </message>
+    <message>
+        <source>Checking imagery availability</source>
+        <translation>Beschikbaarheid van beeldmateriaal wordt gecontroleerd</translation>
+    </message>
+    <message>
+        <source>Class name</source>
+        <translation>Klassenaam</translation>
+    </message>
+    <message>
+        <source>Class {n}</source>
+        <translation>Klasse {n}</translation>
+    </message>
+    <message>
+        <source>Classes</source>
+        <translation>Klassen</translation>
+    </message>
+    <message>
+        <source>Cleanup</source>
+        <translation>Opschonen</translation>
+    </message>
+    <message>
+        <source>Colors detected in this map - each checked one becomes a polygon class:</source>
+        <translation>Gedetecteerde kleuren in deze kaart - elke aangevinkte kleur wordt een polygoonklasse:</translation>
+    </message>
+    <message>
+        <source>Could not read raster pixels (the file may be incomplete).</source>
+        <translation>Kan de rasterpixels niet lezen (het bestand is mogelijk onvolledig).</translation>
+    </message>
+    <message>
+        <source>Couldn't load the example basemap. Check your internet connection, or add your own layer (GeoTIFF, WMS, XYZ).</source>
+        <translation>Kan de voorbeeld-basiskaart niet laden. Controleer uw internetverbinding of voeg uw eigen laag toe (GeoTIFF, WMS, XYZ).</translation>
+    </message>
+    <message>
+        <source>Couldn't open your browser. Copy the link and open it manually.</source>
+        <translation>Kan uw browser niet openen. Kopieer de link en open deze handmatig.</translation>
+    </message>
+    <message>
+        <source>Couldn't save the updated features to the file.</source>
+        <translation>Kan de bijgewerkte objecten niet in het bestand opslaan.</translation>
+    </message>
+    <message>
+        <source>Credit refunded.</source>
+        <translation>Credit terugbetaald.</translation>
+    </message>
+    <message>
+        <source>Downloading reference image</source>
+        <translation>Referentieafbeelding wordt gedownload</translation>
+    </message>
+    <message>
+        <source>Draw on your zone to point the AI where to act. Your marks guide the edit and are removed from the result.</source>
+        <translation>Teken op uw zone om de AI te wijzen waar te handelen. Uw markeringen sturen de bewerking en worden uit het resultaat verwijderd.</translation>
+    </message>
+    <message>
+        <source>Each pixel goes to the closest class color, so edges stay clean even when the model's colors drift. This caps how far a pixel may sit from its class: higher sweeps in noisy shades, lower leaves them out of every class.</source>
+        <translation>Elke pixel gaat naar de dichtstbijzijnde klassekleur, zodat randen schoon blijven, ook als de kleuren van het model afwijken. Dit begrenst hoe ver een pixel van zijn klasse mag liggen: hoger neemt ruizige tinten mee, lager laat ze buiten elke klasse.</translation>
+    </message>
+    <message>
+        <source>Edit classes</source>
+        <translation>Klassen bewerken</translation>
+    </message>
+    <message>
+        <source>Failed to download result image after 3 attempts: {err}.</source>
+        <translation>Kan de resultaatafbeelding na 3 pogingen niet downloaden: {err}.</translation>
+    </message>
+    <message>
+        <source>Fill interior holes in each shape</source>
+        <translation>Gaten binnen elke vorm opvullen</translation>
+    </message>
+    <message>
+        <source>Free account - sign up takes 15 seconds in your browser.</source>
+        <translation>Gratis account - aanmelden duurt 15 seconden in uw browser.</translation>
+    </message>
+    <message>
+        <source>Free-text label written to each polygon's class_name attribute.</source>
+        <translation>Vrije tekst die naar het class_name-attribuut van elke polygoon wordt geschreven.</translation>
+    </message>
+    <message>
+        <source>Go back to the class list to check, rename or recolor classes, then vectorize again.</source>
+        <translation>Ga terug naar de klassenlijst om klassen aan te vinken, te hernoemen of een andere kleur te geven, en vectoriseer opnieuw.</translation>
+    </message>
+    <message>
+        <source>If a credit was charged, it will be refunded.</source>
+        <translation>Als er een credit is afgeschreven, wordt deze terugbetaald.</translation>
+    </message>
+    <message>
+        <source>Keep your marks on the zone to guide the edit, and close Mark up</source>
+        <translation>Laat uw markeringen op de zone staan om de bewerking te sturen en sluit Annoteren</translation>
+    </message>
+    <message>
+        <source>Load your own imagery</source>
+        <translation>Laad uw eigen beeldmateriaal</translation>
+    </message>
+    <message>
+        <source>Loading imagery…</source>
+        <translation>Beeldmateriaal laden…</translation>
+    </message>
+    <message>
+        <source>New here?</source>
+        <translation>Nieuw hier?</translation>
+    </message>
+    <message>
+        <source>New here? Our 5-minute tutorial walks you through a full edit, step by step.</source>
+        <translation>Nieuw hier? Onze tutorial van 5 minuten leidt u stap voor stap door een volledige bewerking.</translation>
+    </message>
+    <message>
+        <source>No flat color classes found - this image looks photo-realistic. Vectorize works best on maps with solid colors (Segment or Land cover results). You can still sample a color below.</source>
+        <translation>Geen egale kleurklassen gevonden - deze afbeelding oogt fotorealistisch. Vectoriseren werkt het best op kaarten met egale kleuren (resultaten van Segmentatie of Bodembedekking). U kunt hieronder alsnog een kleur bemonsteren.</translation>
+    </message>
+    <message>
+        <source>No polygons found for the selected colors (try a wider tolerance or smaller min size)</source>
+        <translation>Geen polygonen gevonden voor de geselecteerde kleuren (probeer een ruimere tolerantie of een kleinere minimumgrootte)</translation>
+    </message>
+    <message>
+        <source>No shapes left after filtering. Raise 'Color tolerance' or lower 'Min polygon size' below.</source>
+        <translation>Geen vormen meer over na het filteren. Verhoog 'Kleurtolerantie' of verlaag 'Min. polygoongrootte' hieronder.</translation>
+    </message>
+    <message>
+        <source>Open the step-by-step tutorial</source>
+        <translation>De stapsgewijze tutorial openen</translation>
+    </message>
+    <message>
+        <source>Open the tutorial</source>
+        <translation>Tutorial openen</translation>
+    </message>
+    <message>
+        <source>Raster has no usable georeferencing.</source>
+        <translation>Het raster heeft geen bruikbare georeferentie.</translation>
+    </message>
+    <message>
+        <source>Refine</source>
+        <translation>Verfijnen</translation>
+    </message>
+    <message>
+        <source>Sample a color directly from the source raster and add it as a class.</source>
+        <translation>Bemonster een kleur rechtstreeks uit het bronraster en voeg deze toe als klasse.</translation>
+    </message>
+    <message>
+        <source>Select at least one color to vectorize.</source>
+        <translation>Selecteer minstens één kleur om te vectoriseren.</translation>
+    </message>
+    <message>
+        <source>Server returned a non-image response, retrying download</source>
+        <translation>De server gaf een antwoord terug dat geen afbeelding is, download wordt opnieuw geprobeerd</translation>
+    </message>
+    <message>
+        <source>Share of the map covered by this color.</source>
+        <translation>Aandeel van de kaart dat door deze kleur wordt bedekt.</translation>
+    </message>
+    <message>
+        <source>Still waiting. If the page did not open or shows an error, click Open again or copy the link into another browser.</source>
+        <translation>Nog steeds aan het wachten. Als de pagina niet is geopend of een fout toont, klik dan opnieuw op Openen of kopieer de link naar een andere browser.</translation>
+    </message>
+    <message>
+        <source>Team or organization?</source>
+        <translation>Team of organisatie?</translation>
+    </message>
+    <message>
+        <source>The server did not confirm your request. If a credit was charged it will be refunded shortly. Check the Recent tab before retrying.</source>
+        <translation>De server heeft uw verzoek niet bevestigd. Als er een credit is afgeschreven, wordt deze binnenkort terugbetaald. Controleer het tabblad Recent voordat u het opnieuw probeert.</translation>
+    </message>
+    <message>
+        <source>The service is temporarily unavailable (server error). Your connection is fine - please try again in a few minutes.</source>
+        <translation>De service is tijdelijk niet beschikbaar (serverfout). Uw verbinding is in orde - probeer het over een paar minuten opnieuw.</translation>
+    </message>
+    <message>
+        <source>Then type what to change on your imagery, and get the result back as a georeferenced layer.</source>
+        <translation>Typ vervolgens wat er op uw beeldmateriaal moet veranderen en ontvang het resultaat als een gegeoreferenceerde laag.</translation>
+    </message>
+    <message>
+        <source>Trace this color as polygons. Unchecked colors are treated as background.</source>
+        <translation>Deze kleur als polygonen overtrekken. Niet-aangevinkte kleuren worden als achtergrond behandeld.</translation>
+    </message>
+    <message>
+        <source>Try it on an example</source>
+        <translation>Probeer het met een voorbeeld</translation>
+    </message>
+    <message>
+        <source>Vector</source>
+        <translation>Vector</translation>
+    </message>
+    <message>
+        <source>Vectorize turns a flat-color map (Segment, Land cover, masks, site plans...) into editable polygons - one class per color, ready to select, measure, style and export. It reads colors, so it works on colored maps, not photo-realistic images.</source>
+        <translation>Vectoriseren zet een kaart met egale kleuren (Segmentatie, Bodembedekking, maskers, situatietekeningen...) om in bewerkbare polygonen - één klasse per kleur, klaar om te selecteren, meten, stylen en exporteren. Het leest kleuren, dus het werkt op gekleurde kaarten, niet op fotorealistische afbeeldingen.</translation>
+    </message>
+    <message>
+        <source>Waiting for the example basemap to finish loading before you generate</source>
+        <translation>Wachten tot de voorbeeld-basiskaart klaar is met laden voordat u genereert</translation>
+    </message>
+    <message>
+        <source>Watch the tutorial</source>
+        <translation>Bekijk de tutorial</translation>
+    </message>
+    <message>
+        <source>Write to us:</source>
+        <translation>Schrijf ons:</translation>
+    </message>
+    <message>
+        <source>background</source>
+        <translation>achtergrond</translation>
+    </message>
+    <message>
+        <source>paved</source>
+        <translation>verharding</translation>
+    </message>
+    <message>
+        <source>vegetation</source>
+        <translation>vegetatie</translation>
+    </message>
+    <message>
+        <source>water</source>
+        <translation>water</translation>
+    </message>
+    <message>
+        <source>{n} mark. Click Done to guide the edit with it.</source>
+        <translation>{n} markering. Klik op Klaar om de bewerking ermee te sturen.</translation>
+    </message>
+    <message>
+        <source>{n} marks. Click Done to guide the edit with them.</source>
+        <translation>{n} markeringen. Klik op Klaar om de bewerking ermee te sturen.</translation>
+    </message>
+    <message>
+        <source>{n} polygons across {k} classes</source>
+        <translation>{n} polygonen verdeeld over {k} klassen</translation>
+    </message>
+    <message>
+        <source>{n} versions</source>
+        <translation>{n} versies</translation>
+    </message>
 </context>
 </TS>

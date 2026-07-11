@@ -25,22 +25,20 @@ from .auth_helper import (
 _KEY_RE = re.compile(r"^tl_[0-9a-f]{32}$")
 
 SETTINGS_PREFIX = "AIEdit/"
-SUBSCRIBE_URL = (
-    "https://terra-lab.ai/dashboard/ai-edit"
-    "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=subscribe"
-)
-DASHBOARD_URL = (
-    "https://terra-lab.ai/dashboard/ai-edit"
-    "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=dashboard"
-)
-TERMS_URL = (
-    "https://terra-lab.ai/terms-of-sale"
-    "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=settings_terms"
-)
-PRIVACY_URL = (
-    "https://terra-lab.ai/privacy-policy"
-    "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=settings_privacy"
-)
+
+
+def build_utm_url(path: str, utm_content: str) -> str:
+    """Campaign-tagged terra-lab.ai URL; CTAs differ only by path + utm_content."""
+    return (
+        f"https://terra-lab.ai{path}"
+        f"?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content={utm_content}"
+    )
+
+
+SUBSCRIBE_URL = build_utm_url("/dashboard/ai-edit", "subscribe")
+DASHBOARD_URL = build_utm_url("/dashboard/ai-edit", "dashboard")
+TERMS_URL = build_utm_url("/terms-of-sale", "settings_terms")
+PRIVACY_URL = build_utm_url("/privacy-policy", "settings_privacy")
 
 
 def get_terms_url() -> str:
@@ -55,10 +53,7 @@ def get_privacy_url() -> str:
 DEFAULT_CONFIG = {
     "free_credits": 5,
     "free_tier_active": True,
-    "upgrade_url": (
-        "https://terra-lab.ai/dashboard/ai-edit"
-        "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=upgrade"
-    ),
+    "upgrade_url": build_utm_url("/dashboard/ai-edit", "upgrade"),
 }
 
 

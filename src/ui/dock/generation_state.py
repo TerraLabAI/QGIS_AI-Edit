@@ -148,8 +148,8 @@ class DockGenerationStateMixin:
         was picked for the previous zone. Called from plugin._on_zone_selected."""
         self._active_template_id = None
         self._active_template_name = None
-        # Resolution persists for the QGIS session - initial tier default is
-        # applied at init (paid "2K") and coerced to "1K" by
+        # Resolution persists for the QGIS session - the paid "2K" default is
+        # applied when set_credits confirms the tier, and coerced to "1K" by
         # _refresh_resolution_triggers when free tier is confirmed.
         self._refresh_resolution_triggers()
         self._update_layer_warning()
