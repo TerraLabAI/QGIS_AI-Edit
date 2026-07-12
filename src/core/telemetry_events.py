@@ -50,6 +50,9 @@ TUTORIAL_OPENED = "tutorial_opened"
 # Tools
 MARKUP_OPENED = "markup_opened"
 VECTORIZE_PANEL_OPENED = "vectorize_panel_opened"
+# CTA funnel: hint_shown fires when the result panel surfaces the Vectorize
+# suggestion (trigger: template | freeform_verb | flat_output).
+VECTORIZE_HINT_SHOWN = "vectorize_hint_shown"
 VECTORIZE_SUGGESTION_CLICKED = "vectorize_suggestion_clicked"
 VECTORIZE_COMPLETED = "vectorize_completed"
 SWIPE_ARMED = "swipe_armed"
@@ -97,6 +100,7 @@ ALL_EVENTS = frozenset({
     TUTORIAL_OPENED,
     MARKUP_OPENED,
     VECTORIZE_PANEL_OPENED,
+    VECTORIZE_HINT_SHOWN,
     VECTORIZE_SUGGESTION_CLICKED,
     VECTORIZE_COMPLETED,
     SWIPE_ARMED,
@@ -138,6 +142,7 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     TUTORIAL_OPENED: ("tutorial_source",),
     MARKUP_OPENED: (),
     VECTORIZE_PANEL_OPENED: (),
+    VECTORIZE_HINT_SHOWN: (),
     VECTORIZE_SUGGESTION_CLICKED: (),
     VECTORIZE_COMPLETED: (),
     SWIPE_ARMED: (),

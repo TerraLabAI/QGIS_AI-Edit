@@ -66,6 +66,15 @@ class PipelineContext:
     # color + label). Either may be None.
     vector_color: str | None = None
     vector_classes: list[dict] | None = None
+    # The prompt reads like a segmentation / land-cover / color-classification
+    # ask (detect_seg_context). Broader than vector_color's single-target
+    # matcher; only relaxes the worker-side flat-output detector below.
+    seg_intent: bool = False
+    # Flat-tint analysis of the downloaded result (vectorize_detect, run in
+    # the worker): [(hex, share), ...] dominant colors when the output looks
+    # like flat color zones, else None. Drives the result panel's prominent
+    # Vectorize CTA for manual segmentation / land-cover prompts.
+    flat_classes: list | None = None
 
     # Submit (populated by generation_service.py)
     request_id: str | None = None

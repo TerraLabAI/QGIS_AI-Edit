@@ -237,15 +237,49 @@ class GenerationResultsMixin:
                 self._dock_widget.add_version_thumb(thumb, result_prompt, version_meta)
             except AttributeError:
                 pass
+            flat_classes = result_info.get("flat_classes") or None
+            cta_trigger = ""
+            if vector_color or vector_classes:
+                cta_trigger = "template" if template_id else "freeform_verb"
+            elif flat_classes:
+                # No template or prompt hint, but the output itself is a small
+                # set of flat color zones (land-cover / segmentation look,
+                # detected worker-side): suggest vectorizing anyway with the
+                # main foreground class pre-filled.
+                from ...core.vectorize_detect import pick_foreground_color
+
+                vector_color = pick_foreground_color(flat_classes)
+                cta_trigger = "flat_output"
             class_label = _resolve_class_label(vector_color, vector_classes)
-            self._dock_widget.set_vectorize_suggestion(
-                layer.id(), vector_color, class_label
+            detected_colors = (
+                [c for c, _share in flat_classes] if flat_classes else None
             )
+            if detected_colors is None and isinstance(vector_classes, list):
+                # Multi-class template: show its palette on the CTA card.
+                detected_colors = [
+                    e.get("color")
+                    for e in vector_classes
+                    if isinstance(e, dict) and e.get("color")
+                ] or None
+            self._dock_widget.set_vectorize_suggestion(
+                layer.id(),
+                vector_color,
+                class_label,
+                detected_colors=detected_colors,
+                trigger=cta_trigger,
+            )
+            if vector_color:
+                telemetry.track(te.VECTORIZE_HINT_SHOWN, {
+                    "trigger": cta_trigger,
+                    "n_colors": len(flat_classes or []),
+                })
             # Surface the next action on the canvas, beside the × badge:
             # Compare whenever a before/after is possible, Vectorize when the
-            # run came from a detection / segmentation template (same signal
-            # that drives the dock CTA above).
-            self._vectorize_suggestion = (layer.id(), vector_color, class_label)
+            # run produced a vectorizable result (same signal that drives the
+            # dock CTA above).
+            self._vectorize_suggestion = (
+                layer.id(), vector_color, class_label, cta_trigger
+            )
             self._pills_armed = True
             self._show_action_pills()
             self._refresh_credits()

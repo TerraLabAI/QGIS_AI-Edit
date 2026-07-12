@@ -218,8 +218,8 @@ Edição de imagens geoespaciais com IA</translation>
         <translation>Todos os arquivos (*)</translation>
     </message>
     <message>
-        <source>All {limit} free credits used. Subscribe to continue.</source>
-        <translation>Todos os {limit} créditos gratuitos foram usados. Assine para continuar.</translation>
+        <source>You've used this month's {limit} free credits. They renew on the 1st.</source>
+        <translation>Você usou os {limit} créditos gratuitos deste mês. Eles renovam no dia 1º.</translation>
     </message>
     <message>
         <source>Arrow</source>
@@ -1540,6 +1540,18 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Vetorizar este resultado</translation>
     </message>
     <message>
+        <source>Finish</source>
+        <translation>Concluir</translation>
+    </message>
+    <message>
+        <source>{n} color zones detected in this result</source>
+        <translation>{n} zonas de cor detectadas neste resultado</translation>
+    </message>
+    <message>
+        <source>Turn the colored zones into editable polygons</source>
+        <translation>Transforme as zonas coloridas em polígonos editáveis</translation>
+    </message>
+    <message>
         <source>Vectorizing “{name}”...</source>
         <translation>Vetorizando “{name}”...</translation>
     </message>
@@ -1572,8 +1584,8 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Onde o AI Edit grava seus GeoTIFFs gerados. Deixe vazio para usar ~/Documents/AI Edit/ (ou a pasta do projeto salvo).</translation>
     </message>
     <message>
-        <source>You've used your free credits</source>
-        <translation>Você usou seus créditos gratuitos</translation>
+        <source>You've used this month's free credits</source>
+        <translation>Você usou os créditos gratuitos deste mês</translation>
     </message>
     <message>
         <source>Your prompt</source>
@@ -2060,8 +2072,8 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Preencher os buracos internos de cada forma</translation>
     </message>
     <message>
-        <source>Free account - sign up takes 15 seconds in your browser.</source>
-        <translation>Conta gratuita - o cadastro leva 15 segundos no navegador.</translation>
+        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>Plano gratuito - 5 edições com IA por mês. O cadastro leva 15 segundos no seu navegador.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

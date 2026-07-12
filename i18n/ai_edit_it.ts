@@ -218,8 +218,8 @@ Editing di immagini geospaziali basato sull'IA</translation>
         <translation>Tutti i file (*)</translation>
     </message>
     <message>
-        <source>All {limit} free credits used. Subscribe to continue.</source>
-        <translation>Hai utilizzato tutti i {limit} crediti gratuiti. Abbonati per continuare.</translation>
+        <source>You've used this month's {limit} free credits. They renew on the 1st.</source>
+        <translation>Hai utilizzato i {limit} crediti gratuiti di questo mese. Si rinnovano il giorno 1.</translation>
     </message>
     <message>
         <source>Arrow</source>
@@ -1540,6 +1540,18 @@ Saremo felici di ricevere il tuo feedback!</translation>
         <translation>Vettorizza questo risultato</translation>
     </message>
     <message>
+        <source>Finish</source>
+        <translation>Termina</translation>
+    </message>
+    <message>
+        <source>{n} color zones detected in this result</source>
+        <translation>{n} zone di colore rilevate in questo risultato</translation>
+    </message>
+    <message>
+        <source>Turn the colored zones into editable polygons</source>
+        <translation>Trasforma le zone colorate in poligoni modificabili</translation>
+    </message>
+    <message>
         <source>Vectorizing “{name}”...</source>
         <translation>Vettorizzazione di “{name}”...</translation>
     </message>
@@ -1572,8 +1584,8 @@ Saremo felici di ricevere il tuo feedback!</translation>
         <translation>Percorso in cui AI Edit scrive i GeoTIFF generati. Lascia vuoto per usare ~/Documents/AI Edit/ (o la cartella del progetto salvato).</translation>
     </message>
     <message>
-        <source>You've used your free credits</source>
-        <translation>Hai utilizzato i tuoi crediti gratuiti</translation>
+        <source>You've used this month's free credits</source>
+        <translation>Hai utilizzato i crediti gratuiti di questo mese</translation>
     </message>
     <message>
         <source>Your prompt</source>
@@ -2060,8 +2072,8 @@ Saremo felici di ricevere il tuo feedback!</translation>
         <translation>Riempi i buchi interni di ogni forma</translation>
     </message>
     <message>
-        <source>Free account - sign up takes 15 seconds in your browser.</source>
-        <translation>Account gratuito - la registrazione richiede 15 secondi nel browser.</translation>
+        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>Piano gratuito - 5 modifiche IA al mese. La registrazione richiede 15 secondi nel browser.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

@@ -218,8 +218,8 @@ AI-powered image editing for geospatial data</source>
         <translation>すべてのファイル (*)</translation>
     </message>
     <message>
-        <source>All {limit} free credits used. Subscribe to continue.</source>
-        <translation>無料クレジット{limit}件をすべて使用しました。続けるには登録してください。</translation>
+        <source>You've used this month's {limit} free credits. They renew on the 1st.</source>
+        <translation>今月の無料クレジット{limit}を使い切りました。毎月1日に更新されます。</translation>
     </message>
     <message>
         <source>Arrow</source>
@@ -1540,6 +1540,18 @@ We'd love to hear from you!</source>
         <translation>この結果をベクトル化</translation>
     </message>
     <message>
+        <source>Finish</source>
+        <translation>完了</translation>
+    </message>
+    <message>
+        <source>{n} color zones detected in this result</source>
+        <translation>この結果から{n}個の色ゾーンを検出しました</translation>
+    </message>
+    <message>
+        <source>Turn the colored zones into editable polygons</source>
+        <translation>色分けされたゾーンを編集可能なポリゴンに変換します</translation>
+    </message>
+    <message>
         <source>Vectorizing “{name}”...</source>
         <translation>「{name}」をベクトル化中...</translation>
     </message>
@@ -1572,8 +1584,8 @@ We'd love to hear from you!</source>
         <translation>AI Editが生成したGeoTIFFを保存する場所です。空欄の場合は ~/Documents/AI Edit/（またはプロジェクトの保存先フォルダ）が使用されます。</translation>
     </message>
     <message>
-        <source>You've used your free credits</source>
-        <translation>無料クレジットを使い切りました</translation>
+        <source>You've used this month's free credits</source>
+        <translation>今月の無料クレジットを使い切りました</translation>
     </message>
     <message>
         <source>Your prompt</source>
@@ -2060,8 +2072,8 @@ We'd love to hear from you!</source>
         <translation>各図形の内側の穴を埋める</translation>
     </message>
     <message>
-        <source>Free account - sign up takes 15 seconds in your browser.</source>
-        <translation>無料アカウント - ブラウザで15秒で登録できます。</translation>
+        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>無料プラン - 毎月5回のAI編集。登録はブラウザで15秒で完了します。</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

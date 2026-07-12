@@ -72,6 +72,18 @@ _BTN_BLUE_AUTH = (
     f"QPushButton:disabled {{ background-color: {BRAND_DISABLED}; }}"
 )
 
+# Blue-outline secondary (canonical design-system constant, mirrored from the
+# AI Segmentation socle): a prominent secondary sitting on a screen whose one
+# filled primary is the green Generate.
+_BTN_BLUE_OUTLINE = (
+    f"QPushButton {{ background-color: transparent; color: {BRAND_BLUE};"
+    f" border: 1px solid {BRAND_BLUE}; border-radius: 4px; font-weight: 600;"
+    " padding: 6px 12px; }"
+    "QPushButton:hover { background-color: rgba(30, 136, 229, 0.12); }"
+    f"QPushButton:disabled {{ color: {DISABLED_TEXT};"
+    f" border-color: {DISABLED_TEXT}; }}"
+)
+
 _BTN_GRAY = (
     f"QPushButton {{ background-color: {BRAND_GRAY}; color: #000000;"
     f" padding: 4px 8px; border: none; border-radius: 4px; }}"

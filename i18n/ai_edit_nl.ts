@@ -218,8 +218,8 @@ AI-gestuurde beeldbewerking voor geospatiale data</translation>
         <translation>Alle bestanden (*)</translation>
     </message>
     <message>
-        <source>All {limit} free credits used. Subscribe to continue.</source>
-        <translation>Alle {limit} gratis credits zijn gebruikt. Neem een abonnement om door te gaan.</translation>
+        <source>You've used this month's {limit} free credits. They renew on the 1st.</source>
+        <translation>U heeft de {limit} gratis credits van deze maand gebruikt. Ze worden op de 1e vernieuwd.</translation>
     </message>
     <message>
         <source>Arrow</source>
@@ -1540,6 +1540,18 @@ We horen graag van u!</translation>
         <translation>Vectoriseer dit resultaat</translation>
     </message>
     <message>
+        <source>Finish</source>
+        <translation>Voltooien</translation>
+    </message>
+    <message>
+        <source>{n} color zones detected in this result</source>
+        <translation>{n} kleurzones gedetecteerd in dit resultaat</translation>
+    </message>
+    <message>
+        <source>Turn the colored zones into editable polygons</source>
+        <translation>Zet de gekleurde zones om in bewerkbare polygonen</translation>
+    </message>
+    <message>
         <source>Vectorizing “{name}”...</source>
         <translation>Bezig met vectoriseren van “{name}”...</translation>
     </message>
@@ -1572,8 +1584,8 @@ We horen graag van u!</translation>
         <translation>Waar AI Edit de gegenereerde GeoTIFFs opslaat. Laat leeg om ~/Documents/AI Edit/ te gebruiken (of de map van het opgeslagen project).</translation>
     </message>
     <message>
-        <source>You've used your free credits</source>
-        <translation>U heeft uw gratis credits gebruikt</translation>
+        <source>You've used this month's free credits</source>
+        <translation>U heeft de gratis credits van deze maand gebruikt</translation>
     </message>
     <message>
         <source>Your prompt</source>
@@ -2060,8 +2072,8 @@ We horen graag van u!</translation>
         <translation>Gaten binnen elke vorm opvullen</translation>
     </message>
     <message>
-        <source>Free account - sign up takes 15 seconds in your browser.</source>
-        <translation>Gratis account - aanmelden duurt 15 seconden in uw browser.</translation>
+        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>Gratis plan - 5 AI-bewerkingen per maand. Aanmelden duurt 15 seconden in uw browser.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

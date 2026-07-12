@@ -33,7 +33,7 @@ from .color_controls import ColorControlsMixin
 from .layer_filters import _is_ai_edit_output, _is_visible_ai_edit_output
 from .refine_ui import RefineUiMixin
 from .run_lifecycle import RunLifecycleMixin
-from .style import _BTN_BLUE_QSS, _BTN_GHOST_QSS, ERROR_TEXT, SUCCESS_TEXT
+from .style import _BTN_GHOST_QSS, _BTN_GREEN, _BTN_LINK_MUTED_QSS, ERROR_TEXT, SUCCESS_TEXT
 
 
 class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidget):
@@ -196,48 +196,50 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
             lambda: self._status_label.setVisible(False)
         )
 
-        # Action row: Exit (left, ghost) and Vectorize (right, primary blue).
-        # Mirrors the Mark up panel's bottom row so the two tool panels feel
-        # like siblings.
-        action_row = QHBoxLayout()
-        action_row.setContentsMargins(0, 6, 0, 0)
-        action_row.setSpacing(6)
+        # Primary: full-width green Vectorize, the ONLY filled button on the
+        # panel, mirroring AI Segmentation's review Export button so the
+        # finish line is unmistakable. The escape hatch is the muted Exit
+        # link below, never a competing filled/ghost button (the old ghost
+        # "Done" next to a small blue "Vectorize" read as two equals -
+        # Yvann, 2026-07-12).
+        self._run_btn = QPushButton(tr("Vectorize"))
+        self._run_btn.setStyleSheet(_BTN_GREEN)
+        self._run_btn.setCursor(QtC.PointingHandCursor)
+        self._run_btn.setMinimumHeight(44)
+        self._run_btn.setDefault(True)
+        self._run_btn.setAutoDefault(True)
+        self._run_btn.clicked.connect(self._on_run_clicked)
+        layout.addWidget(self._run_btn)
 
-        # Ghost "Done" to bail out before running. Hidden once a run
-        # succeeds: the blue run button then relabels itself to "Done", and
-        # two "Done" buttons side by side just confuse (issue #125).
-        self._exit_btn = QPushButton(tr("Done"))
-        self._exit_btn.setStyleSheet(_BTN_GHOST_QSS)
-        self._exit_btn.setCursor(QtC.PointingHandCursor)
-        self._exit_btn.setMinimumHeight(34)
-        self._exit_btn.setMinimumWidth(80)
-        self._exit_btn.clicked.connect(self.done_clicked.emit)
-        action_row.addWidget(self._exit_btn)
+        # Quiet links under the primary, centered (same pattern as the
+        # segmentation review's "Adjust and run again · Exit" line).
+        links_row = QHBoxLayout()
+        links_row.setContentsMargins(0, 0, 0, 0)
+        links_row.setSpacing(2)
+        links_row.addStretch(1)
 
         # Refine state's way back: swaps the panel to the setup page (layer +
         # classes) without touching the traced layer. Glyph outside tr().
         self._back_btn = QPushButton("‹ " + tr("Edit classes"))
-        self._back_btn.setStyleSheet(_BTN_GHOST_QSS)
+        self._back_btn.setStyleSheet(_BTN_LINK_MUTED_QSS)
         self._back_btn.setCursor(QtC.PointingHandCursor)
-        self._back_btn.setMinimumHeight(34)
         self._back_btn.setToolTip(
             tr("Go back to the class list to check, rename or recolor "
                "classes, then vectorize again.")
         )
         self._back_btn.clicked.connect(self._on_back_clicked)
         self._back_btn.setVisible(False)
-        action_row.addWidget(self._back_btn)
-        action_row.addStretch()
+        links_row.addWidget(self._back_btn)
 
-        self._run_btn = QPushButton(tr("Vectorize"))
-        self._run_btn.setStyleSheet(_BTN_BLUE_QSS)
-        self._run_btn.setCursor(QtC.PointingHandCursor)
-        self._run_btn.setMinimumHeight(34)
-        self._run_btn.setDefault(True)
-        self._run_btn.setAutoDefault(True)
-        self._run_btn.clicked.connect(self._on_run_clicked)
-        action_row.addWidget(self._run_btn)
-        layout.addLayout(action_row)
+        # Exit before running. Hidden once a run succeeds: the green button
+        # then relabels itself to "Finish" and carries the exit.
+        self._exit_btn = QPushButton(tr("Exit"))
+        self._exit_btn.setStyleSheet(_BTN_LINK_MUTED_QSS)
+        self._exit_btn.setCursor(QtC.PointingHandCursor)
+        self._exit_btn.clicked.connect(self.done_clicked.emit)
+        links_row.addWidget(self._exit_btn)
+        links_row.addStretch(1)
+        layout.addLayout(links_row)
 
         # The dismissible tip at the top carries the tool description, so there
         # is no footer info box mixed in with the controls.

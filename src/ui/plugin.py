@@ -107,10 +107,11 @@ class AIEditPlugin(
         # Throttle for the "draw inside the zone" notice so repeated out-of-zone
         # strokes don't stack message bars.
         self._markup_outside_notice_active = False
-        # Stored (layer_id, color_hex, class_label) of the last generation so
-        # the canvas Vectorize pill can open the panel pre-filled, mirroring
-        # the dock CTA. None when the last run was not a detection template.
-        self._vectorize_suggestion: tuple[str, str | None, str] | None = None
+        # Stored (layer_id, color_hex, class_label, trigger) of the last
+        # generation so the canvas Vectorize pill can open the panel
+        # pre-filled, mirroring the dock CTA. None when the last run produced
+        # nothing vectorizable (no template hints, no flat-color output).
+        self._vectorize_suggestion: tuple[str, str | None, str, str] | None = None
         # Whether the canvas action pills (×/Compare/Vectorize) belong on the
         # canvas right now. Tool panels (Vectorize / Mark up) hide them while
         # open; this flag lets the panel-exit path bring them back.

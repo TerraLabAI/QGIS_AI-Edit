@@ -120,7 +120,10 @@ class DockChromeMixin:
         # Value proposition in words, pixel-matched to the AI Segmentation
         # sign-in screen's checkmark card (same neutral frame, same rows) so
         # the two docks read as one family. An illustrative image and a
-        # "5 free AI Edits" hint were tried here and rejected: text only.
+        # standalone "5 free AI Edits" hint were tried here and rejected:
+        # text only. Since the 2026-07 monthly free plan, the first bullet
+        # states the allowance ("5 AI edits every month"): the monthly
+        # renewal is the plan's pitch and must be explicit.
         hint_card = QFrame()
         hint_card.setObjectName("signinHintCard")
         hint_card.setStyleSheet(
@@ -132,7 +135,8 @@ class DockChromeMixin:
         hint_card_layout.setContentsMargins(10, 8, 10, 8)
         hint_card_layout.setSpacing(5)
         for line in (
-            tr("Free account - sign up takes 15 seconds in your browser."),
+            tr("Free plan - 5 AI edits every month. Sign-up takes 15 seconds "
+               "in your browser."),
             tr("Then type what to change on your imagery, and get the result "
                "back as a georeferenced layer."),
         ):

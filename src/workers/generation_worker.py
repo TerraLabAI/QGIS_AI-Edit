@@ -33,6 +33,7 @@ def _ctx_snapshot(ctx) -> dict:
         "template_name": getattr(ctx, "template_name", None),
         "vector_color": getattr(ctx, "vector_color", None),
         "vector_classes": getattr(ctx, "vector_classes", None),
+        "flat_classes": getattr(ctx, "flat_classes", None),
         "output_rescued": bool(getattr(ctx, "output_rescued", False)),
     }
 
@@ -344,6 +345,23 @@ class GenerationTask(QgsTask):
 
         if self.isCanceled():
             return False
+
+        # Flat-tint sniff on the downloaded bytes: lights the Vectorize CTA
+        # for manual segmentation / land-cover prompts that carry no template
+        # hints. Optional by design, a failure must never fail the run.
+        if (
+            self._ctx is not None
+            and not self._ctx.vector_color
+            and not self._ctx.vector_classes
+        ):
+            try:
+                from ..core.vectorize_detect import detect_flat_colors
+
+                self._ctx.flat_classes = detect_flat_colors(
+                    image_data, seg_hint=bool(getattr(self._ctx, "seg_intent", False))
+                )
+            except Exception:  # nosec B110
+                self._ctx.flat_classes = None
 
         self.progress.emit(tr("Dropping it on the map..."), 97)
 

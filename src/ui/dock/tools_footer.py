@@ -360,14 +360,18 @@ class DockToolsFooterMixin:
         layer_id: str | None,
         color_hex: str | None,
         class_label: str = "",
+        detected_colors: list[str] | None = None,
+        trigger: str = "",
     ) -> None:
-        """Inject (or clear) the post-generation Vectorize CTA.
+        """Inject (or clear) the post-generation Vectorize CTA card.
 
-        Called by the plugin orchestrator after a successful generation
-        when the template carried a vector_color in the catalog. Hidden
-        the moment the user navigates away from the result section.
-        ``class_label`` (when known) flows down to the vectorize panel
-        so the produced polygons land with a sensible class_name value.
+        Called by the plugin orchestrator after a successful generation when
+        a template carried vector hints, a free-form prompt asked to segment
+        one target, or the downloaded result itself is a set of flat color
+        zones (trigger="flat_output", detected_colors carries the zone
+        palette). Hidden the moment the user navigates away from the result
+        section. ``class_label`` (when known) flows down to the vectorize
+        panel so the produced polygons land with a sensible class_name value.
         """
         if not layer_id or not color_hex:
             self._vectorize_cta_section.setVisible(False)
@@ -380,21 +384,50 @@ class DockToolsFooterMixin:
             self._vectorize_cta_pending = None
             return
         normalised = qc.name().upper()
-        self._vectorize_cta_swatch.setStyleSheet(
-            f"background: {normalised};"
-            " border: 1px solid rgba(128,128,128,0.5); border-radius: 3px;"
+        swatches: list[str] = []
+        for candidate in detected_colors or [normalised]:
+            sc = QColor(candidate)
+            if sc.isValid():
+                swatches.append(sc.name().upper())
+        if not swatches:
+            swatches = [normalised]
+        self._set_vectorize_swatches(swatches)
+        # Instrument voice: measure what was detected; the button carries
+        # the action. The generic line covers template / prompt triggers.
+        if trigger == "flat_output":
+            caption = tr("{n} color zones detected in this result").format(
+                n=len(swatches)
+            )
+        else:
+            caption = tr("Turn the colored zones into editable polygons")
+        self._vectorize_cta_caption.setText(caption)
+        self._vectorize_cta_pending = (
+            layer_id, normalised, class_label or "", trigger or ""
         )
-        # The swatch communicates the pre-filled color already; the label
-        # stays generic so it works for every template.
-        self._vectorize_cta_btn.setText(tr("Vectorize this result") + " →")
-        self._vectorize_cta_pending = (layer_id, normalised, class_label or "")
         self._vectorize_cta_section.setVisible(True)
+
+    def _set_vectorize_swatches(self, colors: list[str]) -> None:
+        """Rebuild the CTA's color swatch row (max 6, one per detected zone)."""
+        row = self._vectorize_cta_swatch_row
+        while row.count():
+            item = row.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+        for hex_color in colors[:6]:
+            sw = QLabel()
+            sw.setFixedSize(14, 14)
+            sw.setStyleSheet(
+                f"background: {hex_color};"
+                " border: 1px solid rgba(128,128,128,0.5); border-radius: 3px;"
+            )
+            row.addWidget(sw)
 
     def _on_vectorize_cta_clicked(self) -> None:
         if self._vectorize_cta_pending is None:
             return
-        layer_id, color_hex, class_label = self._vectorize_cta_pending
-        self.vectorize_suggestion_clicked.emit(layer_id, color_hex, class_label)
+        layer_id, color_hex, class_label, trigger = self._vectorize_cta_pending
+        self.vectorize_suggestion_clicked.emit(layer_id, color_hex, class_label, trigger)
 
     def _on_contact_us(self, _link=None):
         """Show a dialog with email + Calendly options."""

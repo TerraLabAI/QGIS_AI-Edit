@@ -55,11 +55,12 @@ class AIEditDockWidget(
     zone_clear_requested = pyqtSignal()    # Escape pressed while a zone was selected
     markup_clicked = pyqtSignal()          # user picked Tools → Mark up
     vectorize_clicked = pyqtSignal()       # user picked Tools → Vectorize
-    # (layer_id, color_hex, class_label) from the "Extract regions" CTA in
-    # the result panel. class_label seeds the class_name attribute on
-    # every produced polygon (empty for mono-class templates that lack
-    # a server-side label).
-    vectorize_suggestion_clicked = pyqtSignal(str, str, str)
+    # (layer_id, color_hex, class_label, trigger) from the "Vectorize this
+    # result" CTA in the result panel. class_label seeds the class_name
+    # attribute on every produced polygon (empty for mono-class templates
+    # that lack a server-side label); trigger says what surfaced the CTA
+    # (template | freeform_verb | flat_output) for the telemetry funnel.
+    vectorize_suggestion_clicked = pyqtSignal(str, str, str, str)
     # Footer Before/After is a checkable toggle: True = user wants the
     # swipe map tool armed, False = user wants it disarmed. The plugin
     # routes both states to the SwipeController.

@@ -38,13 +38,13 @@ from ..version_strip import VersionStrip
 from .prompt_container import _PromptContainer
 from .style import (
     _BTN_BLUE,
+    _BTN_BLUE_OUTLINE,
     _BTN_GHOST,
     _BTN_GREEN,
     _FOOTER_ICON_BTN_STYLE,
     _FOOTER_ICON_TOGGLE_STYLE,
     _FOOTER_MENU_STYLE,
     BRAND_BLUE,
-    BRAND_BLUE_HOVER,
 )
 from .widgets import _FooterIconButton, _SubmitTextEdit
 
@@ -169,37 +169,44 @@ def _build_result_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     dock._saved_layer_id: str | None = None
     dock._result_prompt_layout.addWidget(dock._layer_saved_label)
 
-    # --- Vectorize suggestion row (template-driven, hidden by default) ---
-    # Shown after a generation when the template carried a vector_color
-    # in the catalog. One click opens the Vectorize panel with the
-    # source layer locked and the swatch pre-filled. Hidden in every
-    # other case so it doesn't add noise to ad-hoc prompts.
-    dock._vectorize_cta_section = QWidget()
-    cta_layout = QHBoxLayout(dock._vectorize_cta_section)
-    cta_layout.setContentsMargins(0, 4, 0, 0)
+    # --- Vectorize suggestion card (hidden by default) ---
+    # Shown after a generation when a template carried vector hints, when a
+    # free-form prompt asked to segment one target, or when the downloaded
+    # result itself is a set of flat color zones (worker-side detection,
+    # vectorize_detect). One click opens the Vectorize panel with the source
+    # layer locked and the color pre-filled. Guidance-blue tint per the
+    # design-system taxonomy; the button is the blue-outline secondary so
+    # the screen's one filled primary stays the green Generate.
+    dock._vectorize_cta_section = QFrame()
+    dock._vectorize_cta_section.setObjectName("vectorizeCtaCard")
+    dock._vectorize_cta_section.setStyleSheet(
+        "QFrame#vectorizeCtaCard { background-color: rgba(30,136,229,0.08);"
+        " border: 1px solid rgba(30,136,229,0.22); border-radius: 6px; }"
+    )
+    cta_layout = QVBoxLayout(dock._vectorize_cta_section)
+    cta_layout.setContentsMargins(10, 8, 10, 10)
     cta_layout.setSpacing(6)
-    dock._vectorize_cta_swatch = QLabel()
-    dock._vectorize_cta_swatch.setFixedSize(14, 14)
-    dock._vectorize_cta_swatch.setStyleSheet(
-        "background: rgba(128,128,128,0.3); border: 1px solid rgba(128,128,128,0.5);"
-        " border-radius: 3px;"
+    cta_header = QHBoxLayout()
+    cta_header.setSpacing(6)
+    dock._vectorize_cta_swatch_row = QHBoxLayout()
+    dock._vectorize_cta_swatch_row.setSpacing(4)
+    cta_header.addLayout(dock._vectorize_cta_swatch_row)
+    dock._vectorize_cta_caption = QLabel()
+    dock._vectorize_cta_caption.setWordWrap(True)
+    dock._vectorize_cta_caption.setStyleSheet(
+        "font-size: 11px; color: palette(text);"
+        " background: transparent; border: none;"
     )
-    cta_layout.addWidget(dock._vectorize_cta_swatch)
-    dock._vectorize_cta_btn = QPushButton()
-    dock._vectorize_cta_btn.setText(tr("Vectorize this result") + " →")
-    dock._vectorize_cta_btn.setFlat(True)
+    cta_header.addWidget(dock._vectorize_cta_caption, 1)
+    cta_layout.addLayout(cta_header)
+    dock._vectorize_cta_btn = QPushButton(tr("Vectorize this result") + "  →")
     dock._vectorize_cta_btn.setCursor(QtC.PointingHandCursor)
-    dock._vectorize_cta_btn.setStyleSheet(
-        "QPushButton { background: transparent; border: none;"
-        f" color: {BRAND_BLUE}; padding: 4px 0px;"
-        " font-size: 12px; text-align: left; }"
-        f"QPushButton:hover {{ color: {BRAND_BLUE_HOVER};"
-        " text-decoration: underline; }}"
-    )
+    dock._vectorize_cta_btn.setMinimumHeight(32)
+    dock._vectorize_cta_btn.setStyleSheet(_BTN_BLUE_OUTLINE)
     dock._vectorize_cta_btn.clicked.connect(dock._on_vectorize_cta_clicked)
-    cta_layout.addWidget(dock._vectorize_cta_btn, 1)
+    cta_layout.addWidget(dock._vectorize_cta_btn)
     dock._vectorize_cta_section.setVisible(False)
-    dock._vectorize_cta_pending: tuple[str, str, str] | None = None
+    dock._vectorize_cta_pending: tuple[str, str, str, str] | None = None
     dock._result_prompt_layout.addWidget(dock._vectorize_cta_section)
 
     dock._result_layout.addWidget(dock._result_prompt_widget)

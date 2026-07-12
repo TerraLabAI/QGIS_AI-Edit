@@ -3,12 +3,21 @@ from __future__ import annotations
 
 # Design-system tokens from the dock single source (one-way import, dock.style has no back-edge).
 from ...dock.style import (  # noqa: F401
+    _BTN_GREEN,
     BRAND_BLUE,
     BRAND_BLUE_HOVER,
     BRAND_DISABLED,
     DISABLED_TEXT,
     ERROR_TEXT,
     SUCCESS_TEXT,
+)
+
+# Muted text link (canonical design-system constant, mirrored from the AI
+# Segmentation socle): the quiet escape hatch under a filled primary.
+_BTN_LINK_MUTED_QSS = (
+    "QPushButton { background: transparent; border: none;"
+    " color: rgba(128, 128, 128, 0.9); font-size: 11px; padding: 4px 8px; }"
+    f"QPushButton:hover {{ color: {ERROR_TEXT}; text-decoration: underline; }}"
 )
 
 _BTN_BLUE_QSS = (

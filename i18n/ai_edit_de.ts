@@ -218,8 +218,8 @@ KI-gestützte Bildbearbeitung für Geodaten</translation>
         <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-        <source>All {limit} free credits used. Subscribe to continue.</source>
-        <translation>Alle {limit} kostenlosen Credits sind aufgebraucht. Abonnieren Sie, um fortzufahren.</translation>
+        <source>You've used this month's {limit} free credits. They renew on the 1st.</source>
+        <translation>Sie haben die {limit} kostenlosen Credits dieses Monats verwendet. Sie werden am 1. erneuert.</translation>
     </message>
     <message>
         <source>Arrow</source>
@@ -1540,6 +1540,18 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>Dieses Ergebnis vektorisieren</translation>
     </message>
     <message>
+        <source>Finish</source>
+        <translation>Fertigstellen</translation>
+    </message>
+    <message>
+        <source>{n} color zones detected in this result</source>
+        <translation>{n} Farbzonen in diesem Ergebnis erkannt</translation>
+    </message>
+    <message>
+        <source>Turn the colored zones into editable polygons</source>
+        <translation>Verwandeln Sie die farbigen Zonen in bearbeitbare Polygone</translation>
+    </message>
+    <message>
         <source>Vectorizing “{name}”...</source>
         <translation>„{name}“ wird vektorisiert...</translation>
     </message>
@@ -1572,8 +1584,8 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>Wo AI Edit seine generierten GeoTIFFs ablegt. Leer lassen, um ~/Documents/AI Edit/ zu verwenden (oder den gespeicherten Projektordner).</translation>
     </message>
     <message>
-        <source>You've used your free credits</source>
-        <translation>Sie haben Ihre kostenlosen Credits aufgebraucht</translation>
+        <source>You've used this month's free credits</source>
+        <translation>Sie haben die kostenlosen Credits dieses Monats verwendet</translation>
     </message>
     <message>
         <source>Your prompt</source>
@@ -2060,8 +2072,8 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>Innenliegende Löcher in jeder Form füllen</translation>
     </message>
     <message>
-        <source>Free account - sign up takes 15 seconds in your browser.</source>
-        <translation>Kostenloses Konto - die Registrierung dauert 15 Sekunden in Ihrem Browser.</translation>
+        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>Kostenloser Plan - 5 KI-Bearbeitungen pro Monat. Die Anmeldung dauert 15 Sekunden in Ihrem Browser.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

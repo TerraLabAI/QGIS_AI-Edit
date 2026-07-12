@@ -49,9 +49,11 @@ def get_privacy_url() -> str:
     return PRIVACY_URL
 
 
-# Hardcoded fallback config (used when server is unreachable)
+# Hardcoded fallback config (used when server is unreachable).
+# free_credits mirrors the server's monthly free allowance in CREDITS
+# (100 credits = 5 generations per month, renewed on the 1st).
 DEFAULT_CONFIG = {
-    "free_credits": 5,
+    "free_credits": 100,
     "free_tier_active": True,
     "upgrade_url": build_utm_url("/dashboard/ai-edit", "upgrade"),
 }

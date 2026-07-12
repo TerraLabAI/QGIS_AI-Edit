@@ -14,6 +14,7 @@ from ...core.i18n import tr
 from ...core.logger import log, log_debug
 from ...core.prompts.prompt_presets import (
     detect_freeform_vector_intent,
+    detect_seg_context,
     get_vector_hints,
     lookup_template_by_prompt,
 )
@@ -188,6 +189,9 @@ class GenerationMixin:
             # free-form prompt asks to segment, detect, or vectorize one
             # feature type without naming colors (server paints #FF0000).
             ctx.vector_color = detect_freeform_vector_intent(prompt)
+        # Broader signal for the worker's flat-output sniff (manual land
+        # cover / color-classification prompts get a relaxed threshold).
+        ctx.seg_intent = detect_seg_context(prompt)
 
         output_dir = get_output_dir()
 
@@ -308,6 +312,9 @@ class GenerationMixin:
             # free-form prompt asks to segment, detect, or vectorize one
             # feature type without naming colors (server paints #FF0000).
             ctx.vector_color = detect_freeform_vector_intent(prompt)
+        # Broader signal for the worker's flat-output sniff (manual land
+        # cover / color-classification prompts get a relaxed threshold).
+        ctx.seg_intent = detect_seg_context(prompt)
 
         if self._dock_widget._is_free_tier:
             suggested_res = "1K"

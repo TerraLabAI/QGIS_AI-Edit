@@ -218,8 +218,8 @@ AI 驱动的地理空间数据图像编辑工具</translation>
         <translation>所有文件 (*)</translation>
     </message>
     <message>
-        <source>All {limit} free credits used. Subscribe to continue.</source>
-        <translation>{limit} 个免费积分已全部用完,请订阅以继续使用。</translation>
+        <source>You've used this month's {limit} free credits. They renew on the 1st.</source>
+        <translation>本月 {limit} 点免费积分已用完，将于每月 1 日刷新。</translation>
     </message>
     <message>
         <source>Arrow</source>
@@ -1540,6 +1540,18 @@ We'd love to hear from you!</source>
         <translation>矢量化此结果</translation>
     </message>
     <message>
+        <source>Finish</source>
+        <translation>完成</translation>
+    </message>
+    <message>
+        <source>{n} color zones detected in this result</source>
+        <translation>在此结果中检测到 {n} 个色块区域</translation>
+    </message>
+    <message>
+        <source>Turn the colored zones into editable polygons</source>
+        <translation>将色块区域转换为可编辑的多边形</translation>
+    </message>
+    <message>
         <source>Vectorizing “{name}”...</source>
         <translation>正在矢量化“{name}”…</translation>
     </message>
@@ -1572,8 +1584,8 @@ We'd love to hear from you!</source>
         <translation>AI Edit 在此写入生成的 GeoTIFF 文件。留空则使用 ~/Documents/AI Edit/(或已保存的项目文件夹)。</translation>
     </message>
     <message>
-        <source>You've used your free credits</source>
-        <translation>您的免费积分已用完</translation>
+        <source>You've used this month's free credits</source>
+        <translation>本月免费积分已用完</translation>
     </message>
     <message>
         <source>Your prompt</source>
@@ -2060,8 +2072,8 @@ We'd love to hear from you!</source>
         <translation>填充每个形状内部的孔洞</translation>
     </message>
     <message>
-        <source>Free account - sign up takes 15 seconds in your browser.</source>
-        <translation>免费账户,在浏览器中注册只需 15 秒。</translation>
+        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>免费套餐 - 每月 5 次 AI 编辑。在浏览器中注册仅需 15 秒。</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

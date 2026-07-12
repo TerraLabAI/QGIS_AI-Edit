@@ -98,12 +98,7 @@ class DockAccountMixin:
         # Applied only on a confirmed paid credits payload, and never over a
         # resolution the user picked themselves. Free tier keeps its "1K"
         # coercion in _refresh_resolution_triggers.
-        if (
-            used is not None
-            and limit is not None
-            and not is_free_tier
-            and not self._resolution_user_choice
-        ):
+        if used is not None and limit is not None and not is_free_tier and not self._resolution_user_choice:
             self._selected_resolution = "2K"
         if used is not None and limit is not None:
             remaining = max(0, limit - used)
@@ -121,7 +116,7 @@ class DockAccountMixin:
             exhausted = is_free_tier and limit > 0 and used >= limit
             if exhausted and self._trial_info_url:
                 self.show_trial_exhausted_info(
-                    tr("All {limit} free credits used. Subscribe to continue.").format(
+                    tr("You've used this month's {limit} free credits. They renew on the 1st.").format(
                         limit=limit
                     ),
                     self._trial_info_url,
@@ -146,7 +141,7 @@ class DockAccountMixin:
         # strip broke fr/es/pt_BR translations and is gone for that reason.
         title = (message or "").strip()
         if not title:
-            title = tr("You've used your free credits")
+            title = tr("You've used this month's free credits")
         self._trial_info_text.setText(title)
         self._trial_info_url = subscribe_url
         self._trial_info_btn.setVisible(True)

@@ -579,9 +579,10 @@ class AccountSettingsDialog(QDialog):
         )
         card_layout.addWidget(progress)
 
-        # A small reset note (paid renewal date) above the action buttons.
+        # A small reset note above the action buttons: Stripe renewal date for
+        # paid plans, monthly free-credit renewal (1st of the month) for free.
         period_end = sub.get("current_period_end", "")
-        if period_end and not is_free:
+        if period_end:
             reset_row = QHBoxLayout()
             reset_row.setContentsMargins(0, 2, 0, 0)
             reset_label = QLabel(f"{tr('Resets')} {self._format_date(period_end)}")
@@ -605,8 +606,7 @@ class AccountSettingsDialog(QDialog):
         # has no self-serve path yet, so surface a human contact at the account
         # screen. Selectable so the email can be copied.
         contact = QLabel(
-            tr("Team or organization?") + " "
-            + tr("Write to us:") + " <b>yvann.barbot@terra-lab.ai</b>"
+            tr("Team or organization?") + " " + tr("Write to us:") + " <b>yvann.barbot@terra-lab.ai</b>"
         )
         contact.setAlignment(QtC.AlignCenter)
         contact.setWordWrap(True)

@@ -218,8 +218,8 @@ Editing gambar geospasial bertenaga AI</translation>
         <translation>Semua file (*)</translation>
     </message>
     <message>
-        <source>All {limit} free credits used. Subscribe to continue.</source>
-        <translation>Semua {limit} kredit gratis telah digunakan. Berlangganan untuk melanjutkan.</translation>
+        <source>You've used this month's {limit} free credits. They renew on the 1st.</source>
+        <translation>Anda telah menggunakan {limit} kredit gratis bulan ini. Kredit diperbarui pada tanggal 1.</translation>
     </message>
     <message>
         <source>Arrow</source>
@@ -1540,6 +1540,18 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Vektorkan hasil ini</translation>
     </message>
     <message>
+        <source>Finish</source>
+        <translation>Selesai</translation>
+    </message>
+    <message>
+        <source>{n} color zones detected in this result</source>
+        <translation>{n} zona warna terdeteksi di hasil ini</translation>
+    </message>
+    <message>
+        <source>Turn the colored zones into editable polygons</source>
+        <translation>Ubah zona berwarna menjadi poligon yang dapat diedit</translation>
+    </message>
+    <message>
         <source>Vectorizing “{name}”...</source>
         <translation>Memvektorkan “{name}”...</translation>
     </message>
@@ -1572,8 +1584,8 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Lokasi AI Edit menulis GeoTIFF hasil generate. Biarkan kosong untuk menggunakan ~/Documents/AI Edit/ (atau folder proyek yang tersimpan).</translation>
     </message>
     <message>
-        <source>You've used your free credits</source>
-        <translation>Anda telah menggunakan kredit gratis Anda</translation>
+        <source>You've used this month's free credits</source>
+        <translation>Anda telah menghabiskan kredit gratis bulan ini</translation>
     </message>
     <message>
         <source>Your prompt</source>
@@ -2060,8 +2072,8 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Isi lubang di bagian dalam setiap bentuk</translation>
     </message>
     <message>
-        <source>Free account - sign up takes 15 seconds in your browser.</source>
-        <translation>Akun gratis - pendaftaran hanya 15 detik di browser Anda.</translation>
+        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>Paket gratis - 5 edit AI per bulan. Pendaftaran hanya 15 detik di browser Anda.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

@@ -23,7 +23,7 @@ class RunLifecycleMixin:
         if self._busy:
             return
 
-        # After success, button reads "Done" and exits; refine spinboxes still re-run.
+        # After success, button reads "Finish" and exits; refine spinboxes still re-run.
         if self._succeeded:
             self.done_clicked.emit()
             return
@@ -120,8 +120,8 @@ class RunLifecycleMixin:
         }
 
         # Only flip the action row into a "running" state on the initial click.
-        # Debounced refine re-runs keep the Done button + status line intact so
-        # spinbox ticks don't flicker the panel.
+        # Debounced refine re-runs keep the Finish button + status line intact
+        # so spinbox ticks don't flicker the panel.
         if is_initial:
             self._busy = True
             self._run_btn.setEnabled(False)
@@ -263,7 +263,7 @@ class RunLifecycleMixin:
                 # swaps out entirely and only the refine knobs remain. The
                 # 'Edit classes' ghost button is the way back.
                 self._refine_group.setVisible(True)
-                self._run_btn.setText(tr("Done"))
+                self._run_btn.setText(tr("Finish"))
                 self._exit_btn.setVisible(False)
                 self._back_btn.setVisible(True)
                 self._layer_group.setVisible(False)
@@ -392,7 +392,7 @@ class RunLifecycleMixin:
     def _reset_button(self) -> None:
         self._busy = False
         self._run_btn.setEnabled(True)
-        # If we succeeded, the run text was already set to "Done" upstream
+        # If we succeeded, the run text was already set to "Finish" upstream
         # and we must NOT overwrite it here (otherwise refine re-runs would
         # silently flip the label back to "Vectorize").
         if not self._succeeded:

@@ -145,9 +145,10 @@ class AuthManager:
         if used >= limit:
             is_free = usage.get("is_free_tier", False)
             if is_free:
+                # Free credits renew monthly on the 1st (UTC, server-side).
                 return (
                     False,
-                    tr("All {limit} free credits used. Subscribe to continue.").format(limit=limit),
+                    tr("You've used this month's {limit} free credits. They renew on the 1st.").format(limit=limit),
                     ErrorCode.TRIAL_EXHAUSTED.value,
                 )
             return (

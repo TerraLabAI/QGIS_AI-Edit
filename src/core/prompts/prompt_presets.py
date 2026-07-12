@@ -499,6 +499,38 @@ def detect_freeform_vector_intent(prompt_text: str) -> str | None:
     return _FREEFORM_VECTOR_COLOR
 
 
+# Flat-color / map-style phrasing that neither the detect-verb nor the LULC
+# matcher covers ("solid flat colours", "binary mask", "semantic map", ...).
+# Grounded in the manual segmentation prompts observed in production.
+_SEG_CONTEXT_STYLE_RX = re.compile(
+    r"\b(flat|solid|uniform)\s+colou?rs?|couleurs?\s+(unies?|plates?)|aplats?|"
+    r"colores?\s+(planos?|s[óo]lidos?)|cores?\s+(chapadas?|s[óo]lidas?)|"
+    r"binary\s+(mask|map)|semantic\s+(map|segmentation)|worldcover|palette",
+    re.IGNORECASE,
+)
+
+
+def detect_seg_context(prompt_text: str) -> bool:
+    """True when the prompt reads like a segmentation / land-cover /
+    color-classification request, regardless of named colors or class counts.
+
+    Deliberately broader than detect_freeform_vector_intent (which must
+    predict the exact color the server paints): this flag only RELAXES the
+    flat-output detector on the downloaded result (vectorize_detect), so
+    recall beats precision. It never surfaces the CTA on its own.
+    """
+    if not prompt_text:
+        return False
+    text = prompt_text.strip()
+    if not text:
+        return False
+    return bool(
+        _FREEFORM_LULC_RX.search(text)
+        or _FREEFORM_DETECT_VERB_RX.search(text)
+        or _SEG_CONTEXT_STYLE_RX.search(text)
+    )
+
+
 # Off-rails prompt guidance. Detects, with high precision, the ways users
 # misuse the tool so the UI can show a soft, non-blocking hint that steers
 # them back onto a path that produces a good result. Grounded in real user

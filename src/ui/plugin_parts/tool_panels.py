@@ -177,7 +177,7 @@ class ToolPanelsMixin:
         telemetry.track(te.VECTORIZE_PANEL_OPENED, {"source": "footer"})
 
     def _on_vectorize_suggestion_clicked(
-        self, layer_id: str, color_hex: str, class_label: str
+        self, layer_id: str, color_hex: str, class_label: str, trigger: str = ""
     ):
         """User clicked the post-generation \"Vectorize this result\" CTA.
         Open the panel with the source raster + color + class label pre-filled.
@@ -201,7 +201,11 @@ class ToolPanelsMixin:
         )
         telemetry.track(
             te.VECTORIZE_SUGGESTION_CLICKED,
-            {"color": color_hex, "has_class_label": bool(class_label)},
+            {
+                "color": color_hex,
+                "has_class_label": bool(class_label),
+                "trigger": trigger or None,
+            },
         )
 
     def _on_vectorize_done_clicked(self):
@@ -289,9 +293,9 @@ class ToolPanelsMixin:
         if self._vectorize_suggestion is None:
             return
         self._disarm_swipe()
-        layer_id, color_hex, class_label = self._vectorize_suggestion
+        layer_id, color_hex, class_label, trigger = self._vectorize_suggestion
         self._on_vectorize_suggestion_clicked(
-            layer_id, color_hex or "", class_label or ""
+            layer_id, color_hex or "", class_label or "", trigger or ""
         )
 
     def _disarm_swipe(self) -> None:
