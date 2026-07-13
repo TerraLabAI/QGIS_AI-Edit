@@ -108,7 +108,7 @@
         <translation>1. terra-lab.aiでサインアップまたはサインインしてキーを取得</translation>
     </message>
     <message>
-        <source>3,000 credits every month</source>
+        <source>3,000 credits per month</source>
         <translation>毎月3,000クレジット</translation>
     </message>
     <message>
@@ -276,7 +276,7 @@ We'd love to hear from you!</source>
         <translation>先に実行中の生成をキャンセルしてください（パネルを閉じます）</translation>
     </message>
     <message>
-        <source>Canceled</source>
+        <source>Cancelled</source>
         <translation>キャンセルしました</translation>
     </message>
     <message>
@@ -460,7 +460,7 @@ We'd love to hear from you!</source>
         <translation>今月の残りクレジット: {remaining} / {total}</translation>
     </message>
     <message>
-        <source>Custom color…</source>
+        <source>Custom color...</source>
         <translation>カスタムカラー…</translation>
     </message>
     <message>
@@ -680,7 +680,7 @@ We'd love to hear from you!</source>
         <translation>無料</translation>
     </message>
     <message>
-        <source>Free Trial</source>
+        <source>Free trial</source>
         <translation>無料トライアル</translation>
     </message>
     <message>
@@ -1212,7 +1212,7 @@ We'd love to hear from you!</source>
         <translation>{path} に保存しました</translation>
     </message>
     <message>
-        <source>Search prompts...  e.g. "add trees", "segment buildings"</source>
+        <source>Search prompts... e.g. "add trees", "segment buildings"</source>
         <translation>プロンプトを検索...  例:「木を追加」「建物をセグメント」</translation>
     </message>
     <message>
@@ -1548,6 +1548,10 @@ We'd love to hear from you!</source>
         <translation>この結果から{n}個の色ゾーンを検出しました</translation>
     </message>
     <message>
+        <source>{n} color zone detected in this result</source>
+        <translation>この結果から{n}個の色ゾーンを検出しました</translation>
+    </message>
+    <message>
         <source>Turn the colored zones into editable polygons</source>
         <translation>色分けされたゾーンを編集可能なポリゴンに変換します</translation>
     </message>
@@ -1576,7 +1580,7 @@ We'd love to hear from you!</source>
         <translation>こちらで対応いたします :)</translation>
     </message>
     <message>
-        <source>What should AI change?</source>
+        <source>What should the AI change?</source>
         <translation>AIに何を変更させますか？</translation>
     </message>
     <message>
@@ -1652,6 +1656,10 @@ We'd love to hear from you!</source>
         <translation>{n} クレジット</translation>
     </message>
     <message>
+        <source>{n} credit</source>
+        <translation>{n} クレジット</translation>
+    </message>
+    <message>
         <source>{n} d ago</source>
         <translation>{n}日前</translation>
     </message>
@@ -1673,6 +1681,10 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>{n} polygons added</source>
+        <translation>{n}件のポリゴンを追加しました</translation>
+    </message>
+    <message>
+        <source>{n} polygon added</source>
         <translation>{n}件のポリゴンを追加しました</translation>
     </message>
     <message>
@@ -1712,7 +1724,7 @@ We'd love to hear from you!</source>
         <translation>開始元</translation>
     </message>
     <message>
-        <source>Type a prompt to edit {base}…</source>
+        <source>Type a prompt to edit {base}...</source>
         <translation>{base} を編集するプロンプトを入力…</translation>
     </message>
     <message>
@@ -2096,7 +2108,7 @@ We'd love to hear from you!</source>
         <translation>独自の画像を読み込む</translation>
     </message>
     <message>
-        <source>Loading imagery…</source>
+        <source>Loading imagery...</source>
         <translation>画像を読み込み中…</translation>
     </message>
     <message>

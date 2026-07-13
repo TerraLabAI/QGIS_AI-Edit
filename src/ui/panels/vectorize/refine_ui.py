@@ -32,13 +32,12 @@ class RefineUiMixin:
         content_layout.setSpacing(6)
 
         def _section(text: str) -> QLabel:
-            lbl = QLabel(text.upper())
+            lbl = QLabel(text)
             lbl.setStyleSheet(
                 "font-size: 10px; color: palette(text); font-weight: bold;"
                 " background: transparent; border: none;"
                 " border-bottom: 1px solid rgba(128, 128, 128, 0.35);"
                 " padding: 4px 0px 4px 0px; margin-bottom: 4px;"
-                " letter-spacing: 1px;"
             )
             return lbl
 

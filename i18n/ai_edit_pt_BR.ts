@@ -108,7 +108,7 @@
         <translation>1. Cadastre-se ou faça login em terra-lab.ai para obter sua chave</translation>
     </message>
     <message>
-        <source>3,000 credits every month</source>
+        <source>3,000 credits per month</source>
         <translation>3.000 créditos por mês</translation>
     </message>
     <message>
@@ -276,7 +276,7 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Cancele primeiro a geração em andamento (feche o painel)</translation>
     </message>
     <message>
-        <source>Canceled</source>
+        <source>Cancelled</source>
         <translation>Cancelado</translation>
     </message>
     <message>
@@ -460,7 +460,7 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Créditos restantes este mês: {remaining} / {total}</translation>
     </message>
     <message>
-        <source>Custom color…</source>
+        <source>Custom color...</source>
         <translation>Cor personalizada…</translation>
     </message>
     <message>
@@ -680,7 +680,7 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Grátis</translation>
     </message>
     <message>
-        <source>Free Trial</source>
+        <source>Free trial</source>
         <translation>Teste grátis</translation>
     </message>
     <message>
@@ -1212,7 +1212,7 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Salvo em {path}</translation>
     </message>
     <message>
-        <source>Search prompts...  e.g. "add trees", "segment buildings"</source>
+        <source>Search prompts... e.g. "add trees", "segment buildings"</source>
         <translation>Buscar prompts...  ex. "adicionar árvores", "segmentar edifícios"</translation>
     </message>
     <message>
@@ -1548,6 +1548,10 @@ Adoraríamos receber seu retorno!</translation>
         <translation>{n} zonas de cor detectadas neste resultado</translation>
     </message>
     <message>
+        <source>{n} color zone detected in this result</source>
+        <translation>{n} zona de cor detectada neste resultado</translation>
+    </message>
+    <message>
         <source>Turn the colored zones into editable polygons</source>
         <translation>Transforme as zonas coloridas em polígonos editáveis</translation>
     </message>
@@ -1576,7 +1580,7 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Vamos resolver isso para você :)</translation>
     </message>
     <message>
-        <source>What should AI change?</source>
+        <source>What should the AI change?</source>
         <translation>O que a IA deve alterar?</translation>
     </message>
     <message>
@@ -1652,6 +1656,10 @@ Adoraríamos receber seu retorno!</translation>
         <translation>{n} créditos</translation>
     </message>
     <message>
+        <source>{n} credit</source>
+        <translation>{n} crédito</translation>
+    </message>
+    <message>
         <source>{n} d ago</source>
         <translation>há {n} d</translation>
     </message>
@@ -1674,6 +1682,10 @@ Adoraríamos receber seu retorno!</translation>
     <message>
         <source>{n} polygons added</source>
         <translation>{n} polígonos adicionados</translation>
+    </message>
+    <message>
+        <source>{n} polygon added</source>
+        <translation>{n} polígono adicionado</translation>
     </message>
     <message>
         <source>{} outputs are unlocked with a subscription.</source>
@@ -1712,7 +1724,7 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Partir de</translation>
     </message>
     <message>
-        <source>Type a prompt to edit {base}…</source>
+        <source>Type a prompt to edit {base}...</source>
         <translation>Digite um prompt para editar {base}…</translation>
     </message>
     <message>
@@ -2096,7 +2108,7 @@ Adoraríamos receber seu retorno!</translation>
         <translation>Carregue suas próprias imagens</translation>
     </message>
     <message>
-        <source>Loading imagery…</source>
+        <source>Loading imagery...</source>
         <translation>Carregando imagens…</translation>
     </message>
     <message>

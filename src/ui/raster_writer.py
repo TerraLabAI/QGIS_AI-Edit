@@ -72,8 +72,7 @@ def _reload_from_ascii_copy(src_path: str, display_name: str) -> QgsRasterLayer 
     QGIS GDAL provider refuses the original path.
     """
     try:
-        base = os.path.join(tempfile.gettempdir(), "terralab_ai_edit")
-        os.makedirs(base, exist_ok=True)
+        base = tempfile.mkdtemp(prefix="terralab_ai_edit_")
         safe_dir = _ascii_safe_dir(base)
         # Keep the original (ASCII, _slugify-guaranteed) name so two recoveries
         # don't collide; only synthesize one if the basename isn't ASCII.

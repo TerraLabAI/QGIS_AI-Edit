@@ -64,13 +64,8 @@ def _localize_server_error(error: str, code: str) -> str:
         "NOT_AVAILABLE": tr("Result not available."),
         "UPSTREAM_UNAVAILABLE": tr("Result temporarily unavailable, please retry shortly."),
         "UPSTREAM_EMPTY": tr("Result temporarily unavailable, please retry shortly."),
-        # PROVIDER_* are the current server codes; the FAL_* aliases cover
-        # servers from before the neutral rename and can be dropped once the
-        # server no longer emits them.
         "PROVIDER_BAD_RESPONSE": tr("The generation service returned an unexpected response, please retry."),
         "PROVIDER_ERROR": tr("Generation failed, please try again."),
-        "FAL_BAD_RESPONSE": tr("The generation service returned an unexpected response, please retry."),
-        "FAL_ERROR": tr("Generation failed, please try again."),
         "MISCONFIGURED": tr("Service not configured. Please contact support."),
         "SERVER_ERROR": tr("Service temporarily unavailable, please retry shortly."),
         "DB_ERROR": tr("Database error, please retry shortly."),
@@ -119,7 +114,6 @@ _TRANSIENT_CODES = frozenset({
     "RATE_LIMITED", "RATE_LIMITER_DOWN", "STORAGE_UNAVAILABLE", "SIGN_FAILED",
     "UPSTREAM_UNAVAILABLE", "UPSTREAM_EMPTY", "SERVER_ERROR",
     "GENERATION_TIMED_OUT", "PROVIDER_ERROR", "PROVIDER_BAD_RESPONSE",
-    "FAL_ERROR", "FAL_BAD_RESPONSE",
     "NOT_READY", "NOT_AVAILABLE", "UPLOAD_TOKEN_INVALID", "UPLOAD_TOKEN_MISMATCH",
 })
 
@@ -130,7 +124,6 @@ _TRANSIENT_CODES = frozenset({
 # model-failure branch carry their own wording and are intentionally excluded.
 _CREDIT_REASSURE_CODES = frozenset({
     "GENERATION_FAILED", "SERVER_ERROR", "PROVIDER_ERROR", "PROVIDER_BAD_RESPONSE",
-    "FAL_ERROR", "FAL_BAD_RESPONSE",
     "UPSTREAM_UNAVAILABLE", "UPSTREAM_EMPTY", "EMPTY_RESPONSE",
     "IMAGE_FORMAT_UNSUPPORTED", "STORAGE_UNAVAILABLE", "RATE_LIMITED",
     "RATE_LIMITER_DOWN", "MISCONFIGURED", "DB_ERROR", "NOT_AVAILABLE",

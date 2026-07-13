@@ -9,6 +9,8 @@ structure.  Non-selectable group headers provide visual hierarchy.
 Auto-refreshes on layer add/remove, visibility, and reorder.
 """
 
+from __future__ import annotations
+
 from qgis.core import QgsLayerTree, QgsProject
 from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem

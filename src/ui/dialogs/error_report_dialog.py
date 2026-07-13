@@ -11,7 +11,7 @@ import platform
 import re
 import sys
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import quote
 
 from qgis.PyQt.QtCore import Qt, QUrl
@@ -82,7 +82,7 @@ def stop_log_collector():
 
 def _on_log_message(message, tag, level):
     if tag == "AI Edit":
-        timestamp = datetime.now().strftime("%H:%M:%S")
+        timestamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
         _log_buffer.append(f"[{timestamp}] {message}")
 
 

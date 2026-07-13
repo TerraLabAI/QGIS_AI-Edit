@@ -217,14 +217,14 @@ def _build_prompt_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     dock._zone_guidance_hint = QLabel()
     dock._zone_guidance_hint.setWordWrap(True)
     dock._zone_guidance_hint.setStyleSheet(
-        "QLabel { background-color: rgb(255, 230, 150); "
-        "border: 1px solid rgba(255, 152, 0, 0.6); border-radius: 4px; "
-        "padding: 6px 8px; font-size: 11px; color: #333333; }"
+        "QLabel { background-color: rgba(245, 166, 35, 0.12); "
+        "border: 1px solid rgba(245, 166, 35, 0.45); border-radius: 4px; "
+        "padding: 6px 8px; font-size: 11px; color: palette(text); }"
     )
     dock._zone_guidance_hint.setVisible(False)
     dock._prompt_layout.addWidget(dock._zone_guidance_hint)
 
-    dock._prompt_header = _make_section_header(tr("What should AI change?"))
+    dock._prompt_header = _make_section_header(tr("What should the AI change?"))
     dock._prompt_header.setVisible(True)
     dock._prompt_layout.addWidget(dock._prompt_header)
 
@@ -254,8 +254,8 @@ def _build_prompt_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     dock._prompt_guidance_hint = QLabel()
     dock._prompt_guidance_hint.setWordWrap(True)
     dock._prompt_guidance_hint.setStyleSheet(
-        "QLabel { background-color: rgba(25, 118, 210, 0.08); "
-        "border: 1px solid rgba(25, 118, 210, 0.2); border-radius: 4px; "
+        "QLabel { background-color: rgba(30, 136, 229, 0.08); "
+        "border: 1px solid rgba(30, 136, 229, 0.2); border-radius: 4px; "
         "padding: 6px 8px; font-size: 11px; color: palette(text); }"
     )
     dock._prompt_guidance_hint.setVisible(False)

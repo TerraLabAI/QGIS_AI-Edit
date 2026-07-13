@@ -251,8 +251,13 @@ class RunLifecycleMixin:
                     is_success=True,
                 )
             else:
+                added_text = (
+                    tr("{n} polygon added").format(n=polygon_count)
+                    if polygon_count == 1
+                    else tr("{n} polygons added").format(n=polygon_count)
+                )
                 self._show_status(
-                    "✓ " + tr("{n} polygons added").format(n=polygon_count),
+                    "✓ " + added_text,
                     is_error=False,
                     is_success=True,
                 )

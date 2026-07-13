@@ -108,7 +108,7 @@
         <translation>1. Zarejestruj się lub zaloguj na terra-lab.ai, aby otrzymać swój klucz</translation>
     </message>
     <message>
-        <source>3,000 credits every month</source>
+        <source>3,000 credits per month</source>
         <translation>3000 kredytów miesięcznie</translation>
     </message>
     <message>
@@ -276,7 +276,7 @@ Chcielibyśmy to od Ciebie usłyszeć!</translation>
         <translation>Najpierw anuluj trwającą generację (zamknij panel)</translation>
     </message>
     <message>
-        <source>Canceled</source>
+        <source>Cancelled</source>
         <translation>Anulowano</translation>
     </message>
     <message>
@@ -460,7 +460,7 @@ Chcielibyśmy to od Ciebie usłyszeć!</translation>
         <translation>Kredyty pozostałe w tym miesiącu: {remaining} / {total}</translation>
     </message>
     <message>
-        <source>Custom color…</source>
+        <source>Custom color...</source>
         <translation>Własny kolor…</translation>
     </message>
     <message>
@@ -680,7 +680,7 @@ Chcielibyśmy to od Ciebie usłyszeć!</translation>
         <translation>Bezpłatny</translation>
     </message>
     <message>
-        <source>Free Trial</source>
+        <source>Free trial</source>
         <translation>Bezpłatny okres próbny</translation>
     </message>
     <message>
@@ -1212,7 +1212,7 @@ Chcielibyśmy to od Ciebie usłyszeć!</translation>
         <translation>Zapisano w {path}</translation>
     </message>
     <message>
-        <source>Search prompts...  e.g. "add trees", "segment buildings"</source>
+        <source>Search prompts... e.g. "add trees", "segment buildings"</source>
         <translation>Szukaj promptów...  np. "dodaj drzewa", "segmentuj budynki"</translation>
     </message>
     <message>
@@ -1548,6 +1548,10 @@ Chcielibyśmy to od Ciebie usłyszeć!</translation>
         <translation>Wykryto {n} stref kolorów w tym wyniku</translation>
     </message>
     <message>
+        <source>{n} color zone detected in this result</source>
+        <translation>Wykryto {n} strefę kolorów w tym wyniku</translation>
+    </message>
+    <message>
         <source>Turn the colored zones into editable polygons</source>
         <translation>Zamień kolorowe strefy w edytowalne poligony</translation>
     </message>
@@ -1576,7 +1580,7 @@ Chcielibyśmy to od Ciebie usłyszeć!</translation>
         <translation>Naprawimy to dla Ciebie :)</translation>
     </message>
     <message>
-        <source>What should AI change?</source>
+        <source>What should the AI change?</source>
         <translation>Co powinna zmienić AI?</translation>
     </message>
     <message>
@@ -1652,6 +1656,10 @@ Chcielibyśmy to od Ciebie usłyszeć!</translation>
         <translation>{n} kredytów</translation>
     </message>
     <message>
+        <source>{n} credit</source>
+        <translation>{n} kredyt</translation>
+    </message>
+    <message>
         <source>{n} d ago</source>
         <translation>{n} dni temu</translation>
     </message>
@@ -1674,6 +1682,10 @@ Chcielibyśmy to od Ciebie usłyszeć!</translation>
     <message>
         <source>{n} polygons added</source>
         <translation>Dodano {n} poligonów</translation>
+    </message>
+    <message>
+        <source>{n} polygon added</source>
+        <translation>Dodano {n} poligon</translation>
     </message>
     <message>
         <source>{} outputs are unlocked with a subscription.</source>
@@ -1712,7 +1724,7 @@ Chcielibyśmy to od Ciebie usłyszeć!</translation>
         <translation>Zacznij od</translation>
     </message>
     <message>
-        <source>Type a prompt to edit {base}…</source>
+        <source>Type a prompt to edit {base}...</source>
         <translation>Wpisz prompt, aby edytować {base}…</translation>
     </message>
     <message>
@@ -2096,7 +2108,7 @@ Chcielibyśmy to od Ciebie usłyszeć!</translation>
         <translation>Wczytaj własne zobrazowania</translation>
     </message>
     <message>
-        <source>Loading imagery…</source>
+        <source>Loading imagery...</source>
         <translation>Wczytywanie zobrazowań…</translation>
     </message>
     <message>

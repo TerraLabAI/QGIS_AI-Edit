@@ -286,17 +286,19 @@ class GenerationResultsMixin:
             log(f"Generation complete ({round(duration, 1)}s): {result_info['geotiff_path']}")
         except Exception as e:
             if completed_emitted:
-                # The run was already counted complete; a cosmetic post-complete
-                # UI step failed. Never re-emit generation_completed and never
-                # blame the layer-add (it succeeded): log, unlock the UI, keep
-                # the result layer in the project.
+                # The run was already counted complete and the completed view is
+                # already showing (set_generation_complete ran first): a cosmetic
+                # post-complete UI step failed. Never re-emit generation_completed,
+                # never blame the layer-add (it succeeded), and do NOT call
+                # set_generating(False) here - it would hide the finished result
+                # and "Saved as" line for a layer already added and billed. Just
+                # record the exception and leave the completed view intact.
                 telemetry.track(te.PLUGIN_ERROR, {
                     "stage": "write",
                     "error_code": "post_complete_ui",
                     "error_message": _scrub_paths(str(e))[:200],
                 })
                 telemetry.flush()
-                self._dock_widget.set_generating(False)
                 log_warning(f"Post-completion UI step failed: {e}")
                 return
             # The generation itself succeeded and was billed; only the local
@@ -331,7 +333,12 @@ class GenerationResultsMixin:
         """Drop our reference to the QgsTask; TaskManager owns its lifetime."""
         if self._worker is None:
             return
-        for sig in [self._worker.succeeded, self._worker.progress, self._worker.failed]:
+        for sig in [
+            self._worker.succeeded,
+            self._worker.progress,
+            self._worker.failed,
+            self._worker.taskTerminated,
+        ]:
             try:
                 sig.disconnect()
             except (RuntimeError, TypeError):

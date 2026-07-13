@@ -319,8 +319,8 @@ class DockChromeMixin:
 
         self._update_notification_label = QLabel("")
         self._update_notification_label.setStyleSheet(
-            "background-color: rgba(25, 118, 210, 0.15); "
-            "border: 2px solid rgba(25, 118, 210, 0.4); border-radius: 6px; "
+            "background-color: rgba(30, 136, 229, 0.15); "
+            "border: 2px solid rgba(30, 136, 229, 0.4); border-radius: 6px; "
             "padding: 6px 12px; font-size: 12px; font-weight: bold; color: palette(text);"
         )
         self._update_notification_label.setOpenExternalLinks(False)
@@ -349,7 +349,7 @@ class DockChromeMixin:
             plugin_data = plugins.all().get(plugin_id)
             if plugin_data and plugin_data.get("status") == "upgradeable":
                 available_version = plugin_data.get("version_available", "?")
-                text = '{} <a href="#update" style="color: #1976d2; font-weight: bold;">{}</a>'.format(
+                text = '{} <a href="#update" style="color: #1e88e5; font-weight: bold;">{}</a>'.format(
                     tr("New version available: v{version}").format(version=available_version),
                     tr("Update now"),
                 )

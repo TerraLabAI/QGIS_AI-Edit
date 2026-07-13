@@ -143,117 +143,6 @@ class GenerationMixin:
         # generation_started/completed/failed are all tagged is_retry=True.
         self._on_generate(prompt, is_retry=True)
 
-    def _run_generation_from_stored(self, prompt: str):
-        """Run generation using previously stored zone data (for retry)."""
-        if self._worker is not None and self._worker.is_active():
-            self._dock_widget.set_status(tr("Generation already in progress"), is_error=True)
-            return
-
-        if not has_consent():
-            save_consent()
-            self._dock_widget.hide_consent()
-
-        if not has_server_config():
-            self._dock_widget.set_status(
-                tr(
-                    "Cannot generate: export config not loaded from server. "
-                    "Check your internet connection and restart QGIS."
-                ),
-                is_error=True,
-            )
-            return
-
-        # Update resolution from selector (user may have changed it on retry)
-        if not self._dock_widget._is_free_tier:
-            self._last_suggested_res = self._dock_widget.get_selected_resolution()
-
-        ctx = PipelineContext()
-        ctx.aspect_ratio = self._last_aspect_ratio
-        # Reuse the original export's encoded bytes, so the upload must be
-        # labeled with the same format the canvas was encoded as.
-        ctx.input_format = self._last_input_format
-        # Retry on the same zone = iteration. Anchor on the previous result's
-        # original input so the model keeps style coherence.
-        ctx.parent_request_id = self._last_completed_request_id
-        # Same continuous flow on this zone = same session.
-        ctx.session_id = self._session_id
-
-        # Armed template wins over text match so user edits keep vector hints.
-        armed = self._dock_widget.get_active_template()
-        match = armed or lookup_template_by_prompt(prompt)
-        if match:
-            ctx.template_id, ctx.template_name = match
-            ctx.vector_color, ctx.vector_classes = get_vector_hints(ctx.template_id)
-        else:
-            # No preset matched. Still light up the Vectorize CTA when the
-            # free-form prompt asks to segment, detect, or vectorize one
-            # feature type without naming colors (server paints #FF0000).
-            ctx.vector_color = detect_freeform_vector_intent(prompt)
-        # Broader signal for the worker's flat-output sniff (manual land
-        # cover / color-classification prompts get a relaxed threshold).
-        ctx.seg_intent = detect_seg_context(prompt)
-
-        output_dir = get_output_dir()
-
-        # Show the zone rectangle during retry
-        if self._selected_extent:
-            self._show_selection_rectangle(self._selected_extent)
-
-        if self._map_tool:
-            self._map_tool.set_locked(True)
-        self._dock_widget.set_generating(True)
-        self._dock_widget.set_status("")
-        self._generation_service.reset()
-        self._generation_start_time = time.time()
-        self._last_generation_is_retry = True
-        self._last_generation_used_markup = bool(self._last_guidance_b64)
-        telemetry.track(te.GENERATION_STARTED, self._enrich_generation_props({
-            "prompt_length": len(prompt),
-            "aspect_ratio": self._last_aspect_ratio or "",
-            "resolution": self._last_suggested_res or "",
-            "input_image_bytes": self._last_input_bytes,
-            "input_image_format": self._last_input_format,
-            "is_retry": True,
-            "has_geo_context": self._reference_store.count() > 0,
-            "template_id": ctx.template_id,
-            "template_name": ctx.template_name,
-            "used_template": bool(ctx.template_id),
-            "used_markup": bool(self._last_guidance_b64),
-        }))
-        log_debug(f"Retry generation: prompt_len={len(prompt)}")
-
-        plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-
-        self._worker = GenerationWorker(
-            client=self._client,
-            auth_manager=self._auth_manager,
-            service=self._generation_service,
-            image_b64=self._last_image_b64,
-            prompt=prompt,
-            aspect_ratio=self._last_aspect_ratio or "",
-            extent_dict=self._last_extent_dict,
-            crs_wkt=self._last_crs_wkt or "",
-            output_dir=output_dir,
-            ctx=ctx,
-            debug_mode=self._dev_mode,
-            plugin_dir=plugin_dir,
-            skip_trial_check=self._skip_trial_check,
-            suggested_resolution=self._last_suggested_res or "1K",
-            context_image_paths=self._reference_store.snapshot_paths(),
-            guidance_image=self._last_guidance_b64,
-            guidance_format=self._last_guidance_format,
-        )
-        self._worker.succeeded.connect(self._on_generation_finished)
-        self._worker.progress.connect(self._on_generation_progress)
-        self._worker.failed.connect(self._on_generation_error)
-        # Recover the dock if the job is cancelled from the native QGIS
-        # task-manager widget (which never routes through Stop/Exit).
-        self._worker.taskTerminated.connect(self._on_generation_task_terminated)
-        # Fresh run: clear the guard so that cancel is recovered (Stop/Exit set
-        # it to suppress the duplicate recovery they already perform).
-        self._generation_cancel_handled = False
-        QgsApplication.taskManager().addTask(self._worker)
-
     def _on_generate(self, prompt: str, is_retry: bool = False):
         if self._worker is not None and self._worker.is_active():
             self._dock_widget.set_status(tr("Generation already in progress"), is_error=True)
@@ -403,6 +292,10 @@ class GenerationMixin:
             self._export_worker = None
 
     def _on_export_failed(self, error_msg: str):
+        if self._pending_generation is None:
+            # User cancelled / dock was torn down before the render finished; a
+            # late export-failure signal must not paint an error over LAUNCH.
+            return
         self._pending_generation = None
         self._dock_widget.set_generating(False)
         msg = tr("Export error: {error}").format(error=error_msg)

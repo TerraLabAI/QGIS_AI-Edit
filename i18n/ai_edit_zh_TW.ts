@@ -108,7 +108,7 @@
         <translation>1. 在 terra-lab.ai 上註冊或登入以取得您的金鑰</translation>
     </message>
     <message>
-        <source>3,000 credits every month</source>
+        <source>3,000 credits per month</source>
         <translation>每月 3,000 點數</translation>
     </message>
     <message>
@@ -276,7 +276,7 @@ We'd love to hear from you!</source>
         <translation>請先取消正在進行的生成（關閉面板）</translation>
     </message>
     <message>
-        <source>Canceled</source>
+        <source>Cancelled</source>
         <translation>已取消</translation>
     </message>
     <message>
@@ -460,7 +460,7 @@ We'd love to hear from you!</source>
         <translation>本月剩餘點數：{remaining} / {total}</translation>
     </message>
     <message>
-        <source>Custom color…</source>
+        <source>Custom color...</source>
         <translation>自訂顏色…</translation>
     </message>
     <message>
@@ -680,7 +680,7 @@ We'd love to hear from you!</source>
         <translation>免費</translation>
     </message>
     <message>
-        <source>Free Trial</source>
+        <source>Free trial</source>
         <translation>免費試用</translation>
     </message>
     <message>
@@ -1212,7 +1212,7 @@ We'd love to hear from you!</source>
         <translation>已儲存至 {path}</translation>
     </message>
     <message>
-        <source>Search prompts...  e.g. "add trees", "segment buildings"</source>
+        <source>Search prompts... e.g. "add trees", "segment buildings"</source>
         <translation>搜尋提示詞...  例如「新增樹木」、「分割建築物」</translation>
     </message>
     <message>
@@ -1548,6 +1548,10 @@ We'd love to hear from you!</source>
         <translation>在此結果中偵測到 {n} 個色塊區域</translation>
     </message>
     <message>
+        <source>{n} color zone detected in this result</source>
+        <translation>在此結果中偵測到 {n} 個色塊區域</translation>
+    </message>
+    <message>
         <source>Turn the colored zones into editable polygons</source>
         <translation>將色塊區域轉換為可編輯的多邊形</translation>
     </message>
@@ -1576,7 +1580,7 @@ We'd love to hear from you!</source>
         <translation>我們會盡快為您修復 :)</translation>
     </message>
     <message>
-        <source>What should AI change?</source>
+        <source>What should the AI change?</source>
         <translation>AI 應該修改什麼？</translation>
     </message>
     <message>
@@ -1652,6 +1656,10 @@ We'd love to hear from you!</source>
         <translation>{n} 點</translation>
     </message>
     <message>
+        <source>{n} credit</source>
+        <translation>{n} 點</translation>
+    </message>
+    <message>
         <source>{n} d ago</source>
         <translation>{n} 天前</translation>
     </message>
@@ -1673,6 +1681,10 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>{n} polygons added</source>
+        <translation>已新增 {n} 個多邊形</translation>
+    </message>
+    <message>
+        <source>{n} polygon added</source>
         <translation>已新增 {n} 個多邊形</translation>
     </message>
     <message>
@@ -1712,7 +1724,7 @@ We'd love to hear from you!</source>
         <translation>從此開始</translation>
     </message>
     <message>
-        <source>Type a prompt to edit {base}…</source>
+        <source>Type a prompt to edit {base}...</source>
         <translation>輸入提示詞以編輯 {base}…</translation>
     </message>
     <message>
@@ -2096,7 +2108,7 @@ We'd love to hear from you!</source>
         <translation>載入您自己的影像</translation>
     </message>
     <message>
-        <source>Loading imagery…</source>
+        <source>Loading imagery...</source>
         <translation>正在載入影像…</translation>
     </message>
     <message>

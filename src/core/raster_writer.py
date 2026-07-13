@@ -249,8 +249,7 @@ def _rescue_plain_image(
     if ext is None:
         return None
     try:
-        rescue_dir = os.path.join(tempfile.gettempdir(), "terralab_ai_edit")
-        os.makedirs(rescue_dir, exist_ok=True)
+        rescue_dir = tempfile.mkdtemp(prefix="terralab_ai_edit_")
         path = _unique_output_path(_ascii_safe_dir(rescue_dir), file_base, ext)
         with open(path, "wb") as f:
             f.write(image_data)
@@ -351,8 +350,7 @@ def _write_geotiff_gdal(
         resolved_dir = output_dir
     except OSError as e:
         log_warning(f"output_dir not writable ({e}); using tempdir fallback")
-        resolved_dir = os.path.join(tempfile.gettempdir(), "terralab_ai_edit")
-        os.makedirs(resolved_dir, exist_ok=True)
+        resolved_dir = tempfile.mkdtemp(prefix="terralab_ai_edit_")
 
     # Reroute through an ASCII-safe path: a non-ASCII directory (accented
     # Windows username) writes fine via GDAL but loads back as an invalid
@@ -444,8 +442,7 @@ def _write_geotiff_gdal(
             log_warning(
                 f"GDAL Create failed at {primary_path} ({create_err}); retrying in tempdir"
             )
-            fallback_dir = os.path.join(tempfile.gettempdir(), "terralab_ai_edit")
-            os.makedirs(fallback_dir, exist_ok=True)
+            fallback_dir = tempfile.mkdtemp(prefix="terralab_ai_edit_")
             output_path = _unique_output_path(_ascii_safe_dir(fallback_dir), file_base)
             dst_ds, create_err = _create_gtiff(driver, output_path, recv_w, recv_h, bands)
         if dst_ds is None:

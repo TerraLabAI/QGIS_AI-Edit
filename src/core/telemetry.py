@@ -1,9 +1,10 @@
 """Telemetry batched in memory, flushed once per generation cycle. Fails silently."""
 
+from __future__ import annotations
+
 import platform
 import threading
 from datetime import datetime, timezone
-from typing import Optional
 
 from qgis.core import QgsApplication, QgsTask
 from qgis.PyQt.QtCore import QThread
@@ -78,7 +79,7 @@ _NO_CONTENT_EVENTS = frozenset({
     "vectorize_completed",
     "swipe_armed",
     "swipe_disarmed",
-    # Refund visibility — without these, failed-delivery refunds stay invisible.
+    # Refund visibility. Without these, failed-delivery refunds stay invisible.
     "generation_refund_attempted",
     "generation_refund_failed",
     # One-click connect onboarding. These fire pre-activation, so they sit in
@@ -186,7 +187,7 @@ class TelemetryCollector:
             "+00:00", "Z"
         )
 
-    def track(self, event: str, properties: Optional[dict] = None):
+    def track(self, event: str, properties: dict | None = None):
         # Global opt-out: when disabled, nothing is even queued.
         if not is_telemetry_enabled():
             return
@@ -249,7 +250,7 @@ class TelemetryCollector:
             pass
         QgsApplication.taskManager().addTask(task)
 
-    def _drop_inflight(self, task: "_TelemetryFlushTask") -> None:
+    def _drop_inflight(self, task: _TelemetryFlushTask) -> None:
         with self._lock:
             try:
                 self._inflight.remove(task)
@@ -283,7 +284,7 @@ class TelemetryCollector:
                 pass
 
 
-_collector: Optional[TelemetryCollector] = None
+_collector: TelemetryCollector | None = None
 
 
 def init_telemetry(client, auth_manager, plugin_version: str = ""):
@@ -298,7 +299,7 @@ def init_telemetry(client, auth_manager, plugin_version: str = ""):
         pass
 
 
-def track(event: str, properties: Optional[dict] = None):
+def track(event: str, properties: dict | None = None):
     if _collector:
         _collector.track(event, properties)
 

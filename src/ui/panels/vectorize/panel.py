@@ -247,7 +247,7 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
 
         # Esc → Done (close the panel), Enter → Run. WindowShortcut so
         # Esc fires regardless of which child has focus while the panel
-        # is visible — the dock's own Escape handler bails out when the
+        # is visible; the dock's own Escape handler bails out when the
         # main widget is hidden, so there's no conflict.
         esc = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
         esc.setContext(Qt.ShortcutContext.WindowShortcut)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from qgis.core import QgsBlockingNetworkRequest
 from qgis.PyQt.QtCore import QByteArray, QUrl
@@ -34,6 +35,21 @@ def _safe_int(val):
         return getattr(val, "value", val)
 
 
+# Full URLs, and bare multi-label hosts / IPs (a.b.c, with optional :port). A
+# single-dot token (a filename like output.tif) is intentionally left alone so
+# the log stays useful; only endpoint-shaped tokens are masked.
+_URL_RE = re.compile(
+    r"https?://\S+|\b[\w-]+(?:\.[\w-]+){2,}(?::\d+)?",
+    re.IGNORECASE,
+)
+
+
+def _scrub_urls(text: str) -> str:
+    """Mask request endpoints (URLs and host/IP tokens) before logging, so a
+    log line never carries the service host or path (production-safe logging)."""
+    return _URL_RE.sub("<url>", text or "")
+
+
 def _classify_network_error(
     blocker: QgsBlockingNetworkRequest,
 ) -> tuple[str, str]:
@@ -52,7 +68,8 @@ def _classify_network_error(
             http_status = _safe_int(attr)
 
     log_warning(
-        f"Network error: qt_error={_safe_int(qt_error)}, http_status={http_status}, detail={error_string[:500]}"
+        f"Network error: qt_error={_safe_int(qt_error)}, http_status={http_status}, "
+        f"detail={_scrub_urls(error_string)[:500]}"
     )
 
     if qt_error == QtC.HostNotFoundError:
@@ -370,7 +387,7 @@ class TerraLabClient:
         status_int = _safe_int(http_status) if http_status is not None else None
         if status_int is not None and status_int >= 400:
             raw = bytes(reply.content()).decode("utf-8", errors="replace") if reply else ""
-            log_warning(f"Upload PUT failed: HTTP {status_int} {raw[:200]}")
+            log_warning(f"Upload PUT failed: HTTP {status_int} {_scrub_urls(raw)[:200]}")
             return (False, f"HTTP {status_int}")
         return (True, None)
 

@@ -63,7 +63,7 @@ class BeforeAfterSlider(QWidget):
         self._example_badge = example_badge or None
         # Text shown over the tinted backdrop while the slider has no images.
         # Owners flip it to "No preview" for cards that will never get one.
-        self._placeholder_text = tr("Loading…")
+        self._placeholder_text = tr("Loading...")
         self.setMinimumHeight(140)
         self.setMouseTracking(False)
         self._before: QPixmap | None = None

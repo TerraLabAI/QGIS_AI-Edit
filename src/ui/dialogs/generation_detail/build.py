@@ -145,7 +145,7 @@ class BuildUiMixin:
         # anchors the top of the panel so the title doesn't float alone.
         badge_row = QHBoxLayout()
         badge_row.setContentsMargins(0, 0, 0, 0)
-        badge = QLabel(self._badge_text().upper())
+        badge = QLabel(self._badge_text())
         badge.setStyleSheet(_BADGE_STYLE)
         badge_row.addWidget(badge)
         badge_row.addStretch(1)
@@ -207,9 +207,7 @@ class BuildUiMixin:
         return bool(has_url and self._demo_loader is not None)
 
     def _section_label(self, text: str) -> QLabel:
-        # Uppercase here, not in tr(), so translation keys stay natural-case
-        # (QSS has no text-transform).
-        lbl = QLabel(text.upper())
+        lbl = QLabel(text)
         lbl.setStyleSheet(_SECTION_STYLE)
         return lbl
 

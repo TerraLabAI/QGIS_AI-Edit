@@ -108,7 +108,7 @@
         <translation>1. Inscrivez-vous ou connectez-vous sur terra-lab.ai pour obtenir votre clé</translation>
     </message>
     <message>
-        <source>3,000 credits every month</source>
+        <source>3,000 credits per month</source>
         <translation>3 000 crédits par mois</translation>
     </message>
     <message>
@@ -276,7 +276,7 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Annulez d'abord la génération en cours (fermez le panneau)</translation>
     </message>
     <message>
-        <source>Canceled</source>
+        <source>Cancelled</source>
         <translation>Annulé</translation>
     </message>
     <message>
@@ -460,7 +460,7 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Crédits restants ce mois : {remaining} / {total}</translation>
     </message>
     <message>
-        <source>Custom color…</source>
+        <source>Custom color...</source>
         <translation>Couleur personnalisée…</translation>
     </message>
     <message>
@@ -680,7 +680,7 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Gratuit</translation>
     </message>
     <message>
-        <source>Free Trial</source>
+        <source>Free trial</source>
         <translation>Essai gratuit</translation>
     </message>
     <message>
@@ -1212,7 +1212,7 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Enregistré dans {path}</translation>
     </message>
     <message>
-        <source>Search prompts...  e.g. "add trees", "segment buildings"</source>
+        <source>Search prompts... e.g. "add trees", "segment buildings"</source>
         <translation>Rechercher des prompts...  ex. « ajouter des arbres », « segmenter les bâtiments »</translation>
     </message>
     <message>
@@ -1548,6 +1548,10 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>{n} zones de couleur détectées dans ce résultat</translation>
     </message>
     <message>
+        <source>{n} color zone detected in this result</source>
+        <translation>{n} zone de couleur détectée dans ce résultat</translation>
+    </message>
+    <message>
         <source>Turn the colored zones into editable polygons</source>
         <translation>Transformez les zones colorées en polygones éditables</translation>
     </message>
@@ -1576,7 +1580,7 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>On va régler ça pour vous :)</translation>
     </message>
     <message>
-        <source>What should AI change?</source>
+        <source>What should the AI change?</source>
         <translation>Que doit modifier l'IA ?</translation>
     </message>
     <message>
@@ -1652,6 +1656,10 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>{n} crédits</translation>
     </message>
     <message>
+        <source>{n} credit</source>
+        <translation>{n} crédit</translation>
+    </message>
+    <message>
         <source>{n} d ago</source>
         <translation>il y a {n} j</translation>
     </message>
@@ -1674,6 +1682,10 @@ Nous serions ravis d'avoir votre retour !</translation>
     <message>
         <source>{n} polygons added</source>
         <translation>{n} polygones ajoutés</translation>
+    </message>
+    <message>
+        <source>{n} polygon added</source>
+        <translation>{n} polygone ajouté</translation>
     </message>
     <message>
         <source>{} outputs are unlocked with a subscription.</source>
@@ -1712,7 +1724,7 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Partir de</translation>
     </message>
     <message>
-        <source>Type a prompt to edit {base}…</source>
+        <source>Type a prompt to edit {base}...</source>
         <translation>Saisissez un prompt pour modifier {base}…</translation>
     </message>
     <message>
@@ -2096,7 +2108,7 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Chargez votre propre imagerie</translation>
     </message>
     <message>
-        <source>Loading imagery…</source>
+        <source>Loading imagery...</source>
         <translation>Chargement de l'imagerie…</translation>
     </message>
     <message>

@@ -20,7 +20,7 @@ def _get_auth_manager():
 
 
 def _can_use_auth_manager() -> bool:
-    # Never prompt for the master password — would block QGIS startup.
+    # Never prompt for the master password, which would block QGIS startup.
     am = _get_auth_manager()
     if am is None:
         return False

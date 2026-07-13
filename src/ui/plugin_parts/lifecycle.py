@@ -273,7 +273,12 @@ class PluginLifecycleMixin:
         # the run() loop and emits taskTerminated on the main thread.
         if self._worker is not None and self._worker.is_active():
             self._generation_service.cancel()
-            for sig in [self._worker.succeeded, self._worker.progress, self._worker.failed]:
+            for sig in [
+                self._worker.succeeded,
+                self._worker.progress,
+                self._worker.failed,
+                self._worker.taskTerminated,
+            ]:
                 try:
                     sig.disconnect()
                 except (RuntimeError, TypeError):

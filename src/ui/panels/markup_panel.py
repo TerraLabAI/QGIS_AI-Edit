@@ -186,7 +186,7 @@ class MarkupPanel(QWidget):
             " border: 1px solid rgba(128, 128, 128, 0.35);"
             "}"
             f"QToolButton:checked {{"
-            f" background: rgba(25, 118, 210, 0.14);"
+            f" background: rgba(30, 136, 229, 0.14);"
             f" border: 1.5px solid {BRAND_BLUE};"
             f" color: {BRAND_BLUE};"
             f"}}"
@@ -276,7 +276,7 @@ class MarkupPanel(QWidget):
         self._custom_color_btn.setIcon(make_custom_color_icon(
             is_dark=is_dark_palette(self), dot_px=_COLOR_DOT_PX
         ))
-        self._custom_color_btn.setToolTip(tr("Custom color…"))
+        self._custom_color_btn.setToolTip(tr("Custom color..."))
         self._custom_color_btn.clicked.connect(self._on_custom_color_clicked)
         color_row.addWidget(self._custom_color_btn)
         color_row.addStretch()

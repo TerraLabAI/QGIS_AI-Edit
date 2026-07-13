@@ -112,8 +112,8 @@ def _build_result_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     dock._result_guidance_hint = QLabel()
     dock._result_guidance_hint.setWordWrap(True)
     dock._result_guidance_hint.setStyleSheet(
-        "QLabel { background-color: rgba(25, 118, 210, 0.08); "
-        "border: 1px solid rgba(25, 118, 210, 0.2); border-radius: 4px; "
+        "QLabel { background-color: rgba(30, 136, 229, 0.08); "
+        "border: 1px solid rgba(30, 136, 229, 0.2); border-radius: 4px; "
         "padding: 6px 8px; font-size: 11px; color: palette(text); }"
     )
     dock._result_guidance_hint.setVisible(False)
@@ -221,8 +221,8 @@ def _build_trial_info_box(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     # user runs out of credits. Title + 3 benefit bullets + primary button.
     dock._trial_info_box = QFrame()
     dock._trial_info_box.setStyleSheet(
-        "QFrame { background: rgba(25,118,210,0.08); "
-        "border: 1px solid rgba(25,118,210,0.2); "
+        "QFrame { background: rgba(30,136,229,0.08); "
+        "border: 1px solid rgba(30,136,229,0.2); "
         "border-radius: 4px; }"
         "QLabel { background: transparent; border: none; }"
     )
@@ -237,7 +237,7 @@ def _build_trial_info_box(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     trial_layout.addWidget(dock._trial_info_text)
     benefits_html = "<br>".join((
         tr("Subscribe to unlock:"),
-        "&nbsp;&nbsp;✓&nbsp; " + tr("3,000 credits every month"),
+        "&nbsp;&nbsp;✓&nbsp; " + tr("3,000 credits per month"),
         "&nbsp;&nbsp;✓&nbsp; " + tr("Detailed and Maximum output"),
         "&nbsp;&nbsp;✓&nbsp; " + tr("Cancel anytime"),
     ))
@@ -350,7 +350,7 @@ def _build_footer(dock: AIEditDockWidget, layout: QVBoxLayout) -> None:
         f"QPushButton {{ border: 1px solid {BRAND_BLUE}; color: {BRAND_BLUE};"
         f" border-radius: 8px; padding: 1px 8px; font-size: 11px;"
         f" background: transparent; font-weight: normal; }}"
-        f"QPushButton:hover {{ background: rgba(25,118,210,0.12); }}"
+        f"QPushButton:hover {{ background: rgba(30,136,229,0.12); }}"
     )
     dock._upgrade_cta.clicked.connect(dock._on_upgrade_clicked)
     dock._upgrade_cta.setVisible(False)

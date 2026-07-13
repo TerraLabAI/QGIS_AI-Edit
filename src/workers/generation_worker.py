@@ -193,6 +193,24 @@ class GenerationTask(QgsTask):
         return self.isCanceled()
 
     def run(self) -> bool:
+        # Last-resort guard: any unhandled exception on a pipeline path
+        # (reference encoding, the service call, a progress callback, the
+        # GeoTIFF write) must still resolve the run. Route it through the
+        # existing failure path so finished() always reports and the dock
+        # never wedges on the generating view. Cancel keeps its own semantics:
+        # a cancelled run returns False and finished() stays silent.
+        try:
+            return self._run_pipeline()
+        except Exception as unexpected:
+            if self.isCanceled():
+                return False
+            log_debug(f"Generation worker crashed unexpectedly: {unexpected}")
+            return self._mark_failed(
+                tr("Generation failed"),
+                ErrorCode.GENERATION_FAILED.value,
+            )
+
+    def _run_pipeline(self) -> bool:
         if self.isCanceled():
             return False
 

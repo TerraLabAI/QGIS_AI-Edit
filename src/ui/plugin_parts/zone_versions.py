@@ -58,6 +58,10 @@ class ZoneVersionsMixin:
                 self._worker.cancel()
             except Exception:  # nosec B110
                 pass
+        # Drop our reference to the cancelled task: disconnect its signals and
+        # null the ref so its multi-MB base64 payload is released now instead of
+        # lingering until the next run. TaskManager still owns and drains it.
+        self._cleanup_worker()
         # Also tear down an in-flight canvas export: without this a Stop/Exit
         # during the export phase still chains into a generation (and a charge)
         # after the user cancelled.
@@ -124,6 +128,10 @@ class ZoneVersionsMixin:
                 self._worker.cancel()
             except Exception:  # nosec B110
                 pass
+        # Drop our reference to the cancelled task: disconnect its signals and
+        # null the ref so its multi-MB base64 payload is released now instead of
+        # lingering until the next run. TaskManager still owns and drains it.
+        self._cleanup_worker()
         # Also tear down an in-flight canvas export: without this a Stop/Exit
         # during the export phase still chains into a generation (and a charge)
         # after the user cancelled.

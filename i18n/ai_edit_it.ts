@@ -108,7 +108,7 @@
         <translation>1. Registrati o accedi su terra-lab.ai per ottenere la tua chiave</translation>
     </message>
     <message>
-        <source>3,000 credits every month</source>
+        <source>3,000 credits per month</source>
         <translation>3.000 crediti ogni mese</translation>
     </message>
     <message>
@@ -276,7 +276,7 @@ Saremo felici di ricevere il tuo feedback!</translation>
         <translation>Annulla prima la generazione in corso (chiudi il pannello)</translation>
     </message>
     <message>
-        <source>Canceled</source>
+        <source>Cancelled</source>
         <translation>Annullato</translation>
     </message>
     <message>
@@ -460,7 +460,7 @@ Saremo felici di ricevere il tuo feedback!</translation>
         <translation>Crediti rimanenti questo mese: {remaining} / {total}</translation>
     </message>
     <message>
-        <source>Custom color…</source>
+        <source>Custom color...</source>
         <translation>Colore personalizzato…</translation>
     </message>
     <message>
@@ -680,7 +680,7 @@ Saremo felici di ricevere il tuo feedback!</translation>
         <translation>Gratuito</translation>
     </message>
     <message>
-        <source>Free Trial</source>
+        <source>Free trial</source>
         <translation>Prova gratuita</translation>
     </message>
     <message>
@@ -1212,7 +1212,7 @@ Saremo felici di ricevere il tuo feedback!</translation>
         <translation>Salvato in {path}</translation>
     </message>
     <message>
-        <source>Search prompts...  e.g. "add trees", "segment buildings"</source>
+        <source>Search prompts... e.g. "add trees", "segment buildings"</source>
         <translation>Cerca nei prompt...  ad es. "aggiungi alberi", "segmenta edifici"</translation>
     </message>
     <message>
@@ -1548,6 +1548,10 @@ Saremo felici di ricevere il tuo feedback!</translation>
         <translation>{n} zone di colore rilevate in questo risultato</translation>
     </message>
     <message>
+        <source>{n} color zone detected in this result</source>
+        <translation>{n} zona di colore rilevata in questo risultato</translation>
+    </message>
+    <message>
         <source>Turn the colored zones into editable polygons</source>
         <translation>Trasforma le zone colorate in poligoni modificabili</translation>
     </message>
@@ -1576,7 +1580,7 @@ Saremo felici di ricevere il tuo feedback!</translation>
         <translation>Risolveremo il problema per te :)</translation>
     </message>
     <message>
-        <source>What should AI change?</source>
+        <source>What should the AI change?</source>
         <translation>Cosa deve cambiare l'IA?</translation>
     </message>
     <message>
@@ -1652,6 +1656,10 @@ Saremo felici di ricevere il tuo feedback!</translation>
         <translation>{n} crediti</translation>
     </message>
     <message>
+        <source>{n} credit</source>
+        <translation>{n} credito</translation>
+    </message>
+    <message>
         <source>{n} d ago</source>
         <translation>{n} g fa</translation>
     </message>
@@ -1674,6 +1682,10 @@ Saremo felici di ricevere il tuo feedback!</translation>
     <message>
         <source>{n} polygons added</source>
         <translation>{n} poligoni aggiunti</translation>
+    </message>
+    <message>
+        <source>{n} polygon added</source>
+        <translation>{n} poligono aggiunto</translation>
     </message>
     <message>
         <source>{} outputs are unlocked with a subscription.</source>
@@ -1712,7 +1724,7 @@ Saremo felici di ricevere il tuo feedback!</translation>
         <translation>Parti da</translation>
     </message>
     <message>
-        <source>Type a prompt to edit {base}…</source>
+        <source>Type a prompt to edit {base}...</source>
         <translation>Digita un prompt per modificare {base}…</translation>
     </message>
     <message>
@@ -2096,7 +2108,7 @@ Saremo felici di ricevere il tuo feedback!</translation>
         <translation>Carica le tue immagini</translation>
     </message>
     <message>
-        <source>Loading imagery…</source>
+        <source>Loading imagery...</source>
         <translation>Caricamento immagini…</translation>
     </message>
     <message>

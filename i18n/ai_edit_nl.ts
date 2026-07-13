@@ -108,7 +108,7 @@
         <translation>1. Registreer of meld u aan op terra-lab.ai om uw sleutel te krijgen</translation>
     </message>
     <message>
-        <source>3,000 credits every month</source>
+        <source>3,000 credits per month</source>
         <translation>3.000 credits per maand</translation>
     </message>
     <message>
@@ -276,7 +276,7 @@ We horen graag van u!</translation>
         <translation>Annuleer eerst de lopende generatie (sluit het paneel)</translation>
     </message>
     <message>
-        <source>Canceled</source>
+        <source>Cancelled</source>
         <translation>Geannuleerd</translation>
     </message>
     <message>
@@ -460,7 +460,7 @@ We horen graag van u!</translation>
         <translation>Resterende credits deze maand: {remaining} / {total}</translation>
     </message>
     <message>
-        <source>Custom color…</source>
+        <source>Custom color...</source>
         <translation>Aangepaste kleur…</translation>
     </message>
     <message>
@@ -680,7 +680,7 @@ We horen graag van u!</translation>
         <translation>Gratis</translation>
     </message>
     <message>
-        <source>Free Trial</source>
+        <source>Free trial</source>
         <translation>Gratis proefperiode</translation>
     </message>
     <message>
@@ -1212,7 +1212,7 @@ We horen graag van u!</translation>
         <translation>Opgeslagen in {path}</translation>
     </message>
     <message>
-        <source>Search prompts...  e.g. "add trees", "segment buildings"</source>
+        <source>Search prompts... e.g. "add trees", "segment buildings"</source>
         <translation>Prompts zoeken...  bijv. "bomen toevoegen", "gebouwen segmenteren"</translation>
     </message>
     <message>
@@ -1548,6 +1548,10 @@ We horen graag van u!</translation>
         <translation>{n} kleurzones gedetecteerd in dit resultaat</translation>
     </message>
     <message>
+        <source>{n} color zone detected in this result</source>
+        <translation>{n} kleurzone gedetecteerd in dit resultaat</translation>
+    </message>
+    <message>
         <source>Turn the colored zones into editable polygons</source>
         <translation>Zet de gekleurde zones om in bewerkbare polygonen</translation>
     </message>
@@ -1576,7 +1580,7 @@ We horen graag van u!</translation>
         <translation>We lossen dit voor u op :)</translation>
     </message>
     <message>
-        <source>What should AI change?</source>
+        <source>What should the AI change?</source>
         <translation>Wat moet de AI veranderen?</translation>
     </message>
     <message>
@@ -1652,6 +1656,10 @@ We horen graag van u!</translation>
         <translation>{n} credits</translation>
     </message>
     <message>
+        <source>{n} credit</source>
+        <translation>{n} credit</translation>
+    </message>
+    <message>
         <source>{n} d ago</source>
         <translation>{n} d geleden</translation>
     </message>
@@ -1674,6 +1682,10 @@ We horen graag van u!</translation>
     <message>
         <source>{n} polygons added</source>
         <translation>{n} polygonen toegevoegd</translation>
+    </message>
+    <message>
+        <source>{n} polygon added</source>
+        <translation>{n} polygoon toegevoegd</translation>
     </message>
     <message>
         <source>{} outputs are unlocked with a subscription.</source>
@@ -1712,7 +1724,7 @@ We horen graag van u!</translation>
         <translation>Start vanaf</translation>
     </message>
     <message>
-        <source>Type a prompt to edit {base}…</source>
+        <source>Type a prompt to edit {base}...</source>
         <translation>Typ een prompt om {base} te bewerken…</translation>
     </message>
     <message>
@@ -2096,7 +2108,7 @@ We horen graag van u!</translation>
         <translation>Laad uw eigen beeldmateriaal</translation>
     </message>
     <message>
-        <source>Loading imagery…</source>
+        <source>Loading imagery...</source>
         <translation>Beeldmateriaal laden…</translation>
     </message>
     <message>

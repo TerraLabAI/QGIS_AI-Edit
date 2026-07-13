@@ -205,7 +205,7 @@ class PromptTemplatesDialog(PagesMixin, GalleryMixin, SearchMixin, SyncMixin, QD
 
         self._search_input = QLineEdit()
         self._search_input.setPlaceholderText(
-            tr('Search prompts...  e.g. "add trees", "segment buildings"')
+            tr('Search prompts... e.g. "add trees", "segment buildings"')
         )
         self._search_input.addAction(
             search_icon(), QLineEdit.ActionPosition.LeadingPosition
@@ -329,11 +329,11 @@ class PromptTemplatesDialog(PagesMixin, GalleryMixin, SearchMixin, SyncMixin, QD
 
     @staticmethod
     def _sidebar_section_header(text: str) -> QLabel:
-        """Muted uppercase group label for the sidebar (Your prompts / Templates)."""
-        lbl = QLabel(text.upper())
+        """Muted group label for the sidebar (Your prompts / Templates)."""
+        lbl = QLabel(text)
         lbl.setStyleSheet(
             "color: rgba(128,128,128,0.95); font-size: 10px; font-weight: 700;"
-            " letter-spacing: 0.8px; background: transparent; border: none;"
+            " background: transparent; border: none;"
             " padding: 6px 12px 2px 12px;"
         )
         return lbl

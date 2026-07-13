@@ -89,6 +89,9 @@ class ActivationMixin:
         """Server confirmed the key is valid. The validation call IS a /usage
         fetch, so its payload feeds the credits display directly instead of
         firing a second, identical request."""
+        # Guard against an orphaned validation worker firing after unload.
+        if self._dock_widget is None:
+            return
         # Connection works again: re-arm the one-shot connectivity notice.
         self._connectivity_notice_shown = False
         self._last_key_validation_unix = time.time()
@@ -113,6 +116,9 @@ class ActivationMixin:
         A transient server-side failure (5xx incident, rate limit) says nothing
         about the key either, so it takes the same keep-session path.
         """
+        # Guard against an orphaned validation worker firing after unload.
+        if self._dock_widget is None:
+            return
         code_up = (code or "").strip().upper()
         if code_up in NETWORK_ERROR_CODES or code_up in TRANSIENT_SERVER_ERROR_CODES:
             self._dock_widget.set_activated(True)

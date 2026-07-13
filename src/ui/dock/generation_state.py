@@ -355,14 +355,14 @@ class DockGenerationStateMixin:
                 QStyle.StandardPixmap.SP_DialogApplyButton,
             ),
             "warning": (
-                "QWidget { background-color: rgb(255, 230, 150); "
-                "border: 1px solid rgba(255, 152, 0, 0.6); border-radius: 4px; }"
-                "QLabel { background: transparent; border: none; color: #333333; }",
+                "QWidget { background-color: rgba(245, 166, 35, 0.12); "
+                "border: 1px solid rgba(245, 166, 35, 0.45); border-radius: 4px; }"
+                "QLabel { background: transparent; border: none; color: palette(text); }",
                 QStyle.StandardPixmap.SP_MessageBoxWarning,
             ),
             "info": (
-                "QWidget { background-color: rgba(25, 118, 210, 0.08); "
-                "border: 1px solid rgba(25, 118, 210, 0.2); border-radius: 4px; }"
+                "QWidget { background-color: rgba(30, 136, 229, 0.08); "
+                "border: 1px solid rgba(30, 136, 229, 0.2); border-radius: 4px; }"
                 "QLabel { background: transparent; border: none; }",
                 QStyle.StandardPixmap.SP_MessageBoxInformation,
             ),

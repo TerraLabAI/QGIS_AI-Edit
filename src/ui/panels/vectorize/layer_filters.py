@@ -31,7 +31,7 @@ def _is_visible_ai_edit_output(layer) -> bool:
     """``_is_ai_edit_output`` plus tree visibility.
 
     The combo only lists visible layers, so the default pick must also be
-    visible — otherwise ``setLayer()`` silently fails and the combo lands
+    visible, otherwise ``setLayer()`` silently fails and the combo lands
     on whatever fallback it auto-picks.
     """
     if not _is_ai_edit_output(layer):

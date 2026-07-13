@@ -338,7 +338,12 @@ class _ResolutionMenuItem(QWidget):
             if locked
             else "color: rgba(128,128,128,0.85);"
         )
-        cost = QLabel(tr("{n} credits").format(n=credits), self)
+        cost_text = (
+            tr("{n} credit").format(n=credits)
+            if credits == 1
+            else tr("{n} credits").format(n=credits)
+        )
+        cost = QLabel(cost_text, self)
         cost.setStyleSheet(f"font-size: 11px; background: transparent; {cost_color}")
         cost.setAttribute(QtC.WA_TransparentForMouseEvents, True)
         row.addWidget(cost)

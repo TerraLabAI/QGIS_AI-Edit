@@ -1,7 +1,7 @@
 """Before/after swipe tool.
 
 Headless controller that arms/disarms a canvas swipe map tool. There is
-no dock panel — the user toggles the swipe through the dock's footer
+no dock panel; the user toggles the swipe through the dock's footer
 Before/After button. The swipe target is whatever raster is the active
 layer in the QGIS Layers panel; selecting a different raster retargets
 the swipe live. Esc on the canvas disarms the tool. Middle-mouse drag
@@ -132,7 +132,7 @@ class _SwipeOverlay(QgsMapCanvasItem):
         the swipe overlay stays VISIBLE while a pan/zoom is in progress.
         The image content is briefly for the previous extent (slightly
         misaligned for a few hundred ms), but the top layer never shows
-        on the right side of the divider — which is the contract the
+        on the right side of the divider, which is the contract the
         user expects from a "before / after" swipe.
         """
         prev = self._job
@@ -145,7 +145,7 @@ class _SwipeOverlay(QgsMapCanvasItem):
 
     def render_image(self) -> None:
         """Render the underlying layers using an exact copy of the canvas
-        mapSettings — same extent, CRS, DPR, DPI, flags, size. The image
+        mapSettings: same extent, CRS, DPR, DPI, flags, size. The image
         ends up pixel-identical to the canvas's own render of the same
         layers at the same moment, so when the swipe is steady the
         overlay is indistinguishable from the canvas. The old image is
@@ -158,7 +158,7 @@ class _SwipeOverlay(QgsMapCanvasItem):
         settings.setLayers(self._underlying_layers)
         self.setRect(self._canvas.extent())
 
-        # Cancel previous job (without blocking — its finished signal
+        # Cancel previous job (without blocking, its finished signal
         # is filtered by the `job is not self._job` guard below).
         prev = self._job
         if prev is not None:
@@ -193,7 +193,7 @@ class _SwipeOverlay(QgsMapCanvasItem):
         For a raster whose CRS matches the canvas, this is an axis-aligned
         rectangle. For a raster in a different CRS (typical case: layer
         in EPSG:4326, canvas in EPSG:3857), the projected footprint is a
-        non-axis-aligned quad — the AABB of that quad inflates beyond the
+        non-axis-aligned quad; the AABB of that quad inflates beyond the
         actual rendered area, which is the "overflow on the edges" the
         user sees. Returning the quad lets us clip to the exact footprint.
         """
@@ -281,7 +281,7 @@ class _SwipeOverlay(QgsMapCanvasItem):
             # Clip to (raster bbox + small edge pad) ∩ right of divider.
             # The pad covers the canvas's anti-aliased edges of the top
             # layer so they don't peek through. Outside the layer, the
-            # canvas's native render shows directly — no overlay anywhere
+            # canvas's native render shows directly. No overlay anywhere
             # else means no visual difference between "swipe on" and
             # "swipe off" outside the raster area.
             # No painter transform: the image is rendered for the canvas's
@@ -657,7 +657,7 @@ class SwipeController(QObject):
         self._iface_layer_connected = False
 
     def _on_active_layer_changed(self, layer) -> None:
-        """While the swipe is on, follow the user's layer pick — provided
+        """While the swipe is on, follow the user's layer pick, provided
         the new layer is also a swipeable AI-Edit output. Non-eligible
         picks are ignored so the swipe stays on its previous target.
         """

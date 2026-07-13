@@ -108,7 +108,7 @@
         <translation>1. Regístrate o inicia sesión en terra-lab.ai para obtener tu clave</translation>
     </message>
     <message>
-        <source>3,000 credits every month</source>
+        <source>3,000 credits per month</source>
         <translation>3.000 créditos al mes</translation>
     </message>
     <message>
@@ -276,7 +276,7 @@ We'd love to hear from you!</source>
         <translation>Cancela primero la generación en curso (cierra el panel)</translation>
     </message>
     <message>
-        <source>Canceled</source>
+        <source>Cancelled</source>
         <translation>Cancelado</translation>
     </message>
     <message>
@@ -460,7 +460,7 @@ We'd love to hear from you!</source>
         <translation>Créditos restantes este mes: {remaining} / {total}</translation>
     </message>
     <message>
-        <source>Custom color…</source>
+        <source>Custom color...</source>
         <translation>Color personalizado…</translation>
     </message>
     <message>
@@ -680,7 +680,7 @@ We'd love to hear from you!</source>
         <translation>Gratis</translation>
     </message>
     <message>
-        <source>Free Trial</source>
+        <source>Free trial</source>
         <translation>Prueba gratis</translation>
     </message>
     <message>
@@ -1212,7 +1212,7 @@ We'd love to hear from you!</source>
         <translation>Guardado en {path}</translation>
     </message>
     <message>
-        <source>Search prompts...  e.g. "add trees", "segment buildings"</source>
+        <source>Search prompts... e.g. "add trees", "segment buildings"</source>
         <translation>Buscar prompts...  ej. «añadir árboles», «segmentar edificios»</translation>
     </message>
     <message>
@@ -1548,6 +1548,10 @@ We'd love to hear from you!</source>
         <translation>{n} zonas de color detectadas en este resultado</translation>
     </message>
     <message>
+        <source>{n} color zone detected in this result</source>
+        <translation>{n} zona de color detectada en este resultado</translation>
+    </message>
+    <message>
         <source>Turn the colored zones into editable polygons</source>
         <translation>Convierte las zonas de color en polígonos editables</translation>
     </message>
@@ -1576,7 +1580,7 @@ We'd love to hear from you!</source>
         <translation>Lo solucionaremos para ti :)</translation>
     </message>
     <message>
-        <source>What should AI change?</source>
+        <source>What should the AI change?</source>
         <translation>¿Qué debe cambiar la IA?</translation>
     </message>
     <message>
@@ -1652,6 +1656,10 @@ We'd love to hear from you!</source>
         <translation>{n} créditos</translation>
     </message>
     <message>
+        <source>{n} credit</source>
+        <translation>{n} crédito</translation>
+    </message>
+    <message>
         <source>{n} d ago</source>
         <translation>hace {n} d</translation>
     </message>
@@ -1674,6 +1682,10 @@ We'd love to hear from you!</source>
     <message>
         <source>{n} polygons added</source>
         <translation>{n} polígonos añadidos</translation>
+    </message>
+    <message>
+        <source>{n} polygon added</source>
+        <translation>{n} polígono añadido</translation>
     </message>
     <message>
         <source>{} outputs are unlocked with a subscription.</source>
@@ -1712,7 +1724,7 @@ We'd love to hear from you!</source>
         <translation>Partir de</translation>
     </message>
     <message>
-        <source>Type a prompt to edit {base}…</source>
+        <source>Type a prompt to edit {base}...</source>
         <translation>Escribe un prompt para editar {base}…</translation>
     </message>
     <message>
@@ -2096,7 +2108,7 @@ We'd love to hear from you!</source>
         <translation>Carga tus propias imágenes</translation>
     </message>
     <message>
-        <source>Loading imagery…</source>
+        <source>Loading imagery...</source>
         <translation>Cargando imágenes…</translation>
     </message>
     <message>

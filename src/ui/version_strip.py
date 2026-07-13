@@ -95,7 +95,7 @@ _HEADER_STYLE = (
 # one design language.
 _SECTION_STYLE = (
     "color: rgba(128,128,128,0.95); font-size: 10px; font-weight: 700;"
-    " letter-spacing: 1.2px; background: transparent; border: none;"
+    " background: transparent; border: none;"
 )
 _META_STYLE = (
     "color: palette(text); font-size: 13px; font-weight: 700;"
@@ -159,11 +159,11 @@ class _VersionInfoPopup(QDialog):
         layout.addWidget(meta)
 
         if self._prompt:
-            # Header row: "PROMPT" + a tiny one-click Copy prompt button.
+            # Header row: "Prompt" + a tiny one-click Copy prompt button.
             head = QHBoxLayout()
             head.setContentsMargins(0, 0, 0, 0)
             head.setSpacing(6)
-            section = QLabel(tr("Prompt").upper(), self)
+            section = QLabel(tr("Prompt"), self)
             section.setStyleSheet(_SECTION_STYLE)
             head.addWidget(section)
             head.addStretch(1)

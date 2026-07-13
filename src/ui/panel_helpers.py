@@ -77,8 +77,8 @@ def build_info_box(text: str) -> QLabel:
     label.setWordWrap(True)
     label.setStyleSheet(
         "QLabel {"
-        " background-color: rgba(25, 118, 210, 0.08);"
-        " border: 1px solid rgba(25, 118, 210, 0.2);"
+        " background-color: rgba(30, 136, 229, 0.08);"
+        " border: 1px solid rgba(30, 136, 229, 0.2);"
         " border-radius: 4px;"
         " padding: 8px;"
         " font-size: 11px;"
@@ -89,14 +89,13 @@ def build_info_box(text: str) -> QLabel:
 
 
 def panel_section_label(text: str) -> QLabel:
-    """Small-caps section label (TOOL / COLOR / DETECTION / etc.)."""
-    label = QLabel(text.upper())
+    """Small bold section label (Tool / Color / Detection / etc.), normal case."""
+    label = QLabel(text)
     label.setStyleSheet(
         "font-size: 10px; font-weight: bold; color: palette(text);"
         " background: transparent; border: none;"
         " border-bottom: 1px solid rgba(128, 128, 128, 0.35);"
         " padding: 6px 0px 2px 0px; margin-bottom: 4px;"
-        " letter-spacing: 1px;"
     )
     return label
 

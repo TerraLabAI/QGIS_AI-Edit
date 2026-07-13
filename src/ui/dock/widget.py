@@ -198,7 +198,7 @@ class AIEditDockWidget(
     def _on_escape_pressed(self):
         """Escape walks the flow back one step at a time.
 
-        SWIPE ACTIVE → disarm swipe (highest priority — the canvas-tool
+        SWIPE ACTIVE → disarm swipe (highest priority, the canvas-tool
         Escape handler only fires when canvas has focus, but the swipe
         button stays checked otherwise; route the dock-level Escape
         through here so swipe always exits cleanly).

@@ -43,8 +43,8 @@ PRODUCT_NAME = "AI Edit"
 
 _STATUS_DISPLAY = {
     "active": (tr("Active"), BRAND_GREEN_TEXT),
-    "trialing": (tr("Free Trial"), "#f57c00"),
-    "canceled": (tr("Canceled"), BRAND_RED),
+    "trialing": (tr("Free trial"), "#f5a623"),
+    "canceled": (tr("Cancelled"), BRAND_RED),
 }
 
 _LINK_BTN = (
@@ -579,8 +579,9 @@ class AccountSettingsDialog(QDialog):
         )
         card_layout.addWidget(progress)
 
-        # A small reset note above the action buttons: Stripe renewal date for
-        # paid plans, monthly free-credit renewal (1st of the month) for free.
+        # A small reset note above the action buttons: the subscription renewal
+        # date for paid plans, monthly free-credit renewal (1st of the month)
+        # for free.
         period_end = sub.get("current_period_end", "")
         if period_end:
             reset_row = QHBoxLayout()
@@ -629,7 +630,7 @@ class AccountSettingsDialog(QDialog):
         if plan == "pro":
             return "Pro"
         if status == "trialing":
-            return tr("Free Trial")
+            return tr("Free trial")
         return tr("Free")
 
     @staticmethod

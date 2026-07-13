@@ -395,8 +395,11 @@ class DockToolsFooterMixin:
         # Instrument voice: measure what was detected; the button carries
         # the action. The generic line covers template / prompt triggers.
         if trigger == "flat_output":
-            caption = tr("{n} color zones detected in this result").format(
-                n=len(swatches)
+            n_zones = len(swatches)
+            caption = (
+                tr("{n} color zone detected in this result").format(n=n_zones)
+                if n_zones == 1
+                else tr("{n} color zones detected in this result").format(n=n_zones)
             )
         else:
             caption = tr("Turn the colored zones into editable polygons")

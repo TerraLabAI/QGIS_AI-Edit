@@ -108,7 +108,7 @@
         <translation>1. Daftar atau masuk di terra-lab.ai untuk mendapatkan kunci Anda</translation>
     </message>
     <message>
-        <source>3,000 credits every month</source>
+        <source>3,000 credits per month</source>
         <translation>3.000 kredit setiap bulan</translation>
     </message>
     <message>
@@ -276,7 +276,7 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Batalkan dulu proses generate yang berjalan (tutup panel)</translation>
     </message>
     <message>
-        <source>Canceled</source>
+        <source>Cancelled</source>
         <translation>Dibatalkan</translation>
     </message>
     <message>
@@ -460,7 +460,7 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Kredit tersisa bulan ini: {remaining} / {total}</translation>
     </message>
     <message>
-        <source>Custom color…</source>
+        <source>Custom color...</source>
         <translation>Warna khusus…</translation>
     </message>
     <message>
@@ -680,7 +680,7 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Gratis</translation>
     </message>
     <message>
-        <source>Free Trial</source>
+        <source>Free trial</source>
         <translation>Uji Coba Gratis</translation>
     </message>
     <message>
@@ -1212,7 +1212,7 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Disimpan ke {path}</translation>
     </message>
     <message>
-        <source>Search prompts...  e.g. "add trees", "segment buildings"</source>
+        <source>Search prompts... e.g. "add trees", "segment buildings"</source>
         <translation>Cari prompt...  mis. "tambahkan pohon", "segmentasi bangunan"</translation>
     </message>
     <message>
@@ -1548,6 +1548,10 @@ Kami senang mendengar dari Anda!</translation>
         <translation>{n} zona warna terdeteksi di hasil ini</translation>
     </message>
     <message>
+        <source>{n} color zone detected in this result</source>
+        <translation>{n} zona warna terdeteksi di hasil ini</translation>
+    </message>
+    <message>
         <source>Turn the colored zones into editable polygons</source>
         <translation>Ubah zona berwarna menjadi poligon yang dapat diedit</translation>
     </message>
@@ -1576,7 +1580,7 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Kami akan segera memperbaikinya untuk Anda :)</translation>
     </message>
     <message>
-        <source>What should AI change?</source>
+        <source>What should the AI change?</source>
         <translation>Apa yang harus diubah oleh AI?</translation>
     </message>
     <message>
@@ -1652,6 +1656,10 @@ Kami senang mendengar dari Anda!</translation>
         <translation>{n} kredit</translation>
     </message>
     <message>
+        <source>{n} credit</source>
+        <translation>{n} kredit</translation>
+    </message>
+    <message>
         <source>{n} d ago</source>
         <translation>{n} h lalu</translation>
     </message>
@@ -1673,6 +1681,10 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>{n} polygons added</source>
+        <translation>{n} poligon ditambahkan</translation>
+    </message>
+    <message>
+        <source>{n} polygon added</source>
         <translation>{n} poligon ditambahkan</translation>
     </message>
     <message>
@@ -1712,7 +1724,7 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Mulai dari</translation>
     </message>
     <message>
-        <source>Type a prompt to edit {base}…</source>
+        <source>Type a prompt to edit {base}...</source>
         <translation>Ketik prompt untuk mengedit {base}…</translation>
     </message>
     <message>
@@ -2096,7 +2108,7 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Muat citra Anda sendiri</translation>
     </message>
     <message>
-        <source>Loading imagery…</source>
+        <source>Loading imagery...</source>
         <translation>Memuat citra…</translation>
     </message>
     <message>

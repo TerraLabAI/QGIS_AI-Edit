@@ -118,7 +118,7 @@ class DockVersionsMixin:
         which version the next edit builds on (see _update_result_generate_label).
         """
         if self._imagery_loading:
-            self._generate_btn.setText(tr("Loading imagery…"))
+            self._generate_btn.setText(tr("Loading imagery..."))
             self._generate_btn.setToolTip(tr(
                 "Waiting for the example basemap to finish loading before you generate"
             ))
@@ -134,7 +134,7 @@ class DockVersionsMixin:
         base = self._version_strip.label_for(self._version_strip.selected_index())
         self._result_regenerate_btn.setText(tr("Generate from {base}").format(base=base))
         self._result_prompt_input.setPlaceholderText(
-            tr("Type a prompt to edit {base}…").format(base=base)
+            tr("Type a prompt to edit {base}...").format(base=base)
         )
 
     def _on_version_selected(self, index: int):
