@@ -3,12 +3,18 @@ name=AI Edit by TerraLab
 description=Edit aerial & satellite imagery with AI: land cover classification, building footprint extraction, super-resolution upscaling, object removal, cloud removal and flood simulation, all from a text prompt. Georeferenced output.
 qgisMinimumVersion=3.0
 qgisMaximumVersion=4.99
-version=1.6.5
+version=1.6.6
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.6.6
+    - More reliable generation: it no longer gets stuck on unexpected errors, and cancelling frees things up right away
+    - Vectorize is now suggested only when the result is genuinely a flat-color map
+    - Refreshed interface styling and clearer wording throughout
+    - Privacy and stability improvements
+
     1.6.5
     - AI Edit now recognizes land cover and segmentation style results and offers to vectorize them in one click, with the detected color classes ready to trace
     - Clearer Vectorize panel: one big green Vectorize button, with a quiet Exit link below
@@ -84,7 +90,7 @@ about=
 
     • One AI model for almost anything: describe a task and it handles it, from urban planning and solar studies to crop mapping, archaeology, or restoring old maps
 
-    • Universal: Windows, macOS, Linux. Powered by the Best Generative AI Edit model (From Google)
+    • Universal: Windows, macOS, Linux. Powered by the best generative AI model from Google
 
 tracker=https://github.com/TerraLabAI/QGIS_AI-Edit/issues
 repository=https://github.com/TerraLabAI/QGIS_AI-Edit
