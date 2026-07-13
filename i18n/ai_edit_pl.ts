@@ -2084,8 +2084,8 @@ Chcielibyśmy to od Ciebie usłyszeć!</translation>
         <translation>Wypełnij wewnętrzne dziury w każdym kształcie</translation>
     </message>
     <message>
-        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
-        <translation>Darmowy plan - 5 edycji AI miesięcznie. Rejestracja zajmuje 15 sekund w przeglądarce.</translation>
+        <source>Free plan - 10 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>Darmowy plan - 10 edycji AI miesięcznie. Rejestracja zajmuje 15 sekund w przeglądarce.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

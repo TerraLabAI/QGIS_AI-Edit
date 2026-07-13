@@ -2084,8 +2084,8 @@ We'd love to hear from you!</source>
         <translation>各図形の内側の穴を埋める</translation>
     </message>
     <message>
-        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
-        <translation>無料プラン - 毎月5回のAI編集。登録はブラウザで15秒で完了します。</translation>
+        <source>Free plan - 10 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>無料プラン - 毎月10回のAI編集。登録はブラウザで15秒で完了します。</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

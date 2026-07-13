@@ -2084,8 +2084,8 @@ Saremo felici di ricevere il tuo feedback!</translation>
         <translation>Riempi i buchi interni di ogni forma</translation>
     </message>
     <message>
-        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
-        <translation>Piano gratuito - 5 modifiche IA al mese. La registrazione richiede 15 secondi nel browser.</translation>
+        <source>Free plan - 10 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>Piano gratuito - 10 modifiche IA al mese. La registrazione richiede 15 secondi nel browser.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

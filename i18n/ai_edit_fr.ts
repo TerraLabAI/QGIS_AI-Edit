@@ -2084,8 +2084,8 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Remplir les trous intérieurs de chaque forme</translation>
     </message>
     <message>
-        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
-        <translation>Plan gratuit - 5 éditions IA par mois. L'inscription prend 15 secondes dans votre navigateur.</translation>
+        <source>Free plan - 10 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>Plan gratuit - 10 éditions IA par mois. L'inscription prend 15 secondes dans votre navigateur.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

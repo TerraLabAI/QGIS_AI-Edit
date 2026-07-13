@@ -2084,8 +2084,8 @@ We'd love to hear from you!</source>
         <translation>Rellenar los huecos interiores de cada forma</translation>
     </message>
     <message>
-        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
-        <translation>Plan gratuito - 5 ediciones con IA al mes. El registro toma 15 segundos en tu navegador.</translation>
+        <source>Free plan - 10 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>Plan gratuito - 10 ediciones con IA al mes. El registro toma 15 segundos en tu navegador.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

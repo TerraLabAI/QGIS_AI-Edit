@@ -2084,8 +2084,8 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>Innenliegende Löcher in jeder Form füllen</translation>
     </message>
     <message>
-        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
-        <translation>Kostenloser Plan - 5 KI-Bearbeitungen pro Monat. Die Anmeldung dauert 15 Sekunden in Ihrem Browser.</translation>
+        <source>Free plan - 10 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>Kostenloser Plan - 10 KI-Bearbeitungen pro Monat. Die Anmeldung dauert 15 Sekunden in Ihrem Browser.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

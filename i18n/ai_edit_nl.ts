@@ -2084,8 +2084,8 @@ We horen graag van u!</translation>
         <translation>Gaten binnen elke vorm opvullen</translation>
     </message>
     <message>
-        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
-        <translation>Gratis plan - 5 AI-bewerkingen per maand. Aanmelden duurt 15 seconden in uw browser.</translation>
+        <source>Free plan - 10 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>Gratis plan - 10 AI-bewerkingen per maand. Aanmelden duurt 15 seconden in uw browser.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

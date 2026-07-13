@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from qgis.core import QgsPointXY, QgsRaster, QgsRasterLayer
+from qgis.core import QgsPointXY, QgsRasterLayer
 from qgis.gui import QgsMapCanvas, QgsMapTool
 from qgis.PyQt.QtGui import QColor
 
@@ -85,7 +85,7 @@ class EyedropperMapTool(QgsMapTool):
         provider = self._raster.dataProvider()
         if provider is None:
             return None
-        result = provider.identify(map_point, QgsRaster.IdentifyFormatValue)
+        result = provider.identify(map_point, QtC.IdentifyFormatValue)
         if not result.isValid():
             return None
         values = result.results() or {}

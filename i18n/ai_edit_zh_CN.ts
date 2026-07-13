@@ -2084,8 +2084,8 @@ We'd love to hear from you!</source>
         <translation>填充每个形状内部的孔洞</translation>
     </message>
     <message>
-        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
-        <translation>免费套餐 - 每月 5 次 AI 编辑。在浏览器中注册仅需 15 秒。</translation>
+        <source>Free plan - 10 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>免费套餐 - 每月 10 次 AI 编辑。在浏览器中注册仅需 15 秒。</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>

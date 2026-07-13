@@ -6,7 +6,7 @@ them once at import time so the rest of the codebase stays clean.
 """
 from __future__ import annotations
 
-from qgis.core import QgsBlockingNetworkRequest
+from qgis.core import QgsBlockingNetworkRequest, QgsRaster
 from qgis.PyQt.QtCore import QIODevice, QObject, Qt, QTimer
 from qgis.PyQt.QtGui import QImage, QPalette, QTextCursor, QTextOption
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
@@ -154,10 +154,13 @@ except Exception:
     LineGeometry = None
 if PolygonGeometry is None:
     from qgis.core import QgsWkbTypes
-    PolygonGeometry = QgsWkbTypes.PolygonGeometry
+    PolygonGeometry = _resolve(QgsWkbTypes, "GeometryType", "PolygonGeometry")
 if LineGeometry is None:
     from qgis.core import QgsWkbTypes
-    LineGeometry = QgsWkbTypes.LineGeometry
+    LineGeometry = _resolve(QgsWkbTypes, "GeometryType", "LineGeometry")
+
+# QgsRaster.IdentifyFormat (scoped on QGIS 4, flat attribute on QGIS 3)
+IdentifyFormatValue = _resolve(QgsRaster, "IdentifyFormat", "IdentifyFormatValue")
 
 
 # QNetworkReply.NetworkError

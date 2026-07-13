@@ -2084,8 +2084,8 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Isi lubang di bagian dalam setiap bentuk</translation>
     </message>
     <message>
-        <source>Free plan - 5 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
-        <translation>Paket gratis - 5 edit AI per bulan. Pendaftaran hanya 15 detik di browser Anda.</translation>
+        <source>Free plan - 10 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
+        <translation>Paket gratis - 10 edit AI per bulan. Pendaftaran hanya 15 detik di browser Anda.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>
