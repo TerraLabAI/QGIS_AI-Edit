@@ -184,10 +184,13 @@ _CATEGORY_LABELS = {
 # Mirrored with the website catalog (`needs` array + per-category `need`
 # field); these local tables are the offline fallback, resolved through
 # `get_need_groups` the same way category labels are.
+# Family labels (English source; French shows Analyser / Simuler / Habiller via
+# i18n). Keys stay classify/project/render so nothing else has to change; the
+# live labels come from the server catalog's needs[] and MUST mirror these.
 _NEED_LABELS = {
-    "classify": "Classify",
-    "project": "Project",
-    "render": "Render",
+    "classify": "Analyze",
+    "project": "Simulate",
+    "render": "Style",
 }
 
 _NEED_TAGLINES = {
@@ -268,6 +271,10 @@ def _normalize_preset(preset: dict, source_category: str) -> dict:
         # in each category page so the curated list stays trustworthy.
         "experimental": bool(preset.get("experimental", False)),
         "vector_color": preset.get("vector_color"),
+        # Optional per-preset family override: lets the server move a single
+        # prompt to a different family (need) without moving its whole category.
+        # Absent/unknown -> the preset inherits its category's need.
+        "need": preset.get("need"),
         "demo_url_before": preset.get("demo_url_before"),
         "demo_url_after": preset.get("demo_url_after"),
     }
@@ -793,7 +800,8 @@ def _themed_category_label(cat_key: str, catalog: dict | None) -> str:
         resolved = _pick_label(cat.get("label"), "")
         if resolved:
             return resolved
-    return tr(_CATEGORY_LABELS[cat_key])
+    local = _CATEGORY_LABELS.get(cat_key)
+    return tr(local) if local else cat_key
 
 
 def _build_themed_category(cat_key: str, catalog: dict | None) -> list[dict]:
@@ -818,6 +826,38 @@ def _category_need(cat_key: str, catalog: dict | None) -> str:
         if isinstance(need, str) and need in _NEED_LABELS:
             return need
     return _CATEGORY_NEED.get(cat_key, _NEED_ORDER[0])
+
+
+# Pseudo-categories from get_all_categories that are NOT part of the themed
+# catalog and must be excluded from need grouping.
+_PERSONAL_CATEGORY_KEYS = ("recent", "user_favorites", "favorites")
+
+
+def _preset_need(preset: dict, catalog: dict | None) -> str:
+    """Effective need for a (normalized) preset: its own `need` override when
+    valid, else its category's need. Mirrors the website's optional per-preset
+    `need` field so a single prompt can move families without moving its
+    category."""
+    need = preset.get("need")
+    if isinstance(need, str) and need in _NEED_LABELS:
+        return need
+    return _category_need(preset.get("source_category", ""), catalog)
+
+
+def _all_category_keys(catalog: dict | None) -> list[str]:
+    """Category keys to walk: the local `_CATEGORY_ORDER` first (stable
+    order), then any server catalog categories not in the local table
+    appended, so a category the server adds still renders (the local table
+    is only the offline fallback, not a whitelist)."""
+    keys = list(_CATEGORY_ORDER)
+    seen = set(keys)
+    if isinstance(catalog, dict):
+        for cat in catalog.get("categories", []) or []:
+            key = cat.get("key") if isinstance(cat, dict) else None
+            if isinstance(key, str) and key not in seen:
+                keys.append(key)
+                seen.add(key)
+    return keys
 
 
 def get_need_groups(server_catalog: dict | None = None) -> list[dict]:
@@ -846,11 +886,80 @@ def get_need_groups(server_catalog: dict | None = None) -> list[dict]:
                 _pick_label(srv.get("tagline"), "") or tr(_NEED_TAGLINES[need_key])
             ),
             "categories": [
-                c for c in _CATEGORY_ORDER
+                c for c in _all_category_keys(server_catalog)
                 if _category_need(c, server_catalog) == need_key
             ],
         })
     return groups
+
+
+def _presets_by_need(server_catalog: dict | None) -> dict[str, list[dict]]:
+    """Every themed preset bucketed by its EFFECTIVE need (per-preset `need`
+    override wins over the category's need)."""
+    buckets: dict[str, list[dict]] = {k: [] for k in _NEED_ORDER}
+    for cat in get_all_categories(server_catalog):
+        if cat["key"] in _PERSONAL_CATEGORY_KEYS:
+            continue
+        for preset in cat["presets"]:
+            buckets.setdefault(_preset_need(preset, server_catalog), []).append(preset)
+    return buckets
+
+
+def get_need_tiles(server_catalog: dict | None = None) -> list[dict]:
+    """One tile per need, in `_NEED_ORDER`, for the library landing page.
+
+    Presets are grouped by their EFFECTIVE need (a preset's own `need` override
+    wins over its category's need). `hero` is the tile's before/after thumbnail
+    preset: first top pick in the need, else first preset with an "after" demo,
+    else first preset, else None (empty need)."""
+    buckets = _presets_by_need(server_catalog)
+    tiles: list[dict] = []
+    for group in get_need_groups(server_catalog):
+        presets = buckets.get(group["key"], [])
+        cats_present = {p.get("source_category") for p in presets}
+        hero = (
+            next((p for p in presets if p.get("top_pick")), None)
+            or next((p for p in presets if p.get("demo_url_after")), None)
+            or (presets[0] if presets else None)
+        )
+        tiles.append({
+            "key": group["key"],
+            "label": group["label"],
+            "tagline": group["tagline"],
+            "preset_count": len(presets),
+            "category_count": len(cats_present),
+            "hero": hero,
+        })
+    return tiles
+
+
+def get_need_page(need_key: str, server_catalog: dict | None = None) -> dict:
+    """The need's drill-in payload: label, tagline, and its categories each as
+    ``{key, label, presets}`` - only presets whose EFFECTIVE need matches, so a
+    prompt moved via a per-preset `need` override shows under the right family.
+    Empty shell if `need_key` is unknown."""
+    group = next(
+        (g for g in get_need_groups(server_catalog) if g["key"] == need_key), None
+    )
+    if group is None:
+        return {"key": need_key, "label": "", "tagline": "", "categories": []}
+    categories: list[dict] = []
+    for cat in get_all_categories(server_catalog):
+        if cat["key"] in _PERSONAL_CATEGORY_KEYS:
+            continue
+        matching = [
+            p for p in cat["presets"] if _preset_need(p, server_catalog) == need_key
+        ]
+        if matching:
+            categories.append(
+                {"key": cat["key"], "label": cat["label"], "presets": matching}
+            )
+    return {
+        "key": need_key,
+        "label": group["label"],
+        "tagline": group["tagline"],
+        "categories": categories,
+    }
 
 
 def get_all_categories(server_catalog: dict | None = None) -> list[dict]:
@@ -882,7 +991,7 @@ def get_all_categories(server_catalog: dict | None = None) -> list[dict]:
         "presets": _build_top_picks(server_catalog),
     })
 
-    for cat_key in _CATEGORY_ORDER:
+    for cat_key in _all_category_keys(server_catalog):
         result.append({
             "key": cat_key,
             "label": _themed_category_label(cat_key, server_catalog),

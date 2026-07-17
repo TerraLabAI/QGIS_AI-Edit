@@ -17,12 +17,18 @@ from ....core import qt_compat as QtC
 from ....core import telemetry
 from ....core import telemetry_events as te
 from ....core.i18n import tr
+from ....core.prompts.prompt_presets import get_need_page
 from .cards import _BeforeAfterCard
 from .common import (
+    _BACK_BTN_SMALL,
     _EMPTY_MSG,
     _EXPERIMENTAL_BTN,
     _EXPERIMENTAL_HEADER,
     _HISTORY_SVG,
+    _NEED_ACCENT,
+    _NEED_TAB,
+    _NEED_TILE_SUB,
+    _NEED_TILE_TITLE,
     _STAR_OUTLINE_SVG,
     _TABS_WITH_COUNT,
     _is_alive,
@@ -234,6 +240,162 @@ class PagesMixin:
             card = self._build_top_pick_card(preset)
             grid.addWidget(card, row, col)
             self._card_widgets.append((card, page_key))
+
+    # -- Need drill-in pages (landing redesign) --------------------------
+
+    def _switch_to_page(self, widget: QWidget) -> None:
+        """Show an arbitrary stack page (landing or a need page). The
+        landing/need flow does not use sidebar highlighting or tab keys."""
+        self._stack.setCurrentWidget(widget)
+
+    @staticmethod
+    def _tab_active_qss(accent: str) -> str:
+        """Active category tab: underlined in the family's accent colour."""
+        return (
+            "QPushButton { border: none; border-bottom: 2px solid " + accent + "; "
+            "background: transparent; padding: 6px 2px 3px 2px; font-size: 13px; "
+            "font-weight: 700; color: palette(text); }"
+        )
+
+    def _build_back_header(self, title: str, tagline: str = "") -> QWidget:
+        """Compact header: a small borderless back arrow + title (and an
+        optional single-line tagline). Back returns to the landing page."""
+        host = QWidget()
+        row = QHBoxLayout(host)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(10)
+        back = QPushButton("←")  # left arrow, glyph outside tr()
+        back.setStyleSheet(_BACK_BTN_SMALL)
+        back.setCursor(QtC.PointingHandCursor)
+        back.setFixedSize(26, 26)
+        back.setToolTip(tr("Back to library"))
+        back.clicked.connect(lambda _c=False: self._switch_to_page(self._landing_page))
+        row.addWidget(back)
+        titles = QVBoxLayout()
+        titles.setContentsMargins(0, 0, 0, 0)
+        titles.setSpacing(1)
+        lbl = QLabel(title)
+        lbl.setStyleSheet(_NEED_TILE_TITLE)
+        titles.addWidget(lbl)
+        if tagline:
+            sub = QLabel(tagline)
+            sub.setStyleSheet(_NEED_TILE_SUB)
+            sub.setWordWrap(False)  # one line, never wrap to two
+            titles.addWidget(sub)
+        row.addLayout(titles)
+        row.addStretch()
+        return host
+
+    def _ensure_need_page(self, need_key: str) -> QWidget | None:
+        """Lazily build and cache the drill-in page for one need."""
+        page = self._need_pages.get(need_key)
+        if page is None:
+            page = self._build_need_page(need_key)
+            self._need_pages[need_key] = page
+            self._stack.addWidget(page)
+        return page
+
+    def _build_need_page(self, need_key: str) -> QWidget:
+        """Aggregate every category of one need into a single filtered gallery:
+        a back header, category filter chips, and a card grid rebuilt on filter
+        so it always reflows without gaps."""
+        data = get_need_page(need_key, self._server_catalog)
+        accent = _NEED_ACCENT.get(need_key, "#8bac27")
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtC.FrameNoFrame)
+        scroll.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
+        content = QWidget()
+        outer = QVBoxLayout(content)
+        outer.setContentsMargins(6, 4, 6, 8)
+        outer.setSpacing(10)
+
+        # Thin family-colour bar at the top echoes the family's tile accent.
+        top_bar = QFrame()
+        top_bar.setFixedHeight(3)
+        top_bar.setStyleSheet(f"background: {accent}; border: none;")
+        outer.addWidget(top_bar)
+
+        outer.addWidget(self._build_back_header(data["label"], data["tagline"]))
+
+        presets = [p for cat in data["categories"] for p in cat["presets"]]
+
+        self._need_chips[need_key] = {}
+        if len(data["categories"]) > 1:
+            tab_row = QHBoxLayout()
+            tab_row.setContentsMargins(0, 0, 0, 0)
+            tab_row.setSpacing(16)
+            all_tab = QPushButton(tr("All"))
+            all_tab.setStyleSheet(self._tab_active_qss(accent))
+            all_tab.setCursor(QtC.PointingHandCursor)
+            all_tab.clicked.connect(
+                lambda _c=False, k=need_key: self._render_need_grid(k, "__all__")
+            )
+            tab_row.addWidget(all_tab)
+            self._need_chips[need_key]["__all__"] = all_tab
+            for cat in data["categories"]:
+                # && renders a literal & (Qt would otherwise treat "&" as a
+                # mnemonic and show "Forestry & vegetation" as "Forestry _vegetation").
+                tab = QPushButton(cat["label"].replace("&", "&&"))
+                tab.setStyleSheet(_NEED_TAB)
+                tab.setCursor(QtC.PointingHandCursor)
+                tab.clicked.connect(
+                    lambda _c=False, k=need_key, ck=cat["key"]: self._render_need_grid(k, ck)
+                )
+                tab_row.addWidget(tab)
+                self._need_chips[need_key][cat["key"]] = tab
+            tab_row.addStretch()
+            tab_wrap = QWidget()
+            tab_wrap.setLayout(tab_row)
+            outer.addWidget(tab_wrap)
+
+        grid_host = QWidget()
+        grid = self._new_card_grid(grid_host, columns=3)
+        outer.addWidget(grid_host)
+
+        if not presets:
+            empty = QLabel(tr("No prompts in this section yet."))
+            empty.setStyleSheet(_EMPTY_MSG)
+            outer.addWidget(empty)
+
+        outer.addStretch()
+        scroll.setWidget(content)
+
+        self._need_state[need_key] = {
+            "grid": grid, "all_presets": presets, "active": "__all__", "accent": accent,
+        }
+        self._render_need_grid(need_key, "__all__")
+        return scroll
+
+    def _render_need_grid(self, need_key: str, cat_key: str) -> None:
+        """Rebuild a need page's card grid for the active category tab. All
+        prompts render together (no experimental section) so the page stays
+        simple; the rebuild reflows cleanly with no gaps."""
+        state = self._need_state.get(need_key)
+        if not state:
+            return
+        grid = state["grid"]
+        while grid.count():
+            item = grid.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                # setParent(None) removes it from view now; deleteLater alone is
+                # async, so a same-frame rebuild would briefly overlap old cells.
+                widget.setParent(None)
+                widget.deleteLater()
+
+        presets = state["all_presets"]
+        if cat_key != "__all__":
+            presets = [p for p in presets if p.get("source_category") == cat_key]
+        for idx, preset in enumerate(presets):
+            row, col = divmod(idx, 3)
+            grid.addWidget(self._build_top_pick_card(preset), row, col)
+
+        state["active"] = cat_key
+        active_qss = self._tab_active_qss(state.get("accent", "#8bac27"))
+        for key, tab in self._need_chips.get(need_key, {}).items():
+            tab.setStyleSheet(active_qss if key == cat_key else _NEED_TAB)
 
     def _build_top_pick_card(self, preset: dict) -> QFrame:
         """One library card: always a compact before/after slider so every cell

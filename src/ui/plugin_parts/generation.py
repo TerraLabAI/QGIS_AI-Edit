@@ -407,6 +407,9 @@ class GenerationMixin:
         self._generation_service.reset()
         self._generation_start_time = time.time()
         self._last_generation_is_retry = is_retry
+        # Fresh attempt: the error-report dialog may auto-open again for this
+        # one, but at most once (see _show_error_report).
+        self._error_report_dialog_shown = False
         used_markup = bool(guidance_b64)
         telemetry.track(te.GENERATION_STARTED, self._enrich_generation_props({
             "prompt_length": len(prompt),

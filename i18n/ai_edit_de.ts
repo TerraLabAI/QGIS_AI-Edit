@@ -4,6 +4,70 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>Analyze</source>
+        <translation>Analysieren</translation>
+    </message>
+    <message>
+        <source>Simulate</source>
+        <translation>Simulieren</translation>
+    </message>
+    <message>
+        <source>Style</source>
+        <translation>Gestalten</translation>
+    </message>
+    <message>
+        <source>Choose a family to explore</source>
+        <translation>Wähle eine Familie zum Erkunden</translation>
+    </message>
+    <message>
+        <source>Explore</source>
+        <translation>Erkunden</translation>
+    </message>
+    <message>
+        <source>See all</source>
+        <translation>Alle anzeigen</translation>
+    </message>
+    <message>
+        <source>Popular</source>
+        <translation>Beliebt</translation>
+    </message>
+    <message>
+        <source>What the community runs most often</source>
+        <translation>Was die Community am häufigsten nutzt</translation>
+    </message>
+    <message>
+        <source>Your latest prompts</source>
+        <translation>Deine neuesten Prompts</translation>
+    </message>
+    <message>
+        <source>Your starred prompts</source>
+        <translation>Deine markierten Prompts</translation>
+    </message>
+    <message>
+        <source>Nothing here yet.</source>
+        <translation>Noch nichts hier.</translation>
+    </message>
+    <message>
+        <source>What do you want to do?</source>
+        <translation>Was möchtest du tun?</translation>
+    </message>
+    <message>
+        <source>{n} prompts</source>
+        <translation>{n} Prompts</translation>
+    </message>
+    <message>
+        <source>Back to library</source>
+        <translation>Zurück zur Bibliothek</translation>
+    </message>
+    <message>
+        <source>All</source>
+        <translation>Alle</translation>
+    </message>
+    <message>
+        <source>No prompts in this section yet.</source>
+        <translation>Noch keine Prompts in diesem Bereich.</translation>
+    </message>
+    <message>
         <source>Share anonymous usage statistics</source>
         <translation>Anonyme Nutzungsstatistiken teilen</translation>
     </message>
@@ -126,10 +190,6 @@
     <message>
         <source>2K and 4K outputs</source>
         <translation>2K- und 4K-Ausgaben</translation>
-    </message>
-    <message>
-        <source>5 free generations, no credit card required</source>
-        <translation>5 kostenlose Generierungen, keine Kreditkarte erforderlich</translation>
     </message>
     <message>
         <source>&lt;b&gt;Mark up&lt;/b&gt;&lt;br&gt;Draw arrows, shapes, or labels on the map to show the AI what to change and where. Your sketch is sent with the prompt as visual guidance.</source>
@@ -1876,10 +1936,6 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>Melden Sie sich über Ihren Browser an, um AI Edit zu nutzen</translation>
     </message>
     <message>
-        <source>5 free AI Edits, no credit card</source>
-        <translation>5 kostenlose AI Edits, keine Kreditkarte</translation>
-    </message>
-    <message>
         <source>Use an activation key</source>
         <translation>Einen Aktivierungsschlüssel verwenden</translation>
     </message>
@@ -2120,6 +2176,10 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>Neu hier? Unser 5-Minuten-Tutorial führt Sie Schritt für Schritt durch eine komplette Bearbeitung.</translation>
     </message>
     <message>
+        <source>No additional details are available.</source>
+        <translation>Es sind keine weiteren Details verfügbar.</translation>
+    </message>
+    <message>
         <source>No flat color classes found - this image looks photo-realistic. Vectorize works best on maps with solid colors (Segment or Land cover results). You can still sample a color below.</source>
         <translation>Keine Klassen mit einheitlichen Farben gefunden - dieses Bild wirkt fotorealistisch. Vektorisieren funktioniert am besten auf Karten mit Volltonfarben (Ergebnisse von Segment oder Landbedeckung). Sie können unten trotzdem eine Farbe entnehmen.</translation>
     </message>
@@ -2138,6 +2198,10 @@ Wir freuen uns auf Ihre Nachricht!</translation>
     <message>
         <source>Open the tutorial</source>
         <translation>Tutorial öffnen</translation>
+    </message>
+    <message>
+        <source>Please contact {email} for help.</source>
+        <translation>Bitte wenden Sie sich für Hilfe an {email}.</translation>
     </message>
     <message>
         <source>Raster has no usable georeferencing.</source>
@@ -2194,6 +2258,10 @@ Wir freuen uns auf Ihre Nachricht!</translation>
     <message>
         <source>Vector</source>
         <translation>Vektor</translation>
+    </message>
+    <message>
+        <source>Vectorize failed unexpectedly. Please try again, or report the problem if it persists.</source>
+        <translation>Vektorisieren ist unerwartet fehlgeschlagen. Bitte versuchen Sie es erneut, oder melden Sie das Problem, falls es weiterhin auftritt.</translation>
     </message>
     <message>
         <source>Vectorize turns a flat-color map (Segment, Land cover, masks, site plans...) into editable polygons - one class per color, ready to select, measure, style and export. It reads colors, so it works on colored maps, not photo-realistic images.</source>

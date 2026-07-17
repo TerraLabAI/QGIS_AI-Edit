@@ -12,8 +12,9 @@ from __future__ import annotations
 from qgis.core import QgsTask
 from qgis.PyQt.QtCore import pyqtSignal
 
-from ..core.errors import AIEditError
+from ..core.errors import AIEditError, ErrorCode
 from ..core.generation.vectorization_service import compute_class_features
+from ..core.i18n import tr
 from ..core.logger import log_warning
 
 
@@ -55,7 +56,12 @@ class VectorizeTask(QgsTask):
             return False
         except Exception as err:  # nosec B110 - surface as a failed task, never crash QGIS.
             log_warning(f"Vectorize compute failed: {err}")
-            self._failure = (str(err), "")
+            # A stable code + translated, user-safe message: the raw exception
+            # text (GDAL/numpy internals) must never reach the UI, only the log.
+            self._failure = (
+                tr("Vectorize failed unexpectedly. Please try again, or report the problem if it persists."),
+                ErrorCode.VECTORIZE_INTERNAL_ERROR.value,
+            )
             return False
         if feats is None or self.isCanceled():
             # Cancelled mid-compute: no result, no error.

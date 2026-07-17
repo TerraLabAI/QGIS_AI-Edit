@@ -4,6 +4,70 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>Analyze</source>
+        <translation>Analisis</translation>
+    </message>
+    <message>
+        <source>Simulate</source>
+        <translation>Simulasikan</translation>
+    </message>
+    <message>
+        <source>Style</source>
+        <translation>Perindah</translation>
+    </message>
+    <message>
+        <source>Choose a family to explore</source>
+        <translation>Pilih famili untuk dijelajahi</translation>
+    </message>
+    <message>
+        <source>Explore</source>
+        <translation>Jelajahi</translation>
+    </message>
+    <message>
+        <source>See all</source>
+        <translation>Lihat semua</translation>
+    </message>
+    <message>
+        <source>Popular</source>
+        <translation>Populer</translation>
+    </message>
+    <message>
+        <source>What the community runs most often</source>
+        <translation>Yang paling sering dijalankan komunitas</translation>
+    </message>
+    <message>
+        <source>Your latest prompts</source>
+        <translation>Prompt terbaru Anda</translation>
+    </message>
+    <message>
+        <source>Your starred prompts</source>
+        <translation>Prompt favorit Anda</translation>
+    </message>
+    <message>
+        <source>Nothing here yet.</source>
+        <translation>Belum ada apa-apa di sini.</translation>
+    </message>
+    <message>
+        <source>What do you want to do?</source>
+        <translation>Apa yang ingin Anda lakukan?</translation>
+    </message>
+    <message>
+        <source>{n} prompts</source>
+        <translation>{n} prompt</translation>
+    </message>
+    <message>
+        <source>Back to library</source>
+        <translation>Kembali ke pustaka</translation>
+    </message>
+    <message>
+        <source>All</source>
+        <translation>Semua</translation>
+    </message>
+    <message>
+        <source>No prompts in this section yet.</source>
+        <translation>Belum ada prompt di bagian ini.</translation>
+    </message>
+    <message>
         <source>Share anonymous usage statistics</source>
         <translation>Bagikan statistik penggunaan anonim</translation>
     </message>
@@ -126,10 +190,6 @@
     <message>
         <source>2K and 4K outputs</source>
         <translation>Output 2K dan 4K</translation>
-    </message>
-    <message>
-        <source>5 free generations, no credit card required</source>
-        <translation>5 generasi gratis, tanpa kartu kredit</translation>
     </message>
     <message>
         <source>&lt;b&gt;Mark up&lt;/b&gt;&lt;br&gt;Draw arrows, shapes, or labels on the map to show the AI what to change and where. Your sketch is sent with the prompt as visual guidance.</source>
@@ -1876,10 +1936,6 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Masuk melalui browser Anda untuk mulai menggunakan AI Edit</translation>
     </message>
     <message>
-        <source>5 free AI Edits, no credit card</source>
-        <translation>5 AI Edit gratis, tanpa kartu kredit</translation>
-    </message>
-    <message>
         <source>Use an activation key</source>
         <translation>Gunakan kunci aktivasi</translation>
     </message>
@@ -2120,6 +2176,10 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Baru di sini? Tutorial 5 menit kami memandu Anda langkah demi langkah melalui satu pengeditan lengkap.</translation>
     </message>
     <message>
+        <source>No additional details are available.</source>
+        <translation>Tidak ada detail tambahan yang tersedia.</translation>
+    </message>
+    <message>
         <source>No flat color classes found - this image looks photo-realistic. Vectorize works best on maps with solid colors (Segment or Land cover results). You can still sample a color below.</source>
         <translation>Tidak ditemukan kelas warna datar - gambar ini tampak fotorealistis. Vektorkan bekerja paling baik pada peta dengan warna solid (hasil Segment atau Tutupan lahan). Anda tetap bisa mengambil sampel warna di bawah.</translation>
     </message>
@@ -2138,6 +2198,10 @@ Kami senang mendengar dari Anda!</translation>
     <message>
         <source>Open the tutorial</source>
         <translation>Buka tutorial</translation>
+    </message>
+    <message>
+        <source>Please contact {email} for help.</source>
+        <translation>Silakan hubungi {email} untuk bantuan.</translation>
     </message>
     <message>
         <source>Raster has no usable georeferencing.</source>
@@ -2194,6 +2258,10 @@ Kami senang mendengar dari Anda!</translation>
     <message>
         <source>Vector</source>
         <translation>Vektor</translation>
+    </message>
+    <message>
+        <source>Vectorize failed unexpectedly. Please try again, or report the problem if it persists.</source>
+        <translation>Vektorkan gagal secara tidak terduga. Coba lagi, atau laporkan masalah ini jika terus berlanjut.</translation>
     </message>
     <message>
         <source>Vectorize turns a flat-color map (Segment, Land cover, masks, site plans...) into editable polygons - one class per color, ready to select, measure, style and export. It reads colors, so it works on colored maps, not photo-realistic images.</source>

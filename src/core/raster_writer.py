@@ -417,6 +417,8 @@ def _write_geotiff_gdal(
             expanded = gdal.Translate("", src_ds, format="MEM", rgbExpand="rgb")
             if expanded is not None:
                 src_ds = expanded
+            else:
+                log_warning("palette->RGB expansion failed; output may show incorrect colors")
 
         recv_w = src_ds.RasterXSize
         recv_h = src_ds.RasterYSize

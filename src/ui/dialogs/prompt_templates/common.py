@@ -191,6 +191,142 @@ _ORIGIN_PILL = (
     "padding: 1px 8px; font-size: 10px; color: palette(text); }"
 )
 
+# ---------------------------------------------------------------------------
+# Landing redesign: need tiles, feed segmented control, category chips, back.
+# Same visual language as the gallery cards (neutral frame at rest, brand-green
+# lift on hover) so the landing reads as one system. No new hues: the per-need
+# tile accent is applied at build time from the need's representative category
+# glyph colour (reused from `_SIDEBAR_GLYPHS`), never invented here.
+# ---------------------------------------------------------------------------
+_NEED_TILE = (
+    "QFrame#needtile { border: 1px solid rgba(128,128,128,0.30); "
+    "border-radius: 8px; background: rgba(128,128,128,0.05); }"
+)
+_NEED_TILE_HOVER = (
+    "QFrame#needtile { border: 1px solid rgba(139,172,39,0.75); "
+    "border-radius: 8px; background: rgba(139,172,39,0.09); }"
+)
+_NEED_TILE_TITLE = (
+    "QLabel { color: palette(text); font-size: 16px; font-weight: 700; "
+    "background: transparent; border: none; }"
+)
+_NEED_TILE_SUB = (
+    "QLabel { color: palette(text); font-size: 11px; "
+    "background: transparent; border: none; }"
+)
+_NEED_TILE_COUNT = (
+    "QLabel { color: rgba(128,128,128,0.9); font-size: 11px; "
+    "background: transparent; border: none; }"
+)
+
+# Feed segmented control (Popular / Recent / Favorites): reuses the sidebar
+# item's rest/active language, laid out horizontally inside a subtle track.
+_FEED_SEG = "QWidget#feedseg { background: rgba(128,128,128,0.08); border-radius: 6px; }"
+_FEED_SEG_BTN = (
+    "QPushButton { border: none; border-radius: 4px; padding: 6px 14px; "
+    "font-size: 13px; color: palette(text); background: transparent; }"
+    "QPushButton:hover { background: rgba(128,128,128,0.12); }"
+)
+_FEED_SEG_BTN_ACTIVE = (
+    "QPushButton { border: none; border-radius: 4px; padding: 6px 14px; "
+    "font-size: 13px; font-weight: bold; color: palette(text); "
+    "background: rgba(128,128,128,0.20); }"
+)
+
+# Category filter chips on a need page (All / Land cover / ...): neutral pill at
+# rest (matches _ORIGIN_PILL), brand-green tint when active.
+_NEED_CHIP = (
+    "QPushButton { background: rgba(128,128,128,0.10); border: none; "
+    "border-radius: 11px; padding: 4px 12px; font-size: 12px; color: palette(text); }"
+    "QPushButton:hover { background: rgba(128,128,128,0.18); }"
+)
+_NEED_CHIP_ACTIVE = (
+    "QPushButton { background: rgba(139,172,39,0.20); border: none; "
+    "border-radius: 11px; padding: 4px 12px; font-size: 12px; "
+    "font-weight: 700; color: palette(text); }"
+)
+
+# Flat back button on a need-page header.
+_BACK_BTN = (
+    "QPushButton { background: transparent; border: 1px solid rgba(128,128,128,0.3); "
+    "border-radius: 4px; padding: 4px 10px; font-size: 14px; color: palette(text); }"
+    "QPushButton:hover { background: rgba(128,128,128,0.12); }"
+)
+
+# Compact borderless back arrow (need / feed-all headers): small footprint,
+# green on hover, no box.
+_BACK_BTN_SMALL = (
+    "QPushButton { background: transparent; border: none; font-size: 17px; "
+    "color: palette(text); padding: 0px; }"
+    "QPushButton:hover { color: #8bac27; }"
+)
+
+# Sub-group selector as underlined tabs: exactly one active (a brand-green
+# underline), the rest plain. Reads as single-select, unlike the pill chips
+# that looked like an accumulating multi-select.
+_NEED_TAB = (
+    "QPushButton { border: none; background: transparent; padding: 6px 2px 5px 2px; "
+    "font-size: 13px; color: palette(text); }"
+    "QPushButton:hover { color: #8bac27; }"
+)
+_NEED_TAB_ACTIVE = (
+    "QPushButton { border: none; border-bottom: 2px solid #8bac27; background: transparent; "
+    "padding: 6px 2px 3px 2px; font-size: 13px; font-weight: 700; color: palette(text); }"
+)
+
+# "See all" link on a landing feed row.
+_FEED_LINK = (
+    "QPushButton { background: transparent; border: none; font-size: 12px; "
+    "color: #8bac27; padding: 2px 4px; }"
+    "QPushButton:hover { color: #4d7c0f; }"
+)
+
+# "See all" as a visible bordered button, sat at the bottom-right of a feed.
+_SEE_ALL_BTN = (
+    "QPushButton { background: rgba(139,172,39,0.12); border: 1px solid rgba(139,172,39,0.5); "
+    "border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 600; color: #8bac27; }"
+    "QPushButton:hover { background: rgba(139,172,39,0.20); }"
+)
+
+# Need-tile family name (dominant) and its inline "Explore" affordance.
+_NEED_TILE_NAME = (
+    "QLabel { color: palette(text); font-size: 18px; font-weight: 800; "
+    "background: transparent; border: none; }"
+)
+_NEED_TILE_EXPLORE = (
+    "QLabel { color: #8bac27; font-size: 12px; font-weight: 700; "
+    "background: transparent; border: none; }"
+)
+
+# Per-family accent colours, taken from the category glyph palette (not
+# invented): green = Classify/Analyser, blue = Project/Simuler,
+# violet = Render/Habiller. Keyed by need key so it survives a label rename.
+_NEED_ACCENT = {"classify": "#68a868", "project": "#5ca0c0", "render": "#9880b0"}
+# Family emblem glyphs (reused from _SIDEBAR_GLYPHS so they are known to render).
+_NEED_ICON = {"classify": "◉", "project": "⛅", "render": "❖"}
+
+# Family name + arrow overlaid on the tile image (white on a coloured scrim),
+# so a family tile reads as a branded portal, not a prompt card.
+_TILE_NAME_OVERLAY = (
+    "QLabel { color: #ffffff; font-size: 22px; font-weight: 800; "
+    "background: transparent; border: none; }"
+)
+_TILE_ARROW_OVERLAY = (
+    "QLabel { color: #ffffff; font-size: 20px; font-weight: 700; "
+    "background: transparent; border: none; }"
+)
+
+# Landing section heading and feed subtitle.
+_LANDING_HEADING = (
+    "QLabel { color: palette(text); font-size: 14px; font-weight: 700; "
+    "background: transparent; border: none; }"
+)
+_FEED_SUBTITLE = (
+    "QLabel { color: palette(text); font-size: 11px; "
+    "background: transparent; border: none; }"
+)
+
+
 # Sidebar tab order. Themed tabs are sourced from `_CATEGORY_ORDER` so the
 # data facade and the sidebar can't drift; the dialog only owns the synthetic
 # wrapper (Favorites, Recent, separator, Top Picks). "__separator__" inserts

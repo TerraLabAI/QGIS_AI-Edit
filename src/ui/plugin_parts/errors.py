@@ -93,11 +93,15 @@ def _localize_server_error(error: str, code: str) -> str:
 #  Tier 1 (_USER_FIXABLE_CODES)  -> plain inline message, no log prompt.
 #     The user owns the fix (their link, key, zone, plan). Not our bug.
 #  Tier 2 (_TRANSIENT_CODES)     -> inline message + an optional "Report a
-#     problem" link. Retryable on our side (rate limit, busy server, timeout);
-#     the user can send a log if it persists, but we never force a modal.
-#  Tier 3 (everything else)       -> auto-open the log-report dialog. A likely
-#     genuine bug (download/write/empty response, unknown) we want to hear about.
-_USER_FIXABLE_CODES = NETWORK_ERROR_CODES | frozenset({
+#     problem" link. Retryable and not clearly a fault (rate limit, a stale
+#     upload session, a result not ready yet); the user can send a log if it
+#     persists, but we never force a modal.
+#  Tier 3 (everything else)       -> auto-open the log-report dialog. A network
+#     timeout or a server-side fault is terminal for that generation either
+#     way, so we want to hear about it right away rather than only see it as a
+#     dip in completion telemetry (same tier the download/write/empty-response
+#     and truly unknown codes already used).
+_USER_FIXABLE_CODES = frozenset({
     "AUTH_ERROR",
     "NO_KEY", "INVALID_KEY", "KEY_REVOKED", "AUTH_LOCKED",
     "INVALID_CRS", "ANTIMERIDIAN", "POLAR", "TOO_LARGE",
@@ -110,11 +114,28 @@ _USER_FIXABLE_CODES = NETWORK_ERROR_CODES | frozenset({
     "GENERATION_CANCELLED",
 })
 
-_TRANSIENT_CODES = frozenset({
-    "RATE_LIMITED", "RATE_LIMITER_DOWN", "STORAGE_UNAVAILABLE", "SIGN_FAILED",
-    "UPSTREAM_UNAVAILABLE", "UPSTREAM_EMPTY", "SERVER_ERROR",
-    "GENERATION_TIMED_OUT", "PROVIDER_ERROR", "PROVIDER_BAD_RESPONSE",
-    "NOT_READY", "NOT_AVAILABLE", "UPLOAD_TOKEN_INVALID", "UPLOAD_TOKEN_MISMATCH",
+# Pure-connectivity codes: the request never reached us at all because of
+# something in the USER's own network path (no link, DNS, a corporate proxy,
+# SSL inspection). Still not our bug, but not silent either: an optional
+# report link lets someone who cannot self-diagnose their network send us a
+# log. TIMEOUT is deliberately excluded: unlike these, it does not point at
+# the user's own setup (it is just as often our server being slow or
+# overloaded), so it is treated as a server-fault code below instead.
+_CONNECTIVITY_CODES = NETWORK_ERROR_CODES - frozenset({"TIMEOUT"})
+
+_TRANSIENT_CODES = _CONNECTIVITY_CODES | frozenset({
+    "RATE_LIMITED", "NOT_READY", "NOT_AVAILABLE",
+    "UPLOAD_TOKEN_INVALID", "UPLOAD_TOKEN_MISMATCH",
+})
+
+# Server-fault codes: our own infrastructure, or the upstream model provider,
+# failed to answer at all (not merely busy or throttling). Not in either set
+# above, so _report_policy's default already routes these to "dialog"; kept
+# as an explicit set purely to document the classification.
+_SERVER_FAULT_CODES = frozenset({
+    "TIMEOUT", "GENERATION_TIMED_OUT",
+    "SERVER_ERROR", "RATE_LIMITER_DOWN", "STORAGE_UNAVAILABLE", "SIGN_FAILED",
+    "UPSTREAM_UNAVAILABLE", "UPSTREAM_EMPTY", "PROVIDER_ERROR", "PROVIDER_BAD_RESPONSE",
 })
 
 # Failures where a credit is never kept: the generation either never reached the

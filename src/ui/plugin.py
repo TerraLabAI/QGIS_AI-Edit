@@ -147,6 +147,10 @@ class AIEditPlugin(
         # failed can report is_retry and used_markup without re-deriving them.
         self._last_generation_is_retry = False
         self._last_generation_used_markup = False
+        # Guards the auto-opened error-report dialog to at most one popup per
+        # generation attempt; reset alongside the flags above when a new
+        # generation starts (_on_export_completed).
+        self._error_report_dialog_shown = False
 
         # Initialize tiers
         self._dev_mode = False

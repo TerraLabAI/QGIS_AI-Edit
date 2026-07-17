@@ -153,7 +153,16 @@ class GenerationResultsMixin:
 
     def _show_error_report(self, error_message: str, request_id: str = "") -> None:
         """Open the copy-logs/email report dialog. A failure here must never
-        mask the original error, so it is swallowed (and logged)."""
+        mask the original error, so it is swallowed (and logged).
+
+        Auto-opens at most once per generation attempt (reset in
+        ``_on_export_completed`` when the worker is started): a stray second
+        failure signal for the same attempt must never stack a second modal
+        on top of the first.
+        """
+        if getattr(self, "_error_report_dialog_shown", False):
+            return
+        self._error_report_dialog_shown = True
         try:
             from ..dialogs.error_report_dialog import show_error_report
             show_error_report(self._iface.mainWindow(), error_message, request_id)

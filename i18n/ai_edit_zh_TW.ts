@@ -4,6 +4,70 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>Analyze</source>
+        <translation>分析</translation>
+    </message>
+    <message>
+        <source>Simulate</source>
+        <translation>模擬</translation>
+    </message>
+    <message>
+        <source>Style</source>
+        <translation>美化</translation>
+    </message>
+    <message>
+        <source>Choose a family to explore</source>
+        <translation>選擇一個系列來探索</translation>
+    </message>
+    <message>
+        <source>Explore</source>
+        <translation>探索</translation>
+    </message>
+    <message>
+        <source>See all</source>
+        <translation>查看全部</translation>
+    </message>
+    <message>
+        <source>Popular</source>
+        <translation>熱門</translation>
+    </message>
+    <message>
+        <source>What the community runs most often</source>
+        <translation>社群最常使用的內容</translation>
+    </message>
+    <message>
+        <source>Your latest prompts</source>
+        <translation>你最近的提示詞</translation>
+    </message>
+    <message>
+        <source>Your starred prompts</source>
+        <translation>你收藏的提示詞</translation>
+    </message>
+    <message>
+        <source>Nothing here yet.</source>
+        <translation>這裡暫時還沒有內容。</translation>
+    </message>
+    <message>
+        <source>What do you want to do?</source>
+        <translation>你想做什麼？</translation>
+    </message>
+    <message>
+        <source>{n} prompts</source>
+        <translation>{n} 個提示詞</translation>
+    </message>
+    <message>
+        <source>Back to library</source>
+        <translation>返回程式庫</translation>
+    </message>
+    <message>
+        <source>All</source>
+        <translation>全部</translation>
+    </message>
+    <message>
+        <source>No prompts in this section yet.</source>
+        <translation>此分區暫無提示詞。</translation>
+    </message>
+    <message>
         <source>Share anonymous usage statistics</source>
         <translation>分享匿名使用統計資料</translation>
     </message>
@@ -126,10 +190,6 @@
     <message>
         <source>2K and 4K outputs</source>
         <translation>2K 與 4K 輸出</translation>
-    </message>
-    <message>
-        <source>5 free generations, no credit card required</source>
-        <translation>5 次免費生成，無需信用卡</translation>
     </message>
     <message>
         <source>&lt;b&gt;Mark up&lt;/b&gt;&lt;br&gt;Draw arrows, shapes, or labels on the map to show the AI what to change and where. Your sketch is sent with the prompt as visual guidance.</source>
@@ -1876,10 +1936,6 @@ We'd love to hear from you!</source>
         <translation>透過瀏覽器登入以開始使用 AI Edit</translation>
     </message>
     <message>
-        <source>5 free AI Edits, no credit card</source>
-        <translation>5 次免費 AI Edit，無需信用卡</translation>
-    </message>
-    <message>
         <source>Use an activation key</source>
         <translation>使用啟用金鑰</translation>
     </message>
@@ -2120,6 +2176,10 @@ We'd love to hear from you!</source>
         <translation>第一次使用嗎？我們的 5 分鐘教學將逐步帶您完成一次完整的編輯。</translation>
     </message>
     <message>
+        <source>No additional details are available.</source>
+        <translation>沒有其他詳細資訊。</translation>
+    </message>
+    <message>
         <source>No flat color classes found - this image looks photo-realistic. Vectorize works best on maps with solid colors (Segment or Land cover results). You can still sample a color below.</source>
         <translation>未找到純色類別，此影像看起來偏向擬真照片。向量化最適合純色地圖（分割或土地覆蓋的結果）。您仍可在下方取樣顏色。</translation>
     </message>
@@ -2138,6 +2198,10 @@ We'd love to hear from you!</source>
     <message>
         <source>Open the tutorial</source>
         <translation>開啟教學</translation>
+    </message>
+    <message>
+        <source>Please contact {email} for help.</source>
+        <translation>如需協助，請聯絡 {email}。</translation>
     </message>
     <message>
         <source>Raster has no usable georeferencing.</source>
@@ -2194,6 +2258,10 @@ We'd love to hear from you!</source>
     <message>
         <source>Vector</source>
         <translation>向量</translation>
+    </message>
+    <message>
+        <source>Vectorize failed unexpectedly. Please try again, or report the problem if it persists.</source>
+        <translation>向量化發生非預期的錯誤。請再試一次，如果問題持續發生，請回報問題。</translation>
     </message>
     <message>
         <source>Vectorize turns a flat-color map (Segment, Land cover, masks, site plans...) into editable polygons - one class per color, ready to select, measure, style and export. It reads colors, so it works on colored maps, not photo-realistic images.</source>

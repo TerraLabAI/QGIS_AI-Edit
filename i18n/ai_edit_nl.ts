@@ -4,6 +4,70 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>Analyze</source>
+        <translation>Analyseren</translation>
+    </message>
+    <message>
+        <source>Simulate</source>
+        <translation>Simuleren</translation>
+    </message>
+    <message>
+        <source>Style</source>
+        <translation>Vormgeven</translation>
+    </message>
+    <message>
+        <source>Choose a family to explore</source>
+        <translation>Kies een familie om te verkennen</translation>
+    </message>
+    <message>
+        <source>Explore</source>
+        <translation>Verkennen</translation>
+    </message>
+    <message>
+        <source>See all</source>
+        <translation>Alles bekijken</translation>
+    </message>
+    <message>
+        <source>Popular</source>
+        <translation>Populair</translation>
+    </message>
+    <message>
+        <source>What the community runs most often</source>
+        <translation>Wat de community het vaakst gebruikt</translation>
+    </message>
+    <message>
+        <source>Your latest prompts</source>
+        <translation>Je nieuwste prompts</translation>
+    </message>
+    <message>
+        <source>Your starred prompts</source>
+        <translation>Je favoriete prompts</translation>
+    </message>
+    <message>
+        <source>Nothing here yet.</source>
+        <translation>Nog niets hier.</translation>
+    </message>
+    <message>
+        <source>What do you want to do?</source>
+        <translation>Wat wil je doen?</translation>
+    </message>
+    <message>
+        <source>{n} prompts</source>
+        <translation>{n} prompts</translation>
+    </message>
+    <message>
+        <source>Back to library</source>
+        <translation>Terug naar bibliotheek</translation>
+    </message>
+    <message>
+        <source>All</source>
+        <translation>Alles</translation>
+    </message>
+    <message>
+        <source>No prompts in this section yet.</source>
+        <translation>Nog geen prompts in dit gedeelte.</translation>
+    </message>
+    <message>
         <source>Share anonymous usage statistics</source>
         <translation>Anonieme gebruiksstatistieken delen</translation>
     </message>
@@ -126,10 +190,6 @@
     <message>
         <source>2K and 4K outputs</source>
         <translation>2K- en 4K-uitvoer</translation>
-    </message>
-    <message>
-        <source>5 free generations, no credit card required</source>
-        <translation>5 gratis generaties, geen creditcard nodig</translation>
     </message>
     <message>
         <source>&lt;b&gt;Mark up&lt;/b&gt;&lt;br&gt;Draw arrows, shapes, or labels on the map to show the AI what to change and where. Your sketch is sent with the prompt as visual guidance.</source>
@@ -1876,10 +1936,6 @@ We horen graag van u!</translation>
         <translation>Meld u aan via uw browser om AI Edit te gaan gebruiken</translation>
     </message>
     <message>
-        <source>5 free AI Edits, no credit card</source>
-        <translation>5 gratis AI Edits, geen creditcard nodig</translation>
-    </message>
-    <message>
         <source>Use an activation key</source>
         <translation>Gebruik een activeringssleutel</translation>
     </message>
@@ -2120,6 +2176,10 @@ We horen graag van u!</translation>
         <translation>Nieuw hier? Onze tutorial van 5 minuten leidt u stap voor stap door een volledige bewerking.</translation>
     </message>
     <message>
+        <source>No additional details are available.</source>
+        <translation>Er zijn geen aanvullende details beschikbaar.</translation>
+    </message>
+    <message>
         <source>No flat color classes found - this image looks photo-realistic. Vectorize works best on maps with solid colors (Segment or Land cover results). You can still sample a color below.</source>
         <translation>Geen egale kleurklassen gevonden - deze afbeelding oogt fotorealistisch. Vectoriseren werkt het best op kaarten met egale kleuren (resultaten van Segmentatie of Bodembedekking). U kunt hieronder alsnog een kleur bemonsteren.</translation>
     </message>
@@ -2138,6 +2198,10 @@ We horen graag van u!</translation>
     <message>
         <source>Open the tutorial</source>
         <translation>Tutorial openen</translation>
+    </message>
+    <message>
+        <source>Please contact {email} for help.</source>
+        <translation>Neem voor hulp contact op met {email}.</translation>
     </message>
     <message>
         <source>Raster has no usable georeferencing.</source>
@@ -2194,6 +2258,10 @@ We horen graag van u!</translation>
     <message>
         <source>Vector</source>
         <translation>Vector</translation>
+    </message>
+    <message>
+        <source>Vectorize failed unexpectedly. Please try again, or report the problem if it persists.</source>
+        <translation>Vectoriseren is onverwacht mislukt. Probeer het opnieuw, of meld het probleem als het aanhoudt.</translation>
     </message>
     <message>
         <source>Vectorize turns a flat-color map (Segment, Land cover, masks, site plans...) into editable polygons - one class per color, ready to select, measure, style and export. It reads colors, so it works on colored maps, not photo-realistic images.</source>

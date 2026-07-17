@@ -20,12 +20,14 @@ from qgis.PyQt.QtWidgets import (
     QApplication,
     QDialog,
     QLabel,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
 )
 
 from ...core import qt_compat as QtC
 from ...core.i18n import tr
+from ...core.logger import log_warning
 
 # Muted flow hint between the two step buttons (same as AI Segmentation).
 _ARROW_STYLE = "color: rgba(128,128,128,0.65); font-size: 10px;"
@@ -251,9 +253,19 @@ class ErrorReportDialog(QDialog):
 
 
 def show_error_report(parent, error_message: str = "", request_id: str = "") -> None:
-    """Open the error report dialog. Never lets a UI error mask the original one."""
+    """Open the error report dialog. Never lets a UI error mask the original one.
+
+    If the dialog itself fails to construct or show, fall back to a plain
+    QMessageBox so the user still gets the original error and a way to reach
+    support, instead of the report action silently doing nothing.
+    """
     try:
         dialog = ErrorReportDialog(error_message, request_id, parent)
         dialog.exec()
-    except Exception:
-        pass  # nosec B110
+    except Exception as err:
+        log_warning(f"Failed to open the error report dialog: {err}")
+        detail = (error_message or "").strip() or tr("No additional details are available.")
+        contact = tr("Please contact {email} for help.").format(email=SUPPORT_EMAIL)
+        QMessageBox.information(
+            parent, tr("Report a problem"), f"{detail[:500]}\n\n{contact}"
+        )

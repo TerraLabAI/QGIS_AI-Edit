@@ -5,8 +5,6 @@ from qgis.PyQt.QtCore import QSettings, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QGuiApplication
 from qgis.PyQt.QtWidgets import (
     QDialog,
-    QFrame,
-    QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -17,7 +15,7 @@ from qgis.PyQt.QtWidgets import (
 
 from ....core import qt_compat as QtC
 from ....core.i18n import tr
-from ....core.prompts.prompt_presets import get_all_categories, get_need_groups
+from ....core.prompts.prompt_presets import get_all_categories
 from ...onboarding_hint import (
     HINT_LIBRARY_INTRO,
     DismissibleHint,
@@ -37,13 +35,16 @@ from .common import (
 )
 from .gallery_mixin import GalleryMixin
 from .generation_card import _SidebarButton
+from .landing_mixin import LandingMixin
 from .pages_mixin import PagesMixin
 from .search_mixin import SearchMixin
 from .sync_mixin import SyncMixin
 from .workers import _HistoryPageWorker, _LibrarySyncWorker
 
 
-class PromptTemplatesDialog(PagesMixin, GalleryMixin, SearchMixin, SyncMixin, QDialog):
+class PromptTemplatesDialog(
+    LandingMixin, PagesMixin, GalleryMixin, SearchMixin, SyncMixin, QDialog
+):
     """Tab-style modal for browsing recent, favorites, top picks, and templates."""
 
     # Emitted when the user acts on a past generation without picking its
@@ -129,6 +130,13 @@ class PromptTemplatesDialog(PagesMixin, GalleryMixin, SearchMixin, SyncMixin, QD
         # cat_key -> need key, to auto-unfold when a folded tab is targeted.
         self._category_need: dict[str, str] = {}
         self._pages: dict[str, QWidget] = {}
+        # Landing redesign: need drill-in pages + their filter state + chip
+        # buttons, keyed by need key. The sidebar/tab state above is retained
+        # only to keep the galleries, favorites, and search working; it is no
+        # longer the entry surface.
+        self._need_pages: dict[str, QWidget] = {}
+        self._need_state: dict[str, dict] = {}
+        self._need_chips: dict[str, dict] = {}
         # Grid cards (_BeforeAfterCard) stored as generic widgets keyed by the
         # page they live on. Star refresh uses `card.star_button()` and
         # `card.preset()`.
@@ -136,6 +144,7 @@ class PromptTemplatesDialog(PagesMixin, GalleryMixin, SearchMixin, SyncMixin, QD
         # Default landing: Top Picks. First-time users see curated content,
         # not their empty Recent/Favorites.
         self._active_tab: str = "favorites"
+        self._previous_tab: str = "favorites"
         self._sync_worker: _LibrarySyncWorker | None = None
 
         # Themed-category pagination state, keyed by category key. Each entry
@@ -221,99 +230,22 @@ class PromptTemplatesDialog(PagesMixin, GalleryMixin, SearchMixin, SyncMixin, QD
         self._search_input.textChanged.connect(self._on_search_changed)
         root.addWidget(self._search_input)
 
-        body = QHBoxLayout()
-        body.setSpacing(8)
-
-        # Sidebar - wide enough for the longest label ("Presentation renders"
-        # @ 13px font ≈ 165px) + icon + padding without ellipsis on any tab.
-        sidebar = QWidget()
-        sidebar.setFixedWidth(220)
-        sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(0, 0, 0, 0)
-        sidebar_layout.setSpacing(2)
-
-        # Group the sidebar so the user's own entries read apart from curated
-        # templates ("weird that Recent/Favorites are in here" feedback).
-        sidebar_layout.addWidget(self._sidebar_section_header(tr("Your prompts")))
-
-        # The user's own lists lead, and curated Top Picks sits right under them
-        # (no promoting divider above it - it's a personal shortcut, not the
-        # catalog headline). Then a divider, then the themed categories grouped
-        # under three foldable needs (Classify / Project / Render), which are
-        # the real structure of the template catalog.
-        for key in ("user_favorites", "recent", "favorites"):
-            cat = self._categories_by_key.get(key)
-            if cat is None:
-                continue
-            btn = self._build_sidebar_button(key, cat)
-            sidebar_layout.addWidget(btn)
-            self._sidebar_buttons[key] = btn
-
-        sep_wrap = QWidget()
-        sep_wrap.setFixedHeight(13)
-        sep_inner = QVBoxLayout(sep_wrap)
-        sep_inner.setContentsMargins(12, 6, 12, 6)
-        line = QFrame()
-        line.setFixedHeight(1)
-        line.setStyleSheet("background: rgba(128,128,128,0.3); border: none;")
-        sep_inner.addWidget(line)
-        sidebar_layout.addWidget(sep_wrap)
-        # No "Templates" divider here: the three need headers below are the
-        # template list's structure, so a grey small-caps divider on top of
-        # them just stacks two near-identical header tiers.
-
-        for group in get_need_groups(self._server_catalog):
-            need_key = group["key"]
-            members: list[_SidebarButton] = []
-            header = self._build_need_header(group)
-            sidebar_layout.addWidget(header)
-            self._need_header_btns[need_key] = header
-            for key in group["categories"]:
-                cat = self._categories_by_key.get(key)
-                if cat is None:
-                    continue
-                btn = self._build_sidebar_button(key, cat)
-                # Indent under the group header so the hierarchy reads at a
-                # glance (the header has no icon column of its own).
-                btn.layout().setContentsMargins(22, 6, 10, 6)
-                sidebar_layout.addWidget(btn)
-                self._sidebar_buttons[key] = btn
-                members.append(btn)
-                self._category_need[key] = need_key
-            self._need_members[need_key] = members
-            # Empty groups (offline first run without a cached catalog still
-            # lists local categories, so this is belt-and-braces) hide whole.
-            header.setVisible(bool(members))
-            if self._need_collapsed.get(need_key):
-                for btn in members:
-                    btn.setVisible(False)
-            self._update_need_header_text(need_key)
-
-        sidebar_layout.addStretch()
-        body.addWidget(sidebar)
-
-        vsep = QFrame()
-        vsep.setFrameShape(QtC.FrameVLine)
-        vsep.setFrameShadow(QtC.FrameSunken)
-        body.addWidget(vsep)
-
-        # Pages are built lazily (only when a tab is first shown) so opening the
-        # dialog never pays for the 13 category pages + the 24-card Recent grid
-        # and its thumbnail downloads up front. Only the default tab + the
-        # search page exist at construction; the rest materialize on demand via
-        # _ensure_page.
+        # Landing-first: the dialog opens on the visual landing page (feed
+        # toggle + need tiles) instead of a sidebar of category words. Need
+        # drill-in pages and the search page share the same stack and are shown
+        # on demand. The old sidebar/tab helpers below remain only to serve the
+        # galleries, favorites, and search; they are no longer the entry.
         self._stack = QStackedWidget()
-        self._ensure_page(self._active_tab)
+        self._landing_page = self._build_landing_page()
+        self._stack.addWidget(self._landing_page)
         # Search results page - shown when the search input is non-empty.
         self._search_page = self._build_search_page()
         self._stack.addWidget(self._search_page)
 
-        body.addWidget(self._stack, 1)
-        root.addLayout(body, 1)
-
-        # Remember which tab to restore when the search box is cleared.
-        self._previous_tab: str = self._active_tab
-        self._switch_to_tab(self._active_tab)
+        root.addWidget(self._stack, 1)
+        self._stack.setCurrentWidget(self._landing_page)
+        # TODO(telemetry Task 6): track LIBRARY_LANDING_VIEWED once the event is
+        # added to the website registry + analytics_events.json.
 
     def _tab_count(self, key: str, category: dict | None = None) -> int:
         """Sidebar badge count. Recent/Favorites count past generations;

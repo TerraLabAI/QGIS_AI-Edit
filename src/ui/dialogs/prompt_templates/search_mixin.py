@@ -9,7 +9,6 @@ from ....core import qt_compat as QtC
 from ....core.i18n import tr
 from .common import (
     _EMPTY_MSG,
-    _SIDEBAR_ITEM,
     _TAB_ORDER,
     _preset_matches,
     _sidebar_icon_html,
@@ -105,31 +104,19 @@ class SearchMixin:
 
     def _on_search_changed(self, text: str):
         """Search across all categories. Non-empty query → search-results page;
-        empty query → restore the last sidebar tab."""
+        empty query → back to the landing page."""
         query = text.strip().lower()
         if not query:
             self._search_debounce.stop()
-            if self._active_tab == "__search__":
-                # Restore the tab the user was on before they started searching
-                # (lazily building it if needed).
-                target = (
-                    self._previous_tab
-                    if self._previous_tab in self._categories_by_key
-                    else "favorites"
-                )
-                self._switch_to_tab(target)
+            self._active_tab = ""
+            if self._stack.currentWidget() is self._search_page:
+                self._switch_to_page(self._landing_page)
             return
 
-        # Entering search: remember current tab so we can restore it on clear.
-        if self._active_tab != "__search__":
-            self._previous_tab = self._active_tab
         # Switch into search mode immediately; debounce only the heavy rebuild
         # so typing stays smooth.
         self._stack.setCurrentWidget(self._search_page)
         self._active_tab = "__search__"
-        # Drop sidebar highlight while searching - no tab is "active".
-        for btn in self._sidebar_buttons.values():
-            btn.setStyleSheet(_SIDEBAR_ITEM)
         self._search_debounce.start()
 
     def _run_search(self):

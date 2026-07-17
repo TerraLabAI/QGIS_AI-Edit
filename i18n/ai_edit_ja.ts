@@ -4,6 +4,70 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>Analyze</source>
+        <translation>分析</translation>
+    </message>
+    <message>
+        <source>Simulate</source>
+        <translation>シミュレート</translation>
+    </message>
+    <message>
+        <source>Style</source>
+        <translation>スタイル</translation>
+    </message>
+    <message>
+        <source>Choose a family to explore</source>
+        <translation>探索するファミリーを選択</translation>
+    </message>
+    <message>
+        <source>Explore</source>
+        <translation>探索</translation>
+    </message>
+    <message>
+        <source>See all</source>
+        <translation>すべて表示</translation>
+    </message>
+    <message>
+        <source>Popular</source>
+        <translation>人気</translation>
+    </message>
+    <message>
+        <source>What the community runs most often</source>
+        <translation>コミュニティで最もよく使われるもの</translation>
+    </message>
+    <message>
+        <source>Your latest prompts</source>
+        <translation>最近のプロンプト</translation>
+    </message>
+    <message>
+        <source>Your starred prompts</source>
+        <translation>お気に入りのプロンプト</translation>
+    </message>
+    <message>
+        <source>Nothing here yet.</source>
+        <translation>まだ何もありません。</translation>
+    </message>
+    <message>
+        <source>What do you want to do?</source>
+        <translation>何をしますか？</translation>
+    </message>
+    <message>
+        <source>{n} prompts</source>
+        <translation>{n} 件のプロンプト</translation>
+    </message>
+    <message>
+        <source>Back to library</source>
+        <translation>ライブラリに戻る</translation>
+    </message>
+    <message>
+        <source>All</source>
+        <translation>すべて</translation>
+    </message>
+    <message>
+        <source>No prompts in this section yet.</source>
+        <translation>このセクションにはまだプロンプトがありません。</translation>
+    </message>
+    <message>
         <source>Share anonymous usage statistics</source>
         <translation>匿名の利用統計を共有する</translation>
     </message>
@@ -126,10 +190,6 @@
     <message>
         <source>2K and 4K outputs</source>
         <translation>2K・4K出力</translation>
-    </message>
-    <message>
-        <source>5 free generations, no credit card required</source>
-        <translation>無料生成5回、クレジットカード不要</translation>
     </message>
     <message>
         <source>&lt;b&gt;Mark up&lt;/b&gt;&lt;br&gt;Draw arrows, shapes, or labels on the map to show the AI what to change and where. Your sketch is sent with the prompt as visual guidance.</source>
@@ -1876,10 +1936,6 @@ We'd love to hear from you!</source>
         <translation>ブラウザでサインインしてAI Editの利用を開始</translation>
     </message>
     <message>
-        <source>5 free AI Edits, no credit card</source>
-        <translation>無料のAI Edit 5回、クレジットカード不要</translation>
-    </message>
-    <message>
         <source>Use an activation key</source>
         <translation>アクティベーションキーを使用</translation>
     </message>
@@ -2120,6 +2176,10 @@ We'd love to hear from you!</source>
         <translation>初めてですか？5分間のチュートリアルで、編集の一連の流れをステップごとに説明します。</translation>
     </message>
     <message>
+        <source>No additional details are available.</source>
+        <translation>追加の詳細情報はありません。</translation>
+    </message>
+    <message>
         <source>No flat color classes found - this image looks photo-realistic. Vectorize works best on maps with solid colors (Segment or Land cover results). You can still sample a color below.</source>
         <translation>単色のクラスが見つかりませんでした。この画像は実写のように見えます。ベクトル化は、単色で塗られたマップ（Segmentや土地被覆の結果）で最も効果を発揮します。下で色を採取することもできます。</translation>
     </message>
@@ -2138,6 +2198,10 @@ We'd love to hear from you!</source>
     <message>
         <source>Open the tutorial</source>
         <translation>チュートリアルを開く</translation>
+    </message>
+    <message>
+        <source>Please contact {email} for help.</source>
+        <translation>サポートが必要な場合は{email}までご連絡ください。</translation>
     </message>
     <message>
         <source>Raster has no usable georeferencing.</source>
@@ -2194,6 +2258,10 @@ We'd love to hear from you!</source>
     <message>
         <source>Vector</source>
         <translation>ベクトル</translation>
+    </message>
+    <message>
+        <source>Vectorize failed unexpectedly. Please try again, or report the problem if it persists.</source>
+        <translation>ベクトル化中に予期しないエラーが発生しました。もう一度お試しいただくか、問題が続く場合はご報告ください。</translation>
     </message>
     <message>
         <source>Vectorize turns a flat-color map (Segment, Land cover, masks, site plans...) into editable polygons - one class per color, ready to select, measure, style and export. It reads colors, so it works on colored maps, not photo-realistic images.</source>

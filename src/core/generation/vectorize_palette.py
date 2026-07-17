@@ -111,10 +111,10 @@ def detect_classes(raster_path: str) -> list[dict]:
 
 def dominant_palette(
     raster_path: str,
-    max_colors: int = 10,
+    max_colors: int = 16,
     quant: int = 24,
     merge_l1: int = 80,
-    min_fraction: float = 0.02,
+    min_fraction: float = 0.005,
     sample_max: int = 1_000_000,
 ) -> list[tuple[tuple[int, int, int], float]]:
     """Detect the dominant flat colors in a generated map.
@@ -125,8 +125,12 @@ def dominant_palette(
     ...]`` sorted by coverage. ``merge_l1`` sits above the widest quantization
     gap (adjacent buckets are 72 apart) but below the tightest pair in the ESA
     WorldCover palette (water vs wetland is 90 apart) so a 10-class land cover
-    keeps every class separate. Pure numpy + GDAL, decimated to stay fast on 4K
-    rasters; safe to call on the main thread.
+    keeps every class separate. ``max_colors`` and ``min_fraction`` stay generous
+    (rather than tight) so a real class that only covers a small share of the
+    map is still kept, up to the ESA WorldCover palette's own class count; both
+    stay defensive caps, not unlimited, so a photo-like image still returns a
+    short, usable candidate list. Pure numpy + GDAL, decimated to stay fast on
+    4K rasters; safe to call on the main thread.
     """
     if np is None or not raster_path or not os.path.exists(raster_path):
         return []
