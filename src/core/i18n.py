@@ -17,8 +17,6 @@ try:
 except ImportError:
     _safe_parse = ET.parse  # fallback: .ts files are local trusted plugin files
 
-from qgis.PyQt.QtCore import QSettings
-
 # Translation context - must match the context in .ts files
 CONTEXT = "AIEdit"
 
@@ -27,6 +25,45 @@ _translations: dict[str, str] = {}
 
 # Flag to track if translations have been loaded
 _loaded = False
+
+# Session memo of the locale string. QGIS only applies a locale change after a
+# restart, so this cannot move under us. It matters because constructing a
+# QSettings costs ~82 us against a real profile while reading a value off an
+# existing one costs ~1 us, and the prompt catalog resolves a polyglot label
+# hundreds of times per build (see prompt_presets._pick_label).
+_user_locale: str | None = None
+
+
+def _query_user_locale() -> str:
+    """QGIS locale setting, read fresh; English when QGIS is not available
+    (headless tests)."""
+    try:
+        from qgis.PyQt.QtCore import QSettings
+    except ImportError:
+        return "en_US"
+    return QSettings().value("locale/userLocale", "en_US")
+
+
+def _read_user_locale() -> str:
+    """The QGIS locale, read once per session (see `_user_locale`)."""
+    global _user_locale
+    if _user_locale is None:
+        _user_locale = _query_user_locale()
+    return _user_locale
+
+
+def reset_locale_cache() -> None:
+    """Drop the cached locale AND the translations loaded from it.
+
+    Invalidation rule: the trio is valid for as long as the QGIS locale is,
+    which is the whole session. Call this only when the locale itself changes
+    under the plugin (a future in-session language switch); everything derived
+    from it is rebuilt on the next read. tests/test_i18n.py drives it through a
+    language change and checks that the translations follow."""
+    global _user_locale, _loaded
+    _user_locale = None
+    _loaded = False
+    _translations.clear()
 
 
 def _load_translations():
@@ -39,7 +76,7 @@ def _load_translations():
     _loaded = True
 
     # Get the locale from QGIS settings
-    locale = QSettings().value("locale/userLocale", "en_US")
+    locale = _read_user_locale()
     if not locale:
         return
 
@@ -145,7 +182,7 @@ def tr(message: str) -> str:
 
 def get_locale() -> str:
     """Get the 2-letter language code from QGIS settings."""
-    locale = QSettings().value("locale/userLocale", "en_US")
+    locale = _read_user_locale()
     if locale:
         return locale[:2]
     return "en"

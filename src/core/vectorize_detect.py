@@ -21,6 +21,8 @@ decode is a thin lazy shell. A 96px downsample keeps the pixel loops around
 
 from __future__ import annotations
 
+from .config_store import get_export_dial
+
 # Longest side of the downsampled analysis frame. 96px keeps zone shares
 # accurate to about a percent while staying trivially fast in pure Python.
 _SAMPLE_SIDE = 96
@@ -72,8 +74,44 @@ _FLAT_TOLERANCE = 8
 _FLAT_FRACTION_MIN = 0.55
 
 
+def _detect_dials() -> dict:
+    """Server-tunable _analyze kwargs, resolved at analysis time (lock-free
+    reads, worker-safe). Every fallback is the shipped constant above.
+    _QUANT_SHIFT is deliberately NOT a dial: the bucket-key packing assumes
+    4 bits per channel, so tuning it would silently corrupt the histogram."""
+    return {
+        "top_n": get_export_dial("vectorize.detect.top_n", _TOP_N),
+        "base_coverage": get_export_dial("vectorize.detect.base_coverage", _BASE_COVERAGE),
+        "hinted_coverage": get_export_dial(
+            "vectorize.detect.hinted_coverage", _HINTED_COVERAGE
+        ),
+        "min_class_share": get_export_dial(
+            "vectorize.detect.min_class_share", _MIN_CLASS_SHARE
+        ),
+        "merge_distance": get_export_dial(
+            "vectorize.detect.merge_distance", _MERGE_DISTANCE
+        ),
+        "merge_candidates": get_export_dial(
+            "vectorize.detect.merge_candidates", _MERGE_CANDIDATES
+        ),
+        "significant_share": get_export_dial(
+            "vectorize.detect.significant_share", _SIGNIFICANT_SHARE
+        ),
+        "max_significant_colors": get_export_dial(
+            "vectorize.detect.max_significant_colors", _MAX_SIGNIFICANT_COLORS
+        ),
+        "flat_tolerance": get_export_dial(
+            "vectorize.detect.flat_tolerance", _FLAT_TOLERANCE
+        ),
+        "flat_fraction_min": get_export_dial(
+            "vectorize.detect.flat_fraction_min", _FLAT_FRACTION_MIN
+        ),
+    }
+
+
 def _flat_fraction(
-    pixels: list[tuple[int, int, int]], width: int, height: int
+    pixels: list[tuple[int, int, int]], width: int, height: int,
+    tol: int = _FLAT_TOLERANCE,
 ) -> float:
     """Share of horizontal/vertical neighbor pairs that are near-identical.
 
@@ -82,7 +120,6 @@ def _flat_fraction(
     """
     flat = 0
     pairs = 0
-    tol = _FLAT_TOLERANCE
     for y in range(height):
         base = y * width
         for x in range(width):
@@ -100,18 +137,22 @@ def _flat_fraction(
     return flat / pairs if pairs else 0.0
 
 
-def _merge_buckets(ranked: list[list[int]]) -> list[list[float]]:
+def _merge_buckets(
+    ranked: list[list[int]],
+    merge_distance: int = _MERGE_DISTANCE,
+    merge_candidates: int = _MERGE_CANDIDATES,
+) -> list[list[float]]:
     """Fold near-identical buckets (quantization boundary splits) into one
     class, biggest buckets first. Returns [count, sum_r, sum_g, sum_b] rows."""
     merged: list[list[float]] = []
-    for count, sum_r, sum_g, sum_b in ranked[:_MERGE_CANDIDATES]:
+    for count, sum_r, sum_g, sum_b in ranked[:merge_candidates]:
         mean_r, mean_g, mean_b = sum_r / count, sum_g / count, sum_b / count
         target = None
         for cls in merged:
             if (
-                abs(cls[1] / cls[0] - mean_r) <= _MERGE_DISTANCE
-                and abs(cls[2] / cls[0] - mean_g) <= _MERGE_DISTANCE
-                and abs(cls[3] / cls[0] - mean_b) <= _MERGE_DISTANCE
+                abs(cls[1] / cls[0] - mean_r) <= merge_distance
+                and abs(cls[2] / cls[0] - mean_g) <= merge_distance
+                and abs(cls[3] / cls[0] - mean_b) <= merge_distance
             ):
                 target = cls
                 break
@@ -131,10 +172,22 @@ def _analyze(
     width: int,
     height: int,
     seg_hint: bool = False,
+    top_n: int = _TOP_N,
+    base_coverage: float = _BASE_COVERAGE,
+    hinted_coverage: float = _HINTED_COVERAGE,
+    min_class_share: float = _MIN_CLASS_SHARE,
+    merge_distance: int = _MERGE_DISTANCE,
+    merge_candidates: int = _MERGE_CANDIDATES,
+    significant_share: float = _SIGNIFICANT_SHARE,
+    max_significant_colors: int = _MAX_SIGNIFICANT_COLORS,
+    flat_tolerance: int = _FLAT_TOLERANCE,
+    flat_fraction_min: float = _FLAT_FRACTION_MIN,
 ) -> list[tuple[str, float]] | None:
     """QGIS-free decision core. ``pixels`` is a row-major list of (r, g, b)
     triples, ``width * height`` long. Returns the flat-color classes (see
-    detect_flat_colors), or None when the frame is not a flat-color output."""
+    detect_flat_colors), or None when the frame is not a flat-color output.
+    Threshold defaults are the shipped constants; the QImage shell passes the
+    server-tunable values from _detect_dials()."""
     total = width * height
     if total == 0 or len(pixels) < total:
         return None
@@ -155,29 +208,30 @@ def _analyze(
     # Gate 1 - few real colors. A photo's textured regions spread across many
     # buckets; only significant ones count, so edge slivers never inflate it.
     significant = sum(
-        1 for e in buckets.values() if e[0] / total >= _SIGNIFICANT_SHARE
+        1 for e in buckets.values() if e[0] / total >= significant_share
     )
-    if significant > _MAX_SIGNIFICANT_COLORS:
+    if significant > max_significant_colors:
         return None
 
     # Gate 2 - posterized, not photographic. This is the signal that separates
     # a flat map from a photo that merely happens to have a small palette.
-    if _flat_fraction(pixels, width, height) < _FLAT_FRACTION_MIN:
+    if _flat_fraction(pixels, width, height, flat_tolerance) < flat_fraction_min:
         return None
 
     # Gate 3 - the top colors cover the vast majority of the frame.
     merged = _merge_buckets(
-        sorted(buckets.values(), key=lambda e: e[0], reverse=True)
+        sorted(buckets.values(), key=lambda e: e[0], reverse=True),
+        merge_distance, merge_candidates,
     )
-    coverage = sum(e[0] for e in merged[:_TOP_N]) / total
-    threshold = _HINTED_COVERAGE if seg_hint else _BASE_COVERAGE
+    coverage = sum(e[0] for e in merged[:top_n]) / total
+    threshold = hinted_coverage if seg_hint else base_coverage
     if coverage < threshold:
         return None
 
     classes: list[tuple[str, float]] = []
-    for count, sum_r, sum_g, sum_b in merged[:_TOP_N]:
+    for count, sum_r, sum_g, sum_b in merged[:top_n]:
         share = count / total
-        if share < _MIN_CLASS_SHARE:
+        if share < min_class_share:
             break
         classes.append(
             (
@@ -218,9 +272,10 @@ def detect_flat_colors(
     img = QImage.fromData(image_bytes)
     if img.isNull():
         return None
+    sample_side = get_export_dial("vectorize.detect.sample_side", _SAMPLE_SIDE)
     img = img.scaled(
-        _SAMPLE_SIDE,
-        _SAMPLE_SIDE,
+        sample_side,
+        sample_side,
         Qt.AspectRatioMode.KeepAspectRatio,
         Qt.TransformationMode.FastTransformation,
     ).convertToFormat(QImage.Format.Format_RGB32)
@@ -234,7 +289,7 @@ def detect_flat_colors(
             rgb = img.pixel(x, y)
             pixels.append(((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF))
 
-    return _analyze(pixels, width, height, seg_hint=seg_hint)
+    return _analyze(pixels, width, height, seg_hint=seg_hint, **_detect_dials())
 
 
 def pick_foreground_color(classes: list[tuple[str, float]]) -> str:

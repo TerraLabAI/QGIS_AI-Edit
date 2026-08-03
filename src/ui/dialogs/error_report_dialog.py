@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 import platform
-import re
 import sys
 from collections import deque
 from datetime import datetime, timezone
@@ -26,7 +25,9 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ...core import qt_compat as QtC
+from ...core.auth.activation_manager import get_support_email
 from ...core.i18n import tr
+from ...core.log_scrub import scrub_user_paths
 from ...core.logger import log_warning
 
 # Muted flow hint between the two step buttons (same as AI Segmentation).
@@ -45,13 +46,14 @@ _log_collector_connected = False
 
 
 def _anonymize_paths(text: str) -> str:
-    """Anonymize file paths to hide the username."""
+    """Hide the username before the text enters a bug report the user will
+    paste into a public issue or an email. Endpoints are scrubbed at the
+    source (the API client masks them before they ever reach the QGIS log),
+    not here: the URL pattern also matches dotted version numbers, which a
+    diagnostic report must keep."""
     if not text:
         return text
-    text = re.sub(r"/Users/[^/\s]+(?=/|$|\s)", "<USER>", text)
-    text = re.sub(r"/home/[^/\s]+(?=/|$|\s)", "<USER>", text)
-    text = re.sub(r"[A-Za-z]:[/\\]Users[/\\][^/\\\s]+(?=[/\\]|$|\s)", "<USER>", text)
-    return re.sub(r"\\\\[^\\]+\\Users\\[^/\\\s]+(?=[/\\]|$|\s)", "<USER>", text)
+    return scrub_user_paths(text)
 
 
 def start_log_collector():
@@ -227,7 +229,8 @@ class ErrorReportDialog(QDialog):
         layout.addWidget(arrow_label)
 
         self._email_btn = QPushButton(
-            tr("2. Click to send to {email}").format(email=SUPPORT_EMAIL))
+            tr("2. Click to send to {email}").format(
+                email=get_support_email(SUPPORT_EMAIL)))
         self._email_btn.setToolTip(tr("Open email client"))
         self._email_btn.setStyleSheet(_BTN_BLUE)
         self._email_btn.setCursor(QtC.PointingHandCursor)
@@ -249,7 +252,9 @@ class ErrorReportDialog(QDialog):
 
     def _on_open_email(self):
         subject = quote("AI Edit - Bug Report")
-        QDesktopServices.openUrl(QUrl(f"mailto:{SUPPORT_EMAIL}?subject={subject}"))
+        QDesktopServices.openUrl(
+            QUrl(f"mailto:{get_support_email(SUPPORT_EMAIL)}?subject={subject}")
+        )
 
 
 def show_error_report(parent, error_message: str = "", request_id: str = "") -> None:
@@ -265,7 +270,9 @@ def show_error_report(parent, error_message: str = "", request_id: str = "") -> 
     except Exception as err:
         log_warning(f"Failed to open the error report dialog: {err}")
         detail = (error_message or "").strip() or tr("No additional details are available.")
-        contact = tr("Please contact {email} for help.").format(email=SUPPORT_EMAIL)
+        contact = tr("Please contact {email} for help.").format(
+            email=get_support_email(SUPPORT_EMAIL)
+        )
         QMessageBox.information(
             parent, tr("Report a problem"), f"{detail[:500]}\n\n{contact}"
         )

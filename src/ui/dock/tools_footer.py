@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import html
+
 from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QRectF, Qt
 from qgis.PyQt.QtGui import (
@@ -12,10 +14,14 @@ from qgis.PyQt.QtGui import (
     QPen,
     QPixmap,
 )
-from qgis.PyQt.QtWidgets import QLabel, QPushButton, QWidget
+from qgis.PyQt.QtWidgets import QLabel, QPushButton
 
 from ...core import qt_compat as QtC
-from ...core.auth.activation_manager import get_tutorial_url
+from ...core.auth.activation_manager import (
+    get_contact_call_url,
+    get_support_email,
+    get_tutorial_url,
+)
 from ...core.i18n import tr
 from ..dialogs.error_report_dialog import (
     REPORT_PROBLEM_HREF,
@@ -23,12 +29,7 @@ from ..dialogs.error_report_dialog import (
     show_error_report,
 )
 from ..external_url import open_external
-from ..panel_helpers import (
-    apply_swatch_style,
-    build_panel_header,
-    make_hidpi_pixmap,
-    panel_section_label,
-)
+from ..panel_helpers import make_hidpi_pixmap
 from .style import _BTN_BLUE, _BTN_GREEN, _tinted_svg_icon
 
 
@@ -80,12 +81,19 @@ class DockToolsFooterMixin:
             # grays) instead.
             self.set_launch_state()
             self._warning_widget.setVisible(True)
+            self._sync_demo_button()
+            # Re-decide the hero's secondary action on every (re)show: the
+            # project may have gone from "no layers" to "layers, all hidden"
+            # since the last time the card was up.
+            self._sync_warning_actions()
             self._launch_btn.setVisible(False)
             self._launch_btn.setEnabled(False)
+            self._past_sessions_link.setVisible(False)
         else:
             self._warning_widget.setVisible(False)
             self._launch_btn.setVisible(True)
             self._launch_btn.setEnabled(True)
+            self._past_sessions_link.setVisible(True)
         # The first-steps banner follows the same rule: never stacked on the
         # hero card, back once imagery exists.
         try:
@@ -155,20 +163,6 @@ class DockToolsFooterMixin:
     # Tool panels (Mark up, Vectorize) - full-dock views reached via the
     # 🧰 Tools menu. They swap with `_main_widget` and restore it on Done.
     # ------------------------------------------------------------------
-
-    def _build_panel_header(
-        self, title: str, on_back, subtitle: str | None = None
-    ) -> QWidget:
-        del on_back  # panels exit via the Done button at the bottom
-        return build_panel_header(title, subtitle)
-
-    @staticmethod
-    def _panel_section_label(text: str) -> QLabel:
-        return panel_section_label(text)
-
-    @staticmethod
-    def _apply_swatch_style(button: QPushButton, color: QColor) -> None:
-        apply_swatch_style(button, color)
 
     def _make_polygon_glyph_icon(self) -> QIcon:
         """Footer Vectorize button glyph - same square-in-square shape as the
@@ -252,7 +246,63 @@ class DockToolsFooterMixin:
         p.end()
         return QIcon(pm)
 
+    def _make_book_glyph_icon(self) -> QIcon:
+        """Footer Tutorial glyph - two stroked pages meeting on a spine, in the
+        palette text colour. Replaces U+1F4D6 OPEN BOOK, which Windows renders
+        through Segoe UI Emoji as a full-colour bitmap: next to four flat
+        palette-ink vector glyphs it was the one coloured picture in the row.
+        (It did not change the row height - the footer button's sizeHint
+        measures 89x37 with the emoji, with "?" and with the gear character
+        alike.)
+
+        Stroke width and span are set so the painted weight matches its
+        neighbours rather than fading next to them: 152.1 ink px over the 20px
+        box, against the filled gear's 171.5 and the polygon's 116.2. The
+        1.6px/25-75% version measured 97.3.
+        """
+        from qgis.PyQt.QtCore import QPointF, Qt
+        from qgis.PyQt.QtGui import QPainter, QPainterPath, QPen
+
+        s = 20
+        ink = self.palette().color(QPalette.ColorRole.WindowText)
+        pm = make_hidpi_pixmap(s)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        pen = QPen(ink)
+        pen.setWidthF(2.2)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        cx = s / 2.0
+        top, bottom = s * 0.18, s * 0.82
+        edge = s * 0.10
+        for outer in (edge, s - edge):
+            page = QPainterPath()
+            page.moveTo(QPointF(cx, top))
+            # Both curves bow away from the spine, so the pages read as open.
+            page.quadTo(
+                QPointF((cx + outer) / 2.0, top - s * 0.09),
+                QPointF(outer, top - s * 0.05),
+            )
+            page.lineTo(QPointF(outer, bottom - s * 0.05))
+            page.quadTo(
+                QPointF((cx + outer) / 2.0, bottom - s * 0.09),
+                QPointF(cx, bottom),
+            )
+            # closeSubpath draws the spine back up to the start point.
+            page.closeSubpath()
+            p.drawPath(page)
+        p.end()
+        return QIcon(pm)
+
     # Public API consumed by the plugin layer ---------------------------
+
+    def _hide_reference_panel(self) -> None:
+        """The Reference panel is None on docks built without the refs strip
+        (no store), so every sibling-swap guards the hide."""
+        if getattr(self, "_reference_panel", None) is not None:
+            self._reference_panel.setVisible(False)
 
     def set_markup_state(self) -> None:
         """Swap the dock view to the Mark up panel."""
@@ -261,6 +311,7 @@ class DockToolsFooterMixin:
         self._vectorize_panel.deactivate()
         self._main_widget.setVisible(False)
         self._vectorize_panel.setVisible(False)
+        self._hide_reference_panel()
         self._markup_panel.setVisible(True)
         self._markup_panel.activate()
 
@@ -270,6 +321,7 @@ class DockToolsFooterMixin:
         self._hide_status_box()
         self._main_widget.setVisible(False)
         self._markup_panel.setVisible(False)
+        self._hide_reference_panel()
         self._vectorize_panel.setVisible(True)
         self._vectorize_panel.activate()
         self._vectorize_btn.set_active(True)
@@ -278,11 +330,26 @@ class DockToolsFooterMixin:
         self._swipe_panel_lock = True
         self._refresh_swipe_enabled()
 
+    def set_reference_state(self) -> None:
+        """Swap the dock view to the Reference panel (import + per-image
+        notes). No map tool involved, so nothing canvas-side to arm."""
+        if getattr(self, "_reference_panel", None) is None:
+            return
+        self._stop_progress_animation()
+        self._hide_status_box()
+        self._vectorize_panel.deactivate()
+        self._main_widget.setVisible(False)
+        self._markup_panel.setVisible(False)
+        self._vectorize_panel.setVisible(False)
+        self._reference_panel.setVisible(True)
+        self._reference_panel.activate()
+
     def exit_tool_panel(self) -> None:
         """Hide whichever tool panel is showing and restore _main_widget."""
         self._vectorize_panel.deactivate()
         self._markup_panel.setVisible(False)
         self._vectorize_panel.setVisible(False)
+        self._hide_reference_panel()
         self._main_widget.setVisible(True)
         self._vectorize_btn.set_active(False)
         self._swipe_panel_lock = False
@@ -319,13 +386,6 @@ class DockToolsFooterMixin:
         enabled = (self._swipe_eligible or is_checked) and not self._swipe_panel_lock
         self._swipe_btn.setEnabled(enabled)
 
-    def set_vectorize_button_active(self, active: bool) -> None:
-        """Light the green tint on the Vectorize footer icon while its
-        panel is open. Same visual language as the swipe button so the
-        user always knows which AI Edit action owns the canvas.
-        """
-        self._vectorize_btn.set_active(active)
-
     def set_settings_button_active(self, active: bool) -> None:
         """Light the green tint on the Settings (gear) footer icon while
         the Account Settings dialog is open.
@@ -355,6 +415,16 @@ class DockToolsFooterMixin:
     def get_markup_color(self) -> QColor:
         return self._markup_panel.get_color()
 
+    def set_markup_tool_unchecked(self, tool_key: str) -> None:
+        """Uncheck a Mark up tool button without emitting tool_changed.
+
+        Called by the plugin when the underlying map tool self-deactivates
+        from under the panel (Line's two-stage Escape calls
+        canvas.unsetMapTool(self) directly), so the button reflects that no
+        drawing tool is armed on the canvas anymore.
+        """
+        self._markup_panel.uncheck_tool(tool_key)
+
     def set_vectorize_suggestion(
         self,
         layer_id: str | None,
@@ -373,7 +443,11 @@ class DockToolsFooterMixin:
         section. ``class_label`` (when known) flows down to the vectorize
         panel so the produced polygons land with a sensible class_name value.
         """
-        if not layer_id or not color_hex:
+        from ...core.auth.activation_manager import is_feature_enabled
+
+        # No CTA for a feature the server switched off: offering it and then
+        # refusing the click is the one thing worse than not offering it.
+        if not layer_id or not color_hex or not is_feature_enabled("vectorize"):
             self._vectorize_cta_section.setVisible(False)
             self._vectorize_cta_pending = None
             return
@@ -407,7 +481,30 @@ class DockToolsFooterMixin:
         self._vectorize_cta_pending = (
             layer_id, normalised, class_label or "", trigger or ""
         )
+        # The AI Segmentation line rides along unless closed for good.
+        from ..onboarding_hint import HINT_SEG_CROSS, is_hint_dismissed
+        self._vectorize_seg_row.setVisible(not is_hint_dismissed(HINT_SEG_CROSS))
         self._vectorize_cta_section.setVisible(True)
+
+    def _on_vectorize_seg_link_activated(self, href: str) -> None:
+        """The Vectorize card's AI Segmentation link: open the plugin's dock
+        when installed, else the Plugin Manager pre-filtered to it."""
+        if href != "ai_seg":
+            return
+        from ...core import telemetry
+        from ...core import telemetry_events as te
+        from ..cross_plugin_discovery import open_ai_segmentation
+        installed = open_ai_segmentation()
+        telemetry.track(te.SEG_REDIRECT_CLICKED, {
+            "guidance_kind": "vectorize_cta",
+            "installed": installed,
+        })
+        telemetry.flush()
+
+    def _on_vectorize_seg_dismissed(self) -> None:
+        from ..onboarding_hint import HINT_SEG_CROSS, dismiss_hint
+        dismiss_hint(HINT_SEG_CROSS)
+        self._vectorize_seg_row.setVisible(False)
 
     def _set_vectorize_swatches(self, colors: list[str]) -> None:
         """Rebuild the CTA's color swatch row (max 6, one per detected zone)."""
@@ -437,7 +534,8 @@ class DockToolsFooterMixin:
         from qgis.PyQt.QtWidgets import QApplication, QDialog
         from qgis.PyQt.QtWidgets import QVBoxLayout as _VBox
 
-        calendly_url = "https://calendly.com/barbot-yvann/30min"
+        call_url = get_contact_call_url()
+        support_email = get_support_email(SUPPORT_EMAIL)
 
         dlg = QDialog(self._main_window_for_dialog())
         dlg.setWindowTitle(tr("Contact us"))
@@ -455,7 +553,9 @@ class DockToolsFooterMixin:
         msg.setStyleSheet("font-size: 12px; color: palette(text);")
         lay.addWidget(msg)
 
-        email_label = QLabel(f"<b>{SUPPORT_EMAIL}</b>")
+        # Bold means rich text, and the address may come from the server, so it
+        # is escaped here as well as validated there.
+        email_label = QLabel(f"<b>{html.escape(support_email, quote=False)}</b>")
         email_label.setTextInteractionFlags(QtC.TextSelectableByMouse)
         email_label.setStyleSheet("font-size: 12px; color: palette(text);")
         lay.addWidget(email_label)
@@ -466,7 +566,7 @@ class DockToolsFooterMixin:
         copy_btn.setCursor(QtC.PointingHandCursor)
         copy_btn.clicked.connect(
             lambda: (
-                QApplication.clipboard().setText(SUPPORT_EMAIL),
+                QApplication.clipboard().setText(support_email),
                 copy_btn.setText(tr("Copied!")),
             )
         )
@@ -482,7 +582,7 @@ class DockToolsFooterMixin:
         call_btn.setStyleSheet(_BTN_BLUE)
         call_btn.setCursor(QtC.PointingHandCursor)
         call_btn.clicked.connect(
-            lambda: open_external(calendly_url)
+            lambda: open_external(call_url)
         )
         lay.addWidget(call_btn)
 
@@ -522,10 +622,14 @@ class DockToolsFooterMixin:
         markup_key = native("Alt+M")
         vectorize_key = native("Alt+V")
         swipe_key = native("Alt+B")
+        # Real family names, not the CSS generic `monospace`: Qt maps no font to
+        # it, so on Windows the keycaps fell back to Segoe UI and the shortcut
+        # column lost its alignment.
         key_style = (
             "background-color: rgba(128,128,128,0.18);"
             "border: 1px solid rgba(128,128,128,0.35);"
-            "border-radius: 3px; padding: 1px 5px; font-family: monospace;"
+            "border-radius: 3px; padding: 1px 5px;"
+            ' font-family: Consolas, "Cascadia Mono", Menlo, monospace;'
         )
         k = f"<span style='{key_style}'>{{}}</span>"
 
@@ -537,7 +641,7 @@ class DockToolsFooterMixin:
             f"<tr><td colspan='2' style='padding-bottom:2px;'><b>{tr('Editing')}</b></td></tr>"
             f"<tr><td>{k.format(launch_key)}</td><td>{tr('Launch AI Edit')}</td></tr>"
             f"<tr><td>{k.format(enter_key)}</td><td>{tr('Generate')}</td></tr>"
-            f"<tr><td>{k.format('Esc')}</td><td>{tr('Cancel selection')}</td></tr>"
+            f"<tr><td>{k.format('Esc')}</td><td>{tr('Go back one step (comparison, drawing, zone)')}</td></tr>"
             f"<tr><td>{k.format(undo_key)}</td><td>{tr('Undo')}</td></tr>"
             f"<tr><td>{k.format(markup_key)}</td><td>{tr('Mark up')}</td></tr>"
             f"<tr><td>{k.format(vectorize_key)}</td><td>{tr('Vectorize')}</td></tr>"

@@ -213,12 +213,6 @@ def add_layer_to_ai_edit_top(layer: QgsMapLayer) -> QgsLayerTreeLayer:
     return group.insertLayer(0, layer)
 
 
-def add_subgroup_to_ai_edit_top(name: str) -> QgsLayerTreeGroup:
-    """Create a sub-group at the top of the AI-Edit group."""
-    group = get_or_create_ai_edit_group()
-    return group.insertGroup(0, name)
-
-
 def pin_markup_to_top() -> None:
     """Keep the Mark up layer at the very top of the tree, above the AI-Edit
     group, so its annotations always render over everything else.

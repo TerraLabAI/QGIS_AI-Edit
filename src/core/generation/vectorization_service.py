@@ -5,6 +5,13 @@ between gdal:* steps on macOS). Everything runs in-memory via GDAL MEM /
 OGR Memory drivers; filtering + simplification happen in Python on
 QgsGeometry objects.
 
+Multi-class runs paint every class mask into ONE label raster and polygonize
+it in a single GDAL call (``_trace_classes_batched``): SieveFilter and
+Polygonize each scan the full raster whatever the class covers, so tracing
+per class paid that scan once per class. The sieve stays per class (see the
+comment in ``_trace_classes_batched``), and masks that overlap after
+refinement fall back to the per-class ``_trace_mask``.
+
 The heavy pixel compute lives here (thread-safe, no QgsProject access);
 layer build/persist/style live in ``vectorize_layer``; palette detection
 and class naming live in ``vectorize_palette``.
@@ -30,12 +37,13 @@ from qgis.core import (
     QgsProject,
     QgsRasterLayer,
     QgsVectorLayer,
-    QgsWkbTypes,
 )
 
+from .. import qt_compat as QtC
 from ..errors import AIEditError, ErrorCode
 from ..i18n import tr
 from ..logger import log_debug
+from ..raster_writer import read_crop_polygon_wkt
 
 # Back-compat re-exports: callers and tests historically found the whole
 # Vectorize surface on this module before it was split.
@@ -134,6 +142,63 @@ def _make_measurer(raster_crs, transform_context, ellipsoid: str) -> QgsDistance
     return measurer
 
 
+def _clip_feats_to_crop(
+    feats: list,
+    raster_path: str,
+    raster_crs,
+    transform_context,
+    ellipsoid: str,
+) -> list:
+    """Clip vectorize output to the P3 alpha-crop polygon (spec section 5):
+    Vectorize matches exact pixel colors on the mosaic, so a traced feature
+    that straddles the crop edge must stop at the polygon, not the pixel.
+
+    No-op (returns ``feats`` unchanged) when the raster carries no crop tag
+    (old generations, MCP/dev extents). A feature split by the crop into
+    several parts becomes one feature per part, same as the bowtie-split
+    path in :func:`_trace_mask`; ``area_m2`` is recomputed geodesically on
+    the clipped geometry.
+    """
+    crop_wkt = read_crop_polygon_wkt(raster_path)
+    if not crop_wkt:
+        return feats
+    crop_geom = QgsGeometry.fromWkt(crop_wkt)
+    if crop_geom is None or crop_geom.isEmpty():
+        return feats
+    if not crop_geom.isGeosValid():
+        fixed = crop_geom.makeValid()
+        if fixed is not None and not fixed.isEmpty():
+            crop_geom = fixed
+
+    measurer = _make_measurer(raster_crs, transform_context, ellipsoid)
+    clipped: list[QgsFeature] = []
+    next_fid = 1
+    for feat in feats:
+        geom = feat.geometry().intersection(crop_geom)
+        if geom is None or geom.isEmpty():
+            continue
+        if not geom.isGeosValid():
+            fixed = geom.makeValid()
+            if fixed is not None and not fixed.isEmpty():
+                geom = fixed
+        parts = geom.asGeometryCollection() if geom.isMultipart() else [geom]
+        attrs = feat.attributes()
+        for part in parts:
+            if part.isEmpty() or part.type() != QtC.PolygonGeometry:
+                continue
+            if part.area() <= 0:
+                continue
+            new_feat = QgsFeature()
+            new_feat.setGeometry(part)
+            new_attrs = list(attrs)
+            new_attrs[0] = next_fid  # feature_id
+            new_attrs[3] = float(measurer.measureArea(part))  # area_m2
+            new_feat.setAttributes(new_attrs)
+            clipped.append(new_feat)
+            next_fid += 1
+    return clipped
+
+
 def _inset_border(mask, expand_value: int) -> None:
     """Erase a thin border of pixels IN PLACE so Polygonize can never trace the
     AI Edit zone's bounding rectangle. Without this, dilate or fill_holes pushes
@@ -145,6 +210,59 @@ def _inset_border(mask, expand_value: int) -> None:
         mask[-border_inset:, :] = 0
         mask[:, :border_inset] = 0
         mask[:, -border_inset:] = 0
+
+
+def _emit_traced_polygon(
+    geom: QgsGeometry,
+    *,
+    min_area: float,
+    simplify_tol: float,
+    round_corners: bool,
+    class_label: str,
+    class_color_hex: str,
+    measurer: QgsDistanceArea,
+    next_fid: int,
+    feats: list,
+) -> int:
+    """Per-polygon tail shared by the per-class and the batched tracer, so the
+    two can never drift: simplify, optional Chaikin smooth, validity repair,
+    geodesic area, feature build. Appends to ``feats``, returns the next fid."""
+    if simplify_tol > 0:
+        simplified = geom.simplify(simplify_tol)
+        if not simplified.isEmpty():
+            geom = simplified
+    if round_corners:
+        # Chaikin smoothing - 5 iterations matches AI Segmentation.
+        smoothed = geom.smooth(5, 0.25)
+        if not smoothed.isEmpty():
+            geom = smoothed
+    # Simplify/smooth can self-intersect; downstream tools and GeoPackage
+    # expect valid rings. makeValid may split a bowtie into several
+    # polygons: emit one feature per part.
+    geoms = [geom]
+    if not geom.isGeosValid():
+        fixed = geom.makeValid()
+        source_parts = fixed.asGeometryCollection() if fixed.isMultipart() else [fixed]
+        parts = []
+        for part in source_parts:
+            if part.isEmpty():
+                continue
+            if part.type() == QtC.PolygonGeometry and part.area() >= min_area:
+                parts.append(part)
+        geoms = parts or [geom]
+    for part in geoms:
+        area_m2 = float(measurer.measureArea(part))
+        feat = QgsFeature()
+        feat.setGeometry(part)
+        feat.setAttributes([
+            next_fid,
+            class_label,
+            class_color_hex,
+            area_m2,
+        ])
+        feats.append(feat)
+        next_fid += 1
+    return next_fid
 
 
 def _trace_mask(
@@ -216,45 +334,192 @@ def _trace_mask(
         geom = QgsGeometry.fromWkt(geom_ref.ExportToWkt())
         if geom.isEmpty() or geom.area() < min_area:
             continue
-        if simplify_tol > 0:
-            simplified = geom.simplify(simplify_tol)
-            if not simplified.isEmpty():
-                geom = simplified
-        if round_corners:
-            # Chaikin smoothing - 5 iterations matches AI Segmentation.
-            smoothed = geom.smooth(5, 0.25)
-            if not smoothed.isEmpty():
-                geom = smoothed
-        # Simplify/smooth can self-intersect; downstream tools and GeoPackage
-        # expect valid rings. makeValid may split a bowtie into several
-        # polygons: emit one feature per part.
-        geoms = [geom]
-        if not geom.isGeosValid():
-            fixed = geom.makeValid()
-            source_parts = fixed.asGeometryCollection() if fixed.isMultipart() else [fixed]
-            parts = []
-            for part in source_parts:
-                if part.isEmpty():
-                    continue
-                if part.type() == QgsWkbTypes.GeometryType.PolygonGeometry and part.area() >= min_area:
-                    parts.append(part)
-            geoms = parts or [geom]
-        for part in geoms:
-            area_m2 = float(measurer.measureArea(part))
-            feat = QgsFeature()
-            feat.setGeometry(part)
-            feat.setAttributes([
-                next_fid,
-                class_label,
-                class_color_hex,
-                area_m2,
-            ])
-            feats.append(feat)
-            next_fid += 1
+        next_fid = _emit_traced_polygon(
+            geom,
+            min_area=min_area,
+            simplify_tol=simplify_tol,
+            round_corners=round_corners,
+            class_label=class_label,
+            class_color_hex=class_color_hex,
+            measurer=measurer,
+            next_fid=next_fid,
+            feats=feats,
+        )
 
     mask_ds = None
     ogr_ds = None
     return feats, next_fid
+
+
+def _class_mask(best_idx, assigned, class_idx: int, expand_value: int, fill_holes: bool):
+    """One class's refined, border-inset uint8 mask, or None when empty."""
+    mask = ((best_idx == class_idx) & assigned).astype(np.uint8)
+    if int(mask.sum()) == 0:
+        return None
+    # Mask-level morphological refinement (expand/contract then fill holes).
+    # Same order as AI Segmentation's apply_mask_refinement.
+    if expand_value != 0 or fill_holes:
+        mask = _refine_mask(mask, expand_value=expand_value, fill_holes=fill_holes)
+        if int(mask.sum()) == 0:
+            return None
+    _inset_border(mask, expand_value)
+    return mask
+
+
+# uint8 label raster: labels 1..254 plus 0 for background. More classes than
+# that (never seen; the palette UI offers ~a dozen) trace per class instead.
+_MAX_BATCHED_CLASSES = 254
+
+
+def _trace_classes_batched(
+    best_idx,
+    assigned,
+    classes: list[dict],
+    gt,
+    proj,
+    *,
+    sieve_threshold: int,
+    min_pixels: int,
+    simplify_factor: float,
+    round_corners: bool,
+    expand_value: int,
+    fill_holes: bool,
+    measurer: QgsDistanceArea,
+    is_cancelled=None,
+) -> tuple[bool, list | None]:
+    """Trace EVERY class from ONE label raster with a single Polygonize call.
+
+    SieveFilter and Polygonize each scan the full raster whatever the class
+    covers, so the per-class tracer paid two full scans per class; painting
+    class index + 1 into one uint8 label raster cuts Polygonize to one scan
+    for the whole run.
+
+    The sieve stays PER CLASS, on a reused scratch band, never on the label
+    raster: sieving labels merges a small region into its largest neighbour
+    whatever its class, so a boundary speckle would switch class instead of
+    dropping to background (and filling the hole of the class around it) as
+    the per-class sieve does. AI Segmentation never faces this: its labels
+    are disjoint instances already cleaned at mask level before polygonize.
+
+    Returns ``(handled, feats)``. ``handled`` is False when the masks cannot
+    share one raster (refinement made two classes overlap, or too many
+    classes): the caller must trace per class. ``feats`` is None when
+    cancelled. Output matches the per-class path feature for feature:
+    fids continuous and grouped in class order, same tail, same attributes.
+    """
+    if len(classes) > _MAX_BATCHED_CLASSES:
+        return False, None
+    height, width = best_idx.shape
+    label_array = np.zeros(best_idx.shape, dtype=np.uint8)
+    label_classes: dict[int, tuple[str, str]] = {}
+
+    mem_raster_driver = gdal.GetDriverByName("MEM")
+    work_ds = mem_raster_driver.Create("", width, height, 1, gdal.GDT_Byte)
+    work_ds.SetGeoTransform(gt)
+    work_ds.SetProjection(proj)
+    work_band = work_ds.GetRasterBand(1)
+    for class_idx, cls in enumerate(classes):
+        if is_cancelled is not None and is_cancelled():
+            return True, None
+        mask = _class_mask(best_idx, assigned, class_idx, expand_value, fill_holes)
+        if mask is None:
+            continue
+        if sieve_threshold > 0:
+            work_band.WriteArray(mask)
+            # In-place noise removal - drops connected components smaller
+            # than threshold, exactly as the per-class tracer sieves.
+            gdal.SieveFilter(
+                srcBand=work_band,
+                maskBand=None,
+                dstBand=work_band,
+                threshold=int(sieve_threshold),
+                connectedness=8,
+            )
+            mask = work_band.ReadAsArray()
+        stamp = mask != 0
+        # Nearest-color masks are disjoint by construction, but refinement
+        # (dilate, fill holes) and the sieve's own hole-filling can grow one
+        # class over another. One raster cannot hold two labels on a pixel,
+        # so overlap sends the whole run down the per-class path unchanged.
+        if bool(np.any(label_array[stamp])):
+            work_ds = None
+            return False, None
+        label_value = len(label_classes) + 1
+        np.copyto(label_array, np.uint8(label_value), where=stamp)
+        label_classes[label_value] = (
+            cls.get("label", ""),
+            "#{:02X}{:02X}{:02X}".format(*cls["rgb"]),
+        )
+    work_band = None
+    work_ds = None
+
+    label_ds = mem_raster_driver.Create("", width, height, 1, gdal.GDT_Byte)
+    label_ds.SetGeoTransform(gt)
+    label_ds.SetProjection(proj)
+    label_band = label_ds.GetRasterBand(1)
+    label_band.WriteArray(label_array)
+    label_band.FlushCache()
+
+    spatial_ref = osr.SpatialReference()
+    spatial_ref.ImportFromWkt(proj)
+    ogr_driver = ogr.GetDriverByName("Memory")
+    ogr_ds = ogr_driver.CreateDataSource("vec")
+    ogr_layer = ogr_ds.CreateLayer("polys", spatial_ref, ogr.wkbPolygon)
+    ogr_layer.CreateField(ogr.FieldDefn("value", ogr.OFTInteger))
+    # The label band doubles as the mask band, so background (0) is never
+    # traced at all instead of traced and filtered out afterwards.
+    gdal.Polygonize(label_band, label_band, ogr_layer, 0, ["8CONNECTED=8"])
+
+    # Cancellation checkpoint after the expensive GDAL polygonize.
+    if is_cancelled is not None and is_cancelled():
+        return True, None
+
+    pixel_area = abs(gt[1] * gt[5])
+    min_area = pixel_area * float(min_pixels)
+    simplify_tol = (pixel_area ** 0.5) * simplify_factor
+
+    # Group by label before the tail: one polygonize interleaves the classes
+    # in raster order, but fids must stay continuous and grouped per class,
+    # exactly as the per-class tracer emitted them.
+    by_label: dict[int, list[QgsGeometry]] = {}
+    seen = 0
+    ogr_layer.ResetReading()
+    for ogr_feat in ogr_layer:
+        seen += 1
+        if seen % 256 == 0 and is_cancelled is not None and is_cancelled():
+            return True, None
+        value = ogr_feat.GetField("value")
+        if value not in label_classes:
+            continue
+        geom_ref = ogr_feat.GetGeometryRef()
+        if geom_ref is None:
+            continue
+        geom = QgsGeometry.fromWkt(geom_ref.ExportToWkt())
+        if geom.isEmpty() or geom.area() < min_area:
+            continue
+        by_label.setdefault(value, []).append(geom)
+
+    feats: list[QgsFeature] = []
+    next_fid = 1
+    for value, (class_label, class_color_hex) in label_classes.items():
+        for geom in by_label.get(value, []):
+            if next_fid % 256 == 0 and is_cancelled is not None and is_cancelled():
+                return True, None
+            next_fid = _emit_traced_polygon(
+                geom,
+                min_area=min_area,
+                simplify_tol=simplify_tol,
+                round_corners=round_corners,
+                class_label=class_label,
+                class_color_hex=class_color_hex,
+                measurer=measurer,
+                next_fid=next_fid,
+                feats=feats,
+            )
+
+    label_ds = None
+    ogr_ds = None
+    return True, feats
 
 
 def compute_class_features(
@@ -317,48 +582,60 @@ def compute_class_features(
 
     measurer = _make_measurer(raster_crs, transform_context, ellipsoid)
 
-    feats: list[QgsFeature] = []
-    next_fid = 1
-    for class_idx, cls in enumerate(classes):
-        if is_cancelled is not None and is_cancelled():
-            return None
-        mask = ((best_idx == class_idx) & assigned).astype(np.uint8)
-        if int(mask.sum()) == 0:
-            continue
-        # Mask-level morphological refinement (expand/contract then fill holes).
-        # Same order as AI Segmentation's apply_mask_refinement.
-        if expand_value != 0 or fill_holes:
-            mask = _refine_mask(mask, expand_value=expand_value, fill_holes=fill_holes)
-            if int(mask.sum()) == 0:
+    handled, feats = _trace_classes_batched(
+        best_idx,
+        assigned,
+        classes,
+        gt,
+        proj,
+        sieve_threshold=sieve_threshold,
+        min_pixels=min_pixels,
+        simplify_factor=simplify_factor,
+        round_corners=round_corners,
+        expand_value=expand_value,
+        fill_holes=fill_holes,
+        measurer=measurer,
+        is_cancelled=is_cancelled,
+    )
+    if handled and feats is None:
+        return None
+    if not handled:
+        feats = []
+        next_fid = 1
+        for class_idx, cls in enumerate(classes):
+            if is_cancelled is not None and is_cancelled():
+                return None
+            mask = _class_mask(best_idx, assigned, class_idx, expand_value, fill_holes)
+            if mask is None:
                 continue
-        _inset_border(mask, expand_value)
-        traced = _trace_mask(
-            mask,
-            gt,
-            proj,
-            sieve_threshold=sieve_threshold,
-            min_pixels=min_pixels,
-            simplify_factor=simplify_factor,
-            round_corners=round_corners,
-            class_label=cls.get("label", ""),
-            class_color_hex="#{:02X}{:02X}{:02X}".format(*cls["rgb"]),
-            measurer=measurer,
-            next_fid=next_fid,
-            is_cancelled=is_cancelled,
-        )
-        if traced is None:
-            return None
-        class_feats, next_fid = traced
-        feats.extend(class_feats)
+            traced = _trace_mask(
+                mask,
+                gt,
+                proj,
+                sieve_threshold=sieve_threshold,
+                min_pixels=min_pixels,
+                simplify_factor=simplify_factor,
+                round_corners=round_corners,
+                class_label=cls.get("label", ""),
+                class_color_hex="#{:02X}{:02X}{:02X}".format(*cls["rgb"]),
+                measurer=measurer,
+                next_fid=next_fid,
+                is_cancelled=is_cancelled,
+            )
+            if traced is None:
+                return None
+            class_feats, next_fid = traced
+            feats.extend(class_feats)
 
+    empty_msg = tr(
+        "No polygons found for the selected colors "
+        "(try a wider tolerance or smaller min size)"
+    )
     if not feats:
-        raise AIEditError(
-            ErrorCode.NO_PIXELS_MATCHED,
-            tr(
-                "No polygons found for the selected colors "
-                "(try a wider tolerance or smaller min size)"
-            ),
-        )
+        raise AIEditError(ErrorCode.NO_PIXELS_MATCHED, empty_msg)
+    feats = _clip_feats_to_crop(feats, raster_path, raster_crs, transform_context, ellipsoid)
+    if not feats:
+        raise AIEditError(ErrorCode.NO_PIXELS_MATCHED, empty_msg)
     log_debug(f"Vectorize computed {len(feats)} polygons across {len(classes)} classes")
     return feats
 
@@ -444,14 +721,15 @@ def _compute_vector_features(
     if traced is None:
         return None
     feats, _ = traced
+    empty_msg = tr(
+        "No polygons remained after filtering "
+        "(try a wider tolerance or smaller min size)"
+    )
     if not feats:
-        raise AIEditError(
-            ErrorCode.NO_PIXELS_MATCHED,
-            tr(
-                "No polygons remained after filtering "
-                "(try a wider tolerance or smaller min size)"
-            ),
-        )
+        raise AIEditError(ErrorCode.NO_PIXELS_MATCHED, empty_msg)
+    feats = _clip_feats_to_crop(feats, raster_path, raster_crs, transform_context, ellipsoid)
+    if not feats:
+        raise AIEditError(ErrorCode.NO_PIXELS_MATCHED, empty_msg)
     return feats
 
 

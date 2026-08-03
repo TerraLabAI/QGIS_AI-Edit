@@ -44,7 +44,31 @@ class VectorizeTask(QgsTask):
         except Exception:
             return False
 
+    @staticmethod
+    def _unexpected_failure() -> tuple[str, str]:
+        """Message + code for a compute that died in a way nothing else caught.
+
+        A stable code plus a translated, user-safe line: the raw exception text
+        (GDAL/numpy internals) must never reach the UI, only the log."""
+        return (
+            tr("Vectorize failed unexpectedly. Please try again, or report the problem if it persists."),
+            ErrorCode.VECTORIZE_INTERNAL_ERROR.value,
+        )
+
     def run(self) -> bool:
+        # Last-resort guard, same shape as generation_worker: a raise out of
+        # run() reaches finished() as a bare False with no failure recorded,
+        # and the panel would keep its disabled "Vectorizing..." button.
+        try:
+            return self._run_compute()
+        except Exception as err:  # noqa: BLE001
+            if self.isCanceled():
+                return False
+            log_warning(f"Vectorize task failed unexpectedly: {err}")
+            self._failure = self._unexpected_failure()
+            return False
+
+    def _run_compute(self) -> bool:
         if self.isCanceled():
             return False
         try:
@@ -54,14 +78,9 @@ class VectorizeTask(QgsTask):
         except AIEditError as err:
             self._failure = (err.message, err.code.value if err.code else "")
             return False
-        except Exception as err:  # nosec B110 - surface as a failed task, never crash QGIS.
+        except Exception as err:  # surface as a failed task, never crash QGIS
             log_warning(f"Vectorize compute failed: {err}")
-            # A stable code + translated, user-safe message: the raw exception
-            # text (GDAL/numpy internals) must never reach the UI, only the log.
-            self._failure = (
-                tr("Vectorize failed unexpectedly. Please try again, or report the problem if it persists."),
-                ErrorCode.VECTORIZE_INTERNAL_ERROR.value,
-            )
+            self._failure = self._unexpected_failure()
             return False
         if feats is None or self.isCanceled():
             # Cancelled mid-compute: no result, no error.
@@ -76,3 +95,7 @@ class VectorizeTask(QgsTask):
             self.succeeded.emit(self._features, self._params)
         elif self._failure is not None:
             self.failed.emit(*self._failure)
+        else:
+            # No slot filled: run() died somewhere sip could not report. Answer
+            # anyway, or the panel never resets its Vectorize button.
+            self.failed.emit(*self._unexpected_failure())

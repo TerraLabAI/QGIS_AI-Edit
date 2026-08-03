@@ -18,12 +18,15 @@ from qgis.PyQt.QtWidgets import (
 from ...core import qt_compat as QtC
 from ...core.i18n import tr
 from .style import (
-    _BTN_BLUE_AUTH,
+    _BTN_GHOST,
     _BTN_GREEN_AUTH,
+    _BTN_LABEL_WEIGHT,
     _BTN_PAIR_CANCEL,
     _BTN_PAIR_NEUTRAL,
     BRAND_BLUE,
-    TERRALAB_URL,
+    BTN_GREEN,
+    BTN_GREEN_HOVER,
+    DOCK_BRANDING_URL,
 )
 from .widgets import _Spinner
 
@@ -46,7 +49,7 @@ class DockChromeMixin:
 
         title_label = QLabel(
             "AI Edit by "
-            f'<a href="{TERRALAB_URL}" '
+            f'<a href="{DOCK_BRANDING_URL}" '
             f'style="color: {BRAND_BLUE}; text-decoration: none;">TerraLab</a>'
         )
         title_label.setOpenExternalLinks(True)
@@ -204,7 +207,7 @@ class DockChromeMixin:
         self._pairing_copy_btn.setStyleSheet(
             "QPushButton { background: transparent; border: none;"
             " color: palette(text); font-size: 11px; padding: 2px;"
-            " text-decoration: underline; }"
+            f" text-decoration: underline; {_BTN_LABEL_WEIGHT} }}"
         )
         self._pairing_copy_btn.clicked.connect(self._on_pairing_copy_clicked)
         wait_layout.addWidget(self._pairing_copy_btn, 0, QtC.AlignCenter)
@@ -230,16 +233,6 @@ class DockChromeMixin:
         self._activation_message.setStyleSheet("font-size: 11px;")
         self._activation_message.setVisible(False)
         layout.addWidget(self._activation_message)
-
-        # CTA button displayed on activation flow when usage limit is reached
-        self._activation_limit_cta_btn = QPushButton(tr("Subscribe"))
-        self._activation_limit_cta_btn.setToolTip(tr("Open the subscription page in your browser"))
-        self._activation_limit_cta_btn.setCursor(QtC.PointingHandCursor)
-        self._activation_limit_cta_btn.setStyleSheet(_BTN_BLUE_AUTH)
-        self._activation_limit_cta_btn.clicked.connect(self._on_activation_limit_cta_clicked)
-        self._activation_limit_cta_btn.setVisible(False)
-        layout.addWidget(self._activation_limit_cta_btn)
-        self._activation_limit_cta_url = ""
 
         return widget
 
@@ -349,16 +342,54 @@ class DockChromeMixin:
             plugin_data = plugins.all().get(plugin_id)
             if plugin_data and plugin_data.get("status") == "upgradeable":
                 available_version = plugin_data.get("version_available", "?")
-                text = '{} <a href="#update" style="color: #1e88e5; font-weight: bold;">{}</a>'.format(
-                    tr("New version available: v{version}").format(version=available_version),
-                    tr("Update now"),
-                )
-                self._update_notification_label.setText(text)
-                self._update_notif_container.setVisible(True)
+                self._show_update_banner(available_version)
                 return True
         except Exception:
             pass  # nosec B110  No repo metadata yet, dev install, etc.
+        return self._check_server_update_nudge()
+
+    def _show_update_banner(self, version: str) -> None:
+        text = '{} <a href="#update" style="color: #1e88e5; font-weight: bold;">{}</a>'.format(
+            tr("New version available: v{version}").format(version=version),
+            tr("Update now"),
+        )
+        self._update_notification_label.setText(text)
+        self._update_notif_container.setVisible(True)
+
+    def _check_server_update_nudge(self) -> bool:
+        """Server-driven fallback trigger: show the same banner when the cached
+        config's min_recommended_version parses higher than the installed
+        version. Cache-only read; absent or garbage values show nothing."""
+        try:
+            from ...core.auth.activation_manager import (
+                get_server_config,
+                is_update_recommended,
+            )
+
+            installed = self._installed_plugin_version()
+            if installed and is_update_recommended(installed):
+                minimum = str(get_server_config().get("min_recommended_version"))
+                self._show_update_banner(minimum)
+                return True
+        except Exception:
+            pass  # nosec B110  A bad nudge must never break the dock.
         return False
+
+    @staticmethod
+    def _installed_plugin_version() -> str:
+        """Read version= from this plugin's metadata.txt ('' when unreadable)."""
+        root = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        )
+        try:
+            with open(os.path.join(root, "metadata.txt"), encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("version="):
+                        return line.split("=", 1)[1].strip()
+        except OSError:
+            pass
+        return ""
 
     def _on_open_plugin_manager(self, _link: str = "") -> None:
         """Open QGIS's Plugin Manager on the Upgradeable tab (index 3)."""
@@ -373,9 +404,13 @@ class DockChromeMixin:
         """Build the empty-canvas first-run hero (shown when no visible layer).
 
         The empty state IS the onboarding. It leads with the truth the user
-        must act on - the imagery is THEIRS to bring (any GeoTIFF / WMS / XYZ) -
-        and keeps a one-click "Try it on an example" demo as the reassurance
-        fallback for someone with no data on hand (Yvann 2026-07-08). It mirrors
+        must act on - the imagery is THEIRS to bring (any GeoTIFF / WMS / XYZ)
+        - and keeps a one-click "Load a sample image" demo as the reassurance
+        fallback for someone with no data on hand (Yvann 2026-07-08). The
+        ghost secondary button adapts to the actual blocker (see
+        _sync_warning_actions): Data Source Manager when the project holds no
+        layers, one-click re-check of the topmost raster when layers exist
+        but are all unchecked. It mirrors
         the AI Segmentation hero pixel for pixel so the two docks read as one
         family. No illustrative preview image: real product output only, a
         glyph is fine. The plugin handles the demo: it only adds a basemap
@@ -411,20 +446,38 @@ class DockChromeMixin:
         glyph.setStyleSheet("font-size: 26px;")
         col.addWidget(glyph)
 
-        title = QLabel(tr("Load your own imagery"))
-        title.setWordWrap(True)
-        title.setAlignment(QtC.AlignCenter)
-        title.setStyleSheet("font-weight: 700; font-size: 15px;")
-        col.addWidget(title)
+        self._warning_title = QLabel(tr("Load your own imagery"))
+        self._warning_title.setWordWrap(True)
+        self._warning_title.setAlignment(QtC.AlignCenter)
+        self._warning_title.setStyleSheet("font-weight: 700; font-size: 15px;")
+        col.addWidget(self._warning_title)
 
         # One quiet line, one job: name what counts as imagery. No workflow
-        # prose. Kept as _warning_text so show_basemap_error can swap it.
+        # prose. Kept as _warning_text so show_basemap_error can swap it and
+        # _sync_warning_actions can retune it per state.
         self._warning_text = QLabel(tr("Any GeoTIFF, WMS or XYZ basemap."))
         self._warning_text.setWordWrap(True)
         self._warning_text.setAlignment(QtC.AlignCenter)
         self._warning_text.setStyleSheet(
             "font-size: 11px; color: rgba(128, 128, 128, 0.95);")
         col.addWidget(self._warning_text)
+
+        # The card's headline names the blocker, so the card owes the user the
+        # door past it. Ghost, not filled: the example button below is the
+        # screen's single filled primary and this one must recede. Text, tooltip
+        # and click target are state-dependent (_sync_warning_actions).
+        self._warning_show_layers_mode = False
+        self._warning_error_text_active = False
+        self._add_layer_btn = QPushButton(tr("Add a layer…"))
+        self._add_layer_btn.setToolTip(
+            tr("Open QGIS's Data Source Manager to add imagery")
+        )
+        self._add_layer_btn.setCursor(QtC.PointingHandCursor)
+        self._add_layer_btn.setMinimumHeight(32)
+        self._add_layer_btn.setStyleSheet(_BTN_GHOST)
+        self._add_layer_btn.clicked.connect(self._on_add_layer_clicked)
+        col.addSpacing(4)
+        col.addWidget(self._add_layer_btn)
 
         # 'or' divider: the structural device that splits the two real paths
         # (bring your own vs. try a sample), so the example reads as the
@@ -448,10 +501,21 @@ class DockChromeMixin:
         col.addLayout(div)
         col.addSpacing(2)
 
-        self._basemap_btn = QPushButton(tr("Try it on an example"))
+        # Generous primary: the empty canvas is the funnel's cliff, and this
+        # button is the one-click way off it, so it reads as an invitation
+        # (tall, bold, arrow), not a fallback. The label names what the click
+        # actually delivers - an image on the canvas - because "try an example"
+        # left users guessing. Glyph outside tr().
+        self._basemap_btn = QPushButton(tr("Load a sample image") + "  →")
         self._basemap_btn.setCursor(QtC.PointingHandCursor)
-        self._basemap_btn.setMinimumHeight(30)
-        self._basemap_btn.setStyleSheet(_BTN_GREEN_AUTH)
+        self._basemap_btn.setMinimumHeight(38)
+        self._basemap_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {BTN_GREEN}; color: #000000;"
+            " font-size: 14px; font-weight: 700; padding: 8px 16px;"
+            " border: none; border-radius: 6px; }"
+            f"QPushButton:hover {{ background-color: {BTN_GREEN_HOVER};"
+            " color: #000000; }"
+        )
         self._basemap_btn.clicked.connect(self._on_try_example_clicked)
         col.addWidget(self._basemap_btn)
 
@@ -459,16 +523,121 @@ class DockChromeMixin:
         outer.addStretch(1)
         return wrapper
 
+    def _sync_warning_actions(self) -> None:
+        """Point the hero's secondary button at the actual blocker. Two states,
+        re-decided every time the hero (re)shows via _update_layer_warning:
+
+        - Project holds NO layers: "Add a layer…" opens the Data Source
+          Manager (the imagery really is missing).
+        - Project holds layers but every one is unchecked: "Show my layers"
+          re-checks the topmost raster. Dumping this user into the full import
+          dialog when the data is already in the project was the complaint
+          that created this split.
+        """
+        from qgis.core import QgsProject
+
+        root = QgsProject.instance().layerTreeRoot()
+        has_layers = any(
+            node.layer() is not None for node in root.findLayers()
+        )
+        self._warning_show_layers_mode = has_layers
+        if has_layers:
+            self._warning_title.setText(tr("Your layers are hidden"))
+            self._add_layer_btn.setText(tr("Show my layers"))
+            self._add_layer_btn.setToolTip(
+                tr("Re-check your topmost layer in the Layers panel")
+            )
+            # A stale basemap-load error belongs to the no-layer state; the
+            # hidden-layers line replaces it.
+            self._warning_error_text_active = False
+            self._warning_text.setText(
+                tr("Nothing shows on the map until one is checked.")
+            )
+        else:
+            self._warning_title.setText(tr("Load your own imagery"))
+            self._add_layer_btn.setText(tr("Add a layer…"))
+            self._add_layer_btn.setToolTip(
+                tr("Open QGIS's Data Source Manager to add imagery")
+            )
+            if not self._warning_error_text_active:
+                self._warning_text.setText(
+                    tr("Any GeoTIFF, WMS or XYZ basemap.")
+                )
+
+    def _reveal_topmost_layer(self) -> None:
+        """Re-check the topmost raster in the layer tree (topmost layer of any
+        kind when no raster exists), plus any unchecked ancestor group so the
+        map actually shows pixels. The layerTreeRoot's visibilityChanged
+        binding then re-runs _update_layer_warning and the hero retires on
+        its own; nothing here touches the dock state directly."""
+        from qgis.core import QgsProject, QgsRasterLayer
+
+        root = QgsProject.instance().layerTreeRoot()
+        nodes = [n for n in root.findLayers() if n.layer() is not None]
+        if not nodes:
+            return
+        node = next(
+            (n for n in nodes if isinstance(n.layer(), QgsRasterLayer)),
+            nodes[0],
+        )
+        node.setItemVisibilityChecked(True)
+        parent = node.parent()
+        while parent is not None and parent is not root:
+            parent.setItemVisibilityChecked(True)
+            parent = parent.parent()
+
+    def _on_add_layer_clicked(self) -> None:
+        """The hero's secondary button: reveal the topmost hidden layer when
+        the project already has layers (see _sync_warning_actions), else open
+        QGIS's own Data Source Manager. QgisInterface exposes no action for
+        that dialog, and its ``openDataSourceManagerPage`` only landed in QGIS
+        3.30, below which this plugin still runs; the main window's
+        ``mActionDataSourceManager`` has carried it since QGIS 3.0, so it goes
+        first and the newer call is the fallback. When neither exists the
+        click does nothing: the example button below stays the way out."""
+        if self._warning_show_layers_mode:
+            self._reveal_topmost_layer()
+            return
+        try:
+            from qgis.utils import iface
+
+            action = iface.mainWindow().findChild(
+                QtC.QAction, "mActionDataSourceManager"
+            )
+            if action is not None:
+                action.trigger()
+                return
+            iface.openDataSourceManagerPage(None)
+        except Exception:
+            pass  # nosec B110  An old or headless QGIS must not raise here.
+
     def _on_try_example_clicked(self):
         """One-click unblock for the empty-canvas gate. The heavy lifting (add
         a basemap, frame the demo scene) lives in the plugin, which owns the
         canvas; the dock only asks for it and stays a pure state machine. The
-        user still draws their own zone and prompt from there."""
+        user still draws their own zone and prompt from there.
+
+        Behind the server kill switch: the demo pulls tiles from an outside
+        source, so it has to be switchable off without a release when that
+        source is down."""
+        if self._feature_blocked("demo"):
+            return
         self.try_example_requested.emit()
+
+    def _sync_demo_button(self) -> None:
+        """Hide the example button when the demo is switched off server-side,
+        so the first-run card offers only what actually works."""
+        from ...core.auth.activation_manager import is_feature_enabled
+
+        if getattr(self, "_basemap_btn", None) is not None:
+            self._basemap_btn.setVisible(is_feature_enabled("demo"))
 
     def show_basemap_error(self):
         """Surface a load failure in the warning box (called by the plugin when
-        neither the demo nor the fallback basemap could be added)."""
+        neither the demo nor the fallback basemap could be added). The flag
+        keeps _sync_warning_actions from overwriting it while the no-layer
+        state lasts."""
+        self._warning_error_text_active = True
         self._warning_text.setText(tr(
             "Couldn't load the example basemap. Check your internet "
             "connection, or add your own layer (GeoTIFF, WMS, XYZ)."
@@ -519,13 +688,21 @@ class DockChromeMixin:
         self._version_strip.setVisible(self._version_strip.count() > 0)
 
     def _sync_attach_buttons(self) -> None:
-        """Hide the + button at capacity, and mirror the reference count onto
-        both prompt containers so the Ref image control shows how many images
-        are attached (the link to the thumbnails above)."""
+        """Mirror the reference count onto both prompt containers, and hide
+        the Reference chip when the server switches references off.
+
+        Capacity no longer hides the chip (2026-08-03): it opens the
+        Reference panel now, a management surface where a full store is
+        exactly when the user wants in (edit notes, remove one). The
+        capacity ceiling itself is enforced at add time by the store."""
         if self._reference_widget is None:
             return
-        enabled = not self._reference_widget.at_capacity()
+        from ...core.auth.activation_manager import is_feature_enabled
+
+        enabled = is_feature_enabled("references")
         count = self._reference_widget.count()
+        if count > 0:
+            self._mark_guide_ai_touched()
         for container in (self._prompt_container, self._result_prompt_container):
             container.set_attach_enabled(enabled)
             container.set_reference_count(count)

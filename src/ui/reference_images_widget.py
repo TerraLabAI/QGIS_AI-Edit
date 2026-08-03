@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 
-from qgis.PyQt.QtCore import QSize, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import QEvent, QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QFont, QPixmap
 from qgis.PyQt.QtWidgets import (
     QApplication,
@@ -25,22 +25,88 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..core import qt_compat as QtC
+from ..core.config_store import get_export_dial
 from ..core.i18n import tr
 from ..core.reference_image_store import (
-    MAX_REFERENCES,
     ReferenceImage,
     ReferenceImageStore,
     ReferenceImageStoreError,
+    max_references,
 )
+from .dock.style import FOCUS_RING
 from .layer_renderer import load_transient_layers, render_layers_to_qimage
+from .panel_helpers import main_window_for_dialog
 
-THUMB_PX = 56
+REF_THUMB_PX = 56
+# Thumbnail frame = the image plus the 2px max border on each side, so the
+# focus ring has its own pixels and never lands under the image (same inset the
+# version strip's tiles use).
+_THUMB_BOX_PX = REF_THUMB_PX + 4
+# Remove button box, painted edge to edge: everything that removes the
+# reference is visible, and the box clears the WCAG 2.2 minimum target.
+_REMOVE_BTN_PX = 24
 # Free-tier reference-image cap. This is a UX/entitlement gate, not a storage
 # limit: the store keeps enforcing MAX_REFERENCES as the hard ceiling, and the
 # backend rejects free-tier generations carrying more than this many context
 # images. Adding past this on free tier surfaces an upsell, not an error.
-FREE_TIER_MAX_REFERENCES = 1
+FREE_TIER_MAX_REFERENCES = 3
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+
+
+def free_tier_max_references() -> int:
+    """Free-tier reference cap, server-tunable. Read at add-click time so a
+    config refresh applies in-session."""
+    return get_export_dial(
+        "entitlements.free_tier_max_references", FREE_TIER_MAX_REFERENCES
+    )
+
+
+def reference_add_reason(store: ReferenceImageStore, free_tier: bool) -> str:
+    """Single source of truth for the add gate, shared by the strip and the
+    Reference panel. Returns ``"ok"``, ``"free_limit"`` (free tier nudge), or
+    ``"hard_cap"`` (the MAX_REFERENCES ceiling). Free-tier is checked first so
+    a free user at the limit always sees the upsell, never the generic cap
+    message."""
+    count = store.count()
+    if free_tier and count >= free_tier_max_references():
+        return "free_limit"
+    if count >= max_references():
+        return "hard_cap"
+    return "ok"
+
+
+def reference_preview_title(record: ReferenceImage | None, is_markup: bool) -> str:
+    """Window title for a reference preview: the source name, with a Mark up
+    tag when the image is the Mark up composite."""
+    if record is None:
+        return tr("Reference image")
+    if is_markup:
+        return tr("Mark up reference")
+    name = (record.source_filename or "").strip()
+    if name:
+        return tr("Reference image: {name}").format(name=name)
+    return tr("Reference image")
+
+
+def open_reference_preview(anchor: QWidget, image_path: str, title: str) -> None:
+    """Open the modal reference preview, shared by the strip and the panel.
+
+    A null pixmap would open an empty, content-less modal that still blocks
+    the user (reject() in the dialog's __init__ doesn't stop a later exec()),
+    so bail before building it. Parented to the QGIS main window, not the
+    anchor: on macOS fullscreen a dialog parented to a widget inside a
+    (possibly floating) dock can open in a different Mission Control Space
+    and yank the user out of QGIS."""
+    if QPixmap(image_path).isNull():
+        return
+    parent_window = main_window_for_dialog(anchor)
+    dlg = _ImagePreviewDialog(image_path, parent_window, title=title)
+    dlg.exec()
+    # Parented to the long-lived main window, so free it explicitly instead
+    # of leaking one dialog plus its large scaled pixmap per open.
+    dlg.deleteLater()
+
+
 # Companions a shapefile needs alongside the .shp to load. .prj is technically
 # optional (no CRS = degraded render via the fallback CRS), so we don't gate on
 # it. Keep the two mandatory ones only.
@@ -62,15 +128,20 @@ def _missing_shapefile_companions(shp_path: str) -> list[str]:
 _THUMB_STYLE = (
     "QFrame { background: rgba(0, 0, 0, 0.0);"
     " border: 1px solid rgba(128, 128, 128, 0.3); border-radius: 4px; }"
+    f"QFrame:focus {{ border: 2px solid {FOCUS_RING}; }}"
 )
 
+# No margin: a QSS margin trims what is painted and not what is clickable, and
+# this button removes the reference. It used to leave 176 of its 576 px2
+# unpainted but still destructive, so the circle now fills the whole box.
 _REMOVE_BTN_STYLE = (
     "QToolButton { background: rgba(0, 0, 0, 0.55); color: white;"
-    " border: none; border-radius: 8px; font-weight: bold; font-size: 11px; }"
+    " border: none; border-radius: 12px; font-weight: bold; font-size: 13px;"
+    " margin: 0px; }"
     "QToolButton:hover { background: rgba(211, 47, 47, 0.85); }"
 )
 
-_BADGE_STYLE = (
+_THUMB_BADGE_STYLE = (
     "QLabel { background: rgba(0, 0, 0, 0.55); color: rgba(255, 255, 255, 0.9);"
     " border: none; border-top-left-radius: 3px; border-bottom-right-radius: 3px;"
     " font-size: 9px; font-weight: bold; padding: 0 2px; }"
@@ -88,18 +159,29 @@ class _ThumbWidget(QFrame):
         self._ref_id = record.id
         self._image_path = record.path
         self._readonly = False
-        self.setFixedSize(THUMB_PX + 2, THUMB_PX + 2)
+        self._hovered = False
+        self.setFixedSize(_THUMB_BOX_PX, _THUMB_BOX_PX)
         self.setStyleSheet(_THUMB_STYLE)
         self.setCursor(QtC.PointingHandCursor)
+        # Preview and removal both hang off this frame, so it has to take focus
+        # or neither is reachable without a mouse. TabFocus, never StrongFocus:
+        # a click-focusable frame pulls the caret out of the prompt box the user
+        # is writing in, and it parks focus on a Delete target they never asked
+        # for.
+        self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.setAccessibleName(tr("Reference image {n}").format(n=index))
+        self.setAccessibleDescription(
+            tr("Press Enter to preview it, Delete to remove it.")
+        )
 
         self._pixmap_label = QLabel(self)
-        self._pixmap_label.setGeometry(1, 1, THUMB_PX, THUMB_PX)
+        self._pixmap_label.setGeometry(2, 2, REF_THUMB_PX, REF_THUMB_PX)
         self._pixmap_label.setAlignment(QtC.AlignCenter)
         pixmap = QPixmap(record.path)
         if not pixmap.isNull():
             self._pixmap_label.setPixmap(
                 pixmap.scaled(
-                    QSize(THUMB_PX, THUMB_PX),
+                    QSize(REF_THUMB_PX, REF_THUMB_PX),
                     QtC.KeepAspectRatio,
                     QtC.SmoothTransformation,
                 )
@@ -109,21 +191,29 @@ class _ThumbWidget(QFrame):
         self._badge = QLabel(str(index), self)
         self._badge.setFixedSize(14, 14)
         self._badge.setAlignment(QtC.AlignCenter)
-        self._badge.setStyleSheet(_BADGE_STYLE)
+        self._badge.setStyleSheet(_THUMB_BADGE_STYLE)
         font = QFont()
         font.setPixelSize(9)
         font.setBold(True)
         self._badge.setFont(font)
-        self._badge.move(1, 1)
+        self._badge.move(2, 2)
 
-        # Remove button (top-right) - hidden by default, revealed on hover so
-        # the thumbnail looks clean while still letting the user delete it.
+        # Remove button (top-right) - hidden by default, revealed on hover or
+        # while the thumbnail has focus, so the strip looks clean and a keyboard
+        # user still sees that Delete does something. It stays out of the tab
+        # chain: a hidden widget cannot hold focus, and Delete on the focused
+        # thumbnail runs the same removal.
         self._remove_btn = QToolButton(self)
         self._remove_btn.setText("×")
-        self._remove_btn.setFixedSize(16, 16)
+        self._remove_btn.setFixedSize(_REMOVE_BTN_PX, _REMOVE_BTN_PX)
         self._remove_btn.setStyleSheet(_REMOVE_BTN_STYLE)
         self._remove_btn.setCursor(QtC.PointingHandCursor)
-        self._remove_btn.move(THUMB_PX + 2 - 16, 0)
+        self._remove_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._remove_btn.setAccessibleName(
+            tr("Remove reference image {n}").format(n=index)
+        )
+        self._remove_btn.setToolTip(tr("Remove this reference image"))
+        self._remove_btn.move(_THUMB_BOX_PX - _REMOVE_BTN_PX, 0)
         self._remove_btn.setVisible(False)
         self._remove_btn.clicked.connect(
             lambda: self.remove_clicked.emit(self._ref_id)
@@ -133,17 +223,65 @@ class _ThumbWidget(QFrame):
         """Hide the remove button so the thumbnail stays clickable for
         preview but cannot be deleted (used during generation)."""
         self._readonly = readonly
-        if readonly:
-            self._remove_btn.setVisible(False)
+        self._update_remove_visible()
+
+    def _update_remove_visible(self) -> None:
+        self._remove_btn.setVisible(
+            not self._readonly and (self._hovered or self.hasFocus())
+        )
 
     def enterEvent(self, event):  # noqa: N802
-        if not self._readonly:
-            self._remove_btn.setVisible(True)
+        self._hovered = True
+        self._update_remove_visible()
         super().enterEvent(event)
 
     def leaveEvent(self, event):  # noqa: N802
-        self._remove_btn.setVisible(False)
+        self._hovered = False
+        self._update_remove_visible()
         super().leaveEvent(event)
+
+    def focusInEvent(self, event):  # noqa: N802
+        self._update_remove_visible()
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event):  # noqa: N802
+        self._update_remove_visible()
+        super().focusOutEvent(event)
+
+    # Keys this thumbnail answers for itself, exactly the two its accessible
+    # description promises (plus Space, the standard activation twin). NOT
+    # Backspace: it is the most reflexive key there is while writing a prompt,
+    # and here it used to delete the reference with no dialog and no undo.
+    _PREVIEW_KEYS = (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter)
+    _REMOVE_KEYS = (Qt.Key.Key_Delete,)
+
+    def event(self, event):
+        # The dock owns QShortcut(Return/Enter, WindowShortcut) for Generate,
+        # and a window shortcut wins the keyboard race before any focused
+        # child's keyPressEvent runs. Accepting the ShortcutOverride is Qt's
+        # way to say "this key is mine while I hold focus", so Enter on a
+        # focused thumbnail previews the image the description promises instead
+        # of spending credits.
+        if event.type() == QEvent.Type.ShortcutOverride:
+            if event.key() in self._PREVIEW_KEYS + self._REMOVE_KEYS:
+                event.accept()
+                return True
+        return super().event(event)
+
+    def keyPressEvent(self, event):  # noqa: N802
+        key = event.key()
+        if key in self._PREVIEW_KEYS:
+            self.preview_requested.emit(self._image_path)
+            event.accept()
+            return
+        if key in self._REMOVE_KEYS:
+            if not self._readonly:
+                self.remove_clicked.emit(self._ref_id)
+            event.accept()
+            return
+        # Keys we don't handle: ignore, so Tab, Escape and the QGIS shortcuts
+        # keep working.
+        event.ignore()
 
     def mousePressEvent(self, event):  # noqa: N802
         # Only swallow the click for the remove button when it is actually
@@ -170,7 +308,10 @@ class _ImagePreviewDialog(QDialog):
             self.reject()
             return
 
-        screen = QApplication.primaryScreen()
+        # The screen this dialog will open on, not the primary one: a laptop
+        # panel next to a bigger main monitor gets a preview sized for the
+        # main monitor and opens with its edges off-screen.
+        screen = self.screen() or QApplication.primaryScreen()
         avail = screen.availableGeometry() if screen is not None else None
         max_w = int(avail.width() * 0.8) if avail is not None else 1280
         max_h = int(avail.height() * 0.8) if avail is not None else 800
@@ -193,6 +334,26 @@ class _ImagePreviewDialog(QDialog):
         # Click anywhere inside the dialog closes it.
         self.accept()
         super().mousePressEvent(event)
+
+
+class _HorizontalWheelScrollArea(QScrollArea):
+    """Scroll area that turns a plain vertical wheel into horizontal movement.
+
+    The thumbnail strip is one row high, so its vertical range is always zero.
+    A Mac trackpad emits a horizontal delta on a two-finger swipe and scrolls
+    it fine, but a Windows mouse wheel emits a vertical one, which Qt routes to
+    the empty vertical bar. Without this the references past the visible few
+    could not be reached at all with a wheel.
+    """
+
+    def wheelEvent(self, event):  # noqa: N802 - Qt naming
+        delta = event.angleDelta()
+        if delta.x() == 0 and delta.y() != 0:
+            bar = self.horizontalScrollBar()
+            bar.setValue(bar.value() - delta.y())
+            event.accept()
+            return
+        super().wheelEvent(event)
 
 
 class ReferenceImagesWidget(QWidget):
@@ -240,7 +401,7 @@ class ReferenceImagesWidget(QWidget):
         self._thumbs_row.setContentsMargins(0, 0, 0, 0)
         self._thumbs_row.setSpacing(6)
 
-        self._thumbs_scroll = QScrollArea(self)
+        self._thumbs_scroll = _HorizontalWheelScrollArea(self)
         self._thumbs_scroll.setWidget(self._thumbs_host)
         self._thumbs_scroll.setWidgetResizable(True)
         self._thumbs_scroll.setFrameShape(QtC.FrameNoFrame)
@@ -252,13 +413,13 @@ class ReferenceImagesWidget(QWidget):
             "QScrollArea > QWidget > QWidget { background: transparent; }"
         )
         self._thumbs_scroll.viewport().setAutoFillBackground(False)
-        # Hide both scrollbars - trackpad / mouse wheel still scroll the
-        # viewport horizontally. Cleaner than ScrollBarAsNeeded which
-        # paints a visible bar under the thumbnails.
+        # Hide both scrollbars - the wheel still scrolls the viewport
+        # horizontally (see _HorizontalWheelScrollArea). Cleaner than
+        # ScrollBarAsNeeded which paints a visible bar under the thumbnails.
         self._thumbs_scroll.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
         self._thumbs_scroll.setVerticalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
         # One row of thumbnails, no extra space for a scrollbar.
-        self._thumbs_scroll.setFixedHeight(THUMB_PX + 4)
+        self._thumbs_scroll.setFixedHeight(_THUMB_BOX_PX)
         # Width follows the parent; never push the dock outward.
         self._thumbs_scroll.setSizePolicy(
             QtC.SizePolicyExpanding, QtC.SizePolicyFixed
@@ -283,9 +444,10 @@ class ReferenceImagesWidget(QWidget):
         if self._markup_ref_id is not None:
             self._store.remove(self._markup_ref_id)
             self._markup_ref_id = None
-        if self._store.count() >= MAX_REFERENCES:
+        cap = max_references()
+        if self._store.count() >= cap:
             self._show_temp_error(
-                tr("Maximum {n} reference images reached").format(n=MAX_REFERENCES)
+                tr("Maximum {n} reference images reached").format(n=cap)
             )
             self._refresh()
             return
@@ -316,7 +478,7 @@ class ReferenceImagesWidget(QWidget):
         # Hard ceiling only. Drives attach-button visibility in the dock: the
         # free-tier gate deliberately does NOT hide the button, so clicking it
         # surfaces the upsell instead of silently doing nothing.
-        return self._store.count() >= MAX_REFERENCES
+        return self._store.count() >= max_references()
 
     def set_free_tier(self, free_tier: bool) -> None:
         """Tell the widget whether the current user is on the free tier.
@@ -328,16 +490,8 @@ class ReferenceImagesWidget(QWidget):
         self._free_tier = free_tier
 
     def _check_can_add(self) -> str:
-        """Single source of truth for the add gate. Returns a reason:
-        ``"ok"``, ``"free_limit"`` (free tier nudge), or ``"hard_cap"`` (the
-        MAX_REFERENCES ceiling). Free-tier is checked first so a free user at
-        the limit always sees the upsell, never the generic cap message."""
-        count = self._store.count()
-        if self._free_tier and count >= FREE_TIER_MAX_REFERENCES:
-            return "free_limit"
-        if count >= MAX_REFERENCES:
-            return "hard_cap"
-        return "ok"
+        """Add gate for this strip's tier state; see reference_add_reason."""
+        return reference_add_reason(self._store, self._free_tier)
 
     def add_paths(self, paths: list[str]) -> None:
         """Public entry point for the container's drop zone and attach button."""
@@ -354,7 +508,7 @@ class ReferenceImagesWidget(QWidget):
             return
         added = 0
         for image, name in items:
-            if self._store.count() >= MAX_REFERENCES:
+            if self._store.count() >= max_references():
                 break
             if image is None or image.isNull():
                 continue
@@ -387,7 +541,7 @@ class ReferenceImagesWidget(QWidget):
             return
         if reason == "hard_cap":
             self._show_temp_error(
-                tr("Maximum {n} reference images reached").format(n=MAX_REFERENCES)
+                tr("Maximum {n} reference images reached").format(n=max_references())
             )
             return
         # Parent on the top-level window (the dock), not self: this widget is
@@ -445,7 +599,7 @@ class ReferenceImagesWidget(QWidget):
             if reason == "hard_cap":
                 if not error_shown:
                     self._show_temp_error(
-                        tr("Maximum {n} reference images reached").format(n=MAX_REFERENCES)
+                        tr("Maximum {n} reference images reached").format(n=max_references())
                     )
                     error_shown = True
                 break
@@ -469,7 +623,7 @@ class ReferenceImagesWidget(QWidget):
             if reason == "hard_cap":
                 if not error_shown:
                     self._show_temp_error(
-                        tr("Maximum {n} reference images reached").format(n=MAX_REFERENCES)
+                        tr("Maximum {n} reference images reached").format(n=max_references())
                     )
                     error_shown = True
                 break
@@ -550,6 +704,11 @@ class ReferenceImagesWidget(QWidget):
         timer.start(4000)
         self._error_clear_timer = timer
 
+    def remove_reference(self, ref_id: str) -> None:
+        """Public removal entry point (used by the Reference panel), so every
+        remove funnels through this strip and refreshes both views."""
+        self._on_remove(ref_id)
+
     def _on_remove(self, ref_id: str) -> None:
         if ref_id == self._markup_ref_id:
             self._markup_ref_id = None
@@ -562,37 +721,8 @@ class ReferenceImagesWidget(QWidget):
         record = next(
             (r for r in self._store.list() if r.path == image_path), None
         )
-        if record is None:
-            return tr("Reference image")
-        if record.id == self._markup_ref_id:
-            return tr("Mark up reference")
-        name = (record.source_filename or "").strip()
-        if name:
-            return tr("Reference image: {name}").format(name=name)
-        return tr("Reference image")
+        is_markup = record is not None and record.id == self._markup_ref_id
+        return reference_preview_title(record, is_markup)
 
     def _open_preview(self, image_path: str) -> None:
-        # A null pixmap would open an empty, content-less modal that still
-        # blocks the user (reject() in the dialog's __init__ doesn't stop a
-        # later exec()), so bail before building it.
-        if QPixmap(image_path).isNull():
-            return
-        # Parent to QGIS main window, not to this widget. On macOS fullscreen,
-        # a dialog parented to a widget inside a (possibly floating) dock can
-        # open in a different Mission Control Space and yank the user out of
-        # QGIS. See AIEditDockWidget._main_window_for_dialog for the rationale.
-        parent_window = self
-        try:
-            from qgis.utils import iface
-            mw = iface.mainWindow() if iface is not None else None
-            if mw is not None:
-                parent_window = mw
-        except Exception:  # nosec B110 - fall back to self on any failure.
-            pass
-        dlg = _ImagePreviewDialog(
-            image_path, parent_window, title=self._build_preview_title(image_path)
-        )
-        dlg.exec()
-        # Parented to the long-lived main window, so free it explicitly instead
-        # of leaking one dialog plus its large scaled pixmap per open.
-        dlg.deleteLater()
+        open_reference_preview(self, image_path, self._build_preview_title(image_path))

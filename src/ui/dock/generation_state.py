@@ -8,12 +8,19 @@ from qgis.PyQt.QtGui import QTextCursor
 from qgis.PyQt.QtWidgets import QStyle
 
 from ...core import qt_compat as QtC
+from ...core import telemetry
+from ...core import telemetry_events as te
 from ...core.auth.activation_manager import has_consent
 from ...core.i18n import tr
 from ...core.prompts.loading_messages import get_phase_messages
 from ...core.prompts.prompt_presets import format_template_prompt
-from ..onboarding_hint import HINT_FIRST_STEPS, is_hint_dismissed
-from .style import _BTN_DISABLED, SUCCESS_TEXT
+from ..onboarding_hint import (
+    HINT_FIRST_STEPS,
+    HINT_GUIDE_AI,
+    dismiss_hint,
+    is_hint_dismissed,
+)
+from .style import SUCCESS_TEXT
 
 
 class DockGenerationStateMixin:
@@ -44,6 +51,7 @@ class DockGenerationStateMixin:
         self._refresh_resolution_triggers()
         self._update_generate_enabled()
         self._update_generate_button_text()
+        self._update_guide_ai_tip()
         # Defer focus: the canvas still has it from the just-finished mouse
         # release event. Setting focus synchronously gets clobbered as soon
         # as the canvas finishes its own focus handling. We fire twice
@@ -107,6 +115,43 @@ class DockGenerationStateMixin:
         if hint is not None:
             hint.setVisible(self._should_show_first_steps())
 
+    def _guide_ai_tip_visible(self) -> bool:
+        """Visibility gate for the "Guide the AI" tip: retires for the rest of
+        the session once the user has used a grounding feature (reference or
+        markup), or closed the tip. Read by DismissibleHint.reshow() so a
+        guidance reset never flashes the tip back for someone who just used
+        the features."""
+        return not is_hint_dismissed(HINT_GUIDE_AI)
+
+    def _mark_guide_ai_touched(self) -> None:
+        """The user used a grounding feature (a reference got attached, or the
+        markup chip or shortcut fired). They know it exists, so retire the tip
+        for the rest of the session (it is back next session, see
+        SESSION_ONLY_HINTS). This is a use, not a close, so it skips the close
+        telemetry."""
+        if is_hint_dismissed(HINT_GUIDE_AI):
+            return
+        hint = getattr(self, "_guide_ai_hint", None)
+        if hint is not None:
+            hint.hide()
+        dismiss_hint(HINT_GUIDE_AI)
+
+    def _on_guide_ai_dismissed(self) -> None:
+        telemetry.track(te.GUIDANCE_TIP_DISMISSED)
+
+    def _update_guide_ai_tip(self) -> None:
+        """Show the tip for a freshly drawn zone (a new edit group), unless
+        the user has already used a grounding feature or closed the tip for
+        good."""
+        hint = getattr(self, "_guide_ai_hint", None)
+        if hint is None:
+            return
+        if is_hint_dismissed(HINT_GUIDE_AI):
+            hint.hide()
+            return
+        hint.show()
+        telemetry.track(te.GUIDANCE_TIP_SHOWN)
+
     def set_launch_state(self):
         """LAUNCH: show the entry screen with the 'Launch AI Edit' button.
 
@@ -140,6 +185,16 @@ class DockGenerationStateMixin:
         self._result_prompt_input.clear()
         self._active_template_id = None
         self._active_template_name = None
+        # Dirty or never-synced cache on the home screen: the last history
+        # fetch failed or has not landed (the post-generation one included).
+        # Retry so the rows self-heal on the exact screen that shows them.
+        # Visibility gate: set_activated calls this from initGui too, where
+        # the dock may be closed, and an idle install must stay network-free
+        # (the deferred bootstrap covers the first real show).
+        if self.isVisible() and (
+            self._library_history_dirty or not self._library_history_loaded
+        ):
+            self.conversations_refresh_requested.emit()
         # Idle screen: reveal the first-steps guide banner (gate-checked).
         self._update_first_steps_visibility()
 
@@ -188,10 +243,6 @@ class DockGenerationStateMixin:
         # Left the idle screen: hide the first-steps guide banner.
         self._update_first_steps_visibility()
 
-    # Backwards-compat alias for callers that still use the old name.
-    def set_prompt_state(self):
-        self.set_launch_state()
-
     def set_generating(self, generating: bool):
         """Toggle generation state -- keep prompt visible but grayed out.
 
@@ -225,6 +276,10 @@ class DockGenerationStateMixin:
                 self._place_reference_widget("prompt")
                 if self._reference_widget is not None:
                     self._reference_widget.set_readonly(True)
+                # The Reference panel is a second view over the same store:
+                # lock it in step with the strip.
+                if getattr(self, "_reference_panel", None) is not None:
+                    self._reference_panel.set_readonly(True)
                 # Keep the version lineage visible under the progress bar while
                 # the next edit renders, but locked (no base switch mid-run).
                 self._place_version_strip("generating")
@@ -241,6 +296,8 @@ class DockGenerationStateMixin:
                 self._prompt_container.set_readonly(False)
                 if self._reference_widget is not None:
                     self._reference_widget.set_readonly(False)
+                if getattr(self, "_reference_panel", None) is not None:
+                    self._reference_panel.set_readonly(False)
                 self._consent_widget.setVisible(not has_consent() and self._zone_selected)
                 self._generate_btn.setVisible(True)
                 self._exit_btn.setVisible(True)
@@ -300,18 +357,6 @@ class DockGenerationStateMixin:
                 self._progress_timer.timeout.connect(self._animate_progress)
             if not self._progress_timer.isActive():
                 self._progress_timer.start()
-
-    def set_generate_loading(self, loading: bool):
-        """Toggle loading state on the Generate button during canvas export."""
-        if loading:
-            self._generate_btn_original_text = self._generate_btn.text()
-            self._generate_btn.setText(tr("Preparing..."))
-            self._generate_btn.setEnabled(False)
-            self._generate_btn.setStyleSheet(_BTN_DISABLED)
-        else:
-            text = getattr(self, "_generate_btn_original_text", tr("Generate"))
-            self._generate_btn.setText(text)
-            self._update_generate_style()
 
     def set_progress_message(self, message: str, percentage: int = -1):
         """Update the progress label and bar during generation with smooth animation."""

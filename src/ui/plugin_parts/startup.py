@@ -8,6 +8,8 @@ from qgis.PyQt.QtCore import Qt, QTimer
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
+from ...core.config_store import get_export_copy
+from ...core.errors import TRANSIENT_SERVER_ERROR_CODES
 from ...core.i18n import tr
 from ...core.logger import log_debug, log_warning
 from ...workers.generic_request_task import GenericRequestTask
@@ -92,7 +94,7 @@ class StartupMixin:
         )
         self._export_config_loader.succeeded.connect(self._on_export_config_loaded)
         self._export_config_loader.failed.connect(
-            lambda msg, code: self._on_export_config_failed(f"Server error: {msg}")
+            lambda msg, code: self._on_export_config_failed(msg, code)
         )
         QgsApplication.taskManager().addTask(self._export_config_loader)
 
@@ -147,6 +149,11 @@ class StartupMixin:
             store = get_store()
             if store is not None:
                 store.set_activation_config(result)
+            # The kill switches were read when the dock was built, before this
+            # answer existed. Re-read them now, or a feature switched off
+            # server-side stays visible until the next activation refresh.
+            if self._dock_widget is not None:
+                self._dock_widget.refresh_feature_visibility()
 
     def _on_bootstrap_loaded(self, payload):
         if not isinstance(payload, dict) or "export_config" not in payload:
@@ -221,15 +228,24 @@ class StartupMixin:
         """Set global export config from server response."""
         # Connection works again: re-arm the one-shot connectivity notice.
         self._connectivity_notice_shown = False
+        # The client returns whatever valid JSON arrived, so a list or a string
+        # gets this far. This runs on the GUI thread, where an exception kills
+        # the session, and a bad shape must leave the config already in place
+        # rather than replace it with something no reader can use.
+        if not isinstance(config, dict):
+            log_warning("Export config: unexpected shape, keeping the previous one")
+            return
         set_server_config(config)
-        costs = config.get("resolution_credit_costs", {})
+        costs = config.get("resolution_credit_costs")
         if self._dock_widget:
-            self._dock_widget.set_resolution_credit_costs(costs)
+            self._dock_widget.set_resolution_credit_costs(costs if isinstance(costs, dict) else {})
 
-    def _on_export_config_failed(self, error_message: str):
-        """Handle export config loading failure (fallback path)."""
-        log_warning(f"Export config failed to load: {error_message}")
-        self._show_connectivity_notice()
+    def _on_export_config_failed(self, error_message: str, code: str = ""):
+        """Handle export config loading failure (fallback path). The code is
+        forwarded so a server-side 5xx shows the 'service unavailable' copy
+        instead of blaming the user's connection."""
+        log_warning(f"Export config failed to load: {error_message} (code={code})")
+        self._show_connectivity_notice(code)
 
     def _show_connectivity_notice(self, code: str = "") -> None:
         """Show ONE transient, dismissible 'no connection' notice per startup
@@ -241,8 +257,23 @@ class StartupMixin:
             return
         self._connectivity_notice_shown = True
         from qgis.core import Qgis
+        # A server-side failure (5xx, rate limit) is not the user's connection:
+        # blaming their internet sends them debugging the wrong side.
+        code_up = (code or "").strip().upper()
+        if code_up in TRANSIENT_SERVER_ERROR_CODES:
+            banner = get_export_copy(
+                "connectivity.server_down",
+                tr("Service temporarily unavailable, please retry shortly."),
+                escape=True,
+            )
+        else:
+            banner = get_export_copy(
+                "connectivity.offline",
+                tr("AI Edit could not reach the server. Some features need an internet connection."),
+                escape=True,
+            )
         self._notify(
-            tr("AI Edit could not reach the server. Some features need an internet connection."),
+            banner,
             level=Qgis.MessageLevel.Warning,
             duration=8,
         )
@@ -274,6 +305,7 @@ class StartupMixin:
         self._deactivate_selection_tool()
         self._clear_selection_rectangle()
         self._selected_extent = None
+        self._selected_polygon = None
         if self._map_tool:
             self._map_tool.set_has_zone(False)
         # Disarm swipe: without the dock the toggle is unreachable.

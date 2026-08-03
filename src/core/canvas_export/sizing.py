@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from qgis.core import QgsMapSettings, QgsRectangle
 
-# Map user-facing resolution labels to target pixel counts (longest side)
-_RESOLUTION_TARGET_PX = {"1K": 1024, "2K": 2048, "4K": 4096}
+from ..config_store import ServerDialMap, get_export_dial
+
+# Map user-facing resolution labels to target pixel counts (longest side).
+# Per-entry server override via export-config `resolution_targets_px`.
+_RESOLUTION_TARGET_PX = ServerDialMap(
+    "resolution_targets_px", {"1K": 1024, "2K": 2048, "4K": 4096}
+)
 
 
 def _aspect_dims(
@@ -42,7 +47,8 @@ def _budget_dims(
     ``max_dim`` proportionally so the aspect is preserved even when clamped.
     """
     ext_ratio = extent.width() / extent.height()
-    budget = (float(ref) * _INPUT_BUDGET_HEADROOM) ** 2
+    headroom = get_export_dial("input_budget_headroom", _INPUT_BUDGET_HEADROOM)
+    budget = (float(ref) * headroom) ** 2
     out_h = (budget / ext_ratio) ** 0.5
     out_w = out_h * ext_ratio
 

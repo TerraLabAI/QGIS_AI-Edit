@@ -16,12 +16,19 @@ The marks are rendered directly onto the image sent to the model; the
 pre-prompt treats hand-drawn strokes / arrows / circles as pointers to
 where the edit applies and removes them from the result. The default
 color is a neon magenta that is never a map class color.
+
+The click-per-vertex Line tool lives in the sibling module
+``markup_line_tool.py`` (its ``LineMapTool`` still subclasses
+``_MarkupBaseMapTool`` from here), split out to keep both files in the
+repo's line-count comfort zone. Import it directly from its own module,
+the same convention as ``eyedropper_tool.py`` / ``selection_map_tool.py``.
 """
 from __future__ import annotations
 
 import math
 
 from qgis.core import (
+    QgsApplication,
     QgsFeature,
     QgsGeometry,
     QgsLineSymbol,
@@ -39,6 +46,7 @@ from qgis.PyQt.QtCore import QObject, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QKeySequence
 
 from ...core import qt_compat as QtC
+from ...core.config_store import get_export_dial, get_export_dial_str
 from ...core.logger import log_debug
 from ..layer_groups import MARKUP_LAYER_PROPERTY, drop_from_snapping
 
@@ -66,6 +74,23 @@ STROKE_WIDTH_PX = 4.5
 # Red is avoided on purpose - the segmentation mode reads a pure-red fill as
 # "color this target red #FF0000", so a red mark would be misread as a fill.
 MARKUP_DEFAULT_COLOR = (230, 0, 230)
+
+_HEX_COLOR_DIGITS = frozenset("0123456789abcdefABCDEF")
+
+
+def markup_stroke_width_px() -> float:
+    """Server-tunable stroke width, read at draw time so a config that lands
+    mid-session applies to the next mark."""
+    return get_export_dial("markup.stroke_width_px", STROKE_WIDTH_PX)
+
+
+def markup_default_color() -> tuple[int, int, int]:
+    """Server-tunable default mark color, served as "#RRGGBB". Anything that
+    is not exactly a 6-digit hex color reads as the shipped magenta."""
+    served = get_export_dial_str("markup.default_color", "").lstrip("#")
+    if len(served) != 6 or any(c not in _HEX_COLOR_DIGITS for c in served):
+        return MARKUP_DEFAULT_COLOR
+    return (int(served[0:2], 16), int(served[2:4], 16), int(served[4:6], 16))
 
 
 def _stroke_color_value(color: QColor) -> str:
@@ -95,6 +120,11 @@ class MarkupLayerManager(QObject):
         # Selected-zone rectangle (canvas/map CRS). When set, every committed
         # mark is clipped to it; a mark fully outside is rejected.
         self._clip_zone: QgsRectangle | None = None
+        # Selected-zone polygon (canvas/map CRS), when the zone was drawn with
+        # the polygon tool. When present, clipping uses this shape instead of
+        # the bbox, so a mark inside the bbox but outside the polygon is
+        # rejected too. None on rect-only paths (history restore, MCP/dev).
+        self._clip_polygon: QgsGeometry | None = None
         # Drop our layer reference whenever QGIS tears it down so we never
         # call methods on a dead C++ wrapper.
         project = QgsProject.instance()
@@ -188,8 +218,8 @@ class MarkupLayerManager(QObject):
     def _apply_style(layer: QgsVectorLayer) -> None:
         symbol = QgsLineSymbol.createSimple(
             {
-                "line_color": _stroke_color_value(QColor(*MARKUP_DEFAULT_COLOR)),
-                "line_width": str(STROKE_WIDTH_PX),
+                "line_color": _stroke_color_value(QColor(*markup_default_color())),
+                "line_width": str(markup_stroke_width_px()),
                 "line_width_unit": "Pixel",
                 "capstyle": "round",
                 "joinstyle": "round",
@@ -205,6 +235,61 @@ class MarkupLayerManager(QObject):
     def layer(self) -> QgsVectorLayer | None:
         return self._layer
 
+    def markup_will_render(self) -> bool:
+        """Main-thread predicate mirroring the render-set/visibility check the
+        off-thread export applies in core/canvas_export/render.py: true only
+        when the layer is alive AND part of the canvas's current render set
+        (checked and visible in the layer tree). Call this right before
+        submitting a generation, never after, since the export runs later on
+        a worker thread where a fresh check is too late for the UI."""
+        if not self._alive():
+            return False
+        try:
+            layer_id = self._layer.id()
+        except RuntimeError:
+            self._layer = None
+            return False
+        render_ids = {lyr.id() for lyr in self._canvas.mapSettings().layers()}
+        return layer_id in render_ids
+
+    def show_layer(self) -> bool:
+        """Re-show the layer so it renders again: check its own and its
+        parent groups' visibility boxes. Returns whether the layer now
+        renders. False when there is nothing left to show, either the
+        reference is stale or the layer's node was removed from the tree
+        entirely: QGIS deletes a layer with no tree node on the next
+        event-loop turn regardless of a fresh re-insert, so a node-less
+        layer here is already unrecoverable, not a lesser case to patch
+        around."""
+        if not self._alive():
+            return False
+        root = QgsProject.instance().layerTreeRoot()
+        node = root.findLayer(self._layer.id())
+        if node is None:
+            return False
+        ancestor = node
+        while ancestor is not None and ancestor is not root:
+            try:
+                ancestor.setItemVisibilityChecked(True)
+            except RuntimeError:
+                break
+            ancestor = ancestor.parent()
+        try:
+            self._canvas.refreshAllLayers()
+        except RuntimeError:  # nosec B110 - C++ canvas gone
+            pass
+        # The layer tree -> canvas bridge updates the canvas's render set
+        # through a queued connection (QGIS coalesces rapid visibility
+        # toggles into one canvas rebuild per event-loop turn). Drain it here
+        # so the check right below, and the one the caller makes right after
+        # to decide whether to submit, both see the layer we just re-showed
+        # instead of a stale render set.
+        try:
+            QgsApplication.instance().processEvents()
+        except Exception:  # nosec B110 - best-effort sync, never fatal
+            pass
+        return self.markup_will_render()
+
     def annotation_count(self) -> int:
         if not self._alive():
             return 0
@@ -216,17 +301,33 @@ class MarkupLayerManager(QObject):
 
     # --- commit / undo / clear -----------------------------------------
 
-    def set_clip_zone(self, rect: QgsRectangle | None) -> None:
-        """Constrain marks to the selected zone (canvas/map CRS). Pass None to
-        lift the constraint (no zone selected)."""
+    def set_clip_zone(
+        self, rect: QgsRectangle | None, polygon: QgsGeometry | None = None
+    ) -> None:
+        """Constrain marks to the selected zone (canvas/map CRS). Pass None for
+        both to lift the constraint (no zone selected).
+
+        ``polygon``, when given, is the actual clip shape: a mark inside
+        ``rect`` but outside the polygon is rejected too. ``rect`` still tracks
+        the bbox for callers that only ever pass a rectangle (history restore,
+        MCP/dev extents), which keeps the plain bbox clip they have always had.
+        """
         self._clip_zone = QgsRectangle(rect) if rect is not None else None
+        self._clip_polygon = (
+            QgsGeometry(polygon) if polygon is not None and not polygon.isEmpty() else None
+        )
 
     def _clip_to_zone(self, geometry: QgsGeometry) -> QgsGeometry | None:
         """Clip a mark to the selected zone: overflow is cut at the zone edge.
-        Returns None when the mark lies entirely outside the zone."""
-        if self._clip_zone is None or self._clip_zone.isEmpty():
+        Uses the polygon when one is set, the bbox otherwise. Returns None when
+        the mark lies entirely outside the zone."""
+        if self._clip_polygon is not None:
+            clip_shape = self._clip_polygon
+        elif self._clip_zone is not None and not self._clip_zone.isEmpty():
+            clip_shape = QgsGeometry.fromRect(self._clip_zone)
+        else:
             return geometry
-        clipped = geometry.intersection(QgsGeometry.fromRect(self._clip_zone))
+        clipped = geometry.intersection(clip_shape)
         if clipped is None or clipped.isEmpty():
             return None
         # The store layer is MultiLineString; keep the clipped result that type.
@@ -343,7 +444,7 @@ class _MarkupBaseMapTool(QgsMapTool):
         self._canvas = canvas
         self._manager = manager
         self._shape = shape
-        self._color = QColor(*MARKUP_DEFAULT_COLOR)
+        self._color = QColor(*markup_default_color())
         self._rubber: QgsRubberBand | None = None
         self._active = False
         self.setCursor(QtC.CrossCursor)
@@ -356,7 +457,7 @@ class _MarkupBaseMapTool(QgsMapTool):
         rb = QgsRubberBand(self._canvas, gtype)
         rb.setStrokeColor(QColor(self._color))
         rb.setColor(QColor(self._color))
-        rb.setWidth(STROKE_WIDTH_PX)
+        rb.setWidth(markup_stroke_width_px())
         return rb
 
     def _discard_rubber(self) -> None:
@@ -393,7 +494,28 @@ class _MarkupBaseMapTool(QgsMapTool):
 
 
 class PencilMapTool(_MarkupBaseMapTool):
-    """Freehand stroke: capture cursor positions during drag, commit on release."""
+    """Freehand stroke: capture cursor positions during drag, commit on release.
+
+    The raw cursor path carries hand tremor, which used to reach the guidance
+    image as a shaky line. Every build cleans the stroke (see _smoothed_points):
+    a moving average low-passes the jitter, then a light simplify drops the
+    redundant vertices. Both the live preview and the committed geometry run
+    through it, so what the user draws, sees, and sends is the same clean line.
+    """
+
+    # Tremor cleanup dials. SMOOTH_WINDOW is the half-width of the moving
+    # average, in samples: each output point is the mean of up to 2*w+1 raw
+    # points centred on it, so per-sample shake cancels while a deliberate
+    # curve (which moves the same way across many samples) survives. Measured
+    # on synthetic strokes, w=4 takes ~3px of tremor down to ~0.85px along the
+    # stroke and leaves a real arc (40px) or a sharp corner (30px) intact. A
+    # plain moving average beats Chaikin here: Chaikin interpolates between
+    # vertices, so it barely touches high-frequency tremor (3.2px to 3.85px in
+    # the same test) and multiplies the vertex count into the hundreds.
+    # SIMPLIFY_PX then trims the smoothed run back to a lean polyline; it is in
+    # screen pixels (via mapUnitsPerPixel) so it holds at any zoom.
+    _SMOOTH_WINDOW = 4
+    _SIMPLIFY_PX = 1.2
 
     def __init__(self, canvas: QgsMapCanvas, manager: MarkupLayerManager) -> None:
         super().__init__(canvas, manager, shape="pencil")
@@ -429,13 +551,48 @@ class PencilMapTool(_MarkupBaseMapTool):
         self._points = []
 
     def _build_geometry(self) -> QgsGeometry | None:
-        if len(self._points) < 2:
+        pts = self._smoothed_points()
+        if pts is None:
             return None
-        line = QgsGeometry.fromPolylineXY(self._points)
+        line = QgsGeometry.fromPolylineXY(pts)
         if line.isEmpty():
             return None
-        # Simplify to drop 1000-vertex jitter strokes.
-        return line.simplify(self._canvas.mapUnitsPerPixel() * 0.6)
+        # Light Douglas-Peucker to drop the near-collinear points the average
+        # leaves behind. Falls back to the smoothed line if simplify empties it.
+        simplified = line.simplify(self._canvas.mapUnitsPerPixel() * self._SIMPLIFY_PX)
+        if simplified is None or simplified.isEmpty():
+            return line
+        return simplified
+
+    def _smoothed_points(self) -> list[QgsPointXY] | None:
+        """Moving-average low-pass over the raw cursor path.
+
+        Each point becomes the mean of its neighbours within SMOOTH_WINDOW, so
+        per-sample tremor cancels while a deliberate curve is kept. The window
+        stays centred on the point and shrinks near the ends (half-width 0 at
+        the first and last sample), which does two things: the average never
+        leans to one side and drags the line inward, and the two endpoints keep
+        their exact position, so the stroke still starts and ends on the cursor.
+        Under four points there is nothing to average, so the raw path passes
+        through.
+        """
+        n = len(self._points)
+        if n < 2:
+            return None
+        if n < 4:
+            return list(self._points)
+        smoothed: list[QgsPointXY] = []
+        for i in range(n):
+            half = min(self._SMOOTH_WINDOW, i, n - 1 - i)
+            window = self._points[i - half:i + half + 1]
+            count = len(window)
+            smoothed.append(
+                QgsPointXY(
+                    sum(p.x() for p in window) / count,
+                    sum(p.y() for p in window) / count,
+                )
+            )
+        return smoothed
 
 
 class ArrowMapTool(_MarkupBaseMapTool):

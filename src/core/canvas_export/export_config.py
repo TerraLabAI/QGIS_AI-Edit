@@ -24,16 +24,35 @@ def _get_server_config() -> dict | None:
     return store.get_server_export_config() if store is not None else None
 
 
+def _pixel_count(value) -> int | None:
+    """A served pixel count as a positive int, or None when unusable.
+
+    Both readers below feed integer pixel arithmetic and QSize, so a string, a
+    bool, a negative or a fractional number must not reach them: a served
+    ``align: "8"`` would raise inside the sizing maths instead of on the path
+    that already handles a missing config. An integral float is accepted and
+    coerced, like every other numeric dial. Unusable reads the same as absent,
+    which is the behaviour the export path already carries.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if isinstance(value, float):
+        if not value.is_integer():
+            return None
+        value = int(value)
+    return value if value > 0 else None
+
+
 def _get_max_dimension() -> int | None:
     """Get max dimension from server config. Returns None if unavailable."""
     cfg = _get_server_config()
-    return cfg.get("max_dimension") if cfg else None
+    return _pixel_count(cfg.get("max_dimension")) if cfg else None
 
 
 def _get_align() -> int | None:
     """Get pixel alignment from server config. Returns None if unavailable."""
     cfg = _get_server_config()
-    return cfg.get("align") if cfg else None
+    return _pixel_count(cfg.get("align")) if cfg else None
 
 
 # Input image encoding. The canvas render is photographic/satellite content;

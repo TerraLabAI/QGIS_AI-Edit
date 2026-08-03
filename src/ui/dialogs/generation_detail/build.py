@@ -29,19 +29,20 @@ from ....core.prompts.prompt_presets import format_template_prompt, lookup_templ
 from ...before_after_slider import BeforeAfterSlider
 from .styles import (
     _ACTION_BTN,
-    _BADGE_STYLE,
     _CHIP_CAPTION,
     _CHIP_STYLE,
     _CHIP_VALUE,
     _COPY_BTN,
     _COPY_SVG,
+    _DANGER_BTN,
+    _DETAIL_BADGE_STYLE,
+    _DETAIL_SECTION_STYLE,
+    _DETAIL_TITLE_STYLE,
     _DOWNLOAD_SVG,
     _FS_BTN,
     _PRIMARY_BTN,
     _PROMPT_STYLE,
-    _SECTION_STYLE,
     _SEPARATOR,
-    _TITLE_STYLE,
 )
 from .widgets import _AspectBox, _RefThumb
 
@@ -63,6 +64,12 @@ class BuildUiMixin:
     """Builds the dialog layout: slider pane, info panel, footer actions."""
 
     def _resolve_title(self, src: dict) -> str:
+        # Session mode: the session's own title (a user rename, else its
+        # oldest prompt) beats anything derived from the cover job.
+        if self._session is not None:
+            title = " ".join(str(self._session.get("title") or "").split())
+            if title:
+                return title
         if not self._is_generation:
             return str(src.get("label") or "").strip() or tr("Template")
         # A generation is "a template" only when its prompt still matches one
@@ -146,7 +153,7 @@ class BuildUiMixin:
         badge_row = QHBoxLayout()
         badge_row.setContentsMargins(0, 0, 0, 0)
         badge = QLabel(self._badge_text())
-        badge.setStyleSheet(_BADGE_STYLE)
+        badge.setStyleSheet(_DETAIL_BADGE_STYLE)
         badge_row.addWidget(badge)
         badge_row.addStretch(1)
         col.addLayout(badge_row)
@@ -154,7 +161,7 @@ class BuildUiMixin:
         title = QLabel(self._title_text)
         title.setWordWrap(True)
         title.setTextFormat(QtC.PlainText)
-        title.setStyleSheet(_TITLE_STYLE)
+        title.setStyleSheet(_DETAIL_TITLE_STYLE)
         col.addWidget(title)
 
         col.addWidget(self._build_prompt_block())
@@ -193,6 +200,8 @@ class BuildUiMixin:
         return has_images
 
     def _badge_text(self) -> str:
+        if self._session is not None:
+            return tr("Session")
         if self._is_generation:
             return tr("Your result")
         src = self._preset or {}
@@ -208,7 +217,7 @@ class BuildUiMixin:
 
     def _section_label(self, text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet(_SECTION_STYLE)
+        lbl.setStyleSheet(_DETAIL_SECTION_STYLE)
         return lbl
 
     def _build_prompt_block(self) -> QWidget:
@@ -305,6 +314,11 @@ class BuildUiMixin:
         job = self._job
         chips: list[tuple[str, str]] = []
 
+        # Session mode: how many generations the session holds, first.
+        if self._session is not None:
+            count = int(self._session.get("count") or 1)
+            chips.append((tr("GENERATIONS"), str(count)))
+
         res = str(job.get("resolution") or "").strip()
         w, h = job.get("output_w"), job.get("output_h")
         if isinstance(w, int) and isinstance(h, int) and w > 0 and h > 0:
@@ -335,6 +349,8 @@ class BuildUiMixin:
         return host
 
     def _build_actions(self):
+        if self._session is not None:
+            return self._build_session_actions()
         if not self._is_generation:
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
@@ -397,6 +413,42 @@ class BuildUiMixin:
         use_btn.setEnabled(can_apply)
         use_btn.clicked.connect(self._on_use)
         row.addWidget(use_btn, 1)
+        return row
+
+    def _build_session_actions(self):
+        """Session footer: Rename (only for server-known sessions) and Delete
+        as quiet secondaries, then the one filled primary, Resume. Each button
+        only records an outcome (see the dialog's _on_*_session handlers);
+        the library maps outcomes onto its session_* signals."""
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+
+        # Same gate as the old row menu: renaming needs a server session id.
+        if (self._session or {}).get("session_id"):
+            rename_btn = QPushButton(tr("Rename"))
+            rename_btn.setStyleSheet(_ACTION_BTN)
+            rename_btn.setCursor(QtC.PointingHandCursor)
+            rename_btn.clicked.connect(self._on_rename_session)
+            row.addWidget(rename_btn)
+
+        delete_btn = QPushButton(tr("Delete"))
+        delete_btn.setStyleSheet(_DANGER_BTN)
+        delete_btn.setCursor(QtC.PointingHandCursor)
+        delete_btn.clicked.connect(self._on_delete_session)
+        row.addWidget(delete_btn)
+
+        resume_btn = QPushButton(tr("Resume this session"))
+        resume_btn.setStyleSheet(_PRIMARY_BTN)
+        resume_btn.setMinimumHeight(38)
+        resume_btn.setCursor(QtC.PointingHandCursor)
+        resume_btn.setToolTip(
+            tr("Reopen this session in AI Edit: its prompt, reference images, "
+               "and the same map zone.")
+        )
+        resume_btn.setEnabled(not self._browse_only)
+        resume_btn.clicked.connect(self._on_resume_session)
+        row.addWidget(resume_btn, 1)
         return row
 
     def _build_download_group(self) -> QWidget | None:

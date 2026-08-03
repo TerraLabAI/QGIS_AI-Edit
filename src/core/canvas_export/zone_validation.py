@@ -10,6 +10,7 @@ from qgis.core import (
     QgsRectangle,
 )
 
+from ..config_store import get_export_dial
 from ..errors import AIEditError, ErrorCode
 from ..i18n import tr
 
@@ -95,11 +96,12 @@ def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> N
                     "AI Edit does not support that yet. Split your zone into two."
                 ),
             )
-        if coords_in_range and max_abs_lat > _POLAR_ABS_LAT_DEG:
+        polar_limit = get_export_dial("zone.polar_abs_lat_deg", _POLAR_ABS_LAT_DEG)
+        if coords_in_range and max_abs_lat > polar_limit:
             raise AIEditError(
                 ErrorCode.POLAR,
                 tr(
                     "Zone is too close to a pole (above {limit} degrees latitude). "
                     "AI Edit cannot estimate ground resolution there."
-                ).format(limit=int(_POLAR_ABS_LAT_DEG)),
+                ).format(limit=int(polar_limit)),
             )

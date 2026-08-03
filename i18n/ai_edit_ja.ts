@@ -4,6 +4,106 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>This prompt is not allowed: its content goes against our rules.</source>
+        <translation>このプロンプトは許可されていません。内容が当社のルールに違反しています。</translation>
+    </message>
+    <message>
+        <source>You have not been charged.</source>
+        <translation>料金は発生していません。</translation>
+    </message>
+    <message>
+        <source>Read our content rules</source>
+        <translation>コンテンツルールを読む</translation>
+    </message>
+    <message>
+        <source>Very large zone (about {km2} km²): the AI keeps only broad shapes at this size. Select a smaller area for object-level edits.</source>
+        <translation>非常に広いゾーン（約 {km2} km²）: このサイズでは AI は大まかな形状しか保持できません。オブジェクト単位の編集には、より小さい範囲を選択してください。</translation>
+    </message>
+    <message>
+        <source>Sessions</source>
+        <translation>セッション</translation>
+    </message>
+    <message>
+        <source>Search your sessions</source>
+        <translation>セッションを検索</translation>
+    </message>
+    <message>
+        <source>No session matches.</source>
+        <translation>一致するセッションがありません。</translation>
+    </message>
+    <message>
+        <source>Loading older sessions</source>
+        <translation>古いセッションを読み込み中</translation>
+    </message>
+    <message>
+        <source>Delete this session?</source>
+        <translation>このセッションを削除しますか？</translation>
+    </message>
+    <message>
+        <source>Deleting session</source>
+        <translation>セッションを削除しています</translation>
+    </message>
+    <message>
+        <source>Session deleted.</source>
+        <translation>セッションを削除しました。</translation>
+    </message>
+    <message>
+        <source>Rename session</source>
+        <translation>セッション名を変更</translation>
+    </message>
+    <message>
+        <source>Renaming session</source>
+        <translation>セッション名を変更しています</translation>
+    </message>
+    <message>
+        <source>No internet connection. This version was made on another device or cleaned from this disk, so its image must be downloaded. Reconnect and click the version again.</source>
+        <translation>インターネット接続がありません。このバージョンは別のデバイスで作成されたか、このディスクから削除されているため、画像のダウンロードが必要です。再接続してから、もう一度バージョンをクリックしてください。</translation>
+    </message>
+    <message>
+        <source>{ref} and {markup} show the AI what you mean. The {library} holds ready-made prompts. New here? Open the tutorial with the {icon} button below.</source>
+        <translation>{ref}と{markup}で、AI に意図を伝えられます。{library}には既成のプロンプトがあります。初めてですか？下の {icon} ボタンからチュートリアルを開いてください。</translation>
+    </message>
+    <message>
+        <source>Click on the map to outline the area to edit.</source>
+        <translation>地図をクリックして編集する範囲を囲みます。</translation>
+    </message>
+    <message>
+        <source>Extract</source>
+        <translation>抽出</translation>
+    </message>
+    <message>
+        <source>Repair</source>
+        <translation>修復</translation>
+    </message>
+    <message>
+        <source>Show a project: renders, plans, simulations, before/after</source>
+        <translation>プロジェクトを見せる：レンダリング、計画図、シミュレーション、ビフォー/アフター</translation>
+    </message>
+    <message>
+        <source>Extract data: detect, segment, count, map</source>
+        <translation>データを抽出：検出、セグメント、カウント、マッピング</translation>
+    </message>
+    <message>
+        <source>Repair imagery: sharpen, upscale, fix gaps and seams</source>
+        <translation>画像を修復：シャープ化、アップスケール、欠損と継ぎ目の修正</translation>
+    </message>
+    <message>
+        <source>Our hand-picked selection to get you started.</source>
+        <translation>はじめに試したいおすすめ集。</translation>
+    </message>
+    <message>
+        <source>Categories</source>
+        <translation>カテゴリ</translation>
+    </message>
+    <message>
+        <source>Guide the AI (optional)</source>
+        <translation>AIをガイドする（任意）</translation>
+    </message>
+    <message>
+        <source>Add a reference image, or draw on the map to show where to act. You get a more reliable, less random result.</source>
+        <translation>参照画像を追加するか、地図上に描画して操作する場所を示してください。より信頼性が高く、ランダム性の少ない結果が得られます。</translation>
+    </message>
+    <message>
         <source>Analyze</source>
         <translation>分析</translation>
     </message>
@@ -32,12 +132,56 @@
         <translation>人気</translation>
     </message>
     <message>
+        <source>Featured</source>
+        <translation>注目</translation>
+    </message>
+    <message>
+        <source>Starred first, then your latest generations</source>
+        <translation>お気に入りを先に、次に最新の生成結果</translation>
+    </message>
+    <message>
+        <source>Your generations will live here. Run a Top pick to get started.</source>
+        <translation>生成結果はここに表示されます。まずはおすすめを実行してみましょう。</translation>
+    </message>
+    <message>
+        <source>Your work</source>
+        <translation>あなたの作業</translation>
+    </message>
+    <message>
+        <source>Pinned</source>
+        <translation>ピン留め</translation>
+    </message>
+    <message>
+        <source>Explore a family</source>
+        <translation>ファミリーを探索</translation>
+    </message>
+    <message>
+        <source>Browse the library and find your use case.</source>
+        <translation>ライブラリを見て、あなたのユースケースを見つけましょう。</translation>
+    </message>
+    <message>
+        <source>The prompts our community runs most, ready to use.</source>
+        <translation>コミュニティで最もよく使われるプロンプト。すぐに使えます。</translation>
+    </message>
+    <message>
+        <source>Top picks</source>
+        <translation>おすすめ</translation>
+    </message>
+    <message>
         <source>What the community runs most often</source>
         <translation>コミュニティで最もよく使われるもの</translation>
     </message>
     <message>
+        <source>What we recommend</source>
+        <translation>私たちのおすすめ</translation>
+    </message>
+    <message>
         <source>Your latest prompts</source>
         <translation>最近のプロンプト</translation>
+    </message>
+    <message>
+        <source>Your latest generations</source>
+        <translation>最近の生成結果</translation>
     </message>
     <message>
         <source>Your starred prompts</source>
@@ -66,14 +210,6 @@
     <message>
         <source>No prompts in this section yet.</source>
         <translation>このセクションにはまだプロンプトがありません。</translation>
-    </message>
-    <message>
-        <source>Share anonymous usage statistics</source>
-        <translation>匿名の利用統計を共有する</translation>
-    </message>
-    <message>
-        <source>Anonymous metrics (durations, error codes, OS, QGIS version) help us fix issues.</source>
-        <translation>匿名の指標（処理時間、エラーコード、OS、QGISのバージョン）は、問題の修正に役立ちます。</translation>
     </message>
     <message>
         <source>Cancelling sign-in</source>
@@ -140,16 +276,16 @@
         <translation>認証に失敗しました。アクティベーションキーを確認してください。</translation>
     </message>
     <message>
-        <source>AI Edit outputs an image, not a vector file. For polygons (SHP, GeoJSON), pick a Segment or Land cover template, then ‘Vectorize this result’.</source>
-        <translation>AI Editが出力するのは画像であり、ベクタファイルではありません。ポリゴン（SHP、GeoJSON）が必要な場合は、Segmentまたは土地被覆のテンプレートを選び、「この結果をベクトル化」を使用してください。</translation>
+        <source>AI Edit outputs an image, not a vector file. For polygons (SHP, GeoJSON), pick a Segment or Land cover template, then ‘Vectorize this result’. For precise object outlines, try our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin.</source>
+        <translation>AI Editが出力するのは画像であり、ベクタファイルではありません。ポリゴン（SHP、GeoJSON）が必要な場合は、Segmentまたは土地被覆のテンプレートを選び、「この結果をベクトル化」を使用してください。オブジェクトの正確な輪郭が必要な場合は、プラグイン&lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt;をお試しください。</translation>
     </message>
     <message>
         <source>AI Edit edits the image, it doesn't answer questions or count. Describe a visual change, e.g. colour the buildings red.</source>
         <translation>AI Editは画像を編集するツールであり、質問への回答や数え上げはできません。「建物を赤く塗る」のように、見た目の変化を記述してください。</translation>
     </message>
     <message>
-        <source>AI Edit can't measure or count. Pick a Segment template, then ‘Vectorize this result’: QGIS gives the area and count per polygon.</source>
-        <translation>AI Editでは計測や数え上げはできません。Segmentテンプレートを選び、「この結果をベクトル化」を使用すると、QGIS側でポリゴンごとの面積と件数が取得できます。</translation>
+        <source>AI Edit can't measure or count. Our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin is built for that: it outlines objects as polygons QGIS can count and measure.</source>
+        <translation>AI Editでは計測や数え上げはできません。それにはプラグイン&lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt;が適しています。オブジェクトをポリゴンとして輪郭抽出し、QGISで数えたり計測したりできます。</translation>
     </message>
     <message>
         <source>Zoomed out: the AI won't see small features (buildings, cars, trees) at this scale. Zoom in for object-level detail.</source>
@@ -196,8 +332,8 @@
         <translation>&lt;b&gt;マークアップ&lt;/b&gt;&lt;br&gt;マップ上に矢印・図形・ラベルを描いて、AIに何をどこで変更するかを示します。描いたスケッチはプロンプトと一緒に視覚的なガイドとして送信されます。</translation>
     </message>
     <message>
-        <source>&lt;b&gt;Reference image&lt;/b&gt;&lt;br&gt;Click to pick an image or data file from disk. To use a QGIS layer already in your project, drag it from the Layers panel into the prompt box. Everything is cropped to your zone.</source>
-        <translation>&lt;b&gt;参照画像&lt;/b&gt;&lt;br&gt;クリックしてディスクから画像またはデータファイルを選択します。プロジェクト内の既存のQGISレイヤを使う場合は、レイヤパネルからプロンプト入力欄にドラッグしてください。すべてゾーンの範囲に合わせて切り出されます。</translation>
+        <source>&lt;b&gt;Reference&lt;/b&gt;&lt;br&gt;Add an image or data file from disk, or one of your project's layers, as guidance for the AI. You can also drag a layer from the Layers panel straight into the prompt box. Everything is cropped to your zone.</source>
+        <translation>&lt;b&gt;参照&lt;/b&gt;&lt;br&gt;ディスクから画像またはデータファイルを、あるいはプロジェクトのレイヤを、AIのガイドとして追加します。レイヤパネルからプロンプト入力欄に直接ドラッグすることもできます。すべてゾーンの範囲に合わせて切り出されます。</translation>
     </message>
     <message>
         <source>&lt;b&gt;Resolution&lt;/b&gt;&lt;br&gt;Higher means a sharper, more detailed result.</source>
@@ -326,10 +462,6 @@ We'd love to hear from you!</source>
     <message>
         <source>Cancel anytime</source>
         <translation>いつでも解約できます</translation>
-    </message>
-    <message>
-        <source>Cancel selection</source>
-        <translation>選択をキャンセル</translation>
     </message>
     <message>
         <source>Cancel the running generation first (close the dock)</source>
@@ -1156,8 +1288,8 @@ We'd love to hear from you!</source>
         <translation>輪郭の細かな変化を減らします（0 = 変更なし）。</translation>
     </message>
     <message>
-        <source>Ref image</source>
-        <translation>参照画像</translation>
+        <source>Reference</source>
+        <translation>参照</translation>
     </message>
     <message>
         <source>Reference image</source>
@@ -1314,6 +1446,10 @@ We'd love to hear from you!</source>
     <message>
         <source>Service temporarily unavailable, please retry shortly.</source>
         <translation>サービスが一時的に利用できません。少し待ってから再試行してください。</translation>
+    </message>
+    <message>
+        <source>This feature is temporarily unavailable. Please try again later.</source>
+        <translation>この機能は一時的に利用できません。後でもう一度お試しください。</translation>
     </message>
     <message>
         <source>Settings</source>
@@ -1704,8 +1840,8 @@ We'd love to hear from you!</source>
         <translation>選択済み</translation>
     </message>
     <message>
-        <source>type your prompt or pick from the library...</source>
-        <translation>プロンプトを入力するか、ライブラリから選択してください...</translation>
+        <source>describe a change, or pick one from the library...</source>
+        <translation>加えたい変更を入力するか、ライブラリから選択してください...</translation>
     </message>
     <message>
         <source>yesterday</source>
@@ -1792,8 +1928,8 @@ We'd love to hear from you!</source>
         <translation>生成に失敗しました: リクエストが安全フィルタによってブロックされました。クレジットは消費されていません。プロンプトを言い換えてお試しください。</translation>
     </message>
     <message>
-        <source>Generation failed: the AI couldn't create an image for this request. You have not been charged. Try rephrasing your prompt, or pick a different zone.</source>
-        <translation>生成に失敗しました: このリクエストに対する画像をAIが作成できませんでした。クレジットは消費されていません。プロンプトを言い換えるか、別のゾーンを選んでお試しください。</translation>
+        <source>Generation failed: the AI returned no image. You have not been charged. AI Edit draws on the map and cannot answer questions, so describe the change you want to see, then try again.</source>
+        <translation>生成に失敗しました: AIが画像を返しませんでした。クレジットは消費されていません。AI Edit は地図に描画するツールで、質問には答えられません。加えたい変更を記述して、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Our image servers are busy right now. You have not been charged. Please wait a moment and try again.</source>
@@ -2100,6 +2236,10 @@ We'd love to hear from you!</source>
         <translation>ラスタのピクセルを読み取れませんでした（ファイルが不完全な可能性があります）。</translation>
     </message>
     <message>
+        <source>Account created. Draw a zone on the example map to run your first edit.</source>
+        <translation>アカウントが作成されました。サンプルマップ上でゾーンを描いて、最初の編集を実行しましょう。</translation>
+    </message>
+    <message>
         <source>Couldn't load the example basemap. Check your internet connection, or add your own layer (GeoTIFF, WMS, XYZ).</source>
         <translation>サンプルのベースマップを読み込めませんでした。インターネット接続を確認するか、独自のレイヤ（GeoTIFF、WMS、XYZ）を追加してください。</translation>
     </message>
@@ -2252,10 +2392,6 @@ We'd love to hear from you!</source>
         <translation>この色をポリゴンとしてトレースします。チェックされていない色は背景として扱われます。</translation>
     </message>
     <message>
-        <source>Try it on an example</source>
-        <translation>サンプルで試す</translation>
-    </message>
-    <message>
         <source>Vector</source>
         <translation>ベクトル</translation>
     </message>
@@ -2310,6 +2446,410 @@ We'd love to hear from you!</source>
     <message>
         <source>{n} versions</source>
         <translation>{n}件のバージョン</translation>
+    </message>
+    <message>
+        <source>Your marks won't be used</source>
+        <translation>描いたマークは使用されません</translation>
+    </message>
+    <message>
+        <source>The markup layer is hidden.</source>
+        <translation>マークアップレイヤーが非表示です。</translation>
+    </message>
+    <message>
+        <source>Show and generate</source>
+        <translation>表示して生成</translation>
+    </message>
+    <message>
+        <source>Generate without</source>
+        <translation>マークなしで生成</translation>
+    </message>
+    <message>
+        <source>Line</source>
+        <translation>直線</translation>
+    </message>
+    <message>
+        <source>Straight lines. Click to add points.</source>
+        <translation>直線。クリックして点を追加します。</translation>
+    </message>
+    <message>
+        <source>Click to add points. Double-click to finish, click the first point to close.</source>
+        <translation>クリックして点を追加してください。ダブルクリックで終了、または最初の点をクリックして閉じます。</translation>
+    </message>
+    <message>
+        <source>Click the map to place points around your zone. Click the first point again, double-click, or press Enter to close it. Then describe the change you want.</source>
+        <translation>地図をクリックしてゾーンの周りに点を配置します。最初の点を再度クリック、ダブルクリック、またはEnterキーを押して閉じます。その後、希望する変更内容を記述してください。</translation>
+    </message>
+    <message>
+        <source>This shape is too thin, too small, or crosses itself. Draw it again.</source>
+        <translation>この図形は細すぎる、小さすぎる、または自己交差しています。もう一度描き直してください。</translation>
+    </message>
+    <message>
+        <source>Crop</source>
+        <translation>切り抜き</translation>
+    </message>
+    <message>
+        <source>Crop: on</source>
+        <translation>切り抜き: オン</translation>
+    </message>
+    <message>
+        <source>Crop: off</source>
+        <translation>切り抜き: オフ</translation>
+    </message>
+    <message>
+        <source>Showing your shape only. Toggle to see the full frame.</source>
+        <translation>あなたの図形のみを表示しています。切り替えると全体のフレームが表示されます。</translation>
+    </message>
+    <message>
+        <source>Save this prompt to your favorites.</source>
+        <translation>このプロンプトをお気に入りに保存します。</translation>
+    </message>
+    <message>
+        <source>Remove this prompt from your favorites.</source>
+        <translation>このプロンプトをお気に入りから削除します。</translation>
+    </message>
+    <message>
+        <source>No layers in the project</source>
+        <translation>プロジェクトにレイヤがありません</translation>
+    </message>
+    <message>
+        <source>Need cleaner outlines? Try our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin.</source>
+        <translation>より正確な輪郭が必要ですか？プラグイン&lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt;をお試しください。</translation>
+    </message>
+    <message>
+        <source>Before and after comparison</source>
+        <translation>変更前と変更後の比較</translation>
+    </message>
+    <message>
+        <source>Could not start the generation: {error}</source>
+        <translation>生成を開始できませんでした: {error}</translation>
+    </message>
+    <message>
+        <source>Could not write {name}. It may be open in QGIS or in another program. Close it, or pick a different name, and try again.</source>
+        <translation>{name} を書き込めませんでした。QGIS または他のプログラムで開かれている可能性があります。ファイルを閉じるか、別の名前を選んで再試行してください。</translation>
+    </message>
+    <message>
+        <source>Dismiss</source>
+        <translation>閉じる</translation>
+    </message>
+    <message>
+        <source>Divider at {pct}%. Left and right arrows move it.</source>
+        <translation>仕切りは {pct}% の位置です。左右の矢印キーで移動できます。</translation>
+    </message>
+    <message>
+        <source>Favorite</source>
+        <translation>お気に入り</translation>
+    </message>
+    <message>
+        <source>Jump to the first version</source>
+        <translation>最初のバージョンへ移動</translation>
+    </message>
+    <message>
+        <source>Jump to the latest version</source>
+        <translation>最新のバージョンへ移動</translation>
+    </message>
+    <message>
+        <source>Paid</source>
+        <translation>有料</translation>
+    </message>
+    <message>
+        <source>Press Enter to preview it, Delete to remove it.</source>
+        <translation>Enterキーでプレビュー、Deleteキーで削除します。</translation>
+    </message>
+    <message>
+        <source>Remove reference image {n}</source>
+        <translation>参照画像 {n} を削除</translation>
+    </message>
+    <message>
+        <source>Remove this reference image</source>
+        <translation>この参照画像を削除</translation>
+    </message>
+    <message>
+        <source>Sign-in failed unexpectedly. Click Connect to try again.</source>
+        <translation>サインイン中に予期しないエラーが発生しました。「接続」をクリックして再試行してください。</translation>
+    </message>
+    <message>
+        <source>The request failed unexpectedly.</source>
+        <translation>リクエスト中に予期しないエラーが発生しました。</translation>
+    </message>
+    <message>
+        <source>Unexpected error while rendering the map.</source>
+        <translation>地図の描画中に予期しないエラーが発生しました。</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>戻る</translation>
+    </message>
+    <message>
+        <source>Browse and search all your conversations</source>
+        <translation>すべての会話を閲覧・検索</translation>
+    </message>
+    <message>
+        <source>Conversation actions</source>
+        <translation>会話の操作</translation>
+    </message>
+    <message>
+        <source>Conversation deleted.</source>
+        <translation>会話を削除しました。</translation>
+    </message>
+    <message>
+        <source>Conversations</source>
+        <translation>会話</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>削除</translation>
+    </message>
+    <message>
+        <source>Delete this conversation?</source>
+        <translation>この会話を削除しますか？</translation>
+    </message>
+    <message>
+        <source>Deleting conversation</source>
+        <translation>会話を削除中</translation>
+    </message>
+    <message>
+        <source>In my view</source>
+        <translation>表示範囲内</translation>
+    </message>
+    <message>
+        <source>Keep this result</source>
+        <translation>この結果を保持</translation>
+    </message>
+    <message>
+        <source>Keep this version and finish. The layer stays in your project.</source>
+        <translation>このバージョンを保持して終了します。レイヤはプロジェクトに残ります。</translation>
+    </message>
+    <message>
+        <source>Loading older conversations</source>
+        <translation>以前の会話を読み込み中</translation>
+    </message>
+    <message>
+        <source>Loading thumbnails</source>
+        <translation>サムネイルを読み込み中</translation>
+    </message>
+    <message>
+        <source>No conversation matches.</source>
+        <translation>一致する会話はありません。</translation>
+    </message>
+    <message>
+        <source>Only conversations whose zone is inside the current map view</source>
+        <translation>現在の地図表示内にゾーンがある会話のみ</translation>
+    </message>
+    <message>
+        <source>Privacy policy</source>
+        <translation>プライバシーポリシー</translation>
+    </message>
+    <message>
+        <source>Refreshing history</source>
+        <translation>履歴を更新中</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>名前を変更</translation>
+    </message>
+    <message>
+        <source>Rename conversation</source>
+        <translation>会話の名前を変更</translation>
+    </message>
+    <message>
+        <source>Renaming conversation</source>
+        <translation>会話の名前を変更中</translation>
+    </message>
+    <message>
+        <source>Result kept. Find this conversation anytime on the home screen.</source>
+        <translation>結果を保持しました。この会話はいつでもホーム画面から開けます。</translation>
+    </message>
+    <message>
+        <source>Search your conversations</source>
+        <translation>会話を検索</translation>
+    </message>
+    <message>
+        <source>Show more</source>
+        <translation>さらに表示</translation>
+    </message>
+    <message>
+        <source>Stored on European servers while your account exists. Delete any conversation whenever you want.</source>
+        <translation>アカウントが存在する間、欧州のサーバーに保存されます。会話はいつでも削除できます。</translation>
+    </message>
+    <message>
+        <source>This deletes its generations and their images from TerraLab servers. Layers already in your project stay. This cannot be undone.</source>
+        <translation>この会話の生成と画像が TerraLab サーバーから削除されます。プロジェクト内のレイヤはそのまま残ります。元に戻すことはできません。</translation>
+    </message>
+    <message>
+        <source>Title</source>
+        <translation>タイトル</translation>
+    </message>
+    <message>
+        <source>Today</source>
+        <translation>今日</translation>
+    </message>
+    <message>
+        <source>This week</source>
+        <translation>今週</translation>
+    </message>
+    <message>
+        <source>Stored on European servers while your account exists.</source>
+        <translation>アカウントが存在する間、欧州のサーバーに保存されます。</translation>
+    </message>
+    <message>
+        <source>Add a layer…</source>
+        <translation>レイヤを追加…</translation>
+    </message>
+    <message>
+        <source>Load a sample image</source>
+        <translation>サンプル画像を読み込む</translation>
+    </message>
+    <message>
+        <source>Open QGIS's Data Source Manager to add imagery</source>
+        <translation>QGIS のデータソースマネージャを開いて画像を追加</translation>
+    </message>
+    <message>
+        <source>Click to exit the comparison</source>
+        <translation>クリックして比較を終了</translation>
+    </message>
+    <message>
+        <source>Keep this version</source>
+        <translation>このバージョンを残す</translation>
+    </message>
+    <message>
+        <source>Kept as the result of this session</source>
+        <translation>このセッションの結果として保持</translation>
+    </message>
+    <message>
+        <source>kept</source>
+        <translation>保持</translation>
+    </message>
+    <message>
+        <source>Finish this session and return to the start</source>
+        <translation>このセッションを終了して最初に戻る</translation>
+    </message>
+    <message>
+        <source>Go back one step (comparison, drawing, zone)</source>
+        <translation>一段階戻る（比較、描画、ゾーン）</translation>
+    </message>
+    <message>
+        <source>Earlier</source>
+        <translation>それ以前</translation>
+    </message>
+    <message>
+        <source>Your session stays in your history. Reopen it anytime from the Prompt Library.</source>
+        <translation>セッションは履歴に残ります。プロンプトライブラリからいつでも再開できます。</translation>
+    </message>
+    <message>
+        <source>Resume this session</source>
+        <translation>このセッションを再開</translation>
+    </message>
+    <message>
+        <source>Session</source>
+        <translation>セッション</translation>
+    </message>
+    <message>
+        <source>GENERATIONS</source>
+        <translation>生成回数</translation>
+    </message>
+    <message>
+        <source>Reopen this session in AI Edit: its prompt, reference images, and the same map zone.</source>
+        <translation>このセッションをAI Editで再開します：プロンプト、参照画像、同じ地図ゾーン。</translation>
+    </message>
+    <message>
+        <source>Your layers are hidden</source>
+        <translation>レイヤが非表示になっています</translation>
+    </message>
+    <message>
+        <source>Nothing shows on the map until one is checked.</source>
+        <translation>1つチェックするまで地図には何も表示されません。</translation>
+    </message>
+    <message>
+        <source>Show my layers</source>
+        <translation>レイヤを表示</translation>
+    </message>
+    <message>
+        <source>Re-check your topmost layer in the Layers panel</source>
+        <translation>レイヤパネルで最上位のレイヤを再チェックします</translation>
+    </message>
+    <message>
+        <source>Past sessions</source>
+        <translation>過去のセッション</translation>
+    </message>
+    <message>
+        <source>Reopen a past session from the Prompt Library</source>
+        <translation>プロンプトライブラリから過去のセッションを再開</translation>
+    </message>
+    <message>
+        <source>Name your marks in the prompt, e.g. "add a pond inside the circle". The marks guide the AI and won't appear in the result.</source>
+        <translation>プロンプトでマークに言及してください（例：「円の中に池を追加」）。マークはAIの手掛かりで、結果には表示されません。</translation>
+    </message>
+    <message>
+        <source>From your computer</source>
+        <translation>コンピュータから</translation>
+    </message>
+    <message>
+        <source>Pick images or data files. Data files (GeoTIFF, shapefile, GeoJSON...) are rendered at your zone.</source>
+        <translation>画像またはデータファイルを選択します。データファイル（GeoTIFF、シェープファイル、GeoJSONなど）はゾーンで描画されます。</translation>
+    </message>
+    <message>
+        <source>From a QGIS layer</source>
+        <translation>QGISレイヤから</translation>
+    </message>
+    <message>
+        <source>Snapshot one of this project's layers at your zone. The layer itself is not changed and stays where it is.</source>
+        <translation>このプロジェクトのレイヤをゾーンでスナップショットします。レイヤ自体は変更されず、そのまま残ります。</translation>
+    </message>
+    <message>
+        <source>No references yet. Add one to guide the AI.</source>
+        <translation>参照はまだありません。追加してAIを導きましょう。</translation>
+    </message>
+    <message>
+        <source>What should the AI take from this image?</source>
+        <translation>この画像からAIは何を参考にすべきですか？</translation>
+    </message>
+    <message>
+        <source>Instructions for reference image {n}</source>
+        <translation>参照画像 {n} への指示</translation>
+    </message>
+    <message>
+        <source>File</source>
+        <translation>ファイル</translation>
+    </message>
+    <message>
+        <source>Your marks guide the edit. No note is needed here.</source>
+        <translation>マークが編集を導きます。ここにメモは不要です。</translation>
+    </message>
+    <message>
+        <source>Keep these references to guide the edit, and close the panel</source>
+        <translation>これらの参照を編集の手掛かりとして保持し、パネルを閉じます</translation>
+    </message>
+    <message>
+        <source>Each image is cropped to your zone and stays hidden from the map. Add a note to tell the AI what to take from it.</source>
+        <translation>各画像はゾーンに合わせて切り抜かれ、地図には表示されません。メモを追加して、AIに何を参考にするか伝えられます。</translation>
+    </message>
+    <message>
+        <source>My work</source>
+        <translation>マイワーク</translation>
+    </message>
+    <message>
+        <source>Starred</source>
+        <translation>スター付き</translation>
+    </message>
+    <message>
+        <source>Your work sessions, newest first.</source>
+        <translation>作業セッションの一覧。新しい順に表示します。</translation>
+    </message>
+    <message>
+        <source>The imagery this session was edited on is not in this project.</source>
+        <translation>このセッションの編集元となった画像はこのプロジェクトにありません。</translation>
+    </message>
+    <message>
+        <source>Add source snapshot</source>
+        <translation>元画像のスナップショットを追加</translation>
+    </message>
+    <message>
+        <source>Session input</source>
+        <translation>セッション入力</translation>
+    </message>
+    <message>
+        <source>Adding session input to the map</source>
+        <translation>セッション入力を地図に追加しています</translation>
     </message>
 </context>
 </TS>

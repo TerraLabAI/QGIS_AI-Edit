@@ -10,7 +10,7 @@ import struct
 import tempfile
 import time
 
-from osgeo import gdal, osr
+from osgeo import gdal, ogr, osr
 
 from .i18n import tr
 from .logger import log_debug, log_warning
@@ -26,6 +26,12 @@ _GTIFF_CREATION_OPTIONS = [
     "TILED=YES",
     "BLOCKXSIZE=256",
     "BLOCKYSIZE=256",
+    # DEFLATE on every core. Measured on a 4096x4096 RGBA write with overviews:
+    # 4.9 s single-threaded, 1.7 s on 4 cores, 1.0 s on 16.
+    "NUM_THREADS=ALL_CPUS",
+    # A 4K RGBA output plus its overviews can pass the 4 GB classic-TIFF
+    # ceiling, where Create() fails outright. IF_SAFER writes BigTIFF instead.
+    "BIGTIFF=IF_SAFER",
 ]
 
 # Formats GDAL reliably decodes across all platforms (esp. Windows OSGeo4W,
@@ -115,7 +121,7 @@ def _detect_image_format(data: bytes) -> str | None:
     return None
 
 
-def _ascii_safe_dir(directory: str) -> str:
+def ascii_safe_dir(directory: str) -> str:
     """Return a directory path both GDAL (write) and the QGIS GDAL provider
     (read-back) accept on Windows.
 
@@ -124,9 +130,20 @@ def _ascii_safe_dir(directory: str) -> str:
     loads it as an invalid layer ("Failed to create valid raster layer").
     Converting the directory to its 8.3 short name yields a pure-ASCII path
     both accept. No-op on non-Windows, on already-ASCII paths, or when
-    conversion is unavailable. The directory must already exist.
+    conversion is unavailable.
+
+    Precondition: ``directory`` already exists (``os.makedirs`` it first). A
+    path that is not there cannot be resolved, so it comes back untouched.
     """
     if os.name != "nt" or directory.isascii():
+        return directory
+
+    if not os.path.isdir(directory):
+        # GetShortPathNameW answers 0 for a missing path, and 0 again on a
+        # volume with 8.3 names off. Reading the first as the second sends a
+        # caller that has not made its output directory yet to the shared
+        # Public folder, and the user's file lands where they never chose.
+        log_warning("ascii_safe_dir ran before the directory existed; path unchanged")
         return directory
 
     try:
@@ -171,6 +188,77 @@ def _create_gtiff(driver, path: str, w: int, h: int, bands: int):
     return ds, ""
 
 
+def _rasterize_crop_alpha(
+    dst_ds, alpha_band_index: int, polygon_wkt: str, geotransform: tuple, projection_wkt: str | None
+) -> None:
+    """Burn ``polygon_wkt`` into a 0/255 mask on ``dst_ds``'s exact pixel grid
+    and write it as the alpha band (P3 reversible crop).
+
+    ``polygon_wkt`` is already in the output raster's own CRS: the zone
+    polygon is captured in the canvas CRS (context_metadata.apply_export_context),
+    and the raster writer never reprojects between capture and output, so no
+    transform is needed here. Raises on any failure so the caller can fall
+    back to a fully opaque band rather than silently losing pixels.
+    """
+    w = dst_ds.RasterXSize
+    h = dst_ds.RasterYSize
+    mask_ds = gdal.GetDriverByName("MEM").Create("", w, h, 1, gdal.GDT_Byte)
+    mask_ds.SetGeoTransform(geotransform)
+
+    srs = None
+    if projection_wkt:
+        candidate = osr.SpatialReference()
+        if candidate.ImportFromWkt(projection_wkt) == 0:
+            srs = candidate
+            mask_ds.SetProjection(projection_wkt)
+
+    ogr_ds = ogr.GetDriverByName("Memory").CreateDataSource("crop_mask")
+    ogr_layer = ogr_ds.CreateLayer("zone", srs, ogr.wkbPolygon)
+    geom = ogr.CreateGeometryFromWkt(polygon_wkt)
+    if geom is None:
+        raise RuntimeError("crop polygon WKT failed to parse")
+    feature = ogr.Feature(ogr_layer.GetLayerDefn())
+    feature.SetGeometry(geom)
+    ogr_layer.CreateFeature(feature)
+
+    mask_band = mask_ds.GetRasterBand(1)
+    gdal.RasterizeLayer(mask_ds, [1], ogr_layer, burn_values=[255])
+    raw = mask_band.ReadRaster(0, 0, w, h, w, h, gdal.GDT_Byte)
+
+    alpha_band = dst_ds.GetRasterBand(alpha_band_index)
+    alpha_band.WriteRaster(0, 0, w, h, raw, w, h, gdal.GDT_Byte)
+    alpha_band.SetColorInterpretation(gdal.GCI_AlphaBand)
+
+    mask_ds = None
+    ogr_ds = None
+
+
+def _write_opaque_alpha_band(dst_ds, alpha_band_index: int) -> None:
+    """Fallback when rasterizing the crop polygon fails: a fully opaque alpha
+    band, so the file still opens with every pixel visible instead of a
+    broken/missing band."""
+    w, h = dst_ds.RasterXSize, dst_ds.RasterYSize
+    alpha_band = dst_ds.GetRasterBand(alpha_band_index)
+    alpha_band.WriteRaster(0, 0, w, h, b"\xff" * (w * h), w, h, gdal.GDT_Byte)
+    alpha_band.SetColorInterpretation(gdal.GCI_AlphaBand)
+
+
+def read_crop_polygon_wkt(geotiff_path: str) -> str | None:
+    """Read back the ``AI_EDIT_CROP_POLYGON_WKT`` tag written by the P3 alpha
+    crop (output CRS). None on a file with no crop: old generations, or
+    MCP/dev extents that never carried a polygon. The crop tags are written
+    before the rasterize attempt, so a rasterization failure that fell back
+    to a fully opaque alpha band still returns the WKT (the shape the user
+    drew stays authoritative for vectorize clipping)."""
+    try:
+        ds = gdal.Open(geotiff_path)
+        if ds is None:
+            return None
+        return ds.GetMetadataItem("AI_EDIT_CROP_POLYGON_WKT") or None
+    except Exception:  # nosec B110 - crop detection is best-effort
+        return None
+
+
 def _unique_output_path(directory: str, base: str, ext: str = "tif") -> str:
     """First free <base>.<ext> in directory; _2, _3... on same-second collisions."""
     path = os.path.join(directory, f"{base}.{ext}")
@@ -179,6 +267,34 @@ def _unique_output_path(directory: str, base: str, ext: str = "tif") -> str:
         path = os.path.join(directory, f"{base}_{counter}.{ext}")
         counter += 1
     return path
+
+
+def replace_staged_file(staged: str, destination: str) -> None:
+    """Move a fully-written staging file onto its destination, or delete it.
+
+    Windows refuses to overwrite a file another process holds open: a .tif
+    already loaded as a layer, a .png open in the Photos app. Without the
+    cleanup every failed attempt leaves a stray ``.part`` next to the user's
+    file, and without ``os.replace`` the destination would have to be unlinked
+    first, destroying the old copy when the new one cannot be put in place.
+    """
+    from .errors import AIEditError, ErrorCode
+
+    try:
+        os.replace(staged, destination)
+    except OSError as err:
+        try:
+            os.remove(staged)
+        except OSError:  # nosec B110 - the staging file is disposable
+            pass
+        raise AIEditError(
+            ErrorCode.WRITE_ERROR,
+            tr(
+                "Could not write {name}. It may be open in QGIS or in another "
+                "program. Close it, or pick a different name, and try again."
+            ).format(name=os.path.basename(destination)),
+            cause=err,
+        ) from err
 
 
 _FALLBACK_EXT = {
@@ -250,7 +366,7 @@ def _rescue_plain_image(
         return None
     try:
         rescue_dir = tempfile.mkdtemp(prefix="terralab_ai_edit_")
-        path = _unique_output_path(_ascii_safe_dir(rescue_dir), file_base, ext)
+        path = _unique_output_path(ascii_safe_dir(rescue_dir), file_base, ext)
         with open(path, "wb") as f:
             f.write(image_data)
         if width <= 0 or height <= 0:
@@ -282,6 +398,17 @@ def _rescue_plain_image(
         return None
 
 
+# Custom property on a result raster layer: absolute path of the
+# georeferenced copy of the imagery the generation ran FROM. The swipe reads
+# it to paint the true "before" side instead of whatever sits beneath.
+BEFORE_PATH_PROPERTY = "ai_edit/before_path"
+
+
+def before_file_base(result_path: str) -> str:
+    """File base of the before GeoTIFF written next to ``result_path``."""
+    return os.path.splitext(os.path.basename(result_path))[0] + "_before"
+
+
 def write_geotiff(
     image_data: bytes,
     extent_dict: dict,
@@ -289,34 +416,34 @@ def write_geotiff(
     output_dir: str,
     prompt: str = "",
     ctx=None,
+    file_base: str | None = None,
 ) -> str:
     """Write raw image bytes as a georeferenced GeoTIFF, falling back to the
     plain image plus a PAM sidecar when the whole GDAL pipeline fails. Once
     the pixels are in memory a paid generation must never be lost to a write
-    error. Runs on a worker thread."""
+    error. Runs on a worker thread. ``file_base`` overrides the prompt-derived
+    filename (the before GeoTIFF names itself after its result)."""
     try:
         return _write_geotiff_gdal(
-            image_data, extent_dict, crs_wkt, output_dir, prompt=prompt, ctx=ctx
+            image_data, extent_dict, crs_wkt, output_dir, prompt=prompt, ctx=ctx,
+            file_base=file_base,
         )
     except Exception as gtiff_err:
         img_format = _detect_image_format(image_data)
         width, height = _image_dimensions(image_data, img_format)
         rescued = _rescue_plain_image(
             image_data, img_format, extent_dict, crs_wkt,
-            _output_file_base(prompt), width, height,
+            file_base or _output_file_base(prompt), width, height,
         )
         if rescued is None:
             raise
         log_warning(f"GeoTIFF write failed ({gtiff_err}); rescued plain image to {rescued}")
         try:
-            import re as _re
-
             from . import telemetry
             from . import telemetry_events as te
+            from .log_scrub import scrub_user_paths
 
-            scrubbed = _re.sub(
-                r"(?i)([/\\]Users[/\\])[^/\\]+", r"\1***", str(gtiff_err)
-            )
+            scrubbed = scrub_user_paths(str(gtiff_err))
             telemetry.track(te.PLUGIN_ERROR, {
                 "stage": "write",
                 "error_code": "write_geotiff_rescued",
@@ -337,11 +464,12 @@ def _write_geotiff_gdal(
     output_dir: str,
     prompt: str = "",
     ctx=None,
+    file_base: str | None = None,
 ) -> str:
     """GDAL GeoTIFF pipeline (tiled, compressed, overviews, provenance tags)."""
     _restore_qgis_proj_paths()
     timestamp = int(time.time())
-    file_base = _output_file_base(prompt)
+    file_base = file_base or _output_file_base(prompt)
 
     # Fall back to tempdir if user's output_dir is read-only so a hostile
     # folder doesn't lose the paid generation.
@@ -355,7 +483,7 @@ def _write_geotiff_gdal(
     # Reroute through an ASCII-safe path: a non-ASCII directory (accented
     # Windows username) writes fine via GDAL but loads back as an invalid
     # QGIS layer. The directory exists by now, so 8.3 short names resolve.
-    resolved_dir = _ascii_safe_dir(resolved_dir)
+    resolved_dir = ascii_safe_dir(resolved_dir)
     primary_path = _unique_output_path(resolved_dir, file_base)
     output_path = primary_path
 
@@ -424,6 +552,14 @@ def _write_geotiff_gdal(
         recv_h = src_ds.RasterYSize
         src_bands = src_ds.RasterCount
         bands = min(src_bands, 3)
+        # Reversible polygon crop (P3): when the zone was drawn with the
+        # polygon tool, ctx carries its WKT (canvas CRS, same as crs_wkt/the
+        # output raster's own CRS below, so no reprojection is needed here).
+        # An extra alpha band is appended and rasterized from it; a bbox-only
+        # zone (ctx is None, or zone_polygon_wkt is None: history restore,
+        # MCP/dev extents) writes RGB exactly as before, byte-identical.
+        crop_polygon_wkt = getattr(ctx, "zone_polygon_wkt", None) if ctx is not None else None
+        dst_bands = bands + 1 if crop_polygon_wkt else bands
         log_debug(f"GeoTIFF: received {recv_w}x{recv_h}px, {bands} bands")
 
         ext_width = xmax - xmin
@@ -437,7 +573,7 @@ def _write_geotiff_gdal(
             ctx.crop_offsets = (0, 0, recv_w, recv_h)
 
         driver = gdal.GetDriverByName("GTiff")
-        dst_ds, create_err = _create_gtiff(driver, output_path, recv_w, recv_h, bands)
+        dst_ds, create_err = _create_gtiff(driver, output_path, recv_w, recv_h, dst_bands)
         if dst_ds is None:
             # Windows MAX_PATH / antivirus lock / network-share perm denied,
             # retry in tempdir.
@@ -445,8 +581,8 @@ def _write_geotiff_gdal(
                 f"GDAL Create failed at {primary_path} ({create_err}); retrying in tempdir"
             )
             fallback_dir = tempfile.mkdtemp(prefix="terralab_ai_edit_")
-            output_path = _unique_output_path(_ascii_safe_dir(fallback_dir), file_base)
-            dst_ds, create_err = _create_gtiff(driver, output_path, recv_w, recv_h, bands)
+            output_path = _unique_output_path(ascii_safe_dir(fallback_dir), file_base)
+            dst_ds, create_err = _create_gtiff(driver, output_path, recv_w, recv_h, dst_bands)
         if dst_ds is None:
             msg = tr("Failed to create GeoTIFF at {path}").format(path=output_path)
             raise RuntimeError(f"{msg} ({create_err})")
@@ -459,7 +595,7 @@ def _write_geotiff_gdal(
         if ctx is not None:
             ctx.output_path = output_path
             ctx.geotransform = geotransform
-            ctx.output_bands = bands
+            ctx.output_bands = dst_bands
             ctx.output_dimensions = (recv_w, recv_h)
 
         projection_wkt = _safe_projection_wkt(crs_wkt)
@@ -512,6 +648,9 @@ def _write_geotiff_gdal(
             "AI_EDIT_DISCLAIMER",
             "Synthetic imagery generated by AI. Not survey data or ground truth.",
         )
+        if crop_polygon_wkt:
+            dst_ds.SetMetadataItem("AI_EDIT_CROP", "POLYGON")
+            dst_ds.SetMetadataItem("AI_EDIT_CROP_POLYGON_WKT", crop_polygon_wkt)
 
         # Copy bands via raw GDAL buffers, not ReadAsArray/WriteArray. The array
         # path pulls in osgeo.gdal_array -> numpy; a broken numpy ABI (common on
@@ -525,6 +664,18 @@ def _write_geotiff_gdal(
             dst_ds.GetRasterBand(i).WriteRaster(
                 0, 0, recv_w, recv_h, raw, recv_w, recv_h, gdal.GDT_Byte
             )
+
+        if crop_polygon_wkt:
+            # Reversible polygon crop (P3): the alpha band appended above.
+            # Never fails the write over cosmetic cropping; a rasterization
+            # error falls back to a fully opaque band instead.
+            try:
+                _rasterize_crop_alpha(
+                    dst_ds, bands + 1, crop_polygon_wkt, geotransform, projection_wkt
+                )
+            except Exception as err:  # noqa: BLE001 - crop is best-effort
+                log_warning(f"crop alpha rasterization failed ({err}); using opaque band")
+                _write_opaque_alpha_band(dst_ds, bands + 1)
 
         # Internal overviews so big outputs pan/zoom instantly everywhere the
         # file travels (QGIS, ArcGIS...). Best-effort: never fail the paid

@@ -330,8 +330,14 @@ class RunLifecycleMixin:
                 code_enum = _EC(code)
             except ValueError:
                 code_enum = None
-        self._handle_run_error(message, code_enum)
-        self._reset_button()
+        # _handle_run_error touches telemetry and several widgets, any of which
+        # can raise. The button reset must survive that, or _busy stays True and
+        # Vectorize is disabled for the rest of the session. Same shape as the
+        # success path above.
+        try:
+            self._handle_run_error(message, code_enum)
+        finally:
+            self._reset_button()
 
     def _handle_run_error(self, message: str, code=None) -> None:
         """Render a friendlier error and steer the user to the lever that

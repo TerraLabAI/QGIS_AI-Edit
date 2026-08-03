@@ -128,18 +128,26 @@ class LayerTreeComboBox(QComboBox):
         self._refresh()
 
     def cleanup(self):
-        """Disconnect project signals."""
+        """Disconnect project signals. One try per signal: batching the six
+        meant the first raise skipped the other five."""
+        signals = []
         try:
             proj = QgsProject.instance()
-            proj.layersAdded.disconnect(self._schedule_refresh)
-            proj.layersRemoved.disconnect(self._schedule_refresh)
+            signals += [proj.layersAdded, proj.layersRemoved]
             root = proj.layerTreeRoot()
-            root.visibilityChanged.disconnect(self._schedule_refresh)
-            root.addedChildren.disconnect(self._schedule_refresh)
-            root.removedChildren.disconnect(self._schedule_refresh)
-            root.nameChanged.disconnect(self._schedule_refresh)
+            signals += [
+                root.visibilityChanged,
+                root.addedChildren,
+                root.removedChildren,
+                root.nameChanged,
+            ]
         except (TypeError, RuntimeError):
             pass
+        for signal in signals:
+            try:
+                signal.disconnect(self._schedule_refresh)
+            except (TypeError, RuntimeError):
+                pass
         try:
             self.currentIndexChanged.disconnect(self._on_index_changed)
         except (TypeError, RuntimeError):

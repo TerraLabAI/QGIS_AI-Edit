@@ -27,6 +27,11 @@ from qgis.PyQt.QtWidgets import (
 
 from ...core import qt_compat as QtC
 from ...core.i18n import tr
+from ..onboarding_hint import (
+    BLUE_TINT,
+    HINT_GUIDE_AI,
+    DismissibleHint,
+)
 from ..panel_helpers import make_section_header as _make_section_header
 from ..reference_images_widget import ReferenceImagesWidget
 from .build_result import (
@@ -38,7 +43,15 @@ from .build_result import (
     _wrap_in_scroll_area,
 )
 from .prompt_container import _PromptContainer
-from .style import _BTN_BLUE, _BTN_GHOST, _BTN_GREEN_AUTH, BRAND_BLUE
+from .style import (
+    _BTN_BLUE,
+    _BTN_GHOST,
+    _BTN_GREEN_AUTH,
+    BOOK_SVG,
+    BRAND_BLUE,
+    _btn_start_qss,
+    svg_url,
+)
 from .widgets import _SubmitTextEdit, _ZoneGestureGlyph
 
 if TYPE_CHECKING:
@@ -127,10 +140,31 @@ def _build_launch_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     dock._launch_btn = QPushButton(tr("Launch AI Edit"))
     dock._launch_btn.setToolTip(tr("Start a new AI edit session"))
     dock._launch_btn.setCursor(QtC.PointingHandCursor)
-    dock._launch_btn.setMinimumHeight(36)
-    dock._launch_btn.setStyleSheet(_BTN_GREEN_AUTH)
+    dock._launch_btn.setMinimumHeight(40)
+    dock._launch_btn.setStyleSheet(_btn_start_qss(_BTN_GREEN_AUTH))
     dock._launch_btn.clicked.connect(dock.launch_clicked.emit)
     launch_layout.addWidget(dock._launch_btn)
+
+    # Quiet permanent doorway to past sessions, right under Launch: flat
+    # text link, translucent gray at rest, brightening on hover (the retired
+    # See-all voice). Replaced the dismissible select-zone banner
+    # (2026-08-03): a pointer this quiet can live on the entry screen for
+    # good, no dismissal needed. Shown/hidden with the Launch button by
+    # _update_layer_warning (the empty-canvas hero shows only itself).
+    # Glyph outside tr().
+    dock._past_sessions_link = QPushButton(tr("Past sessions") + " ›")
+    dock._past_sessions_link.setToolTip(
+        tr("Reopen a past session from the Prompt Library")
+    )
+    dock._past_sessions_link.setCursor(QtC.PointingHandCursor)
+    dock._past_sessions_link.setStyleSheet(
+        "QPushButton { background: transparent; border: none;"
+        " color: rgba(128, 128, 128, 0.95); font-size: 11px;"
+        " padding: 2px 4px; }"
+        "QPushButton:hover { color: palette(text); }"
+    )
+    dock._past_sessions_link.clicked.connect(dock._on_open_sessions_page)
+    launch_layout.addWidget(dock._past_sessions_link, 0, QtC.AlignCenter)
 
     dock._launch_section.setVisible(False)
     main_layout.addWidget(dock._launch_section)
@@ -162,8 +196,12 @@ def _build_select_zone_section(dock: AIEditDockWidget, main_layout: QVBoxLayout)
     # Full-width centered text: wrapping on the real width keeps the layout's
     # heightForWidth correct, so the copy is never clipped (a maxWidth + an
     # alignment flag would mis-size the height and cut the last lines off).
+    # One short line, mirroring AI Segmentation's zone step ("Click on the
+    # map to outline the area to scan."). The click-to-close mechanics are
+    # discoverable on the canvas itself; three sentences of instructions
+    # here read as friction, not help.
     dock._select_zone_hint = QLabel(
-        tr("Hold the left mouse button and drag to draw a box on the map. Then describe the change you want.")
+        tr("Click on the map to outline the area to edit.")
     )
     dock._select_zone_hint.setWordWrap(True)
     dock._select_zone_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -211,26 +249,15 @@ def _build_prompt_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     dock._prompt_layout.setContentsMargins(0, 0, 0, 0)
     dock._prompt_layout.setSpacing(6)
 
-    # Soft, non-blocking warning shown at the top when the drawn zone is so
-    # zoomed out the model can't resolve small features (set by the plugin
-    # on zone selection). Amber to read as "heads up", not an error.
-    dock._zone_guidance_hint = QLabel()
-    dock._zone_guidance_hint.setWordWrap(True)
-    dock._zone_guidance_hint.setStyleSheet(
-        "QLabel { background-color: rgba(245, 166, 35, 0.12); "
-        "border: 1px solid rgba(245, 166, 35, 0.45); border-radius: 4px; "
-        "padding: 6px 8px; font-size: 11px; color: palette(text); }"
-    )
-    dock._zone_guidance_hint.setVisible(False)
-    dock._prompt_layout.addWidget(dock._zone_guidance_hint)
-
     dock._prompt_header = _make_section_header(tr("What should the AI change?"))
     dock._prompt_header.setVisible(True)
     dock._prompt_layout.addWidget(dock._prompt_header)
 
     dock._prompt_input = _SubmitTextEdit()
+    # "describe a change" over "type your prompt": the box takes an edit, not a
+    # question, and users who typed a question got a failed generation.
     dock._prompt_input.setPlaceholderText(
-        tr("type your prompt or pick from the library...")
+        tr("describe a change, or pick one from the library...")
     )
     dock._prompt_input.document().setDocumentMargin(0)
     dock._prompt_input.setMinimumHeight(60)
@@ -258,14 +285,89 @@ def _build_prompt_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
         "border: 1px solid rgba(30, 136, 229, 0.2); border-radius: 4px; "
         "padding: 6px 8px; font-size: 11px; color: palette(text); }"
     )
+    # The measure / vector_file hints embed an <a href='ai_seg'> link to the
+    # AI Segmentation plugin; QLabel auto-detects the rich text.
+    dock._prompt_guidance_hint.setTextInteractionFlags(
+        Qt.TextInteractionFlag.LinksAccessibleByMouse
+    )
+    dock._prompt_guidance_hint.setOpenExternalLinks(False)
+    dock._prompt_guidance_hint.linkActivated.connect(dock._on_guidance_link_activated)
     dock._prompt_guidance_hint.setVisible(False)
     dock._prompt_layout.addWidget(dock._prompt_guidance_hint)
 
+    # "Guide the AI" tip: its own card below the prompt block, between the
+    # prompt and Generate.
+    _build_guide_ai_hint(dock)
+    # "Name your marks in the prompt" tip: same slot, wins over guide-AI.
+    dock._build_markup_prompt_tip()
+
+    # Soft, non-blocking warning about the drawn zone itself: it covers a very
+    # large ground area, or the view is so zoomed out the model can't resolve
+    # small features (set by the plugin on zone selection). Amber to read as
+    # "heads up", not an error. Last in the section (Yvann 2026-08-03): it used
+    # to open the dock, so an amber block was the first thing a new user met,
+    # above the question it is answering. It now sits where it is read, just
+    # before Generate.
+    dock._zone_guidance_hint = QLabel()
+    dock._zone_guidance_hint.setWordWrap(True)
+    dock._zone_guidance_hint.setStyleSheet(
+        "QLabel { background-color: rgba(245, 166, 35, 0.12); "
+        "border: 1px solid rgba(245, 166, 35, 0.45); border-radius: 4px; "
+        "padding: 6px 8px; font-size: 11px; color: palette(text); }"
+    )
+    dock._zone_guidance_hint.setVisible(False)
+    dock._prompt_layout.addWidget(dock._zone_guidance_hint)
+
     # Hidden by default: revealed by set_zone_selected() once the user
-    # draws a rectangle. Initial dock state only shows the "Select your
+    # draws a polygon zone. Initial dock state only shows the "Select your
     # zone" button.
     dock._prompt_section.setVisible(False)
     main_layout.addWidget(dock._prompt_section)
+
+
+def _build_guide_ai_hint(dock: AIEditDockWidget) -> None:
+    # "Guide the AI" tip: its own blue card below the prompt block, sitting
+    # between the prompt and Generate, so the prompt keeps its footer chips as
+    # one unit instead of being split by the tip. Blue tint (an optional
+    # booster, not a warning). Retires once the user attaches a reference or
+    # touches markup this edit group (see _guide_ai_tip_visible /
+    # _mark_guide_ai_touched in generation_state.py), or is closed for the
+    # session with its own glyph.
+    # The body NAMES the three features by taking their button labels straight
+    # from the buttons (tr("Reference") / tr("Mark up") / tr("Library")), in
+    # bold so the sentence reads as "these are controls you can click", and it
+    # ends on the footer Tutorial button, drawn inline as its own icon because
+    # nothing in that button says "tutorial" (Yvann 2026-07-31: most users
+    # never find the Library or the tutorial). Rename a button and the tip
+    # follows it, in every locale.
+    icon_html = (
+        f'<img src="{svg_url(BOOK_SVG)}" width="14" height="14" '
+        'style="vertical-align: middle;" />'
+    )
+    body = tr(
+        "{ref} and {markup} show the AI what you mean. The {library} holds "
+        "ready-made prompts. New here? Open the tutorial with the {icon} "
+        "button below."
+    )
+    for token, value in (
+        ("{ref}", f"<b>{tr('Reference')}</b>"),
+        ("{markup}", f"<b>{tr('Mark up')}</b>"),
+        ("{library}", f"<b>{tr('Library')}</b>"),
+        ("{icon}", icon_html),
+    ):
+        body = body.replace(token, value)
+    dock._guide_ai_hint = DismissibleHint(
+        HINT_GUIDE_AI,
+        tr("Guide the AI (optional)"),
+        body,
+        rich_body=True,
+        visibility_gate=dock._guide_ai_tip_visible,
+        tint=BLUE_TINT,
+        parent=dock._prompt_section,
+    )
+    dock._guide_ai_hint.setVisible(False)
+    dock._guide_ai_hint.dismissed.connect(dock._on_guide_ai_dismissed)
+    dock._prompt_layout.addWidget(dock._guide_ai_hint)
 
 
 def _build_reference_widget(dock: AIEditDockWidget) -> None:
@@ -281,14 +383,27 @@ def _build_reference_widget(dock: AIEditDockWidget) -> None:
         dock._reference_widget.error_cleared.connect(dock._hide_status_box)
         dock._reference_widget.images_changed.connect(dock._sync_attach_buttons)
         dock._reference_widget.upsell_requested.connect(dock._show_reference_upsell)
+
         # Forward container actions: drop on container + paste in textbox +
-        # paperclip click all funnel into the reference widget.
-        dock._prompt_container.files_dropped.connect(dock._reference_widget.add_paths)
-        dock._prompt_container.layers_dropped.connect(dock._reference_widget.add_layers)
-        dock._prompt_container.attach_clicked.connect(
-            dock._reference_widget.open_file_picker
+        # Reference-menu picks (file or project layer) all funnel into the
+        # reference widget, behind the click-time server kill switch
+        # (fail-open when the key is absent). The result container wires the
+        # same five through the same gate.
+        def _gated(handler):
+            return dock._gated_by_feature("references", handler)
+
+        dock._prompt_container.files_dropped.connect(
+            _gated(dock._reference_widget.add_paths)
         )
-        dock._prompt_input.images_pasted.connect(dock._reference_widget.add_paths)
+        dock._prompt_container.layers_dropped.connect(
+            _gated(dock._reference_widget.add_layers)
+        )
+        dock._prompt_container.reference_clicked.connect(
+            _gated(dock.reference_panel_requested.emit)
+        )
+        dock._prompt_input.images_pasted.connect(
+            _gated(dock._reference_widget.add_paths)
+        )
         # Idle: keep the widget out of the title bar by hiding it until placed.
         dock._reference_widget.setVisible(False)
     else:
@@ -314,11 +429,14 @@ def _build_consent_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> 
     consent_layout.setContentsMargins(0, 0, 0, 0)
     consent_layout.setSpacing(8)
     consent_layout.addWidget(dock._consent_check, 0, QtC.AlignTop)
-    _terms_url = (
+    from ...core.auth.activation_manager import get_privacy_url, get_terms_url
+
+    # Server override wins; the consent-specific UTM variants stay the fallback.
+    _terms_url = get_terms_url(
         "https://terra-lab.ai/terms-of-sale"
         "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=consent_terms"
     )
-    _privacy_url = (
+    _privacy_url = get_privacy_url(
         "https://terra-lab.ai/privacy-policy"
         "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=consent_privacy"
     )
@@ -335,6 +453,14 @@ def _build_consent_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> 
     _privacy_link = (
         f'<a href="{_privacy_url}" style="color: {BRAND_BLUE};">{tr("Privacy")}</a>'
     )
+    # The box carries no text of its own, so a screen reader would announce a
+    # bare "checked, checkbox". Name it from the same sentence the label shows,
+    # links flattened to their words, so both stay in one translation.
+    _consent_spoken = _consent_template.format(
+        terms=tr("Terms"), privacy=tr("Privacy")
+    )
+    dock._consent_check.setAccessibleName(_consent_spoken)
+    dock._consent_check.setToolTip(_consent_spoken)
     consent_text = QLabel(
         _consent_template.format(terms=_terms_link, privacy=_privacy_link)
     )

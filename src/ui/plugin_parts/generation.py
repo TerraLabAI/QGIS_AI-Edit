@@ -3,15 +3,18 @@ from __future__ import annotations
 import os
 import time
 
-from qgis.core import QgsApplication
+from qgis.core import Qgis, QgsApplication
 from qgis.PyQt.QtCore import QSettings
+from qgis.PyQt.QtWidgets import QPushButton
 
 from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.auth.activation_manager import has_consent, save_consent
+from ...core.entitlements import coerce_tier
+from ...core.errors import build_failure_props
 from ...core.generation.pipeline_context import PipelineContext
 from ...core.i18n import tr
-from ...core.logger import log, log_debug
+from ...core.logger import log, log_debug, log_warning
 from ...core.prompts.prompt_presets import (
     detect_freeform_vector_intent,
     detect_seg_context,
@@ -22,7 +25,7 @@ from ...workers.export_worker import ExportWorker
 from ...workers.generation_worker import GenerationWorker
 from ..canvas_exporter import apply_export_context, has_server_config, prepare_export
 from ..raster_writer import get_output_dir
-from .errors import _scrub_paths
+from .lifecycle import teardown_step
 
 
 class GenerationMixin:
@@ -143,6 +146,40 @@ class GenerationMixin:
         # generation_started/completed/failed are all tagged is_retry=True.
         self._on_generate(prompt, is_retry=True)
 
+    def _show_markup_hidden_bar(self, prompt: str, is_retry: bool) -> None:
+        """Marks were drawn but would not render. Warn instead of submitting,
+        and let the user recover in one click: re-show the layer (marks kept)
+        or drop the marks and generate without them."""
+        telemetry.track(te.MARKUP_HIDDEN_WARNED, {})
+        bar = self._iface.messageBar()
+        widget = bar.createMessage(
+            tr("Your marks won't be used"), tr("The markup layer is hidden.")
+        )
+        show_button = QPushButton(tr("Show and generate"))
+        without_button = QPushButton(tr("Generate without"))
+        widget.layout().addWidget(show_button)
+        widget.layout().addWidget(without_button)
+
+        def _resolve(choice: str):
+            telemetry.track(te.MARKUP_HIDDEN_RESOLVED, {"choice": choice})
+            bar.popWidget(widget)
+            manager = self._markup_manager
+            if choice == "show_and_generate":
+                shown = manager.show_layer() if manager is not None else False
+                if not shown and manager is not None:
+                    # Nothing to show (stale reference): nothing survives to
+                    # rebuild from, so fall back to a clean generate instead
+                    # of leaving the user stuck on a dead end.
+                    manager.clear_all()
+            else:
+                if manager is not None:
+                    manager.clear_all()
+            self._on_generate(prompt, is_retry=is_retry)
+
+        show_button.clicked.connect(lambda: _resolve("show_and_generate"))
+        without_button.clicked.connect(lambda: _resolve("generate_without"))
+        bar.pushWidget(widget, Qgis.MessageLevel.Warning)
+
     def _on_generate(self, prompt: str, is_retry: bool = False):
         if self._worker is not None and self._worker.is_active():
             self._dock_widget.set_status(tr("Generation already in progress"), is_error=True)
@@ -156,6 +193,9 @@ class GenerationMixin:
         # Launching a new generation is a clear "I am done comparing"
         # signal: drop the swipe overlay so the canvas renders fresh.
         self._disarm_swipe()
+        # Generating FROM the selected version is a commitment: if it was a
+        # browsed preview, it stops being replaceable (preview rule).
+        self._promote_selected_version()
 
         # Save consent on first generation and hide checkbox
         if not has_consent():
@@ -205,14 +245,12 @@ class GenerationMixin:
         # cover / color-classification prompts get a relaxed threshold).
         ctx.seg_intent = detect_seg_context(prompt)
 
-        if self._dock_widget._is_free_tier:
-            suggested_res = "1K"
-        else:
-            suggested_res = self._dock_widget.get_selected_resolution()
-
-        # Lock UI; prep ticker animates while export+upload run off-thread.
-        self._dock_widget.set_generating(True)
-        self._dock_widget.set_status("")
+        # Same entitlement helper the picker uses, so what the user was shown
+        # and what gets submitted can never disagree.
+        suggested_res = coerce_tier(
+            self._dock_widget.get_selected_resolution(),
+            self._dock_widget._is_free_tier,
+        )
 
         # When the user drew markup, the marks are rendered directly onto the
         # MAIN image (co-located guidance), and the same zone WITHOUT the marks
@@ -224,6 +262,25 @@ class GenerationMixin:
                 markup_layer = self._markup_manager.layer()
             except RuntimeError:
                 markup_layer = None
+
+        # Reliability guard: marks were drawn but the layer they live on would
+        # not actually render (hidden, or dropped from the layer tree). The
+        # off-thread export would otherwise silently drop them (see
+        # core/canvas_export/render.py). Check on THIS thread, before locking
+        # the UI or starting anything, so the user can recover in one click.
+        if markup_layer is not None and not self._markup_manager.markup_will_render():
+            self._show_markup_hidden_bar(prompt, is_retry)
+            return
+
+        # Lock UI; prep ticker animates while export+upload run off-thread.
+        self._dock_widget.set_generating(True)
+        self._dock_widget.set_status("")
+        # One auto-opened error report per attempt, from here on. Reset at the
+        # point the user commits, not once the generation starts: a failure in
+        # the export or in the export-to-generation hand-off happens before
+        # that and was silently dropped whenever an earlier attempt had already
+        # opened the dialog.
+        self._error_report_dialog_shown = False
 
         # Pick the base by excluding every AI-Edit result from the EXPORT except
         # the selected version, so the model sees exactly that base. Original
@@ -256,11 +313,10 @@ class GenerationMixin:
             self._dock_widget.set_generating(False)
             msg = tr("Export error: {error}").format(error=e)
             self._dock_widget.set_status(msg, is_error=True)
-            telemetry.track(te.EXPORT_FAILED, {
-                "stage": "export",
-                "error_code": "canvas_export_failed",
-                "error_message": _scrub_paths(str(e))[:200],
-            })
+            telemetry.track(
+                te.EXPORT_FAILED,
+                build_failure_props("export", "canvas_export_failed", str(e)),
+            )
             telemetry.flush()
             self._show_error_report(msg)
             return
@@ -300,11 +356,10 @@ class GenerationMixin:
         self._dock_widget.set_generating(False)
         msg = tr("Export error: {error}").format(error=error_msg)
         self._dock_widget.set_status(msg, is_error=True)
-        telemetry.track(te.EXPORT_FAILED, {
-            "stage": "export",
-            "error_code": "canvas_export_failed",
-            "error_message": _scrub_paths(error_msg)[:200],
-        })
+        telemetry.track(
+            te.EXPORT_FAILED,
+            build_failure_props("export", "canvas_export_failed", error_msg),
+        )
         telemetry.flush()
         self._show_error_report(msg)
 
@@ -324,7 +379,65 @@ class GenerationMixin:
         if pending is None:
             # User cancelled / dock was torn down before the render finished.
             return
+        # set_generating(True) fired back at click time and _pending_generation
+        # is already nulled, so nothing downstream can unlock the dock on its
+        # own: every raise in the hand-off below has to be caught here or the
+        # panel stays on the generating view with the prep ticker running.
+        try:
+            self._start_generation_from_export(
+                pending, image_b64, img_w, img_h, actual_extent,
+                size_bytes, input_format, guidance_b64, guidance_format,
+            )
+        except Exception as err:  # noqa: BLE001
+            self._recover_from_handoff_failure(err)
 
+    def _recover_from_handoff_failure(self, err: Exception) -> None:
+        """Unlock the dock after a failed export-to-generation hand-off.
+
+        The worker was never handed to the task manager (nothing after
+        ``addTask`` can raise), so drop it: a task the manager never got still
+        reports itself active, and would block the next Generate click.
+
+        This runs from inside a Qt slot, where a raise has nowhere to go and
+        would leave the dock locked on the generating view - the exact state
+        this method exists to undo - and would also stop the second slot on the
+        same signal from running. So every step stands on its own guard.
+        """
+        try:
+            detail = str(err)
+        except Exception:  # noqa: BLE001 - a message that will not render must
+            detail = type(err).__name__  # not block the recovery
+        log_warning(f"Generation hand-off failed after export: {detail}")
+        with teardown_step("hand-off worker cleanup", stage="generation"):
+            self._cleanup_worker()
+        with teardown_step("hand-off map tool unlock", stage="generation"):
+            if self._map_tool:
+                self._map_tool.set_locked(False)
+        with teardown_step("hand-off dock unlock", stage="generation"):
+            self._dock_widget.set_generating(False)
+        msg = tr("Could not start the generation: {error}").format(error=detail)
+        with teardown_step("hand-off status", stage="generation"):
+            self._dock_widget.set_status(msg, is_error=True)
+        with teardown_step("hand-off telemetry", stage="generation"):
+            telemetry.track(te.PLUGIN_ERROR, {
+                "stage": "generation",
+                "error_code": "export_handoff_failed",
+            })
+            telemetry.flush()
+        self._show_error_report(msg)
+
+    def _start_generation_from_export(
+        self,
+        pending: dict,
+        image_b64: str,
+        img_w: int,
+        img_h: int,
+        actual_extent,
+        size_bytes: int,
+        input_format: str,
+        guidance_b64: str = "",
+        guidance_format: str = "",
+    ):
         ctx = pending["ctx"]
         prep = pending["prep"]
         prompt = pending["prompt"]
@@ -339,7 +452,16 @@ class GenerationMixin:
             f"used_markup={bool(guidance_b64)}"
         )
 
-        apply_export_context(ctx, prep, actual_extent, size_bytes, input_format)
+        # zone_polygon carries the drawn polygon (when any) onto ctx as plain
+        # WKT text (copy-on-emit, never a live QgsGeometry): P3's raster-
+        # writing task reads it to rasterize the alpha crop. It is never read
+        # by generation_service's submit payload (see
+        # PipelineContext.zone_polygon_wkt), so it never reaches the server
+        # (spec section 8, D2).
+        apply_export_context(
+            ctx, prep, actual_extent, size_bytes, input_format,
+            zone_polygon=self._selected_polygon,
+        )
 
         # Canvas captured: advance the prep ticker to the upload phase so the
         # message pool reflects what's actually happening next (sending bytes).
@@ -361,9 +483,12 @@ class GenerationMixin:
         }
         output_dir = get_output_dir()
 
-        # Update rubber band to match the actual rendered extent
+        # Update rubber band to match the actual rendered extent. The polygon
+        # itself is unchanged by pixel snapping, only its bbox context frame
+        # moves, so re-show it alongside the snapped extent rather than
+        # dropping back to a plain rectangle mid-run.
         self._selected_extent = actual_extent
-        self._show_selection_rectangle(actual_extent)
+        self._show_selection_rectangle(actual_extent, self._selected_polygon)
 
         # ``guidance_b64`` here is the clean base (the zone with the marks
         # removed); the marks ride on ``image_b64``. The server is told via the
@@ -390,6 +515,13 @@ class GenerationMixin:
             self._versions.append({"layer_id": None, "request_id": None, "prompt": ""})
             self._selected_version_index = 0
             pixmap = self._pixmap_from_b64(guidance_b64 or image_b64)
+            # Persist the Original locally, keyed by session: restoring this
+            # conversation later reads it back instead of a signed URL that
+            # will have expired (see conversation_thumbs).
+            from ...core.prompts import conversation_thumbs
+
+            if self._session_id:
+                conversation_thumbs.save_thumb(f"in-{self._session_id}", pixmap)
             try:
                 self._dock_widget.seed_version_strip(pixmap)
             except AttributeError:
@@ -407,25 +539,7 @@ class GenerationMixin:
         self._generation_service.reset()
         self._generation_start_time = time.time()
         self._last_generation_is_retry = is_retry
-        # Fresh attempt: the error-report dialog may auto-open again for this
-        # one, but at most once (see _show_error_report).
-        self._error_report_dialog_shown = False
         used_markup = bool(guidance_b64)
-        telemetry.track(te.GENERATION_STARTED, self._enrich_generation_props({
-            "prompt_length": len(prompt),
-            "aspect_ratio": aspect_ratio,
-            "resolution": suggested_res,
-            "zone_width_px": img_w,
-            "zone_height_px": img_h,
-            "input_image_bytes": size_bytes,
-            "input_image_format": input_format,
-            "is_retry": is_retry,
-            "has_geo_context": self._reference_store.count() > 0,
-            "template_id": ctx.template_id,
-            "template_name": ctx.template_name,
-            "used_template": bool(ctx.template_id),
-            "used_markup": used_markup,
-        }))
         self._last_generation_used_markup = used_markup
         log(f"Generation started: prompt_len={len(prompt)}, resolution={suggested_res}, zone={img_w}x{img_h}px")
 
@@ -447,6 +561,7 @@ class GenerationMixin:
             skip_trial_check=self._skip_trial_check,
             suggested_resolution=suggested_res,
             context_image_paths=self._reference_store.snapshot_paths(),
+            context_image_notes=self._reference_store.snapshot_notes(),
             guidance_image=guidance_b64 or None,
             guidance_format=guidance_format or None,
         )
@@ -460,3 +575,27 @@ class GenerationMixin:
         # it to suppress the duplicate recovery they already perform).
         self._generation_cancel_handled = False
         QgsApplication.taskManager().addTask(self._worker)
+        # generation_started now marks a generation the task manager really has.
+        # It used to fire fifty lines earlier, so any raise in between (worker
+        # construction, a signal connect) left a started event with no terminal
+        # event: a hole in the funnel nothing could ever close. Guarded, because
+        # _recover_from_handoff_failure relies on nothing after addTask raising -
+        # it drops the worker, and this one already belongs to the manager.
+        try:
+            telemetry.track(te.GENERATION_STARTED, self._enrich_generation_props({
+                "prompt_length": len(prompt),
+                "aspect_ratio": aspect_ratio,
+                "resolution": suggested_res,
+                "zone_width_px": img_w,
+                "zone_height_px": img_h,
+                "input_image_bytes": size_bytes,
+                "input_image_format": input_format,
+                "is_retry": is_retry,
+                "has_geo_context": self._reference_store.count() > 0,
+                "template_id": ctx.template_id,
+                "template_name": ctx.template_name,
+                "used_template": bool(ctx.template_id),
+                "used_markup": used_markup,
+            }))
+        except Exception as err:  # noqa: BLE001 - telemetry never breaks a run
+            log_warning(f"generation_started telemetry failed: {err}")

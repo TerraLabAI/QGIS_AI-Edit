@@ -61,3 +61,25 @@ def format_smart_date(iso_ts: str) -> str:
     qdate = QDate(parsed_local.year, parsed_local.month, parsed_local.day)
     fmt = "d MMM" if parsed_local.year == now_local.year else "d MMM yyyy"
     return QLocale().toString(qdate, fmt)
+
+
+def format_group_label(iso_ts: str) -> str:
+    """Time bucket for history lists: Today, This week, else the month
+    (plus the year once it is not the current one). Month names come from
+    QLocale, same as format_smart_date."""
+    parsed = _parse_iso(iso_ts)
+    if parsed is None:
+        return ""
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    local = parsed.astimezone()
+    today = dt.datetime.now().astimezone().date()
+    days_ago = (today - local.date()).days
+    if days_ago <= 0:
+        return tr("Today")
+    if days_ago <= 6:
+        return tr("This week")
+    month = QLocale().standaloneMonthName(local.month)
+    if local.year == today.year:
+        return month
+    return f"{month} {local.year}"

@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import json
-import re
 
 from qgis.core import QgsBlockingNetworkRequest
 from qgis.PyQt.QtCore import QByteArray, QUrl
 from qgis.PyQt.QtNetwork import QNetworkRequest
 
 from ..core import qt_compat as QtC
+from ..core.config_store import get_export_dial
 from ..core.i18n import tr
+from ..core.log_scrub import scrub_urls
 from ..core.logger import log_debug, log_warning
+from ..core.request_context import request_context
 
-# Timeout defaults (milliseconds)
+# Timeout defaults (milliseconds). Server override via export-config
+# `timeouts_ms` {api, startup, download}; the constants stay the fallback
+# (and the only value the startup GETs that fetch the config can see).
 _TIMEOUT_API = 30_000
 # Lightweight startup/interactive GETs (bootstrap, export config, account,
 # credits): short so an unstable connection surfaces fast instead of hanging
@@ -23,6 +27,32 @@ _SUBMIT_TIMEOUTS_MS = {
     "2K": 60_000,
     "4K": 90_000,
 }
+
+
+def _api_timeout_ms() -> int:
+    return get_export_dial("timeouts_ms.api", _TIMEOUT_API)
+
+
+def _startup_timeout_ms() -> int:
+    return get_export_dial("timeouts_ms.startup", _TIMEOUT_STARTUP)
+
+
+def _with_context(path: str) -> str:
+    """Append the request context to a path, keeping any query it already has.
+
+    Only for the calls whose answer can legitimately differ per client (the
+    startup config and bundle): it lets the server send copy in the user's
+    language and reach one broken version. Every part is optional and the
+    whole thing is best-effort, so a path always comes back usable.
+    """
+    try:
+        params = request_context()
+        if not params:
+            return path
+        query = "&".join(f"{key}={value}" for key, value in params.items())
+        return f"{path}{'&' if '?' in path else '?'}{query}"
+    except Exception:  # nosec B110
+        return path
 
 
 def _safe_int(val):
@@ -38,16 +68,8 @@ def _safe_int(val):
 # Full URLs, and bare multi-label hosts / IPs (a.b.c, with optional :port). A
 # single-dot token (a filename like output.tif) is intentionally left alone so
 # the log stays useful; only endpoint-shaped tokens are masked.
-_URL_RE = re.compile(
-    r"https?://\S+|\b[\w-]+(?:\.[\w-]+){2,}(?::\d+)?",
-    re.IGNORECASE,
-)
-
-
-def _scrub_urls(text: str) -> str:
-    """Mask request endpoints (URLs and host/IP tokens) before logging, so a
-    log line never carries the service host or path (production-safe logging)."""
-    return _URL_RE.sub("<url>", text or "")
+# Single implementation in core/log_scrub.py, shared with the bug-report path.
+_scrub_urls = scrub_urls
 
 
 def _classify_network_error(
@@ -236,6 +258,7 @@ class TerraLabClient:
         image_b64: str | None = None,
         upload_token: str | None = None,
         context_images: list[str] | None = None,
+        context_image_notes: list[str] | None = None,
         guidance_image: str | None = None,
         guidance_upload_token: str | None = None,
         centroid_lat: float | None = None,
@@ -263,6 +286,11 @@ class TerraLabClient:
 
         ``context_images`` is an optional list of base64-encoded reference
         images. Sent only when non-empty so older backends ignore the field.
+        ``context_image_notes`` is an optional list of per-image user
+        instructions aligned index-for-index with ``context_images`` ("" for
+        images without a note). Sent only when context images ride along AND
+        at least one note is non-empty (the service normalizes this), so
+        older backends never see the field otherwise.
 
         Geospatial capture context (``centroid``, ``bbox_wgs84``, native
         ``bbox`` + ``crs_authid``/``crs_wkt``, ``ground_resolution_m``,
@@ -289,6 +317,11 @@ class TerraLabClient:
             payload["image"] = image_b64
         if context_images:
             payload["context_images"] = context_images
+            # NEW OPTIONAL field, additive: never sent without context_images,
+            # never sent when every note is empty, and the shape of
+            # context_images itself is untouched.
+            if context_image_notes and any(n for n in context_image_notes):
+                payload["context_image_notes"] = context_image_notes
         # Clean base image (separate from user reference images): the same zone
         # with the markup removed. The marks themselves are drawn onto the MAIN
         # image; this clean copy lets the server have the model restore the
@@ -372,7 +405,7 @@ class TerraLabClient:
         req = QNetworkRequest(QUrl(url))
         for k, v in headers.items():
             req.setRawHeader(k.encode("utf-8"), v.encode("utf-8"))
-        req.setTransferTimeout(timeout_ms)
+        QtC.set_transfer_timeout(req, timeout_ms)
         blocker = QgsBlockingNetworkRequest()
         payload = QByteArray(data)
         try:
@@ -400,7 +433,7 @@ class TerraLabClient:
             path += "&force_fallback=true"
         return self._request("GET", path, auth=auth)
 
-    def get_usage(self, auth: dict, timeout_ms: int = _TIMEOUT_API) -> dict:
+    def get_usage(self, auth: dict, timeout_ms: int | None = None) -> dict:
         """Get usage info. The pre-generation pre-flight passes a shorter timeout
         so an offline/stalled link fails fast instead of blocking the user."""
         return self._request("GET", "/api/plugin/usage", auth=auth, timeout_ms=timeout_ms)
@@ -442,6 +475,37 @@ class TerraLabClient:
             "POST", "/api/ai-edit/history/favorite", auth=auth, body=body, timeout_ms=10_000
         )
 
+    def delete_generation_session(
+        self, auth: dict, session_id: str | None = None, request_id: str | None = None
+    ) -> dict:
+        """Delete a past generation, either a whole conversation (session_id)
+        or a single generation within one (request_id). Exactly one of the
+        two must be given; the server accepts either but never both."""
+        if bool(session_id) == bool(request_id):
+            raise ValueError("Pass exactly one of session_id or request_id")
+        body = json.dumps(
+            {"session_id": session_id} if session_id else {"request_id": request_id}
+        ).encode("utf-8")
+        return self._request(
+            "POST", "/api/ai-edit/history/delete", auth=auth, body=body, timeout_ms=10_000
+        )
+
+    def delete_all_generations(self, auth: dict) -> dict:
+        """Delete every past generation for this account. Requires explicit
+        confirmation in the request body (the server refuses without it)."""
+        body = json.dumps({"confirm": True}).encode("utf-8")
+        return self._request(
+            "POST", "/api/ai-edit/history/delete-all", auth=auth, body=body, timeout_ms=10_000
+        )
+
+    def rename_generation_session(self, auth: dict, session_id: str, title: str) -> dict:
+        """Rename a conversation. The server normalizes and clamps the title
+        and returns the normalized value in the response."""
+        body = json.dumps({"session_id": session_id, "title": title}).encode("utf-8")
+        return self._request(
+            "POST", "/api/ai-edit/history/rename", auth=auth, body=body, timeout_ms=10_000
+        )
+
     def add_favorite(
         self,
         auth: dict,
@@ -467,31 +531,32 @@ class TerraLabClient:
     def get_account(self, auth: dict) -> dict:
         """Get account info (email, subscriptions, usage)."""
         return self._request(
-            "GET", "/api/plugin/account", auth=auth, timeout_ms=_TIMEOUT_STARTUP
+            "GET", "/api/plugin/account", auth=auth, timeout_ms=_startup_timeout_ms()
         )
 
     def get_export_config(self) -> dict:
         """Fetch export config from the server (no auth required)."""
         return self._request(
-            "GET", "/api/ai-edit/export-config", timeout_ms=_TIMEOUT_STARTUP
+            "GET",
+            _with_context("/api/ai-edit/export-config"),
+            timeout_ms=_startup_timeout_ms(),
         )
 
     def get_bootstrap(self, auth: dict | None = None) -> dict:
         """One-call startup bundle: export config + preset catalog + usage
         (when auth is sent). Newer servers only; callers fall back to the
         individual endpoints when this 404s."""
+        path = _with_context("/api/plugin/bootstrap")
         if auth:
             return self._request(
-                "GET", "/api/plugin/bootstrap", auth=auth, timeout_ms=_TIMEOUT_STARTUP
+                "GET", path, auth=auth, timeout_ms=_startup_timeout_ms()
             )
-        return self._request(
-            "GET", "/api/plugin/bootstrap", timeout_ms=_TIMEOUT_STARTUP
-        )
+        return self._request("GET", path, timeout_ms=_startup_timeout_ms())
 
     def get_config(self, product: str) -> dict:
         """Fetch server-driven plugin config (no auth required)."""
         return self._request(
-            "GET", f"/api/plugin/config?product={product}"
+            "GET", _with_context(f"/api/plugin/config?product={product}")
         )
 
     def poll_pairing(self, code: str, timeout_ms: int = 10_000) -> dict:
@@ -565,7 +630,9 @@ class TerraLabClient:
         # Follow the 302 to storage. Resolved through qt_compat because PyQt5 on
         # some QGIS 3 builds exposes these enums flat, not scoped.
         req.setAttribute(QtC.RedirectPolicyAttribute, QtC.NoLessSafeRedirectPolicy)
-        req.setTransferTimeout(_TIMEOUT_DOWNLOAD)
+        QtC.set_transfer_timeout(
+            req, get_export_dial("timeouts_ms.download", _TIMEOUT_DOWNLOAD)
+        )
 
         blocker = QgsBlockingNetworkRequest()
         err = blocker.get(req, forceRefresh=True)
@@ -605,7 +672,8 @@ class TerraLabClient:
         # next attempt switches to the stream=1 bypass) instead of handing these
         # bytes to the GeoTIFF writer, where they would fail as a write error and
         # never be retried.
-        if len(data) < _MIN_IMAGE_BYTES or not _looks_like_image(data):
+        min_bytes = get_export_dial("download.min_image_bytes", _MIN_IMAGE_BYTES)
+        if len(data) < min_bytes or not _looks_like_image(data):
             raise DownloadError(
                 "NOT_IMAGE",
                 tr("Server returned a non-image response, retrying download"),
@@ -630,20 +698,22 @@ class TerraLabClient:
         path: str,
         auth: dict | None = None,
         body: bytes | None = None,
-        timeout_ms: int = _TIMEOUT_API,
+        timeout_ms: int | None = None,
     ) -> dict:
         """Execute an HTTP request via QGIS network stack.
 
         Returns a dict - either the parsed JSON response or
         {"error": "...", "code": "..."} on failure.
         """
+        if timeout_ms is None:
+            timeout_ms = _api_timeout_ms()
         url = f"{self.base_url}{path}"
         req = QNetworkRequest(QUrl(url))
         # Follow redirects (e.g. signed-image 302s). Resolved through qt_compat
         # because PyQt5 on some QGIS 3 builds exposes these enums flat.
         req.setAttribute(QtC.RedirectPolicyAttribute, QtC.NoLessSafeRedirectPolicy)
         req.setRawHeader(b"Content-Type", b"application/json")
-        req.setTransferTimeout(timeout_ms)
+        QtC.set_transfer_timeout(req, timeout_ms)
 
         if auth:
             for key, value in auth.items():
@@ -687,8 +757,10 @@ class TerraLabClient:
         raw_body = bytes(reply.content()).decode("utf-8", errors="replace")
 
         if http_status and _safe_int(http_status) >= 400:
-            # Server returned an error - try to parse JSON body
-            log_warning(f"HTTP {http_status}: {raw_body[:500]}")
+            # Server returned an error - try to parse JSON body. Scrubbed:
+            # a 4xx/5xx body can be a bare infrastructure incident page whose
+            # hostnames must never reach the QGIS log (it feeds bug reports).
+            log_warning(f"HTTP {http_status}: {_scrub_urls(raw_body)[:500]}")
             try:
                 error_body = json.loads(raw_body)
                 if "error" in error_body:
@@ -709,7 +781,7 @@ class TerraLabClient:
         try:
             return json.loads(raw_body)
         except json.JSONDecodeError:
-            log_warning(f"Invalid JSON response: {raw_body[:500]}")
+            log_warning(f"Invalid JSON response: {_scrub_urls(raw_body)[:500]}")
             return {"error": "Invalid server response", "code": "SERVER_ERROR"}
 
 

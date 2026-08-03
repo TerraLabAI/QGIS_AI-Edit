@@ -114,8 +114,9 @@ class SearchMixin:
             return
 
         # Switch into search mode immediately; debounce only the heavy rebuild
-        # so typing stays smooth.
+        # so typing stays smooth. Search has no rail row, so clear the rail.
         self._stack.setCurrentWidget(self._search_page)
+        self._sync_rail_for_page(self._search_page)
         self._active_tab = "__search__"
         self._search_debounce.start()
 

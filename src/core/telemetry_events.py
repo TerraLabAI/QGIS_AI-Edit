@@ -46,9 +46,20 @@ SUBSCRIBE_LINK_CLICKED = "subscribe_link_clicked"
 # so reusing it would collide with that enum. Mirrors AI Segmentation's
 # tutorial_opened, adapted to this plugin's registry.
 TUTORIAL_OPENED = "tutorial_opened"
+# "Guide the AI" tip: reference + markup discoverability under the prompt
+# input, shown once a zone is drawn, retired once either feature is touched.
+GUIDANCE_TIP_SHOWN = "ai_edit_guidance_tip_shown"
+GUIDANCE_TIP_DISMISSED = "ai_edit_guidance_tip_dismissed"
+# The measure / vector_file guidance hint names the AI Segmentation plugin;
+# fires when its inline link is clicked (cross-promo funnel).
+SEG_REDIRECT_CLICKED = "ai_edit_seg_redirect_clicked"
 
 # Tools
 MARKUP_OPENED = "markup_opened"
+# Reliability guard: marks were drawn but would not render (hidden/stale
+# layer), so the submit was intercepted and a recovery bar shown instead.
+MARKUP_HIDDEN_WARNED = "ai_edit_markup_hidden_warned"
+MARKUP_HIDDEN_RESOLVED = "ai_edit_markup_hidden_resolved"
 VECTORIZE_PANEL_OPENED = "vectorize_panel_opened"
 # CTA funnel: hint_shown fires when the result panel surfaces the Vectorize
 # suggestion (trigger: template | freeform_verb | flat_output).
@@ -65,6 +76,14 @@ RECENT_SELECTED = "recent_selected"
 # these too). Restore = re-add/reuse a past generation; export = download it.
 HISTORY_RESTORED = "history_restored"
 HISTORY_EXPORTED = "history_exported"
+
+# Conversations (resume rows + in-dock panel). Deleted carries scope one|all;
+# renamed and validated carry no content, titles are user content and never
+# enter a payload.
+CONVERSATIONS_OPENED = "ai_edit_conversations_opened"
+CONVERSATION_DELETED = "ai_edit_conversation_deleted"
+CONVERSATION_RENAMED = "ai_edit_conversation_renamed"
+RESULT_VALIDATED = "ai_edit_result_validated"
 
 # Refund visibility
 GENERATION_REFUND_ATTEMPTED = "generation_refund_attempted"
@@ -98,7 +117,12 @@ ALL_EVENTS = frozenset({
     TRIAL_EXHAUSTED_VIEWED,
     SUBSCRIBE_LINK_CLICKED,
     TUTORIAL_OPENED,
+    GUIDANCE_TIP_SHOWN,
+    GUIDANCE_TIP_DISMISSED,
+    SEG_REDIRECT_CLICKED,
     MARKUP_OPENED,
+    MARKUP_HIDDEN_WARNED,
+    MARKUP_HIDDEN_RESOLVED,
     VECTORIZE_PANEL_OPENED,
     VECTORIZE_HINT_SHOWN,
     VECTORIZE_SUGGESTION_CLICKED,
@@ -109,6 +133,10 @@ ALL_EVENTS = frozenset({
     RECENT_SELECTED,
     HISTORY_RESTORED,
     HISTORY_EXPORTED,
+    CONVERSATIONS_OPENED,
+    CONVERSATION_DELETED,
+    CONVERSATION_RENAMED,
+    RESULT_VALIDATED,
     GENERATION_REFUND_ATTEMPTED,
     GENERATION_REFUND_FAILED,
     EXPORT_FAILED,
@@ -140,7 +168,12 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     TRIAL_EXHAUSTED_VIEWED: ("is_free_tier",),
     SUBSCRIBE_LINK_CLICKED: (),
     TUTORIAL_OPENED: ("tutorial_source",),
+    GUIDANCE_TIP_SHOWN: (),
+    GUIDANCE_TIP_DISMISSED: (),
+    SEG_REDIRECT_CLICKED: ("guidance_kind", "installed"),
     MARKUP_OPENED: (),
+    MARKUP_HIDDEN_WARNED: (),
+    MARKUP_HIDDEN_RESOLVED: ("choice",),
     VECTORIZE_PANEL_OPENED: (),
     VECTORIZE_HINT_SHOWN: (),
     VECTORIZE_SUGGESTION_CLICKED: (),
@@ -151,6 +184,10 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     RECENT_SELECTED: (),
     HISTORY_RESTORED: (),
     HISTORY_EXPORTED: (),
+    CONVERSATIONS_OPENED: (),
+    CONVERSATION_DELETED: ("scope",),
+    CONVERSATION_RENAMED: (),
+    RESULT_VALIDATED: (),
     GENERATION_REFUND_ATTEMPTED: (),
     GENERATION_REFUND_FAILED: (),
     EXPORT_FAILED: ("stage", "error_code"),

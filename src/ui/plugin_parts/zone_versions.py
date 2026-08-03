@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 import uuid
 
-from qgis.core import QgsPointXY, QgsRectangle
+from qgis.core import QgsGeometry, QgsPointXY, QgsRectangle
 from qgis.gui import QgsRubberBand
 from qgis.PyQt.QtGui import QColor, QPixmap
 
@@ -12,6 +12,14 @@ from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.i18n import tr
 from ...core.logger import log_debug, log_warning
+
+# Committed zone chrome: AI Edit's zone blue as an OUTLINE, never a fill. The
+# imagery inside the zone is the model input and the generated result the user
+# judges, so a veil over it (inherited from AI Segmentation's selector, where
+# the interior is the result) sits between the user and what they came to see.
+_ZONE_OUTLINE = QColor(65, 105, 225, 220)
+_ZONE_NO_FILL = QColor(0, 0, 0, 0)
+_ZONE_OUTLINE_WIDTH = 2
 
 
 class ZoneVersionsMixin:
@@ -25,21 +33,27 @@ class ZoneVersionsMixin:
         self._dock_widget.set_status("")
 
     def _deactivate_selection_tool(self):
-        """Restore the map tool that was active before selection started."""
-        if self._previous_map_tool:
+        """Restore the map tool that was active before selection started.
+
+        The reference is always dropped, even when the restore fails: it points
+        at a foreign tool the plugin only borrowed, and unload must not leave a
+        dead wrapper on the plugin graph.
+        """
+        if self._previous_map_tool is not None and self._canvas is not None:
             try:
                 self._canvas.setMapTool(self._previous_map_tool)
-            except RuntimeError:
+            except (RuntimeError, AttributeError):  # nosec B110 - canvas gone
                 pass
         self._previous_map_tool = None
 
-    def _on_stop(self):
-        """Dock closing mid-generation: cancel work and clear zone state.
+    def _cancel_generation_and_reset_zone(self):
+        """Shared Stop/Exit teardown: cancel in-flight work, clear zone state.
 
-        Triggered by the dock's closeEvent (title-bar X). The Exit button has
-        its own handler that also returns the dock to LAUNCH - see
-        _on_exit_clicked.
+        Always disarms the swipe and the action pills: stopping a run means
+        the previous result's pills must not resurface later.
         """
+        self._disarm_swipe()
+        self._pills_armed = False
         if self._worker is not None and self._worker.is_active() and not self._generation_cancel_handled:
             duration = time.time() - getattr(self, "_generation_start_time", time.time())
             telemetry.track(te.GENERATION_CANCELLED, self._enrich_generation_props({
@@ -74,17 +88,26 @@ class ZoneVersionsMixin:
         self._pending_generation = None
         self._clear_selection_rectangle()
         self._selected_extent = None
+        self._selected_polygon = None
         self._last_image_b64 = None
         self._last_guidance_b64 = None
         self._last_guidance_format = None
         if self._map_tool:
             self._map_tool.set_has_zone(False)
         self._deactivate_selection_tool()
+
+    def _on_stop(self):
+        """Dock closing mid-generation: cancel work and clear zone state.
+
+        Triggered by the dock's closeEvent (title-bar X). The Exit button has
+        its own handler - see _on_exit_clicked.
+        """
+        self._cancel_generation_and_reset_zone()
         # Reset the DOCK VIEW, not just the data. Setting _generation_cancel_handled
-        # above suppresses _on_generation_task_terminated (which would otherwise
-        # call set_generating(False)), so without this the dock stays stuck on the
-        # generating view after a Stop. We cleared the zone, so LAUNCH is the
-        # coherent landing state - same as the Exit sibling (_on_exit_clicked).
+        # in the shared teardown suppresses _on_generation_task_terminated (which
+        # would otherwise call set_generating(False)), so without this the dock
+        # stays stuck on the generating view after a Stop. We cleared the zone, so
+        # LAUNCH is the coherent landing state - same as _on_exit_clicked.
         self._dock_widget.set_launch_state()
 
     def _on_launch_shortcut(self):
@@ -108,51 +131,23 @@ class ZoneVersionsMixin:
 
     def _on_exit_clicked(self):
         """User clicked Exit / Done: cancel work and return to LAUNCH."""
-        self._disarm_swipe()
-        self._pills_armed = False
-        if self._worker is not None and self._worker.is_active() and not self._generation_cancel_handled:
-            duration = time.time() - getattr(self, "_generation_start_time", time.time())
-            telemetry.track(te.GENERATION_CANCELLED, self._enrich_generation_props({
-                "duration_ms": int(duration * 1000),
-                "resolution": getattr(self, "_last_suggested_res", ""),
-            }))
-            telemetry.flush()
-            self._generation_service.cancel()
-            # The plugin recovers the UI itself here, so tell the taskTerminated
-            # slot not to double-handle this same cancel.
-            self._generation_cancel_handled = True
-            # Cancel the task too, not just the service. Otherwise finished()
-            # sees isCanceled()==False and emits a stale "Generation cancelled"
-            # error into the reset UI (plus a spurious generation_failed event).
-            try:
-                self._worker.cancel()
-            except Exception:  # nosec B110
-                pass
-        # Drop our reference to the cancelled task: disconnect its signals and
-        # null the ref so its multi-MB base64 payload is released now instead of
-        # lingering until the next run. TaskManager still owns and drains it.
-        self._cleanup_worker()
-        # Also tear down an in-flight canvas export: without this a Stop/Exit
-        # during the export phase still chains into a generation (and a charge)
-        # after the user cancelled.
-        if self._export_worker is not None and self._export_worker.is_active():
-            try:
-                self._export_worker.cancel()
-            except Exception:  # nosec B110
-                pass
-            self._export_worker = None
-        self._pending_generation = None
-        self._clear_selection_rectangle()
-        self._selected_extent = None
-        self._last_image_b64 = None
-        self._last_guidance_b64 = None
-        self._last_guidance_format = None
-        if self._map_tool:
-            self._map_tool.set_has_zone(False)
-        self._deactivate_selection_tool()
+        # Index 0 of the lineage is the seeded Original, so anything past it
+        # means at least one generation happened in this session.
+        had_generation = len(self._versions or []) > 1
+        self._cancel_generation_and_reset_zone()
         # Mark up annotations persist across sessions on a single shared layer.
         # User wipes them explicitly via the Clear all button.
         self._dock_widget.set_launch_state()
+        if had_generation:
+            # Leaving is not losing: the session stays reachable from the
+            # Prompt Library's Sessions page.
+            self._notify(
+                tr(
+                    "Your session stays in your history. Reopen it anytime "
+                    "from the Prompt Library."
+                ),
+                duration=6,
+            )
 
     def _on_project_layers_changed(self, *_args):
         """Re-check the canvas after the layer tree settles on a layer removal.
@@ -173,7 +168,7 @@ class ZoneVersionsMixin:
         The dock resets its own view (see _update_layer_warning ->
         set_launch_state), but the selection map tool and the zone rubber band
         are plugin-owned. Without this teardown, deleting the last raster mid-
-        flow (SELECTING_ZONE or ZONE_SELECTED) would leave the rectangle tool
+        flow (SELECTING_ZONE or ZONE_SELECTED) would leave the polygon tool
         armed and a stale zone frame floating over a blank canvas. Mirrors the
         tail of _on_exit_clicked, minus the generation cancel (a background run
         already works off captured bytes, so a removed layer must not abort it).
@@ -196,6 +191,7 @@ class ZoneVersionsMixin:
         self._pills_armed = False
         self._clear_selection_rectangle()
         self._selected_extent = None
+        self._selected_polygon = None
         if self._map_tool is not None:
             self._map_tool.set_has_zone(False)
         self._deactivate_selection_tool()
@@ -208,11 +204,26 @@ class ZoneVersionsMixin:
         The active Mark up layer is user guidance, not an AI edit, so it is left
         untouched. Compare / Vectorize pills act on the AI result, so they drop
         when Original is selected and return for any generated version.
+
+        A version without its layer in the project (restored session, or a
+        layer the user deleted) is NOT the Original: its archived output is
+        downloaded and added first, and the selection re-enters here once the
+        layer exists (history.py._materialize_version_layer).
         """
-        if 0 <= index < len(self._versions):
+        prev_index = self._selected_version_index
+        version = self._versions[index] if 0 <= index < len(self._versions) else None
+        if version is not None:
             self._selected_version_index = index
-        sel_layer_id = self._versions[index]["layer_id"] if 0 <= index < len(self._versions) else None
-        is_original = sel_layer_id is None
+            # The prompt box follows the base: iterating on V2 starts from
+            # V2's own prompt, not whatever the last edit typed.
+            self._dock_widget.set_result_prompt_text(version.get("prompt") or "")
+        # Original is the tile with no generation behind it, never just "a
+        # tile missing its layer_id".
+        is_original = version is None or not version.get("request_id")
+        if not is_original and self._version_needs_layer(version):
+            self._materialize_version_layer(index, prev_index=prev_index)
+            return
+        sel_layer_id = version["layer_id"] if not is_original else None
         try:
             self._sync_canvas_to_version(sel_layer_id)
 
@@ -226,6 +237,31 @@ class ZoneVersionsMixin:
                     self._show_action_pills()
         except Exception as err:
             log_warning(f"version-select layer visibility sync failed: {err}")
+        # Preview rule: moving from one browsed version to another replaces the
+        # previous preview on the map instead of stacking layers. Selecting
+        # Original only hides (so the way back stays instant), and committed or
+        # user-touched layers are protected inside _drop_preview_layer.
+        if (
+            not is_original
+            and prev_index != index
+            and 0 <= prev_index < len(self._versions)
+        ):
+            self._drop_preview_layer(self._versions[prev_index])
+
+    def _promote_selected_version(self) -> None:
+        """The user is generating from the selected version: it graduated from
+        browsed preview to base of new work, so it stays on the map."""
+        if 0 <= self._selected_version_index < len(self._versions):
+            self._versions[self._selected_version_index]["promoted"] = True
+
+    def _promote_version_for_layer(self, layer_id: str) -> None:
+        """Commitment expressed through a layer id (Vectorize acts on the
+        layer): that version's preview becomes permanent."""
+        if not layer_id:
+            return
+        for version in self._versions or []:
+            if version.get("layer_id") == layer_id:
+                version["promoted"] = True
 
     def _sync_canvas_to_version(self, sel_layer_id: str | None) -> None:
         """Show only ``sel_layer_id`` among the AI-Edit layers, hide the rest.
@@ -267,11 +303,22 @@ class ZoneVersionsMixin:
         except RuntimeError:
             return None
 
-    def _on_zone_selected(self, extent: QgsRectangle):
+    def _on_zone_selected(self, extent: QgsRectangle, polygon: QgsGeometry | None = None):
+        """A zone was committed on the canvas.
+
+        ``polygon`` (canvas CRS) comes from PolygonSelectionTool.selection_made
+        and is None on every path that isn't a fresh polygon draw: history
+        restore (set_zone(rect)), and any programmatic/MCP extent. A None
+        polygon renders as a plain rectangle with no context frame, and
+        nothing downstream may assume it is ever non-None (spec section 4).
+        """
         self._selected_extent = extent
+        self._selected_polygon = polygon
         # Keep markup clipped to the new zone if the manager already exists.
+        # The polygon (when present) is the actual clip shape: a mark inside
+        # the bbox but outside the polygon is rejected too.
         if self._markup_manager is not None:
-            self._markup_manager.set_clip_zone(extent)
+            self._markup_manager.set_clip_zone(extent, polygon)
         # Fresh zone breaks the iteration chain (parent_request_id + armed template).
         self._last_completed_request_id = None
         self._reset_version_lineage()
@@ -283,16 +330,23 @@ class ZoneVersionsMixin:
             # Drop any Mark up reference baked at the previous zone extent so it
             # is not shipped as context for this new, differently-located zone.
             self._dock_widget.clear_markup_reference()
-        self._show_selection_rectangle(extent)
+        self._show_selection_rectangle(extent, polygon)
         self._dock_widget.set_zone_selected()
-        # Soft heads-up if the zone is so zoomed out the model won't resolve
-        # small features. Best-effort: never blocks selection.
+        # Soft heads-up if the zone is very large on the ground or so zoomed
+        # out the model won't resolve small features. Best-effort: never
+        # blocks selection.
         try:
-            from ..canvas_exporter import estimate_native_ground_resolution_m
+            from ..canvas_exporter import (
+                estimate_native_ground_resolution_m,
+                estimate_zone_area_km2,
+            )
             gr = estimate_native_ground_resolution_m(
                 self._canvas.mapSettings(), extent
             )
-            self._dock_widget.set_zone_guidance(gr)
+            area_km2 = estimate_zone_area_km2(
+                extent, self._canvas.mapSettings().destinationCrs()
+            )
+            self._dock_widget.set_zone_guidance(gr, area_km2)
         except Exception:  # nosec B110 - advisory hint only.
             pass
         # Align reference renders to this zone so context layers line up with
@@ -353,6 +407,7 @@ class ZoneVersionsMixin:
         self._pills_armed = False
         self._clear_selection_rectangle()
         self._selected_extent = None
+        self._selected_polygon = None
         # Clearing the zone breaks the iteration chain.
         self._last_completed_request_id = None
         self._reset_version_lineage()
@@ -369,6 +424,12 @@ class ZoneVersionsMixin:
 
         A new zone (or Exit then a new zone) is a new session, so mint a fresh
         session id here. Restore overrides it afterwards to re-enter a session."""
+        # Browsed previews the user never committed to leave with the lineage.
+        # The one they were looking at stays: leaving is not losing what was
+        # on screen, and its file is indexed for an instant return anyway.
+        for i, version in enumerate(self._versions or []):
+            if i != self._selected_version_index:
+                self._drop_preview_layer(version)
         self._versions = []
         self._selected_version_index = 0
         self._session_id = uuid.uuid4().hex
@@ -429,15 +490,36 @@ class ZoneVersionsMixin:
 
     # --- Selection rectangle management ---
 
-    def _show_selection_rectangle(self, extent):
+    def _show_selection_rectangle(self, extent, polygon: QgsGeometry | None = None):
+        """Render the committed zone's chrome: a blue outline, no fill.
+
+        The zone is drawn as a frame and nothing else (owner call, 2026-07-30:
+        the interior stays untouched imagery, see _ZONE_OUTLINE; and owner
+        call, 2026-07-28: no dashed expanded-bbox "honesty" frame either, it
+        read as clutter). With a polygon (a fresh draw) the outline follows the
+        drawn shape; without one (history restore, MCP/dev extents, the
+        pixel-aligned actual-export extent from generation.py) it frames the
+        plain rectangle.
+
+        The frame stays on for as long as the zone exists (owner call,
+        2026-08-03), result on the map or not: a generated version, a browsed
+        one, Original, a live Before/After and a restored session all keep it.
+        It used to take itself off once a result landed, back when the zone
+        carried a tinted interior that would have veiled that result; with
+        only a stroke left there is nothing to hide from. The teardown paths
+        alone remove it.
+        """
         self._clear_selection_rectangle()
+        if polygon is not None and not polygon.isEmpty():
+            self._show_polygon_zone_bands(extent, polygon)
+            return
         rb = QgsRubberBand(self._canvas, QtC.PolygonGeometry)
-        rb.setColor(QColor(0, 0, 0, 0))
-        rb.setStrokeColor(QColor(65, 105, 225, 180))
-        rb.setWidth(2)
-        # Sit above the Before/After swipe overlay (zValue 100) so the blue zone
-        # frame stays fully visible on all four sides while the user swipes,
-        # instead of the overlay covering its right half.
+        rb.setColor(_ZONE_NO_FILL)
+        rb.setStrokeColor(_ZONE_OUTLINE)
+        rb.setWidth(_ZONE_OUTLINE_WIDTH)
+        # Sit above the Before/After swipe overlay (zValue 100) so the zone
+        # outline stays fully visible while the user swipes, instead of the
+        # overlay covering its right half.
         rb.setZValue(110)
         for x, y, last in (
             (extent.xMinimum(), extent.yMinimum(), False),
@@ -447,6 +529,39 @@ class ZoneVersionsMixin:
         ):
             rb.addPoint(QgsPointXY(x, y), last)
         self._selection_rubber_band = rb
+
+    def _show_polygon_zone_bands(self, extent: QgsRectangle, polygon: QgsGeometry) -> None:
+        """Polygon outline, fill-free (see _show_selection_rectangle).
+
+        Fills the ``_selection_rubber_band`` slot that
+        ``_clear_selection_rectangle`` already tears down generically; the
+        ``_selection_rubber_band_halo`` slot stays None since the dashed
+        bbox frame is gone, and the teardown keeps handling both slots so
+        older state still clears.
+        """
+        band = QgsRubberBand(self._canvas, QtC.PolygonGeometry)
+        band.setColor(_ZONE_NO_FILL)
+        band.setStrokeColor(_ZONE_OUTLINE)
+        band.setWidth(_ZONE_OUTLINE_WIDTH)
+        band.setZValue(110)
+        band.setToGeometry(polygon, None)
+        self._selection_rubber_band = band
+
+    def _redraw_zone_outline(self) -> None:
+        """Re-assert the zone chrome after something else repainted the canvas
+        (a result layer landing, a browsed version materializing).
+
+        Draws against the geometry that is current now: the drawn polygon when
+        the plugin still holds one, the rectangle otherwise. A restored session
+        legitimately has only the rectangle, and framing that is the accepted
+        outcome. No zone, nothing to draw.
+        """
+        extent = getattr(self, "_selected_extent", None)
+        polygon = getattr(self, "_selected_polygon", None)
+        has_polygon = polygon is not None and not polygon.isEmpty()
+        if extent is None and not has_polygon:
+            return
+        self._show_selection_rectangle(extent, polygon)
 
     def _clear_selection_rectangle(self):
         for attr in ("_selection_rubber_band_halo", "_selection_rubber_band"):

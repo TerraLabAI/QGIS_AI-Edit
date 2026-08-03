@@ -1,11 +1,12 @@
 """Mark up panel widget.
 
-Self-contained QWidget that owns the Pencil/Arrow/Circle tool row, the
+Self-contained QWidget that owns the Pencil/Line/Arrow/Circle tool row, the
 color swatches, and the status hint. Emits signals the dock relays to the
 plugin orchestrator.
 """
 from __future__ import annotations
 
+from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import QPointF, QSize, Qt, pyqtSignal
 from qgis.PyQt.QtGui import (
     QColor,
@@ -15,7 +16,6 @@ from qgis.PyQt.QtGui import (
     QPalette,
     QPen,
     QPolygonF,
-    QShortcut,
 )
 from qgis.PyQt.QtWidgets import (
     QButtonGroup,
@@ -31,6 +31,9 @@ from qgis.PyQt.QtWidgets import (
 
 from ...core import qt_compat as QtC
 from ...core.i18n import tr
+from ...core.qt_compat import QShortcut
+from ..dock.style import _BTN_GHOST as _BTN_GHOST_QSS
+from ..dock.style import _BTN_LABEL_WEIGHT, BRAND_BLUE, BRAND_RED, FOCUS_RING
 from ..onboarding_hint import HINT_MARKUP, DismissibleHint, is_hint_dismissed
 from ..panel_helpers import (
     GROUP_BOX_QSS,
@@ -40,32 +43,23 @@ from ..panel_helpers import (
     make_custom_color_icon,
     make_hidpi_pixmap,
 )
-from ..tools.markup_tools import MARKUP_DEFAULT_COLOR
-
-BRAND_BLUE = "#1e88e5"
-BRAND_RED = "#d32f2f"
-DISABLED_TEXT = "#666666"
-
-_BTN_GHOST_QSS = (
-    "QPushButton { background-color: transparent; color: palette(text);"
-    " padding: 8px 16px; border-radius: 4px;"
-    " border: 1px solid rgba(128, 128, 128, 0.35); }"
-    "QPushButton:hover { background-color: rgba(128, 128, 128, 0.15);"
-    " border: 1px solid rgba(128, 128, 128, 0.5); }"
-    f"QPushButton:disabled {{ background-color: rgba(128, 128, 128, 0.08);"
-    f" border: 1px solid rgba(128, 128, 128, 0.15); color: {DISABLED_TEXT}; }}"
-)
+from ..tools.markup_tools import markup_default_color
 
 
 # Annotation colors avoid the map palette (red / green / blue / gray) so the
 # model never reads a mark as a class fill. The default (neon magenta) is first.
-_MARKUP_PRESETS: list[tuple[str, int, int, int]] = [
-    ("Magenta", *MARKUP_DEFAULT_COLOR),
-    ("Violet", 138, 43, 226),
-    ("Pink", 236, 72, 153),
-    ("Amber", 245, 158, 11),
-    ("Cyan", 14, 165, 188),
-]
+# One color per hue family, maximally separated: the old Violet and Pink sat in
+# the same purple-pink band as Magenta and read as near-duplicates at dot size.
+# A function, not a constant, so the server-tunable default is read when the
+# color row is built rather than at import.
+def _markup_color_presets() -> list[tuple[str, int, int, int]]:
+    return [
+        ("Magenta", *markup_default_color()),
+        ("Amber", 245, 158, 11),
+        ("Yellow", 250, 204, 21),
+        ("Cyan", 14, 165, 188),
+    ]
+
 
 _TOOL_BUTTON_SIZE = 56
 _TOOL_ICON_PX = 24
@@ -77,6 +71,10 @@ _MAX_CUSTOM_SWATCHES = 4
 def _tool_hint(tool_key: str) -> str:
     hints = {
         "pencil": tr("Drag on the map to sketch a freehand stroke."),
+        "line": tr(
+            "Click to add points. Double-click to finish, click the "
+            "first point to close."
+        ),
         "arrow": tr("Click and drag on the map to draw an arrow."),
         "circle": tr("Drag on the map to draw an ellipse."),
     }
@@ -111,6 +109,16 @@ def _make_tool_icon(shape: str, color: QColor) -> QIcon:
         p.drawLine(QPointF(5, 19), QPointF(18.5, 5.5))
         p.drawLine(QPointF(18.5, 5.5), QPointF(18.5, 12.5))
         p.drawLine(QPointF(18.5, 5.5), QPointF(11.5, 5.5))
+    elif shape == "line":
+        # Bent polyline with a dot at each vertex: distinct from Arrow's
+        # single diagonal + arrowhead, conveys "click each point".
+        pts = [QPointF(4.5, 18.5), QPointF(12, 8), QPointF(20, 14.5)]
+        p.drawLine(pts[0], pts[1])
+        p.drawLine(pts[1], pts[2])
+        p.setBrush(QColor(color))
+        for pt in pts:
+            p.drawEllipse(pt, 1.6, 1.6)
+        p.setBrush(Qt.BrushStyle.NoBrush)
     elif shape == "circle":
         r = 8.5
         p.drawEllipse(QPointF(size / 2, size / 2), r, r)
@@ -118,21 +126,33 @@ def _make_tool_icon(shape: str, color: QColor) -> QIcon:
     return QIcon(pm)
 
 
+def _line_tool_icon(color: QColor) -> QIcon:
+    """Line tool button icon: prefer the QGIS theme's native polyline glyph
+    (same icon set the desktop digitizing toolbar uses) so it reads as a
+    familiar QGIS action; fall back to our hand-drawn glyph, in the exact
+    style as Pencil/Arrow/Circle, when the running QGIS build/theme lacks
+    it (getThemeIcon returns a null QIcon rather than raising)."""
+    icon = QgsApplication.getThemeIcon("/mActionAddPolyline.svg")
+    if not icon.isNull():
+        return icon
+    return _make_tool_icon("line", color)
+
+
 class MarkupPanel(QWidget):
-    """Tool panel: pencil / arrow / circle drawing on the canvas.
+    """Tool panel: pencil / line / arrow / circle drawing on the canvas.
 
     Annotations land in a memory layer (owned by MarkupLayerManager) that
     the CanvasExporter renders into the PNG sent to the AI.
     """
 
-    tool_changed = pyqtSignal(str)        # 'pencil' | 'arrow' | 'circle'
+    tool_changed = pyqtSignal(str)        # 'pencil' | 'line' | 'arrow' | 'circle'
     color_changed = pyqtSignal(QColor)
     clear_clicked = pyqtSignal()
     done_clicked = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._color = QColor(*MARKUP_DEFAULT_COLOR)
+        self._color = QColor(*markup_default_color())
         self._annotation_count = 0
         self._has_zone = False
 
@@ -164,8 +184,11 @@ class MarkupPanel(QWidget):
         self._tool_group.setExclusive(True)
         self._tool_buttons: dict[str, QToolButton] = {}
 
+        # Line sits second, next to Pencil: both are "draw a path" tools,
+        # while Arrow and Circle are stamps (spec section 4).
         tool_specs = [
             ("pencil", tr("Pencil"), tr("Freehand stroke")),
+            ("line", tr("Line"), tr("Straight lines. Click to add points.")),
             ("arrow", tr("Arrow"), tr("Click-drag from start to end")),
             ("circle", tr("Circle"), tr("Drag to draw an ellipse")),
         ]
@@ -177,9 +200,13 @@ class MarkupPanel(QWidget):
             " background: rgba(128, 128, 128, 0.06);"
             " border: 1px solid rgba(128, 128, 128, 0.20);"
             " border-radius: 8px;"
-            " padding: 6px 0px;"
+            # 1px of side padding the focus rule can give back. Without it the
+            # focused border grows the button 2px against its setFixedWidth and
+            # the label elides; measured 93x28 -> 95x28 before, 95x28 after.
+            " padding: 6px 1px;"
             " color: palette(text);"
             " font-size: 11px;"
+            f" {_BTN_LABEL_WEIGHT}"
             "}"
             "QToolButton:hover {"
             " background: rgba(128, 128, 128, 0.14);"
@@ -195,6 +222,12 @@ class MarkupPanel(QWidget):
             " border: 1px solid rgba(128, 128, 128, 0.10);"
             " color: rgba(128, 128, 128, 0.55);"
             "}"
+            # Last, so the ring also shows on the checked tool. The padding
+            # drops by the extra border width to hold the button's size.
+            f"QToolButton:focus {{"
+            f" border: 2px solid {FOCUS_RING};"
+            f" padding: 5px 0px;"
+            f"}}"
         )
 
         for key, label, tooltip in tool_specs:
@@ -202,11 +235,11 @@ class MarkupPanel(QWidget):
             btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
             btn.setText(label)
             btn.setToolTip(tooltip)
-            btn.setIcon(_make_tool_icon(key, text_color))
+            icon = _line_tool_icon(text_color) if key == "line" else _make_tool_icon(key, text_color)
+            btn.setIcon(icon)
             btn.setIconSize(QSize(_TOOL_ICON_PX, _TOOL_ICON_PX))
             btn.setCheckable(True)
             btn.setCursor(QtC.PointingHandCursor)
-            btn.setFocusPolicy(QtC.NoFocus)
             btn.setFixedHeight(_TOOL_BUTTON_SIZE)
             btn.setFixedWidth(_TOOL_BUTTON_SIZE + 18)
             btn.setStyleSheet(tool_btn_style)
@@ -238,20 +271,32 @@ class MarkupPanel(QWidget):
         # Custom colors the user picks via "+"; kept in insertion order so the
         # oldest can be dropped once the row is full.
         self._custom_color_keys: list[tuple[int, int, int]] = []
+        # `opacity` is not a Qt QSS property: the old rule parsed and vanished,
+        # leaving a disabled swatch identical to a live one. Qt fades the
+        # painted dot itself; the tint and border say the same in the row.
         self._dot_btn_style = (
             "QToolButton {"
             " background: transparent;"
             " border: none;"
             " padding: 2px;"
             "}"
-            "QToolButton:disabled { opacity: 0.4; }"
+            "QToolButton:disabled {"
+            " background: rgba(128, 128, 128, 0.08);"
+            " border: 1px solid rgba(128, 128, 128, 0.20);"
+            " border-radius: 4px;"
+            " padding: 1px;"
+            "}"
+            f"QToolButton:focus {{"
+            f" border: 2px solid {FOCUS_RING};"
+            f" border-radius: 4px;"
+            f" padding: 0px;"
+            f"}}"
         )
         dot_btn_style = self._dot_btn_style
 
-        for _label, r, g, b in _MARKUP_PRESETS:
+        for _label, r, g, b in _markup_color_presets():
             btn = QToolButton()
             btn.setCursor(QtC.PointingHandCursor)
-            btn.setFocusPolicy(QtC.NoFocus)
             btn.setFixedSize(_COLOR_DOT_PX + 6, _COLOR_DOT_PX + 6)
             btn.setIconSize(QSize(_COLOR_DOT_PX, _COLOR_DOT_PX))
             btn.setStyleSheet(dot_btn_style)
@@ -260,6 +305,9 @@ class MarkupPanel(QWidget):
                 color, selected=False, is_dark=is_dark_palette(self), dot_px=_COLOR_DOT_PX
             ))
             btn.setToolTip(color.name().upper())
+            # The hex, not the preset name: it needs no translation and the
+            # button would otherwise be announced as an unnamed button.
+            btn.setAccessibleName(color.name().upper())
             btn.clicked.connect(
                 lambda _checked=False, c=color: self._set_color(c)
             )
@@ -269,7 +317,6 @@ class MarkupPanel(QWidget):
         # Custom color button (+)
         self._custom_color_btn = QToolButton()
         self._custom_color_btn.setCursor(QtC.PointingHandCursor)
-        self._custom_color_btn.setFocusPolicy(QtC.NoFocus)
         self._custom_color_btn.setFixedSize(_COLOR_DOT_PX + 6, _COLOR_DOT_PX + 6)
         self._custom_color_btn.setIconSize(QSize(_COLOR_DOT_PX, _COLOR_DOT_PX))
         self._custom_color_btn.setStyleSheet(dot_btn_style)
@@ -277,6 +324,7 @@ class MarkupPanel(QWidget):
             is_dark=is_dark_palette(self), dot_px=_COLOR_DOT_PX
         ))
         self._custom_color_btn.setToolTip(tr("Custom color..."))
+        self._custom_color_btn.setAccessibleName(tr("Custom color..."))
         self._custom_color_btn.clicked.connect(self._on_custom_color_clicked)
         color_row.addWidget(self._custom_color_btn)
         color_row.addStretch()
@@ -323,6 +371,7 @@ class MarkupPanel(QWidget):
             " background: transparent; border: 1px solid rgba(211, 47, 47, 0.45);"
             f" color: {BRAND_RED}; padding: 6px 12px;"
             " font-size: 12px; border-radius: 4px;"
+            f" {_BTN_LABEL_WEIGHT}"
             "}"
             "QPushButton:hover {"
             " background: rgba(211, 47, 47, 0.18);"
@@ -332,6 +381,9 @@ class MarkupPanel(QWidget):
             " color: rgba(128, 128, 128, 0.5);"
             " border: 1px solid rgba(128, 128, 128, 0.25);"
             "}"
+            f"QPushButton:focus {{"
+            f" border: 2px solid {FOCUS_RING}; padding: 5px 11px;"
+            f"}}"
         )
         self._clear_btn.clicked.connect(self.clear_clicked.emit)
         action_row.addWidget(self._clear_btn)
@@ -374,12 +426,45 @@ class MarkupPanel(QWidget):
         self._clear_btn.setEnabled(count > 0)
         self._refresh_status()
 
+    def annotation_count(self) -> int:
+        """The dock-side copy of MarkupLayerManager's authoritative count
+        (relayed in through set_annotation_count). Read by the prompt tip."""
+        return self._annotation_count
+
     def set_zone_present(self, has_zone: bool) -> None:
         """Track whether a zone exists. Tools stay enabled either way so
         the user can sketch hints first and draw the zone after.
         """
         self._has_zone = has_zone
         self._no_zone_hint.setVisible(not has_zone)
+        self._refresh_status()
+
+    def uncheck_tool(self, tool_key: str) -> None:
+        """External sync: uncheck a tool button without emitting tool_changed.
+
+        Called when the underlying map tool self-deactivates out from under
+        the panel (Line's two-stage Escape calls canvas.unsetMapTool(self)
+        directly, bypassing the button click path entirely) so the button
+        reflects that no drawing tool is armed on the canvas anymore. A no-op
+        if the button is already unchecked or the key is unknown.
+
+        An exclusive QButtonGroup refuses to drop its last checked button:
+        ``setChecked(False)`` alone is silently reverted by Qt, both here and
+        on a plain click (verified: same behavior either way). Toggling
+        exclusivity off for the single call is the documented way to reach
+        "nothing checked" and back; the group is exclusive again before
+        control returns, so a later click still enforces mutual exclusion.
+        """
+        btn = self._tool_buttons.get(tool_key)
+        if btn is None or not btn.isChecked():
+            return
+        btn.blockSignals(True)
+        self._tool_group.setExclusive(False)
+        try:
+            btn.setChecked(False)
+        finally:
+            self._tool_group.setExclusive(True)
+            btn.blockSignals(False)
         self._refresh_status()
 
     def activate(self) -> None:
@@ -428,7 +513,6 @@ class MarkupPanel(QWidget):
             return
         btn = QToolButton()
         btn.setCursor(QtC.PointingHandCursor)
-        btn.setFocusPolicy(QtC.NoFocus)
         btn.setFixedSize(_COLOR_DOT_PX + 6, _COLOR_DOT_PX + 6)
         btn.setIconSize(QSize(_COLOR_DOT_PX, _COLOR_DOT_PX))
         btn.setStyleSheet(self._dot_btn_style)
@@ -436,6 +520,7 @@ class MarkupPanel(QWidget):
             color, selected=False, is_dark=is_dark_palette(self), dot_px=_COLOR_DOT_PX
         ))
         btn.setToolTip(color.name().upper())
+        btn.setAccessibleName(color.name().upper())
         btn.clicked.connect(
             lambda _checked=False, c=color: self._set_color(c)
         )

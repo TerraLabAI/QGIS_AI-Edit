@@ -170,6 +170,10 @@ class _SubmitTextEdit(QTextEdit):
     """Borderless QTextEdit used inside _PromptContainer.
 
     - Enter submits, Shift+Enter inserts newline.
+    - Tab leaves the box (setTabChangesFocus). A prompt is a sentence, never
+      indented text, and without this every control after the box in the tab
+      order - the chips, the footer icons, Generate - is unreachable going
+      forward from the prompt.
     - Image or geodata file paths in the clipboard or raw image data (e.g. a screenshot
       copied from Preview) are routed to the references store via
       ``images_pasted`` instead of being inserted as an emoji-doc icon.
@@ -194,6 +198,9 @@ class _SubmitTextEdit(QTextEdit):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setAcceptDrops(False)
+        # Tab moves on instead of inserting a tab character (see the class
+        # docstring). Nothing in the prompt path reads a tab.
+        self.setTabChangesFocus(True)
         # Remove the native frame - the surrounding _PromptContainer paints it.
         self.setFrameShape(QtC.FrameNoFrame)
         # Transparent background only; keep palette untouched so the QTextEdit
@@ -264,12 +271,12 @@ class _SubmitTextEdit(QTextEdit):
 class _ResolutionMenuItem(QWidget):
     """Custom widget for one resolution row inside the resolution QMenu.
 
-    Layout:   [ ✓ ]  Label                          N credits
+    Layout:   [ ✓ ]  Label  [Pro]                   N credits
 
     The leading checkmark column is fixed-width so all three rows align.
-    Locked rows (free-tier 2K / 4K) render in a muted color but stay
-    clickable - the click still fires so the dock widget can show the
-    "Subscribe for higher resolution" banner.
+    Locked rows (free-tier 2K / 4K) render in a muted color, carry the
+    "Pro" tag, and stay clickable - the click still fires so the dock
+    widget can show the "Subscribe for higher resolution" banner.
 
     QMenu does not paint its selection highlight under QWidgetAction items,
     so the hover background is drawn by the widget itself via a :hover
@@ -308,13 +315,13 @@ class _ResolutionMenuItem(QWidget):
         row.setSpacing(8)
 
         # Leading column: checkmark on the selected row, empty otherwise.
-        # Locked rows carry no icon - the muted text + tooltip already signal
-        # the locked state, and a padlock glyph read as cheap.
         check = QLabel("✓" if selected else "", self)
-        check.setFixedWidth(12)
         check.setStyleSheet(
             "font-size: 12px; color: palette(text); background: transparent;"
         )
+        # Measured, not 12px flat: the Windows fallback face (Segoe UI Symbol)
+        # gives U+2713 a wider advance than the macOS one and shaved the tick.
+        check.setFixedWidth(max(12, check.fontMetrics().horizontalAdvance("✓") + 2))
         check.setAttribute(QtC.WA_TransparentForMouseEvents, True)
         row.addWidget(check)
 
@@ -331,13 +338,27 @@ class _ResolutionMenuItem(QWidget):
         name.setAttribute(QtC.WA_TransparentForMouseEvents, True)
         row.addWidget(name)
 
-        row.addStretch()
-
         cost_color = (
             f"color: {DISABLED_TEXT};"
             if locked
             else "color: rgba(128,128,128,0.85);"
         )
+
+        # A word, not just the muted tint: colour alone carries the locked state
+        # to nobody who cannot see it, and a tooltip is out of reach by keyboard.
+        # "Pro" is the tier name everywhere else: the account dialog prints it,
+        # the plan wire value is "pro", and the website labels these same locked
+        # 2K/4K rows "Pro". It stays outside tr(), like the other two, because
+        # the site ships it untranslated in every locale.
+        if locked:
+            pro = QLabel("Pro", self)
+            pro.setStyleSheet(
+                f"font-size: 10px; background: transparent; {cost_color}"
+            )
+            pro.setAttribute(QtC.WA_TransparentForMouseEvents, True)
+            row.addWidget(pro)
+
+        row.addStretch()
         cost_text = (
             tr("{n} credit").format(n=credits)
             if credits == 1

@@ -1,7 +1,7 @@
 """Curated-template card widgets: star toggle + before/after preview card."""
 from __future__ import annotations
 
-from qgis.PyQt.QtCore import QSize, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QFrame,
@@ -17,6 +17,7 @@ from ....core import telemetry
 from ....core import telemetry_events as te
 from ....core.i18n import tr
 from ....core.prompts import prompt_history
+from ...dock.style import FOCUS_RING
 from .common import (
     _CARD_HOVER,
     _CARD_NORMAL,
@@ -36,6 +37,13 @@ from .common import (
 # ---------------------------------------------------------------------------
 # Widgets
 # ---------------------------------------------------------------------------
+
+# Keyboard focus ring for a card, shared with _GenerationCard. Appended to
+# _CARD_NORMAL / _CARD_HOVER at every swap, because setStyleSheet replaces the
+# whole sheet and a rule left out of one of them disappears on hover. The hover
+# border is the brand green, so the ring cannot be green: FOCUS_RING is the
+# plugin's single ring hue and it reads as a different state under the cursor.
+_CARD_FOCUS = f"QFrame#card:focus {{ border: 2px solid {FOCUS_RING}; }}"
 
 
 class _StarButton(QToolButton):
@@ -121,7 +129,11 @@ class _BeforeAfterCard(QFrame):
         self._preset = preset
         self._on_click = on_click
         self.setCursor(QtC.PointingHandCursor)
-        self.setStyleSheet(_CARD_NORMAL)
+        self.setStyleSheet(_CARD_NORMAL + _CARD_FOCUS)
+        # The card is the only way to pick a template, so it has to be tabbable
+        # and activatable; the star inside it was the sole focus stop before.
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(preset.get("label") or tr("Template"))
         # Flexible width so the grid columns stretch to fill the window (no
         # clipped right edge); a minimum keeps the preview readable when small.
         self.setMinimumWidth(200)
@@ -141,7 +153,9 @@ class _BeforeAfterCard(QFrame):
         # over it (the slider already pauses on hover and respects drags).
         # No badges: match the clean Recent-card preview (the full before/after
         # detail lives in the popup the card opens).
-        self._slider = BeforeAfterSlider(self, auto_loop=False, show_badges=False)
+        self._slider = BeforeAfterSlider(
+            self, auto_loop=False, show_badges=False, handle_grab_only=True
+        )
         self._slider.setFixedHeight(self.SLIDER_HEIGHT)
         self._slider.setSizePolicy(QtC.SizePolicyExpanding, QtC.SizePolicyFixed)
         self._slider.clicked.connect(self._emit_click)
@@ -191,10 +205,11 @@ class _BeforeAfterCard(QFrame):
             bottom_row.addWidget(self._use_hint)
             footer_outer.addLayout(bottom_row)
         else:
-            # Templates (Top Picks, themed): one bold line says it all - compact,
-            # no reserved second line. Title and use hint share a single row.
+            # Templates (Top Picks, themed): the name alone. No prompt snippet -
+            # the title says what the template does, and the full prompt text
+            # lives in the detail popup the card opens.
             footer_outer.setContentsMargins(10, 8, 10, 10)
-            footer_outer.setSpacing(4)
+            footer_outer.setSpacing(3)
             title_row = QHBoxLayout()
             title_row.setContentsMargins(0, 0, 0, 0)
             title_row.setSpacing(6)
@@ -299,12 +314,12 @@ class _BeforeAfterCard(QFrame):
         return self._preset
 
     def enterEvent(self, event):  # noqa: N802
-        self.setStyleSheet(_CARD_HOVER)
+        self.setStyleSheet(_CARD_HOVER + _CARD_FOCUS)
         _set_use_hint(self._use_hint, True)
         super().enterEvent(event)
 
     def leaveEvent(self, event):  # noqa: N802
-        self.setStyleSheet(_CARD_NORMAL)
+        self.setStyleSheet(_CARD_NORMAL + _CARD_FOCUS)
         _set_use_hint(self._use_hint, False)
         super().leaveEvent(event)
 
@@ -320,3 +335,13 @@ class _BeforeAfterCard(QFrame):
             y = QtC.event_pos(event).y()
             if y >= self._slider.height():
                 self._emit_click()
+
+    def keyPressEvent(self, event):  # noqa: N802
+        # Space and Return open the same detail popup a click does.
+        if event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._emit_click()
+            event.accept()
+            return
+        # Keys we don't handle: ignore, so Tab, Escape and the dialog's own
+        # shortcuts keep working.
+        event.ignore()

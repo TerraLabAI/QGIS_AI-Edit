@@ -87,3 +87,35 @@ class ColorControlsMixin:
             is_error=True,
         )
         self._eyedropper_tool = None
+
+    def cancel_eyedropper(self) -> None:
+        """Disarm the eyedropper and hand the canvas back. Teardown entry point.
+
+        The tool is only cleared by its own click callbacks, so unloading while
+        it is armed used to leave QGIS's canvas pointing at a map tool owned by
+        a dead plugin. Called from the dock's cleanup().
+        """
+        tool = self._eyedropper_tool
+        self._eyedropper_tool = None
+        if tool is None:
+            return
+        try:
+            from qgis.utils import iface as _iface
+        except ImportError:  # pragma: no cover - non-QGIS env
+            return
+        try:
+            canvas = _iface.mapCanvas() if _iface is not None else None
+            if canvas is not None and canvas.mapTool() is tool:
+                previous = getattr(tool, "_previous_tool", None)
+                if previous is not None:
+                    canvas.setMapTool(previous)
+                else:
+                    canvas.unsetMapTool(tool)
+        except (RuntimeError, AttributeError):  # nosec B110 - canvas already gone
+            pass
+        # QgsMapTool parents itself to the canvas, so dropping the Python
+        # reference alone leaves the C++ tool alive on the map canvas.
+        try:
+            tool.deleteLater()
+        except (RuntimeError, AttributeError):  # nosec B110
+            pass

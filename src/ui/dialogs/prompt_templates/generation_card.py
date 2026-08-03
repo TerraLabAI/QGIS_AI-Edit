@@ -1,7 +1,7 @@
 """Past-generation card and the sidebar tab button."""
 from __future__ import annotations
 
-from qgis.PyQt.QtCore import QTimer
+from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -15,6 +15,7 @@ from ....core import qt_compat as QtC
 from ....core.date_format import format_smart_date
 from ....core.i18n import tr
 from ....core.prompts.prompt_presets import lookup_template_by_prompt
+from .cards import _CARD_FOCUS
 from .common import (
     _CARD_HOVER,
     _CARD_NORMAL,
@@ -57,7 +58,10 @@ class _GenerationCard(QFrame):
         self._demo_loader = demo_loader
         self._version_badge = None
         self.setCursor(QtC.PointingHandCursor)
-        self.setStyleSheet(_CARD_NORMAL)
+        self.setStyleSheet(_CARD_NORMAL + _CARD_FOCUS)
+        # Opening a past generation is a click-only action otherwise: nothing
+        # inside the card takes focus.
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         # Size to content (like the template cards) so the footer never leaves a
         # dead gap below the title/date. The 175px image caps every card, so the
         # grid stays aligned at the image even when footers differ (1-line
@@ -72,7 +76,9 @@ class _GenerationCard(QFrame):
         # Before/after wipe slider (badges hidden - keeps just the divider).
         from ...before_after_slider import BeforeAfterSlider
 
-        self._slider = BeforeAfterSlider(self, auto_loop=False, show_badges=False)
+        self._slider = BeforeAfterSlider(
+            self, auto_loop=False, show_badges=False, handle_grab_only=True
+        )
         self._slider.setFixedHeight(self.SLIDER_HEIGHT)
         self._slider.setSizePolicy(QtC.SizePolicyExpanding, QtC.SizePolicyFixed)
         self._slider.setCursor(QtC.PointingHandCursor)
@@ -97,6 +103,9 @@ class _GenerationCard(QFrame):
         prompt_raw = job.get("prompt") or ""
         template_match = lookup_template_by_prompt(prompt_raw)
         template_label = template_match[1] if template_match else ""
+        self.setAccessibleName(
+            template_label or prompt_raw or tr("Your prompt")
+        )
 
         # Optional origin pill (unified Favorites tab): Template vs Your prompt.
         if show_origin_pill:
@@ -270,12 +279,12 @@ class _GenerationCard(QFrame):
         self._position_version_badge()
 
     def enterEvent(self, event):  # noqa: N802
-        self.setStyleSheet(_CARD_HOVER)
+        self.setStyleSheet(_CARD_HOVER + _CARD_FOCUS)
         _set_use_hint(self._use_hint, True)
         super().enterEvent(event)
 
     def leaveEvent(self, event):  # noqa: N802
-        self.setStyleSheet(_CARD_NORMAL)
+        self.setStyleSheet(_CARD_NORMAL + _CARD_FOCUS)
         _set_use_hint(self._use_hint, False)
         super().leaveEvent(event)
 
@@ -289,6 +298,16 @@ class _GenerationCard(QFrame):
             y = QtC.event_pos(event).y()
             if y >= self._slider.height():
                 self._emit_open()
+
+    def keyPressEvent(self, event):  # noqa: N802
+        # Space and Return open the same detail popup a click does.
+        if event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._emit_open()
+            event.accept()
+            return
+        # Keys we don't handle: ignore, so Tab, Escape and the dialog's own
+        # shortcuts keep working.
+        event.ignore()
 
 
 class _SidebarButton(QPushButton):

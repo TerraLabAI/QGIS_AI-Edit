@@ -14,7 +14,7 @@ from ....core import qt_compat as QtC
 from ....core.i18n import tr
 from ....core.logger import log_debug
 from ....core.prompts.session_grouping import group_recent_jobs
-from .common import _GALLERY_PAGE_SIZE, _LOAD_MORE_BTN, _is_alive
+from .common import _LOAD_MORE_BTN, _gallery_batch_size, _is_alive
 from .generation_card import _GenerationCard
 from .workers import _detach_worker, _GenerationFavoriteWorker, _HistoryPageWorker
 
@@ -24,14 +24,16 @@ class GalleryMixin:
 
     def _build_card_gallery(
         self, key: str, entries: list, outer_v: QVBoxLayout, scroll: QScrollArea,
+        columns: int = 3, slider_h: int | None = None, paginate: bool = True,
     ) -> None:
-        """Paged grid of cards into ONE continuous 3-column grid. Each entry is
-        a tagged dict ({"kind": "preset"|"job", "data": ...}); presets render as
-        template slider cards, jobs as generation cards. Shared by Recent (jobs
-        only) and the unified Favorites tab (presets + jobs in one flow), so a
-        removed favorite reflows every later card with no gap."""
+        """Paged grid of cards into ONE continuous grid (3 columns by default).
+        Each entry is a tagged dict ({"kind": "preset"|"job", "data": ...});
+        presets render as template slider cards, jobs as generation cards.
+        Shared by Recent (jobs only), the unified Favorites tab, and the
+        Starred page gallery (4 smaller columns via `columns` + `slider_h`),
+        so a removed favorite reflows every later card with no gap."""
         grid_host = QWidget()
-        grid = self._new_card_grid(grid_host, columns=3)
+        grid = self._new_card_grid(grid_host, columns=columns)
         cards: list = []
         more_btn = QPushButton()
         more_btn.setStyleSheet(_LOAD_MORE_BTN)
@@ -43,8 +45,13 @@ class GalleryMixin:
             "cards": cards,
             "visible": 0,
             "btn": more_btn,
+            "columns": columns,
+            "slider_h": slider_h,
+            # paginate=False builds every card upfront (no Show-more button);
+            # thumbnails still stream lazily with the viewport loader below.
+            "page_size": _gallery_batch_size() if paginate else max(1, len(entries)),
         }
-        self._append_gallery_cards(key)  # first _GALLERY_PAGE_SIZE
+        self._append_gallery_cards(key)  # first batch
 
         outer_v.addWidget(grid_host)
 
@@ -68,19 +75,30 @@ class GalleryMixin:
         grid = st["grid"]
         cards = st["cards"]
         start = st["visible"]
-        end = min(start + _GALLERY_PAGE_SIZE, len(entries))
-        # Favorites tag generation cards with a Template / Your prompt origin
-        # pill so the two kinds read apart; Recent does not (all generations).
-        show_origin = key == "user_favorites"
+        end = min(start + st.get("page_size", _gallery_batch_size()), len(entries))
+        # Favorites and the Starred page gallery tag generation cards with a
+        # Template / Your prompt origin pill so the two kinds read apart;
+        # Recent does not (all generations).
+        show_origin = key in ("user_favorites", "work_favorites")
+        columns = st.get("columns", 3)
+        slider_h = st.get("slider_h")
         for idx in range(start, end):
-            row, col = divmod(idx, 3)
+            row, col = divmod(idx, columns)
             entry = entries[idx]
             if entry.get("kind") == "preset":
                 card = self._build_top_pick_card(entry["data"])
+            elif entry.get("kind") == "session":
+                # Sessions page: the card opens the session popup, not the
+                # plain generation detail (SessionsMixin owns the builder).
+                card = self._build_session_card(entry)
             else:
                 card = self._build_generation_card(
                     entry["data"], show_origin, entry.get("count", 1)
                 )
+            if slider_h is not None:
+                slider = getattr(card, "_slider", None)
+                if slider is not None:
+                    slider.setFixedHeight(slider_h)
             grid.addWidget(card, row, col)
             cards.append(card)
         st["visible"] = end
@@ -208,6 +226,10 @@ class GalleryMixin:
         """Download thumbnails only for cards in (or near) the viewport, and
         load more as the user scrolls. Keeps opening Recent fast - no upfront
         burst of dozens of full-size image downloads."""
+        # A gallery rebuilt on a SURVIVING scroll area (the Sessions page's
+        # month galleries, rebuilt on every search keystroke) must retire the
+        # previous hook first or timers and scrollbar connections pile up.
+        self._retire_gallery_wiring(key)
         trigger = lambda: self._load_visible_cards(scroll, cards)  # noqa: E731
         self._gallery_loaders[key] = trigger
         # Coalesce scroll ticks: a fast scroll fires valueChanged dozens of
@@ -218,10 +240,36 @@ class GalleryMixin:
         debounce.setSingleShot(True)
         debounce.setInterval(50)
         debounce.timeout.connect(trigger)
-        scroll.verticalScrollBar().valueChanged.connect(lambda _v: debounce.start())
+        on_scroll = lambda _v: debounce.start()  # noqa: E731
+        scroll.verticalScrollBar().valueChanged.connect(on_scroll)
+        self._gallery_lazy_wiring[key] = (scroll, on_scroll, debounce)
         # Two ticks: one once the event loop drains, one after layout settles.
         QTimer.singleShot(0, trigger)
         QTimer.singleShot(80, trigger)
+
+    def _retire_gallery_wiring(self, key: str) -> None:
+        """Unhook one gallery's lazy-load plumbing (scrollbar slot + debounce
+        timer). Safe on a key that was never wired or whose scroll is gone."""
+        wiring = self._gallery_lazy_wiring.pop(key, None)
+        if wiring is None:
+            return
+        scroll, slot, timer = wiring
+        if _is_alive(scroll):
+            try:
+                scroll.verticalScrollBar().valueChanged.disconnect(slot)
+            except (RuntimeError, TypeError):
+                pass
+        if _is_alive(timer):
+            timer.stop()
+            timer.deleteLater()
+
+    def _retire_gallery(self, key: str) -> None:
+        """Forget one gallery entirely: paging state, loader, lazy-load
+        wiring. Used by the Sessions page, whose month galleries are wiped
+        and rebuilt in place while their scroll area survives."""
+        self._gallery_state.pop(key, None)
+        self._gallery_loaders.pop(key, None)
+        self._retire_gallery_wiring(key)
 
     @staticmethod
     def _load_visible_cards(scroll: QScrollArea, cards: list) -> None:

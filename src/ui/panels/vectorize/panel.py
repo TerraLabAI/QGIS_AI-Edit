@@ -11,7 +11,7 @@ import os
 
 from qgis.core import QgsProject, QgsRasterLayer
 from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QKeySequence, QShortcut
+from qgis.PyQt.QtGui import QColor, QKeySequence
 from qgis.PyQt.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
@@ -23,6 +23,7 @@ from qgis.PyQt.QtWidgets import (
 
 from ....core import qt_compat as QtC
 from ....core.i18n import tr
+from ....core.qt_compat import QShortcut
 from ...layer_groups import pick_default_layer
 from ...layer_tree_combobox import LayerTreeComboBox
 from ...onboarding_hint import HINT_VECTORIZE, DismissibleHint, is_hint_dismissed

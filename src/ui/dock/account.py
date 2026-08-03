@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from ...core import qt_compat as QtC
-from ...core.auth.activation_manager import get_subscribe_url
+from ...core.auth.activation_manager import get_subscribe_url, is_feature_enabled
+from ...core.config_store import get_export_copy
+from ...core.entitlements import paid_tier_default
 from ...core.i18n import tr
 from ..external_url import open_external
 from .style import ERROR_TEXT, SUCCESS_TEXT
@@ -34,8 +36,10 @@ class DockAccountMixin:
         # (not just a fresh result), so they are revealed the moment the dock
         # is activated. Their per-click eligibility is gated by the active
         # layer (set_swipe_button_enabled, vectorize_btn enable refresh).
-        self._vectorize_btn.setVisible(activated)
-        self._set_swipe_button_visible(activated)
+        # A server kill switch hides the entry point rather than greying it:
+        # the click-time gate behind it stays as the backstop for the other
+        # ways in (canvas pills, shortcuts).
+        self._apply_feature_visibility(activated)
         if activated:
             self.hide_trial_info()
             self._update_layer_warning()
@@ -48,7 +52,6 @@ class DockAccountMixin:
             self._connect_section.setVisible(True)
             self._stop_pairing_wait()
             self._activation_message.setVisible(False)
-            self.hide_activation_limit_cta()
             # The credits ring + count and the upsell pill belong to a signed-in
             # session only; clear them so they never linger after sign-out.
             self._set_credits_wanted(False)
@@ -58,26 +61,46 @@ class DockAccountMixin:
         # signed-in user (set_launch_state above), hidden here after sign-out.
         self._update_first_steps_visibility()
 
+    def _apply_feature_visibility(self, activated: bool) -> None:
+        """Show or hide the entry points the server can switch off.
+
+        A kill switch hides the entry point rather than greying it: the
+        click-time gate behind it stays as the backstop for the other ways in
+        (canvas pills, shortcuts).
+        """
+        self._vectorize_btn.setVisible(activated and is_feature_enabled("vectorize"))
+        self._set_swipe_button_visible(activated and is_feature_enabled("swipe"))
+        markup_available = is_feature_enabled("markup")
+        for container in (self._prompt_container, self._result_prompt_container):
+            container.set_markup_available(markup_available)
+
+    def refresh_feature_visibility(self) -> None:
+        """Re-read the kill switches after a late config arrival.
+
+        The config warms in the background, so the dock is built and often
+        activated before the answer lands. Without this, a feature switched off
+        server-side stays visible until the next activation refresh, and a
+        control that is visible and then refuses is worse than one that is
+        absent.
+        """
+        try:
+            self._apply_feature_visibility(bool(self._activated))
+            # The two entry points the chrome owns, same switches.
+            self._sync_demo_button()
+            self._sync_attach_buttons()
+        except Exception:  # nosec B110 - a late refresh must never break the dock
+            pass
+
     def hide_consent(self):
         """Hide the consent checkbox after first generation."""
         self._consent_widget.setVisible(False)
 
     def set_activation_message(self, text: str, is_error: bool = False):
         # Use brighter variants for dark theme readability
-        self.hide_activation_limit_cta()
         color = ERROR_TEXT if is_error else SUCCESS_TEXT
         self._activation_message.setStyleSheet(f"font-size: 11px; color: {color};")
         self._activation_message.setText(text)
         self._activation_message.setVisible(True)
-
-    def show_activation_limit_cta(self, subscribe_url: str):
-        self._activation_limit_cta_url = subscribe_url
-        self._activation_limit_cta_btn.setText(tr("Subscribe"))
-        self._activation_limit_cta_btn.setVisible(True)
-
-    def hide_activation_limit_cta(self):
-        self._activation_limit_cta_btn.setVisible(False)
-        self._activation_limit_cta_url = ""
 
     def set_credits(
         self,
@@ -94,12 +117,12 @@ class DockAccountMixin:
         # Keep the reference-image gate in sync with the confirmed tier.
         if self._reference_widget is not None:
             self._reference_widget.set_free_tier(is_free_tier)
-        # Paid default is "2K" (Detailed): better results out of the box.
-        # Applied only on a confirmed paid credits payload, and never over a
-        # resolution the user picked themselves. Free tier keeps its "1K"
-        # coercion in _refresh_resolution_triggers.
+        # Paid accounts land on the plan's default tier: better results out of
+        # the box. Applied only on a confirmed paid credits payload, and never
+        # over a resolution the user picked themselves. The free-tier coercion
+        # runs in _refresh_resolution_triggers, off the same helper.
         if used is not None and limit is not None and not is_free_tier and not self._resolution_user_choice:
-            self._selected_resolution = "2K"
+            self._selected_resolution = paid_tier_default()
         if used is not None and limit is not None:
             remaining = max(0, limit - used)
             self._credits_label.setText(f"{remaining} / {limit}")
@@ -115,10 +138,17 @@ class DockAccountMixin:
             self._cached_limit = limit
             exhausted = is_free_tier and limit > 0 and used >= limit
             if exhausted and self._trial_info_url:
+                # The renewal date is the server's rule, not the plugin's. A
+                # served sentence keeps this honest if the cadence ever moves,
+                # instead of every old client repeating "the 1st".
                 self.show_trial_exhausted_info(
-                    tr("You've used this month's {limit} free credits. They renew on the 1st.").format(
-                        limit=limit
-                    ),
+                    get_export_copy(
+                        "trial.exhausted",
+                        tr(
+                            "You've used this month's {limit} free credits."
+                            " They renew on the 1st."
+                        ).format(limit=limit),
+                    ).replace("{limit}", str(limit)),
                     self._trial_info_url,
                 )
             elif not exhausted:
@@ -276,16 +306,6 @@ class DockAccountMixin:
             # batch dies with the session.
             telemetry.flush()
             open_external(self._limit_cta_url)
-
-    def _on_activation_limit_cta_clicked(self):
-        if self._activation_limit_cta_url:
-            from ...core import telemetry
-            from ...core import telemetry_events as te
-            telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {"source": "activation_limit_cta"})
-            # The user leaves QGIS for the browser right after; ship now or the
-            # batch dies with the session.
-            telemetry.flush()
-            open_external(self._activation_limit_cta_url)
 
     def _hide_limit_cta(self):
         self._limit_cta_btn.setVisible(False)

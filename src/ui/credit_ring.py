@@ -10,11 +10,14 @@ from qgis.PyQt.QtCore import QRectF, QSize, Qt
 from qgis.PyQt.QtGui import QColor, QPainter, QPen
 from qgis.PyQt.QtWidgets import QWidget
 
-# Brand palette - mirrors dock_widget constants. Duplicated here so the
-# widget remains importable without circular dependency.
+from ..core.config_store import get_export_dial_ratio
+
+# Brand palette - mirrors dock.style constants (BRAND_BLUE, BRAND_GREEN,
+# ERROR_TEXT). Duplicated here so the widget remains importable without
+# circular dependency (dock.build_result imports this module).
 _BRAND_BLUE = "#1e88e5"
 _BRAND_GREEN = "#8bac27"
-_BRAND_RED = "#ef5350"
+_ERROR_RED = "#ef5350"
 _TRACK_RGBA = (128, 128, 128, 64)  # rgba(128,128,128,0.25)
 _LOW_THRESHOLD = 0.20
 
@@ -76,8 +79,8 @@ class CreditRing(QWidget):
 
     def _progress_color(self) -> QColor:
         ratio = self._ratio_remaining()
-        if ratio <= _LOW_THRESHOLD:
-            return QColor(_BRAND_RED)
+        if ratio <= get_export_dial_ratio("credits.low_ratio", _LOW_THRESHOLD):
+            return QColor(_ERROR_RED)
         return QColor(_BRAND_GREEN if self._free_tier else _BRAND_BLUE)
 
     def paintEvent(self, _event):  # noqa: N802

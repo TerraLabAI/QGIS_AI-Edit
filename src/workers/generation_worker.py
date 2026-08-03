@@ -8,19 +8,27 @@ import time
 from qgis.core import QgsTask
 from qgis.PyQt.QtCore import pyqtSignal
 
+from ..core.config_store import get_export_dial
 from ..core.errors import ErrorCode
 from ..core.generation.pipeline_context import save_debug_artifacts
 from ..core.i18n import tr
+from ..core.log_scrub import scrub_user_paths
 from ..core.logger import log_debug
 from ..core.prompts.loading_messages import get_phase_messages
 from ..core.raster_writer import write_geotiff
-from ..core.reference_image_store import encode_references_b64
+from ..core.reference_image_store import (
+    encode_references_b64,
+    encode_references_with_notes,
+)
 
 DEFAULT_ESTIMATED_TIME = 25
 # Only admit "taking a bit longer than usual" once elapsed is well past the
 # server's (p75-ish) estimate, so it shows for the genuinely slow tail rather
 # than on every run. Measured against the UNCAPPED elapsed/estimate ratio.
 _LONGER_THAN_USUAL_RATIO = 1.5
+# Loading-phase boundaries as a fraction of the estimate (early/mid/late copy).
+_PHASE_EARLY_RATIO = 0.3
+_PHASE_LATE_RATIO = 0.75
 
 
 def _ctx_snapshot(ctx) -> dict:
@@ -60,6 +68,7 @@ class GenerationTask(QgsTask):
         plugin_dir="",
         skip_trial_check=False,
         context_image_paths=None,
+        context_image_notes=None,
         guidance_image=None,
         guidance_format=None,
     ):
@@ -80,6 +89,8 @@ class GenerationTask(QgsTask):
         self._suggested_resolution = suggested_resolution
         # Paths only at dispatch; run() base64-encodes them off the UI thread.
         self._context_image_paths = list(context_image_paths or [])
+        # Per-image notes aligned with the paths (snapshot_notes order).
+        self._context_image_notes = list(context_image_notes or [])
         self._context_images: list[str] = []
         self._guidance_image = guidance_image
         self._guidance_format = guidance_format
@@ -103,6 +114,11 @@ class GenerationTask(QgsTask):
 
     def _mark_failed(self, message: str, code: str | ErrorCode) -> bool:
         code_str = code.value if isinstance(code, ErrorCode) else str(code)
+        if code_str.strip().upper() == ErrorCode.GENERATION_CANCELLED.value:
+            # A cancel is never a failure: the cancel path emits
+            # generation_cancelled and recovers the dock itself. Covers the
+            # race where the service was cancelled before task.cancel() landed.
+            return False
         self._failure_payload = (message, code_str, _ctx_snapshot(self._ctx))
         return False
 
@@ -128,7 +144,7 @@ class GenerationTask(QgsTask):
         if error_code:
             attempt_props["error_code"] = error_code
         if error_message:
-            attempt_props["error_message"] = error_message[:200]
+            attempt_props["error_message"] = scrub_user_paths(error_message)[:200]
         if stream_fallback_used is not None:
             attempt_props["stream_fallback_used"] = stream_fallback_used
         self._track_refund_event("generation_refund_attempted", attempt_props)
@@ -148,7 +164,7 @@ class GenerationTask(QgsTask):
                         "reason": reason,
                         "request_id": request_id,
                         "error_code": str(response.get("code", "")),
-                        "error_message": str(response.get("error", ""))[:200],
+                        "error_message": scrub_user_paths(str(response.get("error", "")))[:200],
                     },
                 )
                 return False
@@ -161,7 +177,7 @@ class GenerationTask(QgsTask):
                     "reason": reason,
                     "request_id": request_id,
                     "error_code": "EXCEPTION",
-                    "error_message": str(refund_err)[:200],
+                    "error_message": scrub_user_paths(str(refund_err))[:200],
                 },
             )
             return False
@@ -217,7 +233,22 @@ class GenerationTask(QgsTask):
         self.progress.emit(tr("Preparing..."), 0)
 
         # Reads up to 12 files; tolerates any that vanished since dispatch.
-        self._context_images = encode_references_b64(self._context_image_paths)
+        # When notes ride along, the paired encoder drops a skipped file's
+        # note with it so the two lists stay index-for-index aligned.
+        notes = self._context_image_notes
+        if notes and len(notes) == len(self._context_image_paths):
+            self._context_images, notes = encode_references_with_notes(
+                self._context_image_paths, notes
+            )
+            self._context_image_notes = notes
+        else:
+            if notes:
+                log_debug(
+                    "context_image_notes dropped: "
+                    f"{len(notes)} notes for {len(self._context_image_paths)} paths"
+                )
+                self._context_image_notes = []
+            self._context_images = encode_references_b64(self._context_image_paths)
 
         if not self._skip_trial_check:
             try:
@@ -255,12 +286,16 @@ class GenerationTask(QgsTask):
                 return
             self._poll_count += 1
             if self._poll_count % 2 == 1:
-                est = estimated_time or DEFAULT_ESTIMATED_TIME
+                est = estimated_time or get_export_dial(
+                    "loading.default_estimated_time_s", DEFAULT_ESTIMATED_TIME
+                )
                 t_elapsed = elapsed if elapsed is not None else (time.time() - self._start_time)
                 raw_ratio = (t_elapsed / est) if est > 0 else 0
                 t = min(raw_ratio, 1.0)
 
-                phase = 0 if t < 0.3 else (1 if t < 0.75 else 2)
+                early_r = get_export_dial("loading.phase_early_ratio", _PHASE_EARLY_RATIO)
+                late_r = get_export_dial("loading.phase_late_ratio", _PHASE_LATE_RATIO)
+                phase = 0 if t < early_r else (1 if t < late_r else 2)
                 msgs = self._phase_messages[phase]
                 idx = self._phase_indices[phase]
                 msg = msgs[idx % len(msgs)]
@@ -272,7 +307,9 @@ class GenerationTask(QgsTask):
                 pct = min(pct, 92)
                 self._last_pct = pct
 
-                if raw_ratio >= _LONGER_THAN_USUAL_RATIO:
+                if raw_ratio >= get_export_dial(
+                    "loading.longer_than_usual_ratio", _LONGER_THAN_USUAL_RATIO
+                ):
                     msg = tr("Taking a bit longer than usual...")
 
                 self.progress.emit(msg, pct)
@@ -290,6 +327,7 @@ class GenerationTask(QgsTask):
             ctx=self._ctx,
             suggested_resolution=self._suggested_resolution,
             context_images=self._context_images,
+            context_image_notes=self._context_image_notes or None,
             guidance_image=self._guidance_image,
             guidance_format=self._guidance_format,
             is_cancelled=self.isCanceled,
@@ -401,11 +439,10 @@ class GenerationTask(QgsTask):
             # telemetry (the bare message has not been enough to pinpoint the
             # recurring numpy/PROJ poisoning on Windows). Usernames stripped.
             try:
-                import re as _re
                 import traceback as _tb
 
                 tail = " | ".join(_tb.format_exc().strip().splitlines()[-4:])
-                tail = _re.sub(r"(?i)([/\\]Users[/\\])[^/\\]+", r"\1***", tail)
+                tail = scrub_user_paths(tail)
                 from ..core import telemetry
                 from ..core import telemetry_events as te
 
@@ -454,8 +491,28 @@ class GenerationTask(QgsTask):
             except Exception:  # nosec B110
                 pass
 
+        # Keep the swipe's true "before": the exact input the generation ran
+        # from, written as a sibling GeoTIFF. Best-effort - a failure here
+        # must never fail a completed generation.
+        before_path = ""
+        try:
+            from ..core.raster_writer import before_file_base
+
+            before_path = write_geotiff(
+                image_data=base64.b64decode(self._image_b64),
+                extent_dict=self._extent_dict,
+                crs_wkt=self._crs_wkt,
+                output_dir=self._output_dir,
+                prompt=self._prompt,
+                file_base=before_file_base(geotiff_path),
+            )
+        except Exception as before_err:  # noqa: BLE001 - cosmetic sidecar
+            log_debug(f"before GeoTIFF write skipped: {before_err}")
+            before_path = ""
+
         self._success_payload = {
             "geotiff_path": geotiff_path,
+            "before_geotiff_path": before_path,
             "prompt": self._prompt,
             "crs_wkt": self._crs_wkt,
             **_ctx_snapshot(self._ctx),

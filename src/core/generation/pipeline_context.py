@@ -43,6 +43,16 @@ class PipelineContext:
     # the upload endpoint so the object is signed with a matching content-type.
     input_format: str | None = None
 
+    # User-drawn zone polygon (WKT, same CRS as ``crs_wkt``/``crs_authid``
+    # above), when the zone was drawn with the polygon tool. Set by plugin.py
+    # from the live QgsGeometry right after export completes (main thread),
+    # so the worker thread only ever sees this plain string, never a live
+    # geometry. Local-only: the raster writer rasterizes it for the alpha
+    # crop (P3). It must never be added to the submit payload (see
+    # generation_service._build_geo_kwargs, which does not read this field);
+    # the polygon stays on the machine (spec section 8, D2).
+    zone_polygon_wkt: str | None = None
+
     # Iteration chain: set by plugin.py when the user iterates on a previous
     # result, so the server can silently attach the original input as a
     # reference image to anchor coherence across edits.

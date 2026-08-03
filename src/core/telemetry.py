@@ -25,13 +25,19 @@ def _on_main_thread() -> bool:
 # Mirrors AI Segmentation's telemetry opt-out.
 _TELEMETRY_ENABLED_KEY = "TerraLab/telemetry_enabled"
 
+# Session memo of the opt-out flag. track() asks for it on every single event,
+# and a QSettings construction costs ~87 us against a real profile. Invalidation
+# rule: set_telemetry_enabled writes it, and every flush re-reads it before
+# anything leaves the machine, so an opt-out made in the OTHER TerraLab plugin
+# (same shared key) still stops this plugin's next send rather than only its
+# next session.
+_telemetry_enabled_memo: bool | None = None
 
-def is_telemetry_enabled() -> bool:
-    """Whether anonymous usage telemetry is enabled. Opt-out: defaults to True.
 
-    Reads the shared TerraLab/telemetry_enabled QSettings key. Fails closed: if
-    the preference cannot be read, we do NOT send (privacy takes precedence over
-    a data point)."""
+def _read_telemetry_enabled() -> bool:
+    """Fresh read of the shared opt-out key. Fails closed: if the preference
+    cannot be read, we do NOT send (privacy takes precedence over a data
+    point)."""
     try:
         from qgis.PyQt.QtCore import QSettings
         return bool(QSettings().value(_TELEMETRY_ENABLED_KEY, True, type=bool))
@@ -39,13 +45,37 @@ def is_telemetry_enabled() -> bool:
         return False
 
 
+def is_telemetry_enabled() -> bool:
+    """Whether anonymous usage telemetry is enabled. Opt-out: defaults to True.
+
+    Answers from the session memo (see above); `refresh_telemetry_enabled` is
+    what goes back to the shared TerraLab/telemetry_enabled QSettings key."""
+    global _telemetry_enabled_memo
+    if _telemetry_enabled_memo is None:
+        _telemetry_enabled_memo = _read_telemetry_enabled()
+    return _telemetry_enabled_memo
+
+
+def refresh_telemetry_enabled() -> bool:
+    """Re-read the opt-out key and return what it now says. Called on the send
+    path so nothing ships after the user switches telemetry off, wherever they
+    switched it off."""
+    global _telemetry_enabled_memo
+    _telemetry_enabled_memo = _read_telemetry_enabled()
+    return _telemetry_enabled_memo
+
+
 def set_telemetry_enabled(enabled: bool) -> None:
     """Persist the global telemetry opt-out flag (shared across TerraLab plugins)."""
+    global _telemetry_enabled_memo
     try:
         from qgis.PyQt.QtCore import QSettings
         QSettings().setValue(_TELEMETRY_ENABLED_KEY, bool(enabled))
     except Exception:  # nosec B110
         pass
+    # Set even when the write failed: an opt-out must hold for this session
+    # whether or not it reached disk.
+    _telemetry_enabled_memo = bool(enabled)
 
 
 # Anonymous events with no user-generated content; they need no gate beyond the
@@ -97,7 +127,7 @@ class _TelemetryFlushTask(QgsTask):
     """Sends one batch. Failures swallowed: telemetry must never break the plugin."""
 
     def __init__(self, client, events: list, auth: dict):
-        from ..workers.generic_request_task import silent_task_flags
+        from .qt_compat import silent_task_flags
         super().__init__("AI Edit telemetry flush", silent_task_flags())
         self._client = client
         self._events = events
@@ -211,6 +241,14 @@ class TelemetryCollector:
         and let the next main-thread flush ship the batch (see generation_worker).
         A stray off-thread call is now a safe no-op rather than a hard crash."""
         if not _on_main_thread():
+            return
+        # One QSettings read per flush (not per event) is what keeps the memo
+        # honest: whoever turned telemetry off, nothing queued before that
+        # leaves the machine.
+        if not refresh_telemetry_enabled():
+            with self._lock:
+                self._batch.clear()
+                self._pending_pre_auth.clear()
             return
         task = None
         with self._lock:

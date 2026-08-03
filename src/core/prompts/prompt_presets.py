@@ -8,160 +8,39 @@ available (first install, offline).
 """
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 
-from qgis.PyQt.QtCore import QSettings
-
+from ..config_store import get_export_dial
 from ..i18n import tr
+
+# Re-exports: the format/detect/normalize logic moved to sibling modules;
+# callers keep importing everything through this facade.
+from .preset_normalize import (  # noqa: F401
+    _CLIENT_PRESET_FIELDS,
+    _KNOWN_PRESET_FIELDS,
+    _MAX_EXTRA_CHARS,
+    _MAX_EXTRA_DEPTH,
+    _MAX_EXTRA_ITEMS,
+    _MAX_EXTRA_KEYS,
+    _current_lang,
+    _is_json_shaped,
+    _normalize_preset,
+    _pick_label,
+    _preset_extras,
+)
+from .prompt_detect import (  # noqa: F401
+    detect_freeform_vector_intent,
+    detect_prompt_guidance,
+    detect_seg_context,
+)
+from .prompt_format import format_template_prompt  # noqa: F401
 
 
 def _normalize_for_match(s: str) -> str:
     """Collapse whitespace so reformatted prompts still match the source."""
     return re.sub(r"\s+", " ", (s or "")).strip()
-
-
-_HEX_PAREN_RX = re.compile(r"\(#[0-9A-Fa-f]{3,6}\)")
-_SENTENCE_SPLIT_RX = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
-_BULLET_LINE_RX = re.compile(r"^\s*[-*•]\s+")
-_ITEM_SEP_RX = re.compile(r"^\s*,?\s*(?:and\s+|et\s+|y\s+|e\s+)?", re.IGNORECASE)
-_LEAD_VERB_RX = re.compile(
-    r"\b("
-    r"render|draw|show|paint|color|colour|fill|mark|highlight|label|outline|map|"
-    r"depict|illustrate|display|simulate|trace|"
-    r"rendre|dessiner|afficher|peindre|colorier|colorer|remplir|marquer|cartographier|"
-    r"renderizar|dibujar|mostrar|pintar|colorear|rellenar|marcar|mapear|"
-    r"desenhar|colorir|preencher|destacar"
-    r")\b",
-    re.IGNORECASE,
-)
-
-
-def _find_top_level_comma(text: str) -> int | None:
-    depth = 0
-    for i, c in enumerate(text):
-        if c == "(":
-            depth += 1
-        elif c == ")":
-            depth = max(0, depth - 1)
-        elif c == "," and depth == 0:
-            return i
-    return None
-
-
-def _split_lead_from_first_item(first_item: str) -> tuple[str | None, str]:
-    """Pull a lead-in off the first item so the bulleted list reads as a
-    parallel structure. Lead carries the verb when one is found, so each
-    bullet can drop into the same grammar."""
-    m = _LEAD_VERB_RX.search(first_item)
-    if m:
-        lead = first_item[: m.end()].rstrip()
-        rest = first_item[m.end():].lstrip(" ,;:")
-        if rest:
-            return lead, rest
-    comma_pos = _find_top_level_comma(first_item)
-    if comma_pos is not None and comma_pos > 0:
-        lead = first_item[:comma_pos].rstrip()
-        rest = first_item[comma_pos + 1:].lstrip()
-        if rest:
-            return lead, rest
-    return None, first_item
-
-
-def _bulletize_color_list(sentence: str) -> str | None:
-    """Turn a comma-separated color list into a bulleted block.
-
-    Returns None when the sentence has fewer than 2 hex codes - those keep
-    their prose form so we don't bulletize single-color rules."""
-    hex_matches = list(_HEX_PAREN_RX.finditer(sentence))
-    if len(hex_matches) < 2:
-        return None
-
-    items: list[str] = []
-    last = 0
-    for m in hex_matches:
-        chunk = sentence[last:m.end()]
-        if items:
-            chunk = _ITEM_SEP_RX.sub("", chunk, count=1)
-        items.append(chunk.strip())
-        last = m.end()
-    trailing = sentence[last:].strip()
-
-    lead, first_rest = _split_lead_from_first_item(items[0])
-    items[0] = first_rest
-
-    bullet_block = "\n".join(f"- {it}" for it in items)
-    if lead:
-        lead = lead.rstrip(",. ").strip()
-        result = f"{lead}:\n\n{bullet_block}" if lead else bullet_block
-    else:
-        result = bullet_block
-
-    if trailing:
-        trailing = re.sub(r"^[.,;:\s]+", "", trailing)
-        if trailing:
-            result = f"{result}\n\n{trailing}"
-    return result
-
-
-def _format_text_block(block: str) -> list[str]:
-    """Split a prose block into formatted paragraphs (each its own string).
-    Sentences with 2+ hex codes become bullet lists; the rest stay as prose."""
-    out: list[str] = []
-    for raw in _SENTENCE_SPLIT_RX.split(block):
-        sentence = raw.strip()
-        if not sentence:
-            continue
-        bulleted = _bulletize_color_list(sentence)
-        out.append(bulleted or sentence)
-    return out
-
-
-def format_template_prompt(prompt: str) -> str:
-    """Lay out a template prompt for the textbox.
-
-    Splits prose into one paragraph per sentence and turns any
-    comma-separated color list into a bulleted block. Bullet groups that
-    already ship in the source (server templates with explicit "\n- "
-    lines) are preserved as-is so the source stays the source of truth."""
-    if not prompt:
-        return prompt
-    text = prompt.strip()
-    if not text:
-        return text
-
-    paragraphs: list[str] = []
-    pending_text: list[str] = []
-    pending_bullets: list[str] = []
-
-    def flush_text() -> None:
-        if pending_text:
-            joined = " ".join(pending_text).strip()
-            pending_text.clear()
-            if joined:
-                paragraphs.extend(_format_text_block(joined))
-
-    def flush_bullets() -> None:
-        if pending_bullets:
-            paragraphs.append("\n".join(f"- {b}" for b in pending_bullets))
-            pending_bullets.clear()
-
-    for raw_line in text.split("\n"):
-        line = raw_line.strip()
-        if not line:
-            flush_text()
-            flush_bullets()
-            continue
-        if _BULLET_LINE_RX.match(line):
-            flush_text()
-            pending_bullets.append(_BULLET_LINE_RX.sub("", line, count=1).strip())
-        else:
-            flush_bullets()
-            pending_text.append(line)
-    flush_text()
-    flush_bullets()
-
-    return "\n\n".join(paragraphs)
 
 
 _CATEGORY_LABELS = {
@@ -184,100 +63,59 @@ _CATEGORY_LABELS = {
 # Mirrored with the website catalog (`needs` array + per-category `need`
 # field); these local tables are the offline fallback, resolved through
 # `get_need_groups` the same way category labels are.
-# Family labels (English source; French shows Analyser / Simuler / Habiller via
-# i18n). Keys stay classify/project/render so nothing else has to change; the
-# live labels come from the server catalog's needs[] and MUST mirror these.
+# The three families follow the measured usage split (ai-edit-product.md):
+# Show 57%, Extract 28%, Repair 15%, in that priority order. Keys stay
+# classify/project/render (QSettings fold state, accents, and old per-preset
+# `need` overrides all key on them); only labels, order, and the category
+# mapping moved. The live labels come from the server catalog's needs[] and
+# MUST mirror these (website `needs.ts`).
 _NEED_LABELS = {
-    "classify": "Analyze",
-    "project": "Simulate",
-    "render": "Style",
+    "project": "Show",
+    "classify": "Extract",
+    "render": "Repair",
 }
 
 _NEED_TAGLINES = {
-    "classify": "Analyze the territory: detect, segment, count, map",
-    "project": "Simulate scenarios and possible futures",
-    "render": "From raw imagery to presentation visuals",
+    "project": "Show a project: renders, plans, simulations, before/after",
+    "classify": "Extract data: detect, segment, count, map",
+    "render": "Repair imagery: sharpen, upscale, fix gaps and seams",
 }
 
-_NEED_ORDER = ["classify", "project", "render"]
+_NEED_ORDER = ["project", "classify", "render"]
 
 _CATEGORY_NEED = {
+    "climate": "project",
+    "urban": "project",
+    "energy": "project",
+    "cartography": "project",
+    "presentation": "project",
+    "archaeology": "project",
     "landcover": "classify",
     "segment": "classify",
     "forestry": "classify",
     "agriculture": "classify",
     "geology": "classify",
     "hydrology": "classify",
-    "climate": "project",
-    "urban": "project",
-    "energy": "project",
-    "cartography": "render",
     "cleanup": "render",
-    "presentation": "render",
-    "archaeology": "render",
 }
 
-# Grouped by need (classify -> project -> render) so the sidebar and search
+# Grouped by need (project -> classify -> render) so the sidebar and search
 # results walk the catalog in the same order the need groups display it.
 _CATEGORY_ORDER = [
+    "climate",
+    "urban",
+    "energy",
+    "cartography",
+    "presentation",
+    "archaeology",
     "landcover",
     "segment",
     "forestry",
     "agriculture",
     "geology",
     "hydrology",
-    "climate",
-    "urban",
-    "energy",
-    "cartography",
     "cleanup",
-    "presentation",
-    "archaeology",
 ]
-
-
-def _current_lang() -> str:
-    """Return the 2-char language code matching the server label keys."""
-    locale = QSettings().value("locale/userLocale", "en_US") or "en"
-    short = locale[:2].lower()
-    return short if short in ("en", "fr", "es", "pt") else "en"
-
-
-def _pick_label(label_field: Any, fallback: str = "") -> str:
-    """Return a string label from the server's polyglot `{en, fr, es, pt}`
-    dict, the current locale first, else "en", else the fallback."""
-    if isinstance(label_field, str):
-        return label_field
-    if isinstance(label_field, dict):
-        lang = _current_lang()
-        return label_field.get(lang) or label_field.get("en") or fallback
-    return fallback
-
-
-def _normalize_preset(preset: dict, source_category: str) -> dict:
-    """Pull a server preset into the flat shape the dialog expects.
-
-    `prompt` is a polyglot dict `{en, fr, es, pt}` on v3 server catalogs.
-    Older string-only payloads still work via `_pick_label`'s str fallback.
-    """
-    return {
-        "id": preset.get("id", ""),
-        "label": _pick_label(preset.get("label"), preset.get("id", "")),
-        "prompt": _pick_label(preset.get("prompt"), ""),
-        "source_category": source_category,
-        "top_pick": bool(preset.get("top_pick", False)),
-        # Templates the server flags as fragile (model hallucinates often).
-        # Plugin renders these under a separate "Experimental" disclosure
-        # in each category page so the curated list stays trustworthy.
-        "experimental": bool(preset.get("experimental", False)),
-        "vector_color": preset.get("vector_color"),
-        # Optional per-preset family override: lets the server move a single
-        # prompt to a different family (need) without moving its whole category.
-        # Absent/unknown -> the preset inherits its category's need.
-        "need": preset.get("need"),
-        "demo_url_before": preset.get("demo_url_before"),
-        "demo_url_after": preset.get("demo_url_after"),
-    }
 
 
 # Session-lifetime memo. `_cached_catalog` is called many times per
@@ -302,16 +140,76 @@ def _cached_catalog() -> dict | None:
 
 
 def invalidate_catalog_memo() -> None:
-    """Clear the session memo. Called from prompt_presets_client when a
-    fresh server catalog is written so the next read sees it.
+    """Clear the session memo. Called from prompt_presets_client when the
+    persisted catalog is wiped so the next read goes back to disk.
     """
     global _CATALOG_MEMO, _CATALOG_MEMO_LOADED
     _CATALOG_MEMO = None
     _CATALOG_MEMO_LOADED = False
+    _clear_match_indexes()
+
+
+def seed_catalog_memo(catalog: dict | None) -> None:
+    """Adopt a catalog the caller has already parsed and validated.
+
+    `prompt_presets_client._write_cache` calls this with the very dict it just
+    wrote to QSettings, so a fresh catalog costs zero extra parses: without it
+    the session read the 274 KB blob, json.loads'd it and re-validated it three
+    times per start (stale read, first memo fill, post-fetch invalidation).
+    """
+    global _CATALOG_MEMO, _CATALOG_MEMO_LOADED
+    _CATALOG_MEMO = catalog
+    _CATALOG_MEMO_LOADED = True
+    _clear_match_indexes()
+
+
+# Dev escape hatch for R3 (experimental masking): SHOW_EXPERIMENTAL in
+# .env.local. This module has no plugin instance to read env_vars from (it
+# is called from core, not ui), so it parses the file itself, following the
+# exact KEY=VALUE convention AIEditPlugin._load_env_file uses for DEBUG /
+# SKIP_TRIAL_CHECK / RAW_PROMPT. Memoized like `_cached_catalog` above since
+# this is checked on every catalog iteration.
+_SHOW_EXPERIMENTAL_MEMO: bool | None = None
+
+
+def _read_show_experimental_flag() -> bool:
+    """Read SHOW_EXPERIMENTAL from .env.local at the plugin root. Missing
+    file or read error -> False (masking stays on by default)."""
+    plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    env_path = os.path.join(plugin_dir, ".env.local")
+    if not os.path.isfile(env_path):
+        return False
+    try:
+        with open(env_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                if key.strip() == "SHOW_EXPERIMENTAL":
+                    return value.strip().strip('"').strip("'").lower() == "true"
+    except OSError:
+        return False
+    return False
+
+
+def _show_experimental() -> bool:
+    global _SHOW_EXPERIMENTAL_MEMO
+    if _SHOW_EXPERIMENTAL_MEMO is None:
+        _SHOW_EXPERIMENTAL_MEMO = _read_show_experimental_flag()
+    return _SHOW_EXPERIMENTAL_MEMO
 
 
 def _iter_server_presets(catalog: dict | None):
-    """Yield (category_key, raw_preset) pairs for every preset in `catalog`."""
+    """Yield (category_key, raw_preset) pairs for every preset in `catalog`,
+    experimental included. Used only by the generation-time / telemetry
+    matchers (`lookup_template_by_prompt`, `get_vector_hints`) that must keep
+    resolving experimental templates even after R3 masking hides them from
+    browsing, so usage data on the few that perform well keeps flowing (the
+    R4 promotion signal). Display code must go through `_iter_live_presets`
+    instead."""
     if not isinstance(catalog, dict):
         return
     for cat in catalog.get("categories", []) or []:
@@ -323,6 +221,19 @@ def _iter_server_presets(catalog: dict | None):
         for p in cat.get("presets", []) or []:
             if isinstance(p, dict):
                 yield key, p
+
+
+def _iter_live_presets(catalog: dict | None):
+    """Yield (category_key, raw_preset) pairs for every LIVE preset - the R3
+    masking choke point. Every display accessor built on this (themed
+    categories, need groups/tiles/pages, top picks, search, Recent/Favorites
+    template re-attachment) inherits the filter for free. SHOW_EXPERIMENTAL
+    in .env.local disables the filter for QA."""
+    show_experimental = _show_experimental()
+    for key, p in _iter_server_presets(catalog):
+        if p.get("experimental") and not show_experimental:
+            continue
+        yield key, p
 
 
 def _iter_prompt_variants(prompt_field: Any):
@@ -337,6 +248,60 @@ def _iter_prompt_variants(prompt_field: Any):
                 yield v
 
 
+# The two generation-time matchers below used to walk the whole catalog on
+# every call: ~488 `re.sub` whitespace collapses and 6.0 ms per
+# `lookup_template_by_prompt`, once per Recent card (9 per page), twice on the
+# Generate click, once per detail popup. Both are now dict lookups into indexes
+# built in ONE walk, keyed by normalized prompt and by preset id.
+#
+# Invalidation rule: the indexes belong to one catalog OBJECT. They are rebuilt
+# whenever the catalog handed in is not the one they were built from (identity,
+# not equality), and dropped outright by `invalidate_catalog_memo` /
+# `seed_catalog_memo`. `_MATCH_SOURCE` holds a strong reference to that catalog,
+# so its id can never be recycled under a stale index while the memo lives.
+_MATCH_SOURCE: dict | None = None
+_MATCH_BY_PROMPT: dict[str, tuple[str, str]] | None = None
+_MATCH_BY_ID: dict[str, tuple[str | None, list[dict] | None]] | None = None
+
+
+def _clear_match_indexes() -> None:
+    global _MATCH_SOURCE, _MATCH_BY_PROMPT, _MATCH_BY_ID
+    _MATCH_SOURCE = None
+    _MATCH_BY_PROMPT = None
+    _MATCH_BY_ID = None
+
+
+def _match_indexes(catalog: dict | None) -> tuple[dict, dict]:
+    """The (by normalized prompt, by preset id) pair for `catalog`, built once.
+
+    Experimental presets are indexed on purpose: these two matchers are the R3
+    masking exception (see `_iter_server_presets`). First preset in catalog
+    order wins a key, which is the order the linear walks resolved in."""
+    global _MATCH_SOURCE, _MATCH_BY_PROMPT, _MATCH_BY_ID
+    if _MATCH_BY_PROMPT is None or catalog is not _MATCH_SOURCE:
+        by_prompt: dict[str, tuple[str, str]] = {}
+        by_id: dict[str, tuple[str | None, list[dict] | None]] = {}
+        for _cat_key, p in _iter_server_presets(catalog):
+            preset_id = p.get("id", "")
+            label = _pick_label(p.get("label"), preset_id)
+            for variant in _iter_prompt_variants(p.get("prompt")):
+                key = _normalize_for_match(variant)
+                if key and key not in by_prompt:
+                    by_prompt[key] = (preset_id, label)
+            if isinstance(preset_id, str) and preset_id and preset_id not in by_id:
+                classes = p.get("vector_classes")
+                if not isinstance(classes, list) or not classes:
+                    classes = None
+                color = p.get("vector_color")
+                if not isinstance(color, str) or not color:
+                    color = None
+                by_id[preset_id] = (color, classes)
+        _MATCH_BY_PROMPT = by_prompt
+        _MATCH_BY_ID = by_id
+        _MATCH_SOURCE = catalog
+    return _MATCH_BY_PROMPT, _MATCH_BY_ID
+
+
 def lookup_template_by_prompt(prompt_text: str) -> tuple[str, str] | None:
     """Return (template_id, label) when prompt_text equals a server preset
     after whitespace normalization. Matches across ALL language variants of
@@ -346,13 +311,8 @@ def lookup_template_by_prompt(prompt_text: str) -> tuple[str, str] | None:
     norm = _normalize_for_match(prompt_text)
     if not norm:
         return None
-    catalog = _cached_catalog()
-    for _cat_key, p in _iter_server_presets(catalog):
-        for variant in _iter_prompt_variants(p.get("prompt")):
-            if _normalize_for_match(variant) == norm:
-                label = _pick_label(p.get("label"), p.get("id", ""))
-                return p.get("id", ""), label
-    return None
+    by_prompt, _by_id = _match_indexes(_cached_catalog())
+    return by_prompt.get(norm)
 
 
 def get_vector_hints(template_id: str) -> tuple[str | None, list[dict] | None]:
@@ -367,278 +327,8 @@ def get_vector_hints(template_id: str) -> tuple[str | None, list[dict] | None]:
     """
     if not template_id:
         return None, None
-    catalog = _cached_catalog()
-    for _cat_key, p in _iter_server_presets(catalog):
-        if p.get("id") == template_id:
-            classes = p.get("vector_classes")
-            if not isinstance(classes, list) or not classes:
-                classes = None
-            color = p.get("vector_color")
-            if not isinstance(color, str) or not color:
-                color = None
-            return color, classes
-    return None, None
-
-
-# Free-form detection-intent matcher. Mirrors the server-side preprompt rule
-# that paints a 2-color #FF0000 / #FFFFFF map when a prompt asks to segment,
-# detect, or vectorize ONE feature type without naming colors. Keep these
-# regexes in sync with the website preprompt; both must trigger on the same
-# prompts, otherwise the swatch color in the CTA will not match what the
-# model actually paints.
-#
-# Coverage is en / fr / es / pt (the four user-prompt languages we support).
-# Stems are written so a single match captures infinitive, imperative, and
-# past-participle conjugations (segment / segments / segmenting / segmenter /
-# segmente / segmenté / segmentar / segmenta / segmentado / etc.).
-
-_VERB_TAIL = r"[a-zçéèêàôîïùûœáâãíóôõúüñ]*"  # any conjugation / suffix
-
-_FREEFORM_DETECT_VERB_RX = re.compile(
-    r"\b("
-    # segment / segmenter / segmentar (en/fr/es/pt)
-    r"segment|"
-    # detect / detection / détecter / detectar (en/fr/es/pt, accent optional)
-    r"d[eé]tect|"
-    # find / found / trouver / encontrar / encuentr (en/fr/es/pt)
-    r"find|found|trouv|encontr|encuentr|"
-    # locate / localiser / localizar (en/fr/es/pt)
-    r"locat|localis|localiz|"
-    # identify / identifier / identificar (en/fr/es/pt)
-    r"identif|"
-    # extract / extraire / extrait / extraer / extrair (en/fr/es/pt)
-    r"extract|extrai|extra[íe][rtz]?|"
-    # isolate / isoler / aislar / isolar (en/fr/es/pt)
-    r"isolat|isol|aisl|"
-    # mask / masquer / mascarar / enmascarar (en/fr/es/pt)
-    r"mask|masqu|mascar|enmascar|"
-    # outline / contourer / contornear / contornar (en/fr/es/pt)
-    r"outlin|contour|contorn|"
-    # highlight / surligner / resaltar / destacar (en/fr/es/pt)
-    r"highlight|surlign|resalt|destac|"
-    # trace / tracer / trazar / traçar (en/fr/es/pt)
-    r"trac|traz|traç|"
-    # delineate / délimiter / delimitar (en/fr/es/pt)
-    r"delineat|d[eé]limit|"
-    # vectorize / vectoriser / vectorizar / vetorizar (pt drops c) +
-    # typo variants (vecorize, vetorize, vectorise). [ct]{1,2} catches "ct",
-    # "t" (pt vetorizar), and "c" (vecoriz typo).
-    r"v[ea][ct]{1,2}or[iy][sz]|"
-    # polygonize / polygoniser / poligonizar (en/fr/es/pt)
-    r"polygoni[sz]|poligoni[sz]|"
-    # demarcate / démarquer / demarcar (fr/es/pt mainly)
-    r"demarc|d[eé]marqu|"
-    # mark / marquer / marcar (last because broad, but covered by tail guards)
-    r"marqu|marc"
-    r")" + _VERB_TAIL + r"\b",
-    re.IGNORECASE,
-)
-
-_FREEFORM_COLOR_OR_HEX_RX = re.compile(
-    r"#[0-9A-Fa-f]{3,8}\b|"
-    r"\b("
-    # english
-    r"red|white|black|blue|green|yellow|orange|pink|purple|gray|grey|"
-    r"brown|beige|magenta|cyan|silver|gold|golden|"
-    # french (with optional plural/feminine endings)
-    r"rouges?|blan[cs]he?s?|noires?|bleu(?:e|s|es)?|verte?s?|jaunes?|"
-    r"oranges?|roses?|violet(?:te|s|tes)?|grise?s?|marrons?|bruns?|brunes?|"
-    r"argent[ée]e?s?|dor[ée]e?s?|mauves?|"
-    # spanish
-    r"rojos?|blancos?|blancas?|negros?|negras?|azules?|verdes?|amarillos?|amarillas?|"
-    r"naranjas?|rosas?|morados?|moradas?|marr[oó]n(?:es)?|grises?|plateados?|"
-    # portuguese
-    r"vermelhos?|vermelhas?|brancos?|brancas?|pretos?|pretas?|amarelos?|amarelas?|"
-    r"laranjas?|roxos?|roxas?|cinzas?|marrons?|castanhos?|castanhas?|"
-    r"dourados?|prateados?"
-    r")\b",
-    re.IGNORECASE,
-)
-
-# Land cover / land use phrasing. When present, the server applies a 4-class
-# default (red urban, green vegetation, blue water, gray bare) so the
-# single-color CTA does not fit. Skip those. Multi-class enumerations
-# ("classify into", "classes :", "categorias :") also skip because the server
-# respects user-listed classes and may paint multiple colors.
-_FREEFORM_LULC_RX = re.compile(
-    r"\b("
-    # english
-    r"land[- ]?use|land[- ]?cover|landuse|landcover|lulc|"
-    # french
-    r"occupation\s+du\s+sol|occupation\s+des\s+sols|usage\s+du\s+sol|"
-    r"utilisation\s+des\s+sols|couverture\s+du\s+sol|couverture\s+des\s+sols|"
-    # spanish
-    r"uso\s+del\s+suelo|cobertura\s+del\s+suelo|"
-    # portuguese
-    r"uso\s+do\s+solo|cobertura\s+do\s+solo|mapeamento\s+de\s+uso|"
-    # multi-class hints in all 4 langs
-    r"classif|classes\s*:|cat[ée]gories\s*:|categorias\s*:|categor[íi]as\s*:"
-    r")",
-    re.IGNORECASE,
-)
-
-# Inferred output color when the server falls back to the 2-color default.
-_FREEFORM_VECTOR_COLOR = "#FF0000"
-
-
-def detect_freeform_vector_intent(prompt_text: str) -> str | None:
-    """Return the inferred output color when a free-form prompt looks like a
-    single-target detection, segmentation, or vectorization request. Returns
-    None when the prompt names colors, hex codes, or land cover keywords
-    (those bypass the server's 2-color default so the CTA swatch would not
-    match what the model paints).
-
-    Call this only after lookup_template_by_prompt returns None, so a real
-    preset match always wins. Stays in sync with the server preprompt in the
-    website config; update both together.
-    """
-    if not prompt_text:
-        return None
-    text = prompt_text.strip()
-    if not text:
-        return None
-    if _FREEFORM_LULC_RX.search(text):
-        return None
-    if _FREEFORM_COLOR_OR_HEX_RX.search(text):
-        return None
-    if not _FREEFORM_DETECT_VERB_RX.search(text):
-        return None
-    return _FREEFORM_VECTOR_COLOR
-
-
-# Flat-color / map-style phrasing that neither the detect-verb nor the LULC
-# matcher covers ("solid flat colours", "binary mask", "semantic map", ...).
-# Grounded in the manual segmentation prompts observed in production.
-_SEG_CONTEXT_STYLE_RX = re.compile(
-    r"\b(flat|solid|uniform)\s+colou?rs?|couleurs?\s+(unies?|plates?)|aplats?|"
-    r"colores?\s+(planos?|s[óo]lidos?)|cores?\s+(chapadas?|s[óo]lidas?)|"
-    r"binary\s+(mask|map)|semantic\s+(map|segmentation)|worldcover|palette",
-    re.IGNORECASE,
-)
-
-
-def detect_seg_context(prompt_text: str) -> bool:
-    """True when the prompt reads like a segmentation / land-cover /
-    color-classification request, regardless of named colors or class counts.
-
-    Deliberately broader than detect_freeform_vector_intent (which must
-    predict the exact color the server paints): this flag only RELAXES the
-    flat-output detector on the downloaded result (vectorize_detect), so
-    recall beats precision. It never surfaces the CTA on its own.
-    """
-    if not prompt_text:
-        return False
-    text = prompt_text.strip()
-    if not text:
-        return False
-    return bool(
-        _FREEFORM_LULC_RX.search(text)
-        or _FREEFORM_DETECT_VERB_RX.search(text)
-        or _SEG_CONTEXT_STYLE_RX.search(text)
-    )
-
-
-# Off-rails prompt guidance. Detects, with high precision, the ways users
-# misuse the tool so the UI can show a soft, non-blocking hint that steers
-# them back onto a path that produces a good result. Grounded in real user
-# prompts: ~11% ask for a vector file / digitization, many ask for
-# measurements or counts, some talk to it like a chatbot. All of those
-# disappoint as a plain image edit.
-#
-# Precision over recall on purpose: a false positive nags a user whose prompt
-# was actually fine, which is worse than staying silent. Valid instructions
-# (find / detect / segment / add / remove ...) must NEVER trigger a hint.
-
-# User wants a vector FILE / digitization, not an image. The redirect points
-# at the existing "Vectorize this result" CTA. Anchored on explicit format
-# names, digitize verbs, "... as polygons", and coordinate requests so plain
-# edit prompts ("draw buildings") never match.
-_GUIDANCE_VECTOR_FILE_RX = re.compile(
-    r"\.shp\b|\bshapefile|\bshape\s?file|\bshape\s?data|"
-    r"\bgeojson\b|\bgeo-?json\b|\.kml\b|\bkml\b|\.dxf\b|\bdxf\b|"
-    r"\bvector\s+file\b|fichier\s+vecteur|archivo\s+vectorial|arquivo\s+vetorial|"
-    r"\bdigiti[sz]\w*|\bdigitali[sz]\w*|\bnum[ée]ris\w*|"
-    # transform verb (any en/fr/es/pt conjugation) ... to ... vector/shapefile/polygons
-    r"(?:convert\w*|export\w*|turn|transform\w*|change|passer|convert[ai]\w*|"
-    r"exporta\w*|converter|converte\w*|converti\w*|cambiar|cambia\w*|mudar)"
-    r"[^.\n]{0,30}\b(?:to|into|in|en|a|para|num?)\s+"
-    r"(?:an?\s+|un[ae]?\s+|um[a]?\s+|des\s+|los\s+|las\s+)?"
-    r"(?:vect|shapefile|pol[yíi]gon\w*)|"
-    r"\b(?:to|into)\s+(?:an?\s+)?(?:[\w-]+\s+){0,3}vectors?\b|"
-    r"\bvector\s+pol[yíi]gon\w*|(?:as|into|to|en|a|em)\s+pol[yíi]gon\w*|"
-    # create/draw/produce ... polygons / point|line dataset
-    r"(?:create|need|want|draw|make|generate|trace|produce|cr[ée]\w*|"
-    r"g[ée]n[ée]r\w*|trac\w*|produi\w*|dibuj\w*|desenh\w*)"
-    r"[^.\n]{0,30}\b(?:pol[yíi]gon\w*|point\s+(?:feature|dataset|layer)|"
-    r"line\s+(?:feature|dataset|layer))|"
-    r"(?:generate|give|return|get|extract|export|create|need)"
-    r"[^.\n]{0,30}\bcoordinates?\b|\bcoordonn[ée]es\b|\bcoordenadas\b",
-    re.IGNORECASE,
-)
-
-# User wants a measurement or a count of features. The model can't measure or
-# count, but segment -> Vectorize -> QGIS gives area and feature count per
-# polygon. Restricted to unambiguous counting words and measurement units, so
-# location phrasing ("this area", "area of interest") never matches.
-_GUIDANCE_MEASURE_RX = re.compile(
-    # counting words across en / fr / es / pt / it / id, with conjugations.
-    r"\bhow\s+many\b|\bhow\s+much\b|\bnumber\s+of\b|\bcounts?\b|\bcounting\b|"   # en
-    r"\bcombien\b|\bnombre\s+d|\bcompt(?:er|ez|e-|age|é)|\bd[ée]nombr|"          # fr
-    r"\bcu[áa]nt[oa]s?\b|\bn[úu]mero\s+de\b|\bcantidad\s+de\b|\bcuent[ao]s?\b|"  # es
-    r"\bcont(?:ar|eo|ad[oa]s?)\b|"                                              # es contar/conteo
-    r"\bquant[oa]s?\b|\bquantidade\s+de\b|\bcontagem\b|\bcont(?:ar|e[-\s])|"     # pt
-    r"\bquant[ie]\b|\bnumero\s+di\b|\bjumlah\b|\bberapa\b|"                      # it / id
-    # explicit measurement: units and area phrasing.
-    r"\b(?:acreages?|acres|hectares?|superfic\w*)\b|"
-    r"\bsquare\s+(?:met\w+|kilomet\w+)\b|\b[mk]m2\b|m²|km²|"
-    r"\btotal\s+area\b|\bhow\s+much\s+area\b|\barea\s+in\s+(?:ha|m2|km2|hectares|acres)\b|"
-    r"\bquelle\s+(?:est\s+)?la\s+(?:surface|superfic\w*)\b",
-    re.IGNORECASE,
-)
-
-# User talks to the tool like a chatbot / GIS agent: asks about files, asks
-# why it did something, asks where data came from. These phrasings essentially
-# never appear in a genuine image-edit instruction, so matching is safe.
-_GUIDANCE_META_QA_RX = re.compile(
-    r"\b(can\s+you\s+see|do\s+you\s+see|are\s+you\s+able\s+to\s+see|"
-    r"puedes\s+ver|peux-tu\s+voir|"
-    r"why\s+did|why\s+is|why\s+does|pourquoi|por\s+qu[ée]|perch[ée]|"
-    r"where\s+did|where\s+do\s+you|da\s+dove|de\s+d[oó]nde|"
-    r"trovami|find\s+me\s+the\s+(?:file|certificate|document|name)|"
-    r"what\s+is\s+the\s+name|qu'est-ce\s+que)\b",
-    re.IGNORECASE,
-)
-
-
-def detect_prompt_guidance(prompt_text: str, has_template: bool = False) -> str | None:
-    """Classify an off-rails free-form prompt for the soft guidance hint.
-
-    Returns one of:
-      "vector_file" - user asked for a shapefile / vector / digitization; the
-                      tool outputs an image, so point them at Vectorize.
-      "measure"     - user wants an area or a feature count; segment then
-                      Vectorize, and QGIS measures/counts the polygons.
-      "qa"          - user talks to the tool like a chatbot; the model paints,
-                      it can't answer questions.
-      None          - prompt looks like a legitimate edit instruction, or a
-                      template drives it; stay silent.
-
-    High precision by design: never returns non-None for a valid edit /
-    detect / segment instruction. Used only for a non-blocking inline hint;
-    generation is never blocked.
-    """
-    if has_template:
-        return None
-    text = (prompt_text or "").strip()
-    if len(text) < 4:
-        return None
-    if _GUIDANCE_VECTOR_FILE_RX.search(text):
-        return "vector_file"
-    if _GUIDANCE_MEASURE_RX.search(text):
-        return "measure"
-    if _GUIDANCE_META_QA_RX.search(text):
-        return "qa"
-    return None
+    _by_prompt, by_id = _match_indexes(_cached_catalog())
+    return by_id.get(template_id, (None, None))
 
 
 def _build_prompt_lookup(catalog: dict | None) -> dict[str, dict]:
@@ -646,9 +336,11 @@ def _build_prompt_lookup(catalog: dict | None) -> dict[str, dict]:
     metadata to Recent/Favorites entries the user saved from a template.
 
     Indexes every language variant of every polyglot prompt, so a Recent
-    entry saved in any language re-attaches to its template on next read."""
+    entry saved in any language re-attaches to its template on next read.
+    Live presets only (R3): an experimental template re-attaches as a plain
+    text card, same as any other display surface."""
     lookup: dict[str, dict] = {}
-    for cat_key, p in _iter_server_presets(catalog):
+    for cat_key, p in _iter_live_presets(catalog):
         label = _pick_label(p.get("label"), p.get("id", ""))
         for variant in _iter_prompt_variants(p.get("prompt")):
             key = variant.strip()
@@ -661,9 +353,10 @@ def _build_prompt_lookup(catalog: dict | None) -> dict[str, dict]:
 def _build_preset_lookup(catalog: dict | None) -> dict[str, dict]:
     """Map raw prompt text -> the full normalized preset (id + label + demo
     image URLs). Lets a saved favorite re-render as the template's before/after
-    preview card instead of a bare text card. Indexes every language variant."""
+    preview card instead of a bare text card. Indexes every language variant.
+    Live presets only (R3), same reasoning as `_build_prompt_lookup`."""
     lookup: dict[str, dict] = {}
-    for cat_key, p in _iter_server_presets(catalog):
+    for cat_key, p in _iter_live_presets(catalog):
         norm = _normalize_preset(p, cat_key)
         for variant in _iter_prompt_variants(p.get("prompt")):
             key = variant.strip()
@@ -678,13 +371,14 @@ def get_preset_by_id(preset_id: str, server_catalog: dict | None = None) -> dict
     Used to prime a prompt programmatically (e.g. reopening a template from
     the library). When `server_catalog` is None, falls back to the
     locally-cached catalog. Returns None when the catalog is unavailable
-    (first install offline) or the id is absent, so callers can skip the
-    prompt fill and degrade gracefully."""
+    (first install offline), the id is absent, or the preset is experimental
+    and masked (R3) - reopening from the library is a display action, so
+    callers can skip the prompt fill and degrade gracefully."""
     if not preset_id:
         return None
     if server_catalog is None:
         server_catalog = _cached_catalog()
-    for cat_key, p in _iter_server_presets(server_catalog):
+    for cat_key, p in _iter_live_presets(server_catalog):
         if p.get("id") == preset_id:
             return _normalize_preset(p, cat_key)
     return None
@@ -759,24 +453,30 @@ def _build_user_favorites_presets(catalog: dict | None) -> list[dict]:
     return out
 
 
-def _build_top_picks(catalog: dict | None) -> list[dict]:
-    """Top Picks in server order. Each entry references a preset by id; we
-    resolve those ids back to full presets so the dialog can render them."""
-    if not isinstance(catalog, dict):
-        return []
-    tp_ids = catalog.get("top_picks")
-    if not isinstance(tp_ids, list):
-        return []
-    by_id: dict[str, dict] = {}
-    for cat_key, p in _iter_server_presets(catalog):
-        pid = p.get("id")
-        if isinstance(pid, str) and pid:
-            by_id[pid] = _normalize_preset(p, cat_key)
-    out: list[dict] = []
-    for tid in tp_ids:
-        if isinstance(tid, str) and tid in by_id:
-            out.append(by_id[tid])
-    return out
+# Fallback size when the catalog carries no per-preset `top_pick` flags at
+# all (spec R2 open question 2): enough for the landing shelf strip plus a
+# non-trivial "See all", without silently becoming a full catalog dump.
+_TOP_PICKS_FALLBACK_COUNT = 12
+
+
+def _top_picks_fallback_size() -> int:
+    """How many live presets stand in for an unflagged catalog, read at use
+    time so the shelf length can be retuned from a deploy."""
+    return get_export_dial("library.top_picks_fallback_count", _TOP_PICKS_FALLBACK_COUNT)
+
+
+def get_top_picks(server_catalog: dict | None = None) -> list[dict]:
+    """Top Picks: every LIVE preset flagged `top_pick` in the served catalog,
+    in catalog order (R2 - editorial, not usage-driven). Falls back to the
+    first `_TOP_PICKS_FALLBACK_COUNT` live presets in catalog order when the
+    catalog ships no top_pick flags, so the shelf is never empty just
+    because curation hasn't caught up. `server_catalog` falls back to the
+    locally-cached catalog when None, same as the other get_* accessors."""
+    if server_catalog is None:
+        server_catalog = _cached_catalog()
+    live = [_normalize_preset(p, cat_key) for cat_key, p in _iter_live_presets(server_catalog)]
+    picks = [p for p in live if p["top_pick"]]
+    return picks or live[:_top_picks_fallback_size()]
 
 
 def _find_server_category(catalog: dict | None, cat_key: str) -> dict | None:
@@ -805,14 +505,17 @@ def _themed_category_label(cat_key: str, catalog: dict | None) -> str:
 
 
 def _build_themed_category(cat_key: str, catalog: dict | None) -> list[dict]:
-    """All presets in `cat_key` from the server catalog (empty if unavailable)."""
-    cat = _find_server_category(catalog, cat_key)
-    if cat is None:
+    """All LIVE presets in `cat_key` from the server catalog (empty if the
+    category is unavailable, or if every one of its presets is experimental
+    and masked - R3). Filters through `_iter_live_presets` rather than the
+    category's raw preset list so masking reaches every category page,
+    need group and count derived from it."""
+    if _find_server_category(catalog, cat_key) is None:
         return []
     return [
         _normalize_preset(p, cat_key)
-        for p in (cat.get("presets") or [])
-        if isinstance(p, dict)
+        for k, p in _iter_live_presets(catalog)
+        if k == cat_key
     ]
 
 
@@ -987,8 +690,8 @@ def get_all_categories(server_catalog: dict | None = None) -> list[dict]:
 
     result.append({
         "key": "favorites",
-        "label": tr("Top Picks"),
-        "presets": _build_top_picks(server_catalog),
+        "label": tr("Top picks"),
+        "presets": get_top_picks(server_catalog),
     })
 
     for cat_key in _all_category_keys(server_catalog):

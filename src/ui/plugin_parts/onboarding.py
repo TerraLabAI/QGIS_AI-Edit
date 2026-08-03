@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import urllib.parse
 
 from qgis.PyQt.QtCore import QTimer
@@ -7,6 +8,11 @@ from qgis.PyQt.QtCore import QTimer
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
+from ...core.config_store import (
+    get_export_dial,
+    get_export_dial_objs,
+    get_export_dial_str,
+)
 from ...core.i18n import tr
 from ...core.logger import log, log_warning
 
@@ -56,12 +62,143 @@ _DEMO_SCENES: dict[str, dict] = {
     },
 }
 _DEFAULT_SCENE_ID = "paris"
+# How long the demo holds Generate while the basemap's tiles paint: the quiet
+# window that has to elapse after the last repaint, and the hard ceiling that
+# releases the gate on a slow or offline network.
+_IMAGERY_SETTLE_MS = 1200
+_IMAGERY_CAP_MS = 8000
+
+
+# -- served onboarding sources ----------------------------------------------
+# Every value in this section is a third party's address or a place on Earth,
+# which is exactly the kind of thing that rots between releases: IGN has already
+# renamed its ortho layer once, and a tile host that moves takes the first-run
+# demo down for the whole fleet until a plugin ships. Served, a rename is one
+# deploy. Nothing here is trusted: a URI must parse as an https XYZ source and a
+# scene must be a real box in degrees, or the shipped value stands.
+
+# What a QGIS raster URI may look like before it is handed to QgsRasterLayer.
+# It goes to a tile server and paints in the user's project, so a served one has
+# to be the same shape as the two shipped above: an XYZ source over https, with
+# none of the characters that would let a value break out of the URI's own
+# separators.
+_URI_MAX_CHARS = 600
+_URI_FORBIDDEN_RE = re.compile(r"[\x00-\x20\x7f-\x9f<>\"'\\]")
+_XYZ_URI_PREFIX = "type=xyz&url=https://"
+# A scene id keys telemetry and a QSettings-free lookup; keep it a short slug.
+_SCENE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+# One deploy may not turn the demo into a catalogue.
+_MAX_SERVED_SCENES = 12
+
+
+def _is_safe_xyz_uri(value) -> bool:
+    return (
+        isinstance(value, str)
+        and value.startswith(_XYZ_URI_PREFIX)
+        and len(value) <= _URI_MAX_CHARS
+        and not _URI_FORBIDDEN_RE.search(value)
+    )
+
+
+def _served_basemap_uri(key: str, fallback: str) -> str:
+    """A served XYZ basemap URI, or the shipped one."""
+    value = get_export_dial_str(f"onboarding.{key}", fallback)
+    return value if _is_safe_xyz_uri(value) else fallback
+
+
+def _served_probe_url(fallback: str) -> str:
+    """The one tile probed before committing to the regional source."""
+    value = get_export_dial_str("onboarding.regional_probe_url", fallback)
+    if (
+        isinstance(value, str)
+        and value.startswith("https://")
+        and len(value) <= _URI_MAX_CHARS
+        and not _URI_FORBIDDEN_RE.search(value)
+    ):
+        return value
+    return fallback
+
+
+def _valid_scene(entry: dict) -> tuple[str, dict] | None:
+    """One served scene as (id, scene), or None when anything about it is off.
+
+    Whole-record validation: a scene that is half right frames the canvas on
+    nothing, so a single failed field drops the entry rather than filling in a
+    default for it. Extents are degrees, and they are transformed into the
+    project CRS later, so they must be a real box inside WGS84 bounds.
+    """
+    scene_id = entry.get("id")
+    if not isinstance(scene_id, str) or not _SCENE_ID_RE.match(scene_id):
+        return None
+    extent = entry.get("extent")
+    if not isinstance(extent, dict):
+        return None
+    box = {}
+    for field in ("xmin", "ymin", "xmax", "ymax"):
+        value = extent.get(field)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        box[field] = float(value)
+    if not (-180.0 <= box["xmin"] < box["xmax"] <= 180.0):
+        return None
+    if not (-90.0 <= box["ymin"] < box["ymax"] <= 90.0):
+        return None
+    return scene_id, {"extent": box, "prefer_ign": entry.get("prefer_ign") is True}
+
+
+def demo_scenes() -> dict[str, dict]:
+    """The demo scenes on offer: the shipped ones, then any served addition.
+
+    Union-only, like every other served list here: a deploy ADDS a place and can
+    never drop the one the plugin ships, so the demo always has somewhere to go
+    even when the served block is wrong.
+    """
+    scenes = dict(_DEMO_SCENES)
+    for entry in get_export_dial_objs("onboarding.scenes", _MAX_SERVED_SCENES):
+        valid = _valid_scene(entry)
+        if valid is not None and valid[0] not in scenes:
+            scenes[valid[0]] = valid[1]
+    return scenes
+
+
+def default_scene_id() -> str:
+    """Where the demo goes when the caller names no scene. Restricted to the
+    scenes actually on offer, so a typo lands on the shipped one rather than on
+    nothing."""
+    return get_export_dial_str(
+        "onboarding.default_scene",
+        _DEFAULT_SCENE_ID,
+        allowed=set(demo_scenes()),
+    )
 
 
 class OnboardingMixin:
     """Empty-canvas one-click onboarding ("Try it on an example")."""
 
-    def _on_try_example(self, scene_id: str = ""):
+    def _auto_load_example_after_signup(self):
+        """Post-signup continuity: a fresh account must never land on an empty
+        canvas with a question. When the pairing lands and nothing is visible,
+        load the demo scene unprompted and arm the zone tool; the account step
+        is over and the one next step is drawing a zone. A user whose project
+        already shows imagery, or whose demo is switched off server-side, sees
+        nothing change."""
+        from qgis.core import QgsProject
+
+        from ...core.auth.activation_manager import is_feature_enabled
+
+        if self._dock_widget is None:
+            return
+        if not is_feature_enabled("demo"):
+            return
+        root = QgsProject.instance().layerTreeRoot()
+        has_visible = any(
+            node.isVisible() for node in root.findLayers() if node.layer() is not None
+        )
+        if has_visible:
+            return
+        self._on_try_example(trigger="auto")
+
+    def _on_try_example(self, scene_id: str = "", trigger: str = "click"):
         """Empty-canvas one-click onboarding. Drop a satellite basemap and,
         when no imagery is visible, zoom to the chosen demo scene so there is
         real imagery to work with. The user still draws their own zone,
@@ -70,7 +207,10 @@ class OnboardingMixin:
         only add a global backdrop and leave the user's view and inputs
         untouched. France scenes first probe IGN off-thread (a blocking probe
         would freeze the click for up to 4s); the click finishes in
-        _finish_try_example once the source is decided."""
+        _finish_try_example once the source is decided.
+
+        ``trigger`` is "click" (the hero button) or "auto" (the post-signup
+        load); the auto path also arms the zone tool once the scene is in."""
         from qgis.core import QgsApplication, QgsProject
 
         from ...workers.generic_request_task import GenericRequestTask
@@ -78,8 +218,9 @@ class OnboardingMixin:
         probe = getattr(self, "_basemap_probe_task", None)
         if probe is not None and probe.is_active():
             return  # a previous click's probe is still deciding the source
-        scene_id = scene_id if scene_id in _DEMO_SCENES else _DEFAULT_SCENE_ID
-        scene = _DEMO_SCENES[scene_id]
+        scenes = demo_scenes()
+        scene_id = scene_id if scene_id in scenes else default_scene_id()
+        scene = scenes[scene_id]
         # The hero shows when nothing is VISIBLE; layers may still exist
         # unchecked. The user explicitly asked for a demo place, so fly there
         # unless some visible imagery would be stomped by the reframe.
@@ -88,29 +229,32 @@ class OnboardingMixin:
             node.isVisible() for node in root.findLayers() if node.layer() is not None
         )
         if not scene.get("prefer_ign"):
-            self._finish_try_example(scene_id, has_visible, ign_ok=False)
+            self._finish_try_example(scene_id, has_visible, ign_ok=False, trigger=trigger)
             return
+        probe_url = _served_probe_url(_IGN_PROBE_URL)
         task = GenericRequestTask(
             tr("Checking imagery availability"),
-            lambda: {"ok": self._probe_tile(_IGN_PROBE_URL)},
+            lambda url=probe_url: {"ok": self._probe_tile(url)},
             silent=True,
         )
         task.succeeded.connect(
-            lambda result, sid=scene_id, hv=has_visible: self._finish_try_example(
-                sid, hv, ign_ok=bool((result or {}).get("ok"))
+            lambda result, sid=scene_id, hv=has_visible, tg=trigger: self._finish_try_example(
+                sid, hv, ign_ok=bool((result or {}).get("ok")), trigger=tg
             )
         )
         # A probe failure just means the global fallback provider is used.
         task.failed.connect(
-            lambda _msg, _code, sid=scene_id, hv=has_visible: self._finish_try_example(
-                sid, hv, ign_ok=False
+            lambda _msg, _code, sid=scene_id, hv=has_visible, tg=trigger: self._finish_try_example(
+                sid, hv, ign_ok=False, trigger=tg
             )
         )
         # Hard ref: a QgsTask GC'd mid-run aborts QGIS.
         self._basemap_probe_task = task
         QgsApplication.taskManager().addTask(task)
 
-    def _finish_try_example(self, scene_id: str, has_visible: bool, ign_ok: bool):
+    def _finish_try_example(
+        self, scene_id: str, has_visible: bool, ign_ok: bool, trigger: str = "click"
+    ):
         """Main-thread second half of the demo click, once the probe answered."""
         self._basemap_probe_task = None
         if self._dock_widget is None:
@@ -124,8 +268,33 @@ class OnboardingMixin:
             QTimer.singleShot(0, self._frame_demo_scene)
         elif not ok:
             self._dock_widget.show_basemap_error()
-        telemetry.track(te.BASEMAP_CTA_CLICKED, {"success": ok, "scene": scene_id})
+        if ok and trigger == "auto":
+            # Queued after _frame_demo_scene's deferred zoom, so the tool arms
+            # on the framed scene, not mid-flight.
+            QTimer.singleShot(0, self._arm_first_zone_after_signup)
+        # `trigger` splits the funnel: hero clicks vs the post-signup autoload.
+        telemetry.track(
+            te.BASEMAP_CTA_CLICKED,
+            {"success": ok, "scene": scene_id, "trigger": trigger},
+        )
         telemetry.flush()
+
+    def _arm_first_zone_after_signup(self):
+        """Close the signup loop: say the account step is done and start zone
+        selection, exactly what a Launch click does (minus its telemetry - the
+        launch_clicked funnel stays user-intent only)."""
+        if self._dock_widget is None:
+            return
+        self._disarm_swipe()
+        self._activate_selection_tool()
+        self._dock_widget.set_selecting_zone_state()
+        self._dock_widget._show_status_box(
+            "✓ " + tr(
+                "Account created. Draw a zone on the example map to run "
+                "your first edit."
+            ),
+            "success",
+        )
 
     def _add_backdrop_layer(self, use_ign: bool):
         """Add a satellite basemap at the bottom of the layer tree (AI Edit
@@ -139,11 +308,13 @@ class OnboardingMixin:
         layer = None
         source = ""
         if use_ign:
-            candidate = QgsRasterLayer(_IGN_ORTHO_URI, "Orthophoto (IGN)", "wms")
+            uri = _served_basemap_uri("regional_basemap_uri", _IGN_ORTHO_URI)
+            candidate = QgsRasterLayer(uri, "Orthophoto (IGN)", "wms")
             if candidate.isValid():
                 layer, source = candidate, "ign"
         if layer is None:
-            candidate = QgsRasterLayer(_ESRI_WORLD_IMAGERY_URI, "Satellite (Esri)", "wms")
+            uri = _served_basemap_uri("global_basemap_uri", _ESRI_WORLD_IMAGERY_URI)
+            candidate = QgsRasterLayer(uri, "Satellite (Esri)", "wms")
             if candidate.isValid():
                 layer, source = candidate, "esri"
         if layer is None:
@@ -167,8 +338,7 @@ class OnboardingMixin:
 
         try:
             request = QNetworkRequest(QUrl(url))
-            if hasattr(request, "setTransferTimeout"):  # Qt >= 5.15
-                request.setTransferTimeout(4000)
+            QtC.set_transfer_timeout(request, 4000)  # no-op before Qt 5.15
             return QgsBlockingNetworkRequest().get(request) == QtC.BlockingNoError
         except Exception as err:  # noqa: BLE001 - a probe must never break the click.
             log_warning(f"basemap probe failed: {err}")
@@ -187,8 +357,9 @@ class OnboardingMixin:
             QgsRectangle,
         )
 
-        scene = _DEMO_SCENES.get(
-            getattr(self, "_pending_demo_scene_id", ""), _DEMO_SCENES[_DEFAULT_SCENE_ID]
+        scenes = demo_scenes()
+        scene = scenes.get(
+            getattr(self, "_pending_demo_scene_id", ""), scenes[default_scene_id()]
         )
         extent = scene["extent"]
         wgs84 = QgsCoordinateReferenceSystem("EPSG:4326")
@@ -231,8 +402,12 @@ class OnboardingMixin:
             self._imagery_cap_timer.setSingleShot(True)
             self._imagery_cap_timer.timeout.connect(self._finish_imagery_gate)
             self._canvas.mapCanvasRefreshed.connect(self._on_imagery_refresh)
-            self._imagery_cap_timer.start(8000)
-            self._imagery_settle_timer.start(1200)
+            self._imagery_cap_timer.start(
+                get_export_dial("onboarding.imagery_cap_ms", _IMAGERY_CAP_MS)
+            )
+            self._imagery_settle_timer.start(
+                get_export_dial("onboarding.imagery_settle_ms", _IMAGERY_SETTLE_MS)
+            )
         except Exception as err:  # noqa: BLE001 - release rather than trap Generate.
             log_warning(f"imagery gate setup failed, releasing: {err}")
             self._finish_imagery_gate()
@@ -241,7 +416,9 @@ class OnboardingMixin:
         """Each finished render restarts the quiet window; when tiles stop
         arriving the window elapses and the gate lifts."""
         if self._imagery_settle_timer is not None:
-            self._imagery_settle_timer.start(1200)
+            self._imagery_settle_timer.start(
+                get_export_dial("onboarding.imagery_settle_ms", _IMAGERY_SETTLE_MS)
+            )
 
     def _finish_imagery_gate(self):
         """Release Generate and tear down the warm-up watchers (idempotent)."""

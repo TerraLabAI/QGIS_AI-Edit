@@ -1,23 +1,163 @@
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 
-from qgis.core import QgsProject
+from qgis.core import QgsApplication, QgsProject
 from qgis.PyQt.QtCore import QSettings, QTimer
-from qgis.PyQt.QtGui import QAction, QIcon, QKeySequence, QShortcut
+from qgis.PyQt.QtGui import QIcon, QKeySequence
 
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.auth.activation_manager import clear_config_cache, migrate_legacy_key
 from ...core.config_store import set_store
+from ...core.errors import build_failure_props
 from ...core.i18n import tr
 from ...core.logger import log, log_warning
+from ...core.qt_compat import QAction, QShortcut
 from ..dock_widget import AIEditDockWidget
-from ..tools.selection_map_tool import RectangleSelectionTool
+from ..tools.polygon_selection_tool import PolygonSelectionTool
 
 # Qt maps Ctrl -> Cmd on macOS automatically.
 LAUNCH_SHORTCUT = "Ctrl+Alt+E"
+
+# Plugin-declared signals per task class. Only these are disconnected at
+# teardown; an argument-less task.disconnect() would also sever the
+# QgsTaskManager hookups made by addTask() and orphan the task.
+GENERATION_TASK_SIGNALS = ("succeeded", "progress", "failed", "taskTerminated")
+EXPORT_TASK_SIGNALS = ("completed", "failed")
+REQUEST_TASK_SIGNALS = ("succeeded", "failed")  # GenericRequestTask
+PAIRING_TASK_SIGNALS = (  # PairingPollTask
+    "pairing_succeeded",
+    "pairing_failed",
+    "pairing_timeout",
+    "pairing_browser_seen",
+    "pairing_stalled",
+)
+# Single source for the background-loader teardown: drives both the drain
+# and the null-out so the two can never drift.
+LOADER_SIGNALS = {
+    "_export_config_loader": REQUEST_TASK_SIGNALS,
+    "_credits_loader": REQUEST_TASK_SIGNALS,
+    "_key_validation_worker": REQUEST_TASK_SIGNALS,
+    "_pairing_worker": PAIRING_TASK_SIGNALS,
+    "_catalog_loader": REQUEST_TASK_SIGNALS,
+    "_bootstrap_task": REQUEST_TASK_SIGNALS,
+    "_activation_config_loader": REQUEST_TASK_SIGNALS,
+}
+# Selection map tool signals connected in initGui.
+MAP_TOOL_SIGNALS = (
+    "selection_made",
+    "zone_too_small",
+    "zone_invalid",
+    "zone_delete_requested",
+    "compare_requested",
+    "vectorize_requested",
+)
+
+
+def disconnect_signals(obj, signal_names):
+    """Disconnect the named signals if present. Per-signal only.
+
+    A QgsTask can have its C++ half deleted by the task manager before the
+    plugin unloads; on such a dead sip wrapper even getattr raises
+    RuntimeError, so the guard wraps the whole per-signal access, not just
+    the disconnect call."""
+    if obj is None:
+        return
+    for name in signal_names:
+        try:
+            sig = getattr(obj, name, None)
+            if sig is None:
+                continue
+            sig.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+
+
+def drain_task(task, signal_names):
+    """Disconnect the named plugin signals, then request a cancel.
+
+    Per-signal only: never call task.disconnect() with no arguments.
+    """
+    if task is None:
+        return
+    disconnect_signals(task, signal_names)
+    try:
+        task.cancel()
+    except Exception:  # nosec B110
+        pass
+
+
+def safe_error_text(err: BaseException) -> str:
+    """str(err) that cannot itself raise.
+
+    A sip wrapper around a deleted object, and any exception whose message is
+    built lazily, can raise from __str__. Inside a teardown handler that raise
+    kills the rest of unload(): the exact failure the handler exists to remove.
+    """
+    try:
+        return str(err)
+    except Exception:  # noqa: BLE001 - the fallback must always answer
+        try:
+            return type(err).__name__
+        except Exception:  # noqa: BLE001
+            return "unprintable error"
+
+
+def step_error_code(label: str, stage: str) -> str:
+    """Stable snake_case error_code for one guarded step, e.g. unload_dock_removal.
+
+    Labels are literals written in this file, so this only normalises their
+    spelling; no user data can reach it.
+    """
+    try:
+        slug = "".join(c if c.isalnum() else "_" for c in str(label).lower())
+    except Exception:  # noqa: BLE001 - a label that will not render is not worth a raise
+        slug = ""
+    return f"{stage}_{slug.strip('_') or 'step'}"[:60]
+
+
+def report_teardown_failure(label: str, err: BaseException, stage: str = "unload") -> None:
+    """Log a failed step and ship it as plugin_error. Never raises, never blocks.
+
+    A Warning line in the QGIS log is invisible to us, so a teardown that fails
+    on every machine of one QGIS build would go unnoticed. The message rides
+    through build_failure_props, which scrubs user paths and caps at 200 chars.
+    track() only queues; the batch leaves on the telemetry step's own flush, so
+    a step failing AFTER telemetry shut down is logged but no longer sent.
+    """
+    detail = safe_error_text(err)
+    try:
+        log_warning(f"Guarded step failed ({stage}/{label}): {detail}")
+    except Exception:  # nosec B110 - logging must never break teardown
+        pass
+    try:
+        telemetry.track(
+            te.PLUGIN_ERROR,
+            build_failure_props(stage, step_error_code(label, stage), detail),
+        )
+    except Exception:  # nosec B110 - telemetry must never break teardown
+        pass
+
+
+@contextmanager
+def teardown_step(label: str, stage: str = "unload"):
+    """Isolate one section of unload(): report what raised, then carry on.
+
+    Unguarded, a single raise (a canvas whose C++ half is already gone during
+    QGIS shutdown) skipped every later section, leaving the plugin half torn
+    down: event filter installed, dock never removed, telemetry still up. The
+    next load then stacked a second set of connections on the first.
+
+    Also used by the post-failure recovery paths, which run inside Qt slots
+    where a raise has nowhere to go; those pass their own ``stage``.
+    """
+    try:
+        yield
+    except Exception as err:  # noqa: BLE001 - teardown never re-raises
+        report_teardown_failure(label, err, stage)
 
 
 class PluginLifecycleMixin:
@@ -166,9 +306,24 @@ class PluginLifecycleMixin:
         self._dock_widget.markup_color_changed.connect(self._on_markup_color_changed)
         self._dock_widget.vectorize_clicked.connect(self._on_vectorize_clicked)
         self._dock_widget.vectorize_done_clicked.connect(self._on_vectorize_done_clicked)
+        self._dock_widget.reference_panel_requested.connect(self._on_reference_clicked)
+        self._dock_widget.reference_done_clicked.connect(self._on_reference_done_clicked)
         self._dock_widget.vectorize_suggestion_clicked.connect(
             self._on_vectorize_suggestion_clicked
         )
+        # Conversations: resume rows + panel intents land on the plugin's
+        # ConversationsMixin, which owns the network side.
+        self._dock_widget.conversation_delete.connect(self._on_conversation_delete)
+        self._dock_widget.conversation_rename.connect(self._on_conversation_rename)
+        self._dock_widget.conversations_page_requested.connect(
+            self._on_conversations_page_requested
+        )
+        self._dock_widget.conversations_refresh_requested.connect(
+            self._refresh_conversations_cache
+        )
+        # One silent fetch so the Resume rows are fresh at startup without
+        # opening the Library first (falls back to the disk cache offline).
+        self._refresh_conversations_cache()
         # Before/After swipe: toggle-based, no dock panel. The footer
         # button toggle drives the SwipeController; the controller signals
         # back so the button visual + enable state stays in sync.
@@ -213,7 +368,7 @@ class PluginLifecycleMixin:
         self._launch_shortcut.activated.connect(self._on_launch_shortcut)
 
         # Create map tool
-        self._map_tool = RectangleSelectionTool(self._canvas)
+        self._map_tool = PolygonSelectionTool(self._canvas)
         self._map_tool.selection_made.connect(self._on_zone_selected)
         self._map_tool.zone_too_small.connect(self._on_zone_too_small)
         self._map_tool.zone_invalid.connect(self._on_zone_invalid)
@@ -231,6 +386,18 @@ class PluginLifecycleMixin:
         from ..dialogs.error_report_dialog import start_log_collector
 
         start_log_collector()
+
+        # unload() does not run on every QGIS exit path, and Qt aborts the
+        # process when it destroys a QThread still inside run(). Join the
+        # detached Prompt Library threads on the way out too.
+        from ..dialogs.prompt_templates.workers import drain_prompt_library_workers
+
+        self._prompt_library_drain = drain_prompt_library_workers
+        try:
+            QgsApplication.instance().aboutToQuit.connect(drain_prompt_library_workers)
+        except (AttributeError, TypeError, RuntimeError) as err:
+            self._prompt_library_drain = None
+            log_warning(f"Prompt Library drain not hooked to aboutToQuit: {err}")
 
         # Initialize telemetry (respects consent + auth, non-blocking)
         telemetry.init_telemetry(
@@ -261,204 +428,209 @@ class PluginLifecycleMixin:
             log_warning("DEV MODE: SKIP_TRIAL_CHECK is active - auth checks bypassed")
 
     def unload(self):
-        """Called by QGIS when plugin is unloaded."""
+        """Called by QGIS when plugin is unloaded.
+
+        Every section runs inside teardown_step: one raise must never skip the
+        sections that follow it.
+        """
         # Make any pending plugin-update-check timer a no-op (belt-and-suspenders
         # alongside parenting it to the dock).
         self._update_check_done = True
         # Tear down any in-flight onboarding tile-warm-up watcher (disconnects
         # the canvas signal so it can't fire against a torn-down dock).
-        self._finish_imagery_gate()
+        with teardown_step("imagery gate"):
+            self._finish_imagery_gate()
         # Stop generation task. QgsTaskManager owns the task lifecycle, so we
         # request cancellation and drop our reference; the framework drains
         # the run() loop and emits taskTerminated on the main thread.
-        if self._worker is not None and self._worker.is_active():
-            self._generation_service.cancel()
-            for sig in [
-                self._worker.succeeded,
-                self._worker.progress,
-                self._worker.failed,
-                self._worker.taskTerminated,
-            ]:
-                try:
-                    sig.disconnect()
-                except (RuntimeError, TypeError):
-                    pass
-            try:
-                self._worker.cancel()
-            except Exception:  # nosec B110
-                pass
+        with teardown_step("generation worker"):
+            if self._worker is not None and self._worker.is_active():
+                self._generation_service.cancel()
+                drain_task(self._worker, GENERATION_TASK_SIGNALS)
         self._worker = None
 
         # Same drain for the canvas-export worker. Drop the pending hand-off
         # so a late completed-signal doesn't try to kick a GenerationWorker
         # against a torn-down dock.
         self._pending_generation = None
-        if self._export_worker is not None and self._export_worker.is_active():
-            for sig in [self._export_worker.completed, self._export_worker.failed]:
-                try:
-                    sig.disconnect()
-                except (RuntimeError, TypeError):
-                    pass
-            try:
-                self._export_worker.cancel()
-            except Exception:  # nosec B110
-                pass
+        with teardown_step("export worker"):
+            if self._export_worker is not None and self._export_worker.is_active():
+                drain_task(self._export_worker, EXPORT_TASK_SIGNALS)
         self._export_worker = None
 
         # Stop background loader QgsTasks. We disconnect signals (slots
         # would land on a dying dock) then cancel; the task manager drains
         # the run() loop and disposes of the task itself.
-        for loader in [
-            self._export_config_loader,
-            self._credits_loader,
-            self._key_validation_worker,
-            self._pairing_worker,
-            self._catalog_loader,
-            self._bootstrap_task,
-            self._activation_config_loader,
-        ]:
-            if loader is None:
-                continue
-            try:
-                loader.disconnect()
-            except (RuntimeError, TypeError):
-                pass
-            try:
-                loader.cancel()
-            except Exception:  # nosec B110
-                pass
-        self._export_config_loader = None
-        self._credits_loader = None
-        self._key_validation_worker = None
-        self._pairing_worker = None
-        self._catalog_loader = None
-        self._bootstrap_task = None
+        for attr, signal_names in LOADER_SIGNALS.items():
+            with teardown_step(f"loader {attr}"):
+                drain_task(getattr(self, attr, None), signal_names)
+            setattr(self, attr, None)
 
         # Drain in-flight history tasks (add-to-map, download, reference reload).
         # Their succeeded/failed slots touch self._canvas / self._iface, which
         # are stale after unload, so disconnect then cancel before teardown.
-        for task in list(self._history_tasks):
-            try:
-                task.succeeded.disconnect()
-                task.failed.disconnect()
-            except (RuntimeError, TypeError):
-                pass
-            try:
-                task.cancel()
-            except Exception:  # nosec B110
-                pass
-        self._history_tasks.clear()
+        with teardown_step("history tasks"):
+            for task in list(self._history_tasks):
+                drain_task(task, REQUEST_TASK_SIGNALS)
+            self._history_tasks.clear()
 
         # Drop the layer-removal listener before the plugin objects vanish.
+        # Broad on purpose: every narrow handler in unload is one AttributeError
+        # away from skipping the whole rest of the teardown.
         try:
             QgsProject.instance().layersRemoved.disconnect(
                 self._on_project_layers_changed
             )
-        except (RuntimeError, TypeError):
+        except Exception:  # nosec B110 - already disconnected, or project gone
             pass
 
-        self._clear_selection_rectangle()
+        # The user's pre-AI-Edit tool is a foreign object we only borrowed a
+        # reference to, and only _deactivate_selection_tool ever cleared it -
+        # a method unload does not call. Drop it here so the dead plugin graph
+        # never keeps a stranded map tool alive. No restore: setMapTool at this
+        # point re-fires mapToolSet into handlers that are mid-teardown, and the
+        # map-tool section below already returns the canvas to QGIS's default.
+        self._previous_map_tool = None
+
+        with teardown_step("selection rectangle"):
+            self._clear_selection_rectangle()
+
+        # Drop the mapToolSet listener before the markup tools it references
+        # are torn down below (see tool_panels.py._on_markup_maptool_set).
+        if self._markup_maptool_set_connected:
+            if self._canvas is not None:
+                try:
+                    self._canvas.mapToolSet.disconnect(self._on_markup_maptool_set)
+                except Exception:  # nosec B110 - already disconnected, or canvas gone
+                    pass
+            self._markup_maptool_set_connected = False
 
         # Detach any Mark up tool we set on the canvas before our objects vanish.
         if self._markup_tool_objs:
-            current = self._canvas.mapTool() if self._canvas else None
-            if current in self._markup_tool_objs.values():
-                self._canvas.unsetMapTool(current)
+            with teardown_step("markup tool unset"):
+                # The canvas C++ half can already be gone (QGIS shutting down,
+                # project torn down first). Unguarded, that raise skipped every
+                # later section of unload.
+                current = self._canvas.mapTool() if self._canvas else None
+                if current in self._markup_tool_objs.values():
+                    self._canvas.unsetMapTool(current)
+            # deleteLater, or the canvas-parented C++ tools pin the dead
+            # plugin graph for the rest of the session.
+            for tool in self._markup_tool_objs.values():
+                try:
+                    tool.deleteLater()
+                except Exception:  # nosec B110 - C++ tool already gone
+                    pass
             self._markup_tool_objs.clear()
-        self._clear_markup_layer()
-        if self._markup_manager is not None:
-            self._markup_manager.disconnect_signals()
+        with teardown_step("markup layer"):
+            self._clear_markup_layer()
+        with teardown_step("markup manager"):
+            if self._markup_manager is not None:
+                self._markup_manager.disconnect_signals()
         self._markup_manager = None
         self._pre_markup_map_tool = None
         if self._markup_event_filter is not None:
             try:
                 self._iface.mainWindow().removeEventFilter(self._markup_event_filter)
-            except RuntimeError:
+            except Exception:  # nosec B110 - main window already torn down
                 pass
             self._markup_event_filter = None
-        self._restore_qgis_undo()
+        with teardown_step("qgis undo stack"):
+            self._restore_qgis_undo()
         if self._launch_shortcut is not None:
             try:
                 self._launch_shortcut.setEnabled(False)
                 self._launch_shortcut.deleteLater()
-            except RuntimeError:
+            except Exception:  # nosec B110 - C++ shortcut already gone
                 pass
             self._launch_shortcut = None
 
         if self._swipe_controller is not None:
-            try:
+            with teardown_step("swipe controller"):
                 self._swipe_controller.cleanup()
-            except RuntimeError:
-                pass
             self._swipe_controller = None
 
         if self._dock_widget:
             # Disconnect QgsProject signals before the dock is destroyed.
             # closeEvent used to do this but firing on every hide also broke
             # the dock when the user re-opened it from the Panels menu.
-            try:
+            with teardown_step("dock cleanup"):
                 self._dock_widget.cleanup()
-            except Exception as err:  # nosec B110
-                log_warning(f"Dock cleanup failed: {err}")
-            self._iface.removeDockWidget(self._dock_widget)
-            self._dock_widget.deleteLater()
+            with teardown_step("dock removal"):
+                self._iface.removeDockWidget(self._dock_widget)
+            with teardown_step("dock delete"):
+                self._dock_widget.deleteLater()
             self._dock_widget = None
 
         # Wipe session-scoped reference images from disk.
-        try:
+        with teardown_step("reference store"):
             self._reference_store.cleanup()
-        except Exception as err:  # nosec B110
-            log_warning(f"Reference store cleanup failed: {err}")
 
-        from ..dialogs.error_report_dialog import stop_log_collector
+        with teardown_step("log collector"):
+            from ..dialogs.error_report_dialog import stop_log_collector
 
-        stop_log_collector()
+            stop_log_collector()
 
-        if self._settings_action and self._terralab_menu:
-            self._terralab_menu.removeAction(self._settings_action)
-            self._settings_action = None
+        with teardown_step("settings menu entry"):
+            if self._settings_action and self._terralab_menu:
+                self._terralab_menu.removeAction(self._settings_action)
 
+        ai_seg_action = getattr(self, "_ai_seg_action", None)
         if self._action:
-            from ..terralab_menu import remove_from_plugins_menu, remove_plugin_from_menu
+            # The import itself is a step: Plugin Reloader can drop the package
+            # mid-unload, and a bare import here used to take the QAction
+            # teardown, the map tool, the thread drain and the telemetry
+            # shutdown down with it. A failed import leaves the names unbound,
+            # so each use below reports itself and the rest still runs.
+            with teardown_step("menu helper import"):
+                from ..terralab_menu import remove_from_plugins_menu, remove_plugin_from_menu
 
-            remove_from_plugins_menu(self._iface, self._action)
-            remove_plugin_from_menu(
-                self._terralab_menu, self._action, self._iface.mainWindow()
-            )
+            with teardown_step("plugins menu entry"):
+                remove_from_plugins_menu(self._iface, self._action)
+            with teardown_step("terralab menu entry"):
+                remove_plugin_from_menu(
+                    self._terralab_menu, self._action, self._iface.mainWindow()
+                )
 
-            ai_seg_action = getattr(self, "_ai_seg_action", None)
             if ai_seg_action is not None:
-                try:
+                with teardown_step("cross-promo plugins menu entry"):
                     remove_from_plugins_menu(self._iface, ai_seg_action)
-                except (RuntimeError, AttributeError):
-                    pass
-                try:
+                with teardown_step("cross-promo terralab menu entry"):
                     remove_plugin_from_menu(
                         self._terralab_menu, ai_seg_action, self._iface.mainWindow())
-                except (RuntimeError, AttributeError):
-                    pass
 
-            from ..terralab_toolbar import remove_action_from_toolbar
+            with teardown_step("toolbar helper import"):
+                from ..terralab_toolbar import remove_action_from_toolbar
 
             if self._terralab_toolbar:
-                try:
+                with teardown_step("toolbar entry"):
                     remove_action_from_toolbar(
                         self._terralab_toolbar, self._action, self._iface.mainWindow()
                     )
-                except (RuntimeError, AttributeError):
-                    pass
                 if ai_seg_action is not None:
-                    try:
+                    with teardown_step("cross-promo toolbar entry"):
                         remove_action_from_toolbar(
                             self._terralab_toolbar, ai_seg_action, self._iface.mainWindow()
                         )
-                    except (RuntimeError, AttributeError):
-                        pass
-                self._terralab_toolbar = None
 
-            self._action = None
-            self._ai_seg_action = None
-            self._terralab_menu = None
+        # The three QActions are parented to the QGIS main window, so pulling
+        # them out of the menus is not enough: the C++ objects outlive unload
+        # still connected to this plugin's bound methods, and every reload
+        # stacks another dead plugin graph on the main window.
+        for action in (self._settings_action, self._action, ai_seg_action):
+            if action is None:
+                continue
+            with teardown_step("plugin action"):
+                try:
+                    action.triggered.disconnect()
+                except (RuntimeError, TypeError):
+                    pass
+                action.deleteLater()
+        self._settings_action = None
+        self._action = None
+        self._ai_seg_action = None
+        self._terralab_toolbar = None
+        self._terralab_menu = None
 
         if self._map_tool is not None:
             # Detach the selection tool from the canvas before we drop it, or
@@ -468,18 +640,41 @@ class PluginLifecycleMixin:
             try:
                 if self._canvas is not None and self._canvas.mapTool() is self._map_tool:
                     self._canvas.unsetMapTool(self._map_tool)
-            except RuntimeError:  # nosec B110 - C++ canvas already gone
+            except Exception:  # nosec B110 - C++ canvas already gone
                 pass
+            # Disconnect the plugin-facing signals, then deleteLater: the
+            # canvas-parented C++ tool otherwise pins the dead plugin graph.
+            disconnect_signals(self._map_tool, MAP_TOOL_SIGNALS)
             try:
                 self._map_tool.cleanup()
             except Exception as err:  # nosec B110
                 log_warning(f"Map tool cleanup failed: {err}")
+            try:
+                self._map_tool.deleteLater()
+            except Exception:  # nosec B110 - C++ tool already gone
+                pass
         self._map_tool = None
-        clear_config_cache()
+
+        # Join the detached Prompt Library threads last, once the visible UI is
+        # gone: Qt aborts the process when it destroys a QThread still in run().
+        with teardown_step("prompt library workers"):
+            from ..dialogs.prompt_templates.workers import drain_prompt_library_workers
+
+            drain_prompt_library_workers()
+        drain_hook = getattr(self, "_prompt_library_drain", None)
+        if drain_hook is not None:
+            with teardown_step("about-to-quit hook"):
+                QgsApplication.instance().aboutToQuit.disconnect(drain_hook)
+            self._prompt_library_drain = None
+
+        with teardown_step("config cache"):
+            clear_config_cache()
         # Cancel any in-flight telemetry flush tasks before tearing down the
         # store so QgsTaskManager doesn't outlive the collector.
-        telemetry.shutdown_telemetry()
-        if self._config_store is not None:
-            self._config_store.clear()
-        set_store(None)
+        with teardown_step("telemetry"):
+            telemetry.shutdown_telemetry()
+        with teardown_step("config store"):
+            if self._config_store is not None:
+                self._config_store.clear()
+            set_store(None)
         log("AI Edit plugin unloaded")

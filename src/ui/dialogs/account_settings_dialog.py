@@ -1,12 +1,12 @@
 """Account Settings dialog for AI Edit plugin."""
 from __future__ import annotations
 
+import html
 from datetime import datetime
 
 from qgis.PyQt.QtCore import QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import (
-    QCheckBox,
     QDialog,
     QFileDialog,
     QFrame,
@@ -26,9 +26,11 @@ from ...core.auth.activation_manager import (
     get_privacy_url,
     get_terms_url,
 )
+from ...core.config_store import get_export_copy
 from ...core.i18n import tr
 from ...workers.generic_request_task import GenericRequestTask
 from ..dock_widget import (
+    _BTN_LABEL_WEIGHT,
     BRAND_BLUE,
     BRAND_BLUE_HOVER,
     BRAND_GREEN,
@@ -47,9 +49,25 @@ _STATUS_DISPLAY = {
     "canceled": (tr("Cancelled"), BRAND_RED),
 }
 
+
+def _status_display(status) -> tuple[str, str]:
+    """Label and colour for a subscription status.
+
+    A status the plugin has never heard of used to be dropped into the rich
+    text label as the server wrote it. It is now escaped, tidied into words,
+    and servable (copy.billing.status.<status>), so a billing status added
+    after this release reads as a sentence rather than a raw token."""
+    key = str(status or "")
+    shipped, color = _STATUS_DISPLAY.get(key, ("", BRAND_RED))
+    if not shipped:
+        shipped = html.escape(key.replace("_", " ").title(), quote=False)
+    return get_export_copy(f"billing.status.{key}", shipped, escape=True), color
+
+
 _LINK_BTN = (
     f"QPushButton {{ border: none; color: {BRAND_BLUE}; font-size: 11px;"
-    f" text-decoration: underline; padding: 2px 4px; background: transparent; }}"
+    f" text-decoration: underline; padding: 2px 4px; background: transparent;"
+    f" {_BTN_LABEL_WEIGHT} }}"
     f"QPushButton:hover {{ color: {BRAND_BLUE_HOVER}; }}"
 )
 
@@ -64,7 +82,8 @@ _MANAGE_BTN = (
 # Compact sign-out link (sits inside the account chip, not a full-width button).
 _SIGNOUT_LINK = (
     "QPushButton { border: none; background: transparent; color: palette(text);"
-    " font-size: 11px; text-decoration: underline; padding: 2px 4px; }"
+    f" font-size: 11px; text-decoration: underline; padding: 2px 4px;"
+    f" {_BTN_LABEL_WEIGHT} }}"
     f"QPushButton:hover {{ color: {BRAND_RED}; }}"
 )
 
@@ -75,7 +94,7 @@ _SIGNOUT_LINK = (
 _PREF_BTN = (
     "QPushButton { background: palette(button); color: palette(text);"
     " border: 1px solid rgba(128,128,128,0.45); border-radius: 5px;"
-    " padding: 3px 12px; }"
+    f" padding: 3px 12px; {_BTN_LABEL_WEIGHT} }}"
     "QPushButton:hover { background: rgba(128,128,128,0.18); }"
 )
 
@@ -267,8 +286,6 @@ class AccountSettingsDialog(QDialog):
 
         self._content_layout.addWidget(self._build_preferences_card())
 
-        self._content_layout.addWidget(self._build_privacy_card())
-
         # Discreet footer: thin top separator, small muted Terms / Privacy links.
         footer = QFrame()
         footer.setObjectName("legalFooter")
@@ -295,47 +312,6 @@ class AccountSettingsDialog(QDialog):
 
         self._content_widget.setVisible(True)
         self.adjustSize()
-
-    def _build_privacy_card(self) -> QFrame:
-        """Anonymous usage telemetry with a clear, ON-by-default opt-out.
-
-        Flips the shared TerraLab/telemetry_enabled flag (telemetry.py), so
-        turning it off here also silences the sibling AI Segmentation plugin.
-        Metrics are anonymous (no email, no identifier that singles a user out)
-        and carry no imagery, prompts, coordinates, or project content.
-        """
-        from ...core.telemetry import is_telemetry_enabled, set_telemetry_enabled
-
-        card = QFrame()
-        card.setStyleSheet(_CARD_STYLE)
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(6)
-
-        title = QLabel(f"<b>{tr('Privacy')}</b>")
-        title.setStyleSheet("font-size: 13px; color: palette(text);")
-        layout.addWidget(title)
-
-        self._telemetry_checkbox = QCheckBox(tr("Share anonymous usage statistics"))
-        self._telemetry_checkbox.setChecked(is_telemetry_enabled())
-        self._telemetry_checkbox.setCursor(QtC.PointingHandCursor)
-        self._telemetry_checkbox.setStyleSheet(
-            "font-size: 12px; color: palette(text);"
-        )
-        self._telemetry_checkbox.toggled.connect(set_telemetry_enabled)
-        layout.addWidget(self._telemetry_checkbox)
-
-        caption = QLabel(
-            tr(
-                "Anonymous metrics (durations, error codes, OS, QGIS version) "
-                "help us fix issues."
-            )
-        )
-        caption.setWordWrap(True)
-        caption.setStyleSheet("font-size: 11px; color: palette(text);")
-        layout.addWidget(caption)
-
-        return card
 
     def _build_preferences_card(self) -> QFrame:
         card = QFrame()
@@ -537,9 +513,7 @@ class AccountSettingsDialog(QDialog):
 
         grid.addWidget(self._field_label(tr("Plan")), 0, 0)
         plan_text = self._format_plan(plan, status)
-        status_text, status_color = _STATUS_DISPLAY.get(
-            status, (status.title(), BRAND_RED)
-        )
+        status_text, status_color = _status_display(status)
         plan_status = QLabel(f"{plan_text} · <span style='color:{status_color};'>{status_text}</span>")
         plan_status.setStyleSheet("font-size: 12px; color: palette(text);")
         grid.addWidget(plan_status, 0, 1)

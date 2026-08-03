@@ -57,21 +57,34 @@ class ImageLoadMixin:
     def _load_template_images(self) -> None:
         if self._demo_loader is None or self._absolute_url is None:
             return
+        # Track every request in flight so a template whose demo is not seeded
+        # yet (all four fetches 404) says "No preview" instead of leaving the
+        # slider on its default "Loading..." forever (same contract as the
+        # grid cards).
+        self._demo_pairs_pending: set[tuple[str, str]] = set()
+        self._demo_sides_ok: set[str] = set()
         self._demo_loader.loaded.connect(self._on_image_loaded)
+        self._demo_loader.failed.connect(self._on_image_failed)
         ub = self._preset.get("demo_url_before")
         ua = self._preset.get("demo_url_after")
         # Base demo (640px, often already grid-cached) for an instant first
         # paint, then the 2048px preview upgrades it under the _preview key.
         if ub:
+            self._demo_pairs_pending.add((self._thumb_key, "before"))
+            self._demo_pairs_pending.add((self._full_key, "before"))
             self._demo_loader.request(self._thumb_key, "before", self._absolute_url(ub))
             self._demo_loader.request(
                 self._full_key, "before", self._absolute_url(_with_preview_size(ub))
             )
         if ua:
+            self._demo_pairs_pending.add((self._thumb_key, "after"))
+            self._demo_pairs_pending.add((self._full_key, "after"))
             self._demo_loader.request(self._thumb_key, "after", self._absolute_url(ua))
             self._demo_loader.request(
                 self._full_key, "after", self._absolute_url(_with_preview_size(ua))
             )
+        if not self._demo_pairs_pending:
+            self._mark_no_preview()
 
     def _load_reference_thumbs(self) -> None:
         if self._demo_loader is None:
@@ -92,6 +105,10 @@ class ImageLoadMixin:
         is_thumb = key == self._thumb_key
         if not (is_full or is_thumb):
             return
+        pending = getattr(self, "_demo_pairs_pending", None)
+        if pending is not None:
+            pending.discard((key, which))
+            self._demo_sides_ok.add(which)
         # A thumb must never overwrite the full image once it has arrived.
         if is_thumb and which in self._full_done:
             return
@@ -104,6 +121,24 @@ class ImageLoadMixin:
         # Prefer the full image's true dimensions for the window aspect.
         if is_full or not self._aspect_locked:
             self._adopt_aspect(pixmap)
+
+    def _on_image_failed(self, key: str, which: str) -> None:
+        """A demo fetch failed (typically 404: demo not seeded yet). Once every
+        request has settled with no image at all, say so instead of loading
+        forever."""
+        pending = getattr(self, "_demo_pairs_pending", None)
+        if pending is None:
+            return
+        pending.discard((key, which))
+        if not pending and not self._demo_sides_ok:
+            self._mark_no_preview()
+
+    def _mark_no_preview(self) -> None:
+        if self._slider is not None:
+            try:
+                self._slider.set_placeholder_text(tr("No preview"))
+            except (RuntimeError, AttributeError):
+                pass
 
     def _adopt_aspect(self, pixmap) -> None:
         """Match the window + slider to the image aspect (used for templates and
@@ -145,9 +180,14 @@ class ImageLoadMixin:
             return
         from urllib.parse import urlparse
 
+        from ...raster_writer import get_output_dir
+
         url = urls[index]
         ext = os.path.splitext(urlparse(url).path)[1] or ".png"
-        suggested = f"reference_{index + 1}{ext}"
+        # Absolute, like every other save dialog here. A bare filename is
+        # resolved against the process CWD, which on a Windows OSGeo4W install
+        # is the read-only bin/ folder under Program Files.
+        suggested = os.path.join(get_output_dir(), f"reference_{index + 1}{ext}")
         dest, _sel = QFileDialog.getSaveFileName(
             self, tr("Save reference image"), suggested
         )
@@ -157,13 +197,15 @@ class ImageLoadMixin:
         def _work(client=self._client, u=url, path=dest):
             # Worker thread: fetch and write here so a stalled link never
             # freezes QGIS (the old blockingGet held the UI for up to 60s).
+            from ...raster_writer import replace_staged_file
+
             data = client.download_image(u)
             if not data:
                 raise OSError("empty response")
             tmp = path + ".part"
             with open(tmp, "wb") as f:
                 f.write(data)
-            os.replace(tmp, path)
+            replace_staged_file(tmp, path)
             return {"path": path}
 
         task = GenericRequestTask(tr("Downloading reference image"), _work)
@@ -191,7 +233,11 @@ class ImageLoadMixin:
             return
         from qgis.PyQt.QtWidgets import QMessageBox
 
-        QMessageBox.warning(
-            self, tr("Download failed"),
-            tr("Could not download the reference image."),
-        )
+        # The worker's own sentence (already translated, and the only place
+        # that says whether the file was locked, the disk full or the link
+        # dead) goes under the generic line instead of being dropped.
+        body = tr("Could not download the reference image.")
+        detail = (msg or "").strip()
+        if detail:
+            body = f"{body}\n\n{detail}"
+        QMessageBox.warning(self, tr("Download failed"), body)

@@ -4,8 +4,8 @@ from __future__ import annotations
 from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsSettings
 
 from ..logger import log_warning
+from .activation_manager import SETTINGS_PREFIX
 
-SETTINGS_PREFIX = "AIEdit/"
 _AUTHCFG_KEY = f"{SETTINGS_PREFIX}authcfg_id"
 _LEGACY_KEY = f"{SETTINGS_PREFIX}activation_key"
 _MIGRATION_PENDING_KEY = f"{SETTINGS_PREFIX}auth_migration_pending"

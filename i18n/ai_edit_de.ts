@@ -4,6 +4,106 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>This prompt is not allowed: its content goes against our rules.</source>
+        <translation>Diese Eingabe ist nicht zulässig: Ihr Inhalt verstößt gegen unsere Regeln.</translation>
+    </message>
+    <message>
+        <source>You have not been charged.</source>
+        <translation>Ihnen wurde nichts berechnet.</translation>
+    </message>
+    <message>
+        <source>Read our content rules</source>
+        <translation>Unsere Inhaltsregeln lesen</translation>
+    </message>
+    <message>
+        <source>Very large zone (about {km2} km²): the AI keeps only broad shapes at this size. Select a smaller area for object-level edits.</source>
+        <translation>Sehr große Zone (etwa {km2} km²): Die KI behält bei dieser Größe nur grobe Formen. Wählen Sie einen kleineren Bereich für Bearbeitungen auf Objektebene.</translation>
+    </message>
+    <message>
+        <source>Sessions</source>
+        <translation>Sitzungen</translation>
+    </message>
+    <message>
+        <source>Search your sessions</source>
+        <translation>Sitzungen durchsuchen</translation>
+    </message>
+    <message>
+        <source>No session matches.</source>
+        <translation>Keine Sitzung stimmt überein.</translation>
+    </message>
+    <message>
+        <source>Loading older sessions</source>
+        <translation>Ältere Sitzungen werden geladen</translation>
+    </message>
+    <message>
+        <source>Delete this session?</source>
+        <translation>Diese Sitzung löschen?</translation>
+    </message>
+    <message>
+        <source>Deleting session</source>
+        <translation>Sitzung wird gelöscht</translation>
+    </message>
+    <message>
+        <source>Session deleted.</source>
+        <translation>Sitzung gelöscht.</translation>
+    </message>
+    <message>
+        <source>Rename session</source>
+        <translation>Sitzung umbenennen</translation>
+    </message>
+    <message>
+        <source>Renaming session</source>
+        <translation>Sitzung wird umbenannt</translation>
+    </message>
+    <message>
+        <source>No internet connection. This version was made on another device or cleaned from this disk, so its image must be downloaded. Reconnect and click the version again.</source>
+        <translation>Keine Internetverbindung. Diese Version wurde auf einem anderen Gerät erstellt oder von dieser Festplatte entfernt, ihr Bild muss daher heruntergeladen werden. Stellen Sie die Verbindung wieder her und klicken Sie die Version erneut an.</translation>
+    </message>
+    <message>
+        <source>{ref} and {markup} show the AI what you mean. The {library} holds ready-made prompts. New here? Open the tutorial with the {icon} button below.</source>
+        <translation>{ref} und {markup} zeigen der KI, was Sie meinen. Die {library} enthält fertige Prompts. Neu hier? Öffnen Sie das Tutorial über die Schaltfläche {icon} unten.</translation>
+    </message>
+    <message>
+        <source>Click on the map to outline the area to edit.</source>
+        <translation>Klicken Sie auf die Karte, um den zu bearbeitenden Bereich zu umreißen.</translation>
+    </message>
+    <message>
+        <source>Extract</source>
+        <translation>Extrahieren</translation>
+    </message>
+    <message>
+        <source>Repair</source>
+        <translation>Reparieren</translation>
+    </message>
+    <message>
+        <source>Show a project: renders, plans, simulations, before/after</source>
+        <translation>Ein Projekt zeigen: Renderings, Pläne, Simulationen, Vorher/Nachher</translation>
+    </message>
+    <message>
+        <source>Extract data: detect, segment, count, map</source>
+        <translation>Daten extrahieren: erkennen, segmentieren, zählen, kartieren</translation>
+    </message>
+    <message>
+        <source>Repair imagery: sharpen, upscale, fix gaps and seams</source>
+        <translation>Bilder reparieren: schärfen, hochskalieren, Lücken und Nähte beheben</translation>
+    </message>
+    <message>
+        <source>Our hand-picked selection to get you started.</source>
+        <translation>Unsere Auswahl für den Einstieg.</translation>
+    </message>
+    <message>
+        <source>Categories</source>
+        <translation>Kategorien</translation>
+    </message>
+    <message>
+        <source>Guide the AI (optional)</source>
+        <translation>KI anleiten (optional)</translation>
+    </message>
+    <message>
+        <source>Add a reference image, or draw on the map to show where to act. You get a more reliable, less random result.</source>
+        <translation>Fügen Sie ein Referenzbild hinzu, oder zeichnen Sie auf der Karte, wo etwas geändert werden soll. Das Ergebnis wird zuverlässiger und weniger zufällig.</translation>
+    </message>
+    <message>
         <source>Analyze</source>
         <translation>Analysieren</translation>
     </message>
@@ -32,12 +132,56 @@
         <translation>Beliebt</translation>
     </message>
     <message>
+        <source>Featured</source>
+        <translation>Empfohlen</translation>
+    </message>
+    <message>
+        <source>Starred first, then your latest generations</source>
+        <translation>Favoriten zuerst, dann Ihre letzten Generierungen</translation>
+    </message>
+    <message>
+        <source>Your generations will live here. Run a Top pick to get started.</source>
+        <translation>Ihre Generierungen erscheinen hier. Starten Sie mit einer Auswahl.</translation>
+    </message>
+    <message>
+        <source>Your work</source>
+        <translation>Ihre Arbeit</translation>
+    </message>
+    <message>
+        <source>Pinned</source>
+        <translation>Angeheftet</translation>
+    </message>
+    <message>
+        <source>Explore a family</source>
+        <translation>Eine Familie erkunden</translation>
+    </message>
+    <message>
+        <source>Browse the library and find your use case.</source>
+        <translation>Durchstöbern Sie die Bibliothek und finden Sie Ihren Anwendungsfall.</translation>
+    </message>
+    <message>
+        <source>The prompts our community runs most, ready to use.</source>
+        <translation>Die meistgenutzten Prompts unserer Community, sofort einsatzbereit.</translation>
+    </message>
+    <message>
+        <source>Top picks</source>
+        <translation>Top-Auswahl</translation>
+    </message>
+    <message>
         <source>What the community runs most often</source>
         <translation>Was die Community am häufigsten nutzt</translation>
     </message>
     <message>
+        <source>What we recommend</source>
+        <translation>Was wir empfehlen</translation>
+    </message>
+    <message>
         <source>Your latest prompts</source>
         <translation>Deine neuesten Prompts</translation>
+    </message>
+    <message>
+        <source>Your latest generations</source>
+        <translation>Deine neuesten Generierungen</translation>
     </message>
     <message>
         <source>Your starred prompts</source>
@@ -66,14 +210,6 @@
     <message>
         <source>No prompts in this section yet.</source>
         <translation>Noch keine Prompts in diesem Bereich.</translation>
-    </message>
-    <message>
-        <source>Share anonymous usage statistics</source>
-        <translation>Anonyme Nutzungsstatistiken teilen</translation>
-    </message>
-    <message>
-        <source>Anonymous metrics (durations, error codes, OS, QGIS version) help us fix issues.</source>
-        <translation>Anonyme Metriken (Dauer, Fehlercodes, Betriebssystem, QGIS-Version) helfen uns, Probleme zu beheben.</translation>
     </message>
     <message>
         <source>Cancelling sign-in</source>
@@ -140,16 +276,16 @@
         <translation>Authentifizierung fehlgeschlagen. Überprüfen Sie Ihren Aktivierungsschlüssel.</translation>
     </message>
     <message>
-        <source>AI Edit outputs an image, not a vector file. For polygons (SHP, GeoJSON), pick a Segment or Land cover template, then ‘Vectorize this result’.</source>
-        <translation>AI Edit erzeugt ein Bild, keine Vektordatei. Für Polygone (SHP, GeoJSON) wählen Sie eine Vorlage vom Typ Segment oder Landbedeckung und anschließend ‘Dieses Ergebnis vektorisieren’.</translation>
+        <source>AI Edit outputs an image, not a vector file. For polygons (SHP, GeoJSON), pick a Segment or Land cover template, then ‘Vectorize this result’. For precise object outlines, try our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin.</source>
+        <translation>AI Edit erzeugt ein Bild, keine Vektordatei. Für Polygone (SHP, GeoJSON) wählen Sie eine Vorlage vom Typ Segment oder Landbedeckung und anschließend ‘Dieses Ergebnis vektorisieren’. Für präzise Objektumrisse probieren Sie unser Plugin &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt;.</translation>
     </message>
     <message>
         <source>AI Edit edits the image, it doesn't answer questions or count. Describe a visual change, e.g. colour the buildings red.</source>
         <translation>AI Edit bearbeitet das Bild, es beantwortet keine Fragen und zählt nicht. Beschreiben Sie eine visuelle Änderung, z. B. die Gebäude rot einfärben.</translation>
     </message>
     <message>
-        <source>AI Edit can't measure or count. Pick a Segment template, then ‘Vectorize this result’: QGIS gives the area and count per polygon.</source>
-        <translation>AI Edit kann nicht messen oder zählen. Wählen Sie eine Segment-Vorlage und anschließend ‘Dieses Ergebnis vektorisieren’: QGIS liefert Fläche und Anzahl pro Polygon.</translation>
+        <source>AI Edit can't measure or count. Our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin is built for that: it outlines objects as polygons QGIS can count and measure.</source>
+        <translation>AI Edit kann nicht messen oder zählen. Dafür ist unser Plugin &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; gemacht: Es umreißt Objekte als Polygone, die QGIS zählen und messen kann.</translation>
     </message>
     <message>
         <source>Zoomed out: the AI won't see small features (buildings, cars, trees) at this scale. Zoom in for object-level detail.</source>
@@ -196,8 +332,8 @@
         <translation>&lt;b&gt;Markieren&lt;/b&gt;&lt;br&gt;Zeichnen Sie Pfeile, Formen oder Beschriftungen auf die Karte, um der KI zu zeigen, was und wo geändert werden soll. Ihre Skizze wird mit dem Prompt als visuelle Vorgabe gesendet.</translation>
     </message>
     <message>
-        <source>&lt;b&gt;Reference image&lt;/b&gt;&lt;br&gt;Click to pick an image or data file from disk. To use a QGIS layer already in your project, drag it from the Layers panel into the prompt box. Everything is cropped to your zone.</source>
-        <translation>&lt;b&gt;Referenzbild&lt;/b&gt;&lt;br&gt;Klicken Sie, um ein Bild oder eine Datendatei von der Festplatte auszuwählen. Um einen QGIS-Layer zu verwenden, der bereits in Ihrem Projekt vorhanden ist, ziehen Sie ihn aus dem Layer-Bedienfeld in das Prompt-Feld. Alles wird auf Ihre Zone zugeschnitten.</translation>
+        <source>&lt;b&gt;Reference&lt;/b&gt;&lt;br&gt;Add an image or data file from disk, or one of your project's layers, as guidance for the AI. You can also drag a layer from the Layers panel straight into the prompt box. Everything is cropped to your zone.</source>
+        <translation>&lt;b&gt;Referenz&lt;/b&gt;&lt;br&gt;Fügen Sie ein Bild oder eine Datendatei von der Festplatte hinzu, oder einen Layer aus Ihrem Projekt, als Orientierung für die KI. Sie können einen Layer auch direkt aus dem Layer-Bedienfeld in das Prompt-Feld ziehen. Alles wird auf Ihre Zone zugeschnitten.</translation>
     </message>
     <message>
         <source>&lt;b&gt;Resolution&lt;/b&gt;&lt;br&gt;Higher means a sharper, more detailed result.</source>
@@ -326,10 +462,6 @@ Wir freuen uns auf Ihre Nachricht!</translation>
     <message>
         <source>Cancel anytime</source>
         <translation>Jederzeit kündbar</translation>
-    </message>
-    <message>
-        <source>Cancel selection</source>
-        <translation>Auswahl abbrechen</translation>
     </message>
     <message>
         <source>Cancel the running generation first (close the dock)</source>
@@ -1156,8 +1288,8 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>Kleine Schwankungen in der Kontur reduzieren (0 = keine Änderung).</translation>
     </message>
     <message>
-        <source>Ref image</source>
-        <translation>Ref.-Bild</translation>
+        <source>Reference</source>
+        <translation>Referenz</translation>
     </message>
     <message>
         <source>Reference image</source>
@@ -1314,6 +1446,10 @@ Wir freuen uns auf Ihre Nachricht!</translation>
     <message>
         <source>Service temporarily unavailable, please retry shortly.</source>
         <translation>Dienst vorübergehend nicht verfügbar, versuchen Sie es in Kürze erneut.</translation>
+    </message>
+    <message>
+        <source>This feature is temporarily unavailable. Please try again later.</source>
+        <translation>Diese Funktion ist vorübergehend nicht verfügbar. Bitte versuchen Sie es später erneut.</translation>
     </message>
     <message>
         <source>Settings</source>
@@ -1704,8 +1840,8 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>ausgewählt</translation>
     </message>
     <message>
-        <source>type your prompt or pick from the library...</source>
-        <translation>geben Sie Ihren Prompt ein oder wählen Sie aus der Bibliothek...</translation>
+        <source>describe a change, or pick one from the library...</source>
+        <translation>beschreiben Sie eine Änderung oder wählen Sie eine aus der Bibliothek...</translation>
     </message>
     <message>
         <source>yesterday</source>
@@ -1792,8 +1928,8 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>Generierung fehlgeschlagen: Die Anfrage wurde von einem Sicherheitsfilter blockiert. Es wurden keine Kosten berechnet. Formulieren Sie Ihren Prompt anders.</translation>
     </message>
     <message>
-        <source>Generation failed: the AI couldn't create an image for this request. You have not been charged. Try rephrasing your prompt, or pick a different zone.</source>
-        <translation>Generierung fehlgeschlagen: Die KI konnte für diese Anfrage kein Bild erstellen. Es wurden keine Kosten berechnet. Formulieren Sie Ihren Prompt anders, oder wählen Sie eine andere Zone.</translation>
+        <source>Generation failed: the AI returned no image. You have not been charged. AI Edit draws on the map and cannot answer questions, so describe the change you want to see, then try again.</source>
+        <translation>Generierung fehlgeschlagen: Die KI hat kein Bild zurückgegeben. Es wurden keine Kosten berechnet. AI Edit zeichnet auf der Karte und beantwortet keine Fragen. Beschreiben Sie die gewünschte Änderung und versuchen Sie es erneut.</translation>
     </message>
     <message>
         <source>Our image servers are busy right now. You have not been charged. Please wait a moment and try again.</source>
@@ -2100,6 +2236,10 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>Rasterpixel konnten nicht gelesen werden (die Datei ist möglicherweise unvollständig).</translation>
     </message>
     <message>
+        <source>Account created. Draw a zone on the example map to run your first edit.</source>
+        <translation>Konto erstellt. Zeichnen Sie eine Zone auf der Beispielkarte, um Ihre erste Bearbeitung zu starten.</translation>
+    </message>
+    <message>
         <source>Couldn't load the example basemap. Check your internet connection, or add your own layer (GeoTIFF, WMS, XYZ).</source>
         <translation>Die Beispiel-Grundkarte konnte nicht geladen werden. Prüfen Sie Ihre Internetverbindung oder fügen Sie einen eigenen Layer hinzu (GeoTIFF, WMS, XYZ).</translation>
     </message>
@@ -2252,10 +2392,6 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>Diese Farbe als Polygone nachzeichnen. Nicht angehakte Farben werden als Hintergrund behandelt.</translation>
     </message>
     <message>
-        <source>Try it on an example</source>
-        <translation>An einem Beispiel ausprobieren</translation>
-    </message>
-    <message>
         <source>Vector</source>
         <translation>Vektor</translation>
     </message>
@@ -2310,6 +2446,410 @@ Wir freuen uns auf Ihre Nachricht!</translation>
     <message>
         <source>{n} versions</source>
         <translation>{n} Versionen</translation>
+    </message>
+    <message>
+        <source>Your marks won't be used</source>
+        <translation>Ihre Markierungen werden nicht verwendet</translation>
+    </message>
+    <message>
+        <source>The markup layer is hidden.</source>
+        <translation>Die Markierungsebene ist ausgeblendet.</translation>
+    </message>
+    <message>
+        <source>Show and generate</source>
+        <translation>Einblenden und generieren</translation>
+    </message>
+    <message>
+        <source>Generate without</source>
+        <translation>Ohne generieren</translation>
+    </message>
+    <message>
+        <source>Line</source>
+        <translation>Linie</translation>
+    </message>
+    <message>
+        <source>Straight lines. Click to add points.</source>
+        <translation>Gerade Linien. Klicken Sie, um Punkte hinzuzufügen.</translation>
+    </message>
+    <message>
+        <source>Click to add points. Double-click to finish, click the first point to close.</source>
+        <translation>Klicken Sie, um Punkte hinzuzufügen. Doppelklicken Sie zum Abschließen, oder klicken Sie auf den ersten Punkt, um zu schließen.</translation>
+    </message>
+    <message>
+        <source>Click the map to place points around your zone. Click the first point again, double-click, or press Enter to close it. Then describe the change you want.</source>
+        <translation>Klicken Sie auf die Karte, um Punkte um Ihre Zone zu setzen. Klicken Sie erneut auf den ersten Punkt, doppelklicken Sie, oder drücken Sie die Eingabetaste, um sie zu schließen. Beschreiben Sie danach die gewünschte Änderung.</translation>
+    </message>
+    <message>
+        <source>This shape is too thin, too small, or crosses itself. Draw it again.</source>
+        <translation>Diese Form ist zu dünn, zu klein oder überschneidet sich selbst. Zeichnen Sie sie erneut.</translation>
+    </message>
+    <message>
+        <source>Crop</source>
+        <translation>Zuschnitt</translation>
+    </message>
+    <message>
+        <source>Crop: on</source>
+        <translation>Zuschnitt: an</translation>
+    </message>
+    <message>
+        <source>Crop: off</source>
+        <translation>Zuschnitt: aus</translation>
+    </message>
+    <message>
+        <source>Showing your shape only. Toggle to see the full frame.</source>
+        <translation>Nur Ihre Form wird angezeigt. Umschalten, um den vollständigen Rahmen zu sehen.</translation>
+    </message>
+    <message>
+        <source>Save this prompt to your favorites.</source>
+        <translation>Diesen Prompt in Ihren Favoriten speichern.</translation>
+    </message>
+    <message>
+        <source>Remove this prompt from your favorites.</source>
+        <translation>Diesen Prompt aus Ihren Favoriten entfernen.</translation>
+    </message>
+    <message>
+        <source>No layers in the project</source>
+        <translation>Keine Layer im Projekt</translation>
+    </message>
+    <message>
+        <source>Need cleaner outlines? Try our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin.</source>
+        <translation>Sauberere Umrisse gewünscht? Probieren Sie unser Plugin &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt;.</translation>
+    </message>
+    <message>
+        <source>Before and after comparison</source>
+        <translation>Vorher/Nachher-Vergleich</translation>
+    </message>
+    <message>
+        <source>Could not start the generation: {error}</source>
+        <translation>Die Generierung konnte nicht gestartet werden: {error}</translation>
+    </message>
+    <message>
+        <source>Could not write {name}. It may be open in QGIS or in another program. Close it, or pick a different name, and try again.</source>
+        <translation>{name} konnte nicht geschrieben werden. Die Datei ist möglicherweise in QGIS oder in einem anderen Programm geöffnet. Schließen Sie sie, oder wählen Sie einen anderen Namen, und versuchen Sie es erneut.</translation>
+    </message>
+    <message>
+        <source>Dismiss</source>
+        <translation>Ausblenden</translation>
+    </message>
+    <message>
+        <source>Divider at {pct}%. Left and right arrows move it.</source>
+        <translation>Trennlinie bei {pct}%. Mit den Pfeiltasten links und rechts verschieben.</translation>
+    </message>
+    <message>
+        <source>Favorite</source>
+        <translation>Favorit</translation>
+    </message>
+    <message>
+        <source>Jump to the first version</source>
+        <translation>Zur ersten Version springen</translation>
+    </message>
+    <message>
+        <source>Jump to the latest version</source>
+        <translation>Zur neuesten Version springen</translation>
+    </message>
+    <message>
+        <source>Paid</source>
+        <translation>Kostenpflichtig</translation>
+    </message>
+    <message>
+        <source>Press Enter to preview it, Delete to remove it.</source>
+        <translation>Eingabetaste für die Vorschau, Entf zum Entfernen.</translation>
+    </message>
+    <message>
+        <source>Remove reference image {n}</source>
+        <translation>Referenzbild {n} entfernen</translation>
+    </message>
+    <message>
+        <source>Remove this reference image</source>
+        <translation>Dieses Referenzbild entfernen</translation>
+    </message>
+    <message>
+        <source>Sign-in failed unexpectedly. Click Connect to try again.</source>
+        <translation>Die Anmeldung ist unerwartet fehlgeschlagen. Klicken Sie auf Verbinden, um es erneut zu versuchen.</translation>
+    </message>
+    <message>
+        <source>The request failed unexpectedly.</source>
+        <translation>Die Anfrage ist unerwartet fehlgeschlagen.</translation>
+    </message>
+    <message>
+        <source>Unexpected error while rendering the map.</source>
+        <translation>Unerwarteter Fehler beim Rendern der Karte.</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>Zurück</translation>
+    </message>
+    <message>
+        <source>Browse and search all your conversations</source>
+        <translation>Alle Ihre Konversationen durchsuchen</translation>
+    </message>
+    <message>
+        <source>Conversation actions</source>
+        <translation>Konversationsaktionen</translation>
+    </message>
+    <message>
+        <source>Conversation deleted.</source>
+        <translation>Konversation gelöscht.</translation>
+    </message>
+    <message>
+        <source>Conversations</source>
+        <translation>Konversationen</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Löschen</translation>
+    </message>
+    <message>
+        <source>Delete this conversation?</source>
+        <translation>Diese Konversation löschen?</translation>
+    </message>
+    <message>
+        <source>Deleting conversation</source>
+        <translation>Konversation wird gelöscht</translation>
+    </message>
+    <message>
+        <source>In my view</source>
+        <translation>In meiner Ansicht</translation>
+    </message>
+    <message>
+        <source>Keep this result</source>
+        <translation>Dieses Ergebnis behalten</translation>
+    </message>
+    <message>
+        <source>Keep this version and finish. The layer stays in your project.</source>
+        <translation>Diese Version behalten und abschließen. Die Ebene bleibt in Ihrem Projekt.</translation>
+    </message>
+    <message>
+        <source>Loading older conversations</source>
+        <translation>Ältere Konversationen werden geladen</translation>
+    </message>
+    <message>
+        <source>Loading thumbnails</source>
+        <translation>Vorschaubilder werden geladen</translation>
+    </message>
+    <message>
+        <source>No conversation matches.</source>
+        <translation>Keine Konversation entspricht der Suche.</translation>
+    </message>
+    <message>
+        <source>Only conversations whose zone is inside the current map view</source>
+        <translation>Nur Konversationen, deren Zone in der aktuellen Kartenansicht liegt</translation>
+    </message>
+    <message>
+        <source>Privacy policy</source>
+        <translation>Datenschutzerklärung</translation>
+    </message>
+    <message>
+        <source>Refreshing history</source>
+        <translation>Verlauf wird aktualisiert</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Umbenennen</translation>
+    </message>
+    <message>
+        <source>Rename conversation</source>
+        <translation>Konversation umbenennen</translation>
+    </message>
+    <message>
+        <source>Renaming conversation</source>
+        <translation>Konversation wird umbenannt</translation>
+    </message>
+    <message>
+        <source>Result kept. Find this conversation anytime on the home screen.</source>
+        <translation>Ergebnis übernommen. Sie finden diese Konversation jederzeit auf dem Startbildschirm.</translation>
+    </message>
+    <message>
+        <source>Search your conversations</source>
+        <translation>Ihre Konversationen durchsuchen</translation>
+    </message>
+    <message>
+        <source>Show more</source>
+        <translation>Mehr anzeigen</translation>
+    </message>
+    <message>
+        <source>Stored on European servers while your account exists. Delete any conversation whenever you want.</source>
+        <translation>Gespeichert auf europäischen Servern, solange Ihr Konto besteht. Löschen Sie jede Konversation, wann immer Sie möchten.</translation>
+    </message>
+    <message>
+        <source>This deletes its generations and their images from TerraLab servers. Layers already in your project stay. This cannot be undone.</source>
+        <translation>Dies löscht ihre Generierungen und Bilder von den TerraLab-Servern. Bereits im Projekt vorhandene Ebenen bleiben erhalten. Dies kann nicht rückgängig gemacht werden.</translation>
+    </message>
+    <message>
+        <source>Title</source>
+        <translation>Titel</translation>
+    </message>
+    <message>
+        <source>Today</source>
+        <translation>Heute</translation>
+    </message>
+    <message>
+        <source>This week</source>
+        <translation>Diese Woche</translation>
+    </message>
+    <message>
+        <source>Stored on European servers while your account exists.</source>
+        <translation>Gespeichert auf europäischen Servern, solange Ihr Konto besteht.</translation>
+    </message>
+    <message>
+        <source>Add a layer…</source>
+        <translation>Ebene hinzufügen…</translation>
+    </message>
+    <message>
+        <source>Load a sample image</source>
+        <translation>Beispielbild laden</translation>
+    </message>
+    <message>
+        <source>Open QGIS's Data Source Manager to add imagery</source>
+        <translation>QGIS-Datenquellenverwaltung öffnen, um Bilddaten hinzuzufügen</translation>
+    </message>
+    <message>
+        <source>Click to exit the comparison</source>
+        <translation>Klicken, um den Vergleich zu beenden</translation>
+    </message>
+    <message>
+        <source>Keep this version</source>
+        <translation>Diese Version behalten</translation>
+    </message>
+    <message>
+        <source>Kept as the result of this session</source>
+        <translation>Als Ergebnis dieser Sitzung behalten</translation>
+    </message>
+    <message>
+        <source>kept</source>
+        <translation>behalten</translation>
+    </message>
+    <message>
+        <source>Finish this session and return to the start</source>
+        <translation>Diese Sitzung beenden und zum Start zurückkehren</translation>
+    </message>
+    <message>
+        <source>Go back one step (comparison, drawing, zone)</source>
+        <translation>Einen Schritt zurück (Vergleich, Zeichnung, Zone)</translation>
+    </message>
+    <message>
+        <source>Earlier</source>
+        <translation>Früher</translation>
+    </message>
+    <message>
+        <source>Your session stays in your history. Reopen it anytime from the Prompt Library.</source>
+        <translation>Ihre Sitzung bleibt in Ihrem Verlauf. Öffnen Sie sie jederzeit über die Prompt-Bibliothek erneut.</translation>
+    </message>
+    <message>
+        <source>Resume this session</source>
+        <translation>Diese Sitzung fortsetzen</translation>
+    </message>
+    <message>
+        <source>Session</source>
+        <translation>Sitzung</translation>
+    </message>
+    <message>
+        <source>GENERATIONS</source>
+        <translation>GENERIERUNGEN</translation>
+    </message>
+    <message>
+        <source>Reopen this session in AI Edit: its prompt, reference images, and the same map zone.</source>
+        <translation>Diese Sitzung in AI Edit erneut öffnen: ihr Prompt, ihre Referenzbilder und dieselbe Kartenzone.</translation>
+    </message>
+    <message>
+        <source>Your layers are hidden</source>
+        <translation>Ihre Ebenen sind ausgeblendet</translation>
+    </message>
+    <message>
+        <source>Nothing shows on the map until one is checked.</source>
+        <translation>Auf der Karte erscheint nichts, bis eine angehakt ist.</translation>
+    </message>
+    <message>
+        <source>Show my layers</source>
+        <translation>Meine Ebenen anzeigen</translation>
+    </message>
+    <message>
+        <source>Re-check your topmost layer in the Layers panel</source>
+        <translation>Hakt die oberste Ebene im Ebenen-Bedienfeld wieder an</translation>
+    </message>
+    <message>
+        <source>Past sessions</source>
+        <translation>Frühere Sitzungen</translation>
+    </message>
+    <message>
+        <source>Reopen a past session from the Prompt Library</source>
+        <translation>Eine frühere Sitzung aus der Prompt-Bibliothek erneut öffnen</translation>
+    </message>
+    <message>
+        <source>Name your marks in the prompt, e.g. "add a pond inside the circle". The marks guide the AI and won't appear in the result.</source>
+        <translation>Nennen Sie Ihre Markierungen im Prompt, z. B. "im Kreis einen Teich hinzufügen". Die Markierungen leiten die KI und erscheinen nicht im Ergebnis.</translation>
+    </message>
+    <message>
+        <source>From your computer</source>
+        <translation>Von Ihrem Computer</translation>
+    </message>
+    <message>
+        <source>Pick images or data files. Data files (GeoTIFF, shapefile, GeoJSON...) are rendered at your zone.</source>
+        <translation>Wählen Sie Bilder oder Datendateien. Datendateien (GeoTIFF, Shapefile, GeoJSON...) werden an Ihrer Zone gerendert.</translation>
+    </message>
+    <message>
+        <source>From a QGIS layer</source>
+        <translation>Aus einer QGIS-Ebene</translation>
+    </message>
+    <message>
+        <source>Snapshot one of this project's layers at your zone. The layer itself is not changed and stays where it is.</source>
+        <translation>Erstellt einen Schnappschuss einer Projektebene an Ihrer Zone. Die Ebene selbst wird nicht verändert und bleibt, wo sie ist.</translation>
+    </message>
+    <message>
+        <source>No references yet. Add one to guide the AI.</source>
+        <translation>Noch keine Referenzen. Fügen Sie eine hinzu, um die KI zu leiten.</translation>
+    </message>
+    <message>
+        <source>What should the AI take from this image?</source>
+        <translation>Was soll die KI aus diesem Bild übernehmen?</translation>
+    </message>
+    <message>
+        <source>Instructions for reference image {n}</source>
+        <translation>Anweisungen für Referenzbild {n}</translation>
+    </message>
+    <message>
+        <source>File</source>
+        <translation>Datei</translation>
+    </message>
+    <message>
+        <source>Your marks guide the edit. No note is needed here.</source>
+        <translation>Ihre Markierungen leiten die Bearbeitung. Hier ist keine Notiz nötig.</translation>
+    </message>
+    <message>
+        <source>Keep these references to guide the edit, and close the panel</source>
+        <translation>Diese Referenzen zur Orientierung behalten und das Bedienfeld schließen</translation>
+    </message>
+    <message>
+        <source>Each image is cropped to your zone and stays hidden from the map. Add a note to tell the AI what to take from it.</source>
+        <translation>Jedes Bild wird auf Ihre Zone zugeschnitten und bleibt auf der Karte verborgen. Fügen Sie eine Notiz hinzu, um der KI zu sagen, was sie daraus übernehmen soll.</translation>
+    </message>
+    <message>
+        <source>My work</source>
+        <translation>Meine Arbeit</translation>
+    </message>
+    <message>
+        <source>Starred</source>
+        <translation>Markiert</translation>
+    </message>
+    <message>
+        <source>Your work sessions, newest first.</source>
+        <translation>Ihre Arbeitssitzungen, neueste zuerst.</translation>
+    </message>
+    <message>
+        <source>The imagery this session was edited on is not in this project.</source>
+        <translation>Die Bilddaten, auf denen diese Sitzung bearbeitet wurde, sind nicht in diesem Projekt.</translation>
+    </message>
+    <message>
+        <source>Add source snapshot</source>
+        <translation>Quell-Schnappschuss hinzufügen</translation>
+    </message>
+    <message>
+        <source>Session input</source>
+        <translation>Sitzungs-Eingabe</translation>
+    </message>
+    <message>
+        <source>Adding session input to the map</source>
+        <translation>Sitzungs-Eingabe wird zur Karte hinzugefügt</translation>
     </message>
 </context>
 </TS>

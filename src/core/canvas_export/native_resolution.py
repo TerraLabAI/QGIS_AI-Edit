@@ -7,11 +7,12 @@ from qgis.core import (
     QgsCoordinateTransform,
     QgsDataSourceUri,
     QgsDistanceArea,
-    QgsMapLayer,
     QgsPointXY,
     QgsProject,
     QgsRectangle,
 )
+
+from .. import qt_compat as QtC
 
 # Optional in QGIS < 3.14; vector tile sizing falls back to "unconstrained" if missing.
 try:
@@ -71,7 +72,7 @@ def _native_pixel_size_xy_m(
     if QgsVectorTileLayer is not None and isinstance(layer, QgsVectorTileLayer):
         return _vector_tile_native_mpp_xy(layer, zone_extent, map_crs)
 
-    if layer.type() != QgsMapLayer.LayerType.RasterLayer:
+    if layer.type() != QtC.RasterLayerType:
         return None
 
     if not _intersects_zone(layer, zone_extent, map_crs):
@@ -121,6 +122,16 @@ def _raster_native_mpp_xy(
         return None
 
 
+def _measure_ellipsoid() -> str:
+    """The ellipsoid the geodesic measurers use. A project without a measure
+    ellipsoid returns the string "NONE" (truthy, so an `or` fallback never
+    fired and measurements silently went planar); map that to WGS84."""
+    ellipsoid = QgsProject.instance().ellipsoid()
+    if not ellipsoid or ellipsoid.upper() == "NONE":
+        return "EPSG:7030"
+    return ellipsoid
+
+
 def _layer_units_to_meters_xy(
     layer, px_x: float, px_y: float, zone_extent: QgsRectangle, map_crs
 ) -> tuple[float, float] | None:
@@ -135,7 +146,7 @@ def _layer_units_to_meters_xy(
 
         da = QgsDistanceArea()
         da.setSourceCrs(layer_crs, QgsProject.instance().transformContext())
-        da.setEllipsoid(QgsProject.instance().ellipsoid() or "WGS84")
+        da.setEllipsoid(_measure_ellipsoid())
 
         m_per_unit_x = da.measureLine(
             QgsPointXY(center.x(), center.y()),
@@ -214,7 +225,7 @@ def _zone_dims_meters(
     try:
         da = QgsDistanceArea()
         da.setSourceCrs(map_crs, QgsProject.instance().transformContext())
-        da.setEllipsoid(QgsProject.instance().ellipsoid() or "WGS84")
+        da.setEllipsoid(_measure_ellipsoid())
         center_y = zone_extent.center().y()
         center_x = zone_extent.center().x()
         width_m = da.measureLine(

@@ -1,6 +1,7 @@
 """Category pages, template-card grids, and the detail popup."""
 from __future__ import annotations
 
+from qgis.PyQt.QtCore import QEasingCurve, QPoint, QPropertyAnimation
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QFrame,
@@ -22,17 +23,14 @@ from .cards import _BeforeAfterCard
 from .common import (
     _BACK_BTN_SMALL,
     _EMPTY_MSG,
-    _EXPERIMENTAL_BTN,
-    _EXPERIMENTAL_HEADER,
+    _HALL_SECTION_COUNT,
+    _HALL_SECTION_TITLE,
     _HISTORY_SVG,
-    _NEED_ACCENT,
-    _NEED_TAB,
     _NEED_TILE_SUB,
     _NEED_TILE_TITLE,
     _STAR_OUTLINE_SVG,
     _TABS_WITH_COUNT,
     _is_alive,
-    _split_experimental,
 )
 
 
@@ -135,97 +133,21 @@ class PagesMixin:
                 empty = self._build_empty_state(key)
                 if empty is not None:
                     layout.addWidget(empty)
-                self._themed_state.pop(key, None)
             else:
-                # Every reliable preset is shown up front; experimentals
-                # (server-flagged fragile prompts) hide behind a single
-                # amber disclosure so the curated default view stays clean.
-                reliable, experimental = _split_experimental(presets)
                 # Same visual language as Top Picks: a 3-column grid of
                 # before/after preview cards. Each cell falls back to a text
                 # card when its demo asset is missing, so every category reads
                 # the same way whether or not its demos are seeded yet.
+                # Experimental presets never reach this list (masked at the
+                # resolver, R3), so every card here is reliable.
                 grid_host = QWidget()
                 grid = self._new_card_grid(grid_host, columns=3)
-                self._populate_grid_cards(grid, reliable, key, columns=3)
+                self._populate_grid_cards(grid, presets, key, columns=3)
                 layout.addWidget(grid_host)
-
-                exp_btn = None
-                if experimental:
-                    exp_btn = QPushButton(
-                        self._show_experimental_label(len(experimental))
-                    )
-                    exp_btn.setStyleSheet(_EXPERIMENTAL_BTN)
-                    exp_btn.setCursor(QtC.PointingHandCursor)
-                    exp_btn.clicked.connect(
-                        lambda _=False, k=key: self._on_show_experimental(k)
-                    )
-                    row = QHBoxLayout()
-                    row.setContentsMargins(0, 6, 0, 0)
-                    row.addStretch()
-                    row.addWidget(exp_btn)
-                    row.addStretch()
-                    layout.addLayout(row)
-                    self._themed_state[key] = {
-                        "layout": layout,
-                        "grid": grid,
-                        "reliable_count": len(reliable),
-                        "experimental": experimental,
-                        "exp_btn": exp_btn,
-                    }
-                else:
-                    self._themed_state.pop(key, None)
             layout.addStretch()
 
         scroll.setWidget(content)
         return scroll
-
-    @staticmethod
-    def _show_experimental_label(count: int) -> str:
-        return tr("Show {n} experimental templates").format(n=count)
-
-    def _on_show_experimental(self, key: str):
-        """Reveal the experimental templates for this category, prefixed
-        with a small amber header that warns the prompts may misfire."""
-        state = self._themed_state.get(key)
-        if state is None:
-            return
-        exp_btn = state.get("exp_btn")
-        experimental = state.get("experimental") or []
-        grid = state.get("grid")
-        if exp_btn is None or not _is_alive(exp_btn) or not experimental or grid is None:
-            return
-        # Continue the same 3-column grid: an amber header spanning the row,
-        # then the experimental templates as preview cards below it.
-        start = int(state.get("reliable_count", 0))
-        header_row = (start + 2) // 3
-        header = QLabel(tr("EXPERIMENTAL (may produce unexpected results)"))
-        header.setStyleSheet(_EXPERIMENTAL_HEADER)
-        header.setWordWrap(True)
-        grid.addWidget(header, header_row, 0, 1, 3)
-        base = (header_row + 1) * 3
-        for i, preset in enumerate(experimental):
-            row, col = divmod(base + i, 3)
-            card = self._build_top_pick_card(preset)
-            grid.addWidget(card, row, col)
-            self._card_widgets.append((card, key))
-        exp_btn.setVisible(False)
-        state["exp_btn"] = None
-        self._themed_state.pop(key, None)
-
-    @staticmethod
-    def _row_index_of(layout: QVBoxLayout, btn: QPushButton) -> int:
-        """Return the layout index of the row that hosts `btn`, so callers
-        can insertWidget before it. Falls back to layout.count() - 1 (right
-        before the trailing stretch) if the row can't be found."""
-        for i in range(layout.count()):
-            item = layout.itemAt(i)
-            if item is None:
-                continue
-            sub = item.layout()
-            if sub is not None and sub.indexOf(btn) >= 0:
-                return i
-        return max(0, layout.count() - 1)
 
     def _populate_grid_cards(
         self, grid: QGridLayout, presets: list[dict], page_key: str, columns: int = 3
@@ -244,18 +166,11 @@ class PagesMixin:
     # -- Need drill-in pages (landing redesign) --------------------------
 
     def _switch_to_page(self, widget: QWidget) -> None:
-        """Show an arbitrary stack page (landing or a need page). The
-        landing/need flow does not use sidebar highlighting or tab keys."""
+        """Show an arbitrary stack page (landing or a need page) and keep the
+        navigation rail's active row in sync with it. The landing/need flow does
+        not use sidebar highlighting or tab keys."""
         self._stack.setCurrentWidget(widget)
-
-    @staticmethod
-    def _tab_active_qss(accent: str) -> str:
-        """Active category tab: underlined in the family's accent colour."""
-        return (
-            "QPushButton { border: none; border-bottom: 2px solid " + accent + "; "
-            "background: transparent; padding: 6px 2px 3px 2px; font-size: 13px; "
-            "font-weight: 700; color: palette(text); }"
-        )
+        self._sync_rail_for_page(widget)
 
     def _build_back_header(self, title: str, tagline: str = "") -> QWidget:
         """Compact header: a small borderless back arrow + title (and an
@@ -296,106 +211,183 @@ class PagesMixin:
         return page
 
     def _build_need_page(self, need_key: str) -> QWidget:
-        """Aggregate every category of one need into a single filtered gallery:
-        a back header, category filter chips, and a card grid rebuilt on filter
-        so it always reflows without gaps."""
+        """One continuous scrolling hall per family (R6). A fixed header
+        (back affordance + family name/tagline) sits above a QScrollArea
+        holding one section per subfamily: a header (label + live count)
+        followed by its full card grid, in catalog order. The rail's
+        subfamily rows glide the hall to a section, and a scroll-spy keeps
+        the active row in sync with the scroll position."""
         data = get_need_page(need_key, self._server_catalog)
-        accent = _NEED_ACCENT.get(need_key, "#8bac27")
+        categories = [cat for cat in data["categories"] if cat["presets"]]
 
+        page = QWidget()
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(6, 4, 6, 4)
+        outer.setSpacing(10)
+
+        outer.addWidget(self._build_back_header(data["label"], data["tagline"]))
+
+        # No subfamily row up here: the navigation rail lists this family's
+        # subfamilies indented under the active category row (RailMixin), so
+        # the page keeps only the hall itself and its section headers.
+
+        # The hall itself: one section per subfamily, stacked so the whole
+        # family's structure is visible by scrolling, no click required.
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QtC.FrameNoFrame)
         scroll.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
         content = QWidget()
-        outer = QVBoxLayout(content)
-        outer.setContentsMargins(6, 4, 6, 8)
-        outer.setSpacing(10)
+        hall = QVBoxLayout(content)
+        hall.setContentsMargins(0, 2, 0, 8)
+        hall.setSpacing(20)
 
-        # Thin family-colour bar at the top echoes the family's tile accent.
-        top_bar = QFrame()
-        top_bar.setFixedHeight(3)
-        top_bar.setStyleSheet(f"background: {accent}; border: none;")
-        outer.addWidget(top_bar)
+        sections: list[tuple[str, QWidget]] = []
+        for cat in categories:
+            section = self._build_hall_section(cat)
+            hall.addWidget(section)
+            sections.append((cat["key"], section))
 
-        outer.addWidget(self._build_back_header(data["label"], data["tagline"]))
+        if not categories:
+            empty = QLabel(tr("No prompts in this section yet."))
+            empty.setStyleSheet(_EMPTY_MSG)
+            hall.addWidget(empty)
 
-        presets = [p for cat in data["categories"] for p in cat["presets"]]
+        hall.addStretch()
+        scroll.setWidget(content)
+        outer.addWidget(scroll, 1)
 
-        self._need_chips[need_key] = {}
-        if len(data["categories"]) > 1:
-            tab_row = QHBoxLayout()
-            tab_row.setContentsMargins(0, 0, 0, 0)
-            tab_row.setSpacing(16)
-            all_tab = QPushButton(tr("All"))
-            all_tab.setStyleSheet(self._tab_active_qss(accent))
-            all_tab.setCursor(QtC.PointingHandCursor)
-            all_tab.clicked.connect(
-                lambda _c=False, k=need_key: self._render_need_grid(k, "__all__")
-            )
-            tab_row.addWidget(all_tab)
-            self._need_chips[need_key]["__all__"] = all_tab
-            for cat in data["categories"]:
-                # && renders a literal & (Qt would otherwise treat "&" as a
-                # mnemonic and show "Forestry & vegetation" as "Forestry _vegetation").
-                tab = QPushButton(cat["label"].replace("&", "&&"))
-                tab.setStyleSheet(_NEED_TAB)
-                tab.setCursor(QtC.PointingHandCursor)
-                tab.clicked.connect(
-                    lambda _c=False, k=need_key, ck=cat["key"]: self._render_need_grid(k, ck)
-                )
-                tab_row.addWidget(tab)
-                self._need_chips[need_key][cat["key"]] = tab
-            tab_row.addStretch()
-            tab_wrap = QWidget()
-            tab_wrap.setLayout(tab_row)
-            outer.addWidget(tab_wrap)
+        # Smooth glide on a rail subfamily click (same pattern as the version
+        # strip's chevron jump); the scroll-spy guard below suppresses row
+        # churn while this animation is in flight.
+        anim = QPropertyAnimation(scroll.verticalScrollBar(), b"value", page)
+        anim.setDuration(240)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.finished.connect(lambda k=need_key: self._on_hall_scroll_anim_finished(k))
+
+        self._need_state[need_key] = {
+            "scroll_area": scroll,
+            "content": content,
+            "sections": sections,
+            "entries": [
+                (cat["key"], cat["label"], len(cat["presets"]))
+                for cat in categories
+            ],
+            "active": None,
+            "programmatic": False,
+            "anim": anim,
+        }
+        # The hall opens at the top, so the first section is the current one.
+        if categories:
+            self._set_hall_active_section(need_key, categories[0]["key"])
+        scroll.verticalScrollBar().valueChanged.connect(
+            lambda v, k=need_key: self._on_hall_scrolled(k, v)
+        )
+        return page
+
+    def _build_hall_section(self, category: dict) -> QWidget:
+        """One hall section: a strong subfamily header (17px title + muted
+        count) followed by its full preset grid. Hierarchy comes from type
+        size and weight alone - no coloured bar. No "see all" either: the
+        section already shows every live prompt."""
+        section = QWidget()
+        box = QVBoxLayout(section)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(8)
+
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(8)
+        # Plain QLabel text (no buddy set) renders "&" literally - unlike
+        # QPushButton, it needs no escaping here.
+        title = QLabel(category["label"])
+        title.setStyleSheet(_HALL_SECTION_TITLE)
+        title_row.addWidget(title)
+        count = QLabel(f"({len(category['presets'])})")
+        count.setStyleSheet(_HALL_SECTION_COUNT)
+        title_row.addWidget(count)
+        title_row.addStretch()
+        box.addLayout(title_row)
 
         grid_host = QWidget()
         grid = self._new_card_grid(grid_host, columns=3)
-        outer.addWidget(grid_host)
+        self._populate_grid_cards(grid, category["presets"], category["key"], columns=3)
+        box.addWidget(grid_host)
+        return section
 
-        if not presets:
-            empty = QLabel(tr("No prompts in this section yet."))
-            empty.setStyleSheet(_EMPTY_MSG)
-            outer.addWidget(empty)
+    @staticmethod
+    def _hall_section_y(state: dict, section: QWidget) -> int:
+        """Section's vertical offset inside the hall's scroll content - the
+        scrollbar value that puts this section's header at the viewport top."""
+        return section.mapTo(state["content"], QPoint(0, 0)).y()
 
-        outer.addStretch()
-        scroll.setWidget(content)
-
-        self._need_state[need_key] = {
-            "grid": grid, "all_presets": presets, "active": "__all__", "accent": accent,
-        }
-        self._render_need_grid(need_key, "__all__")
-        return scroll
-
-    def _render_need_grid(self, need_key: str, cat_key: str) -> None:
-        """Rebuild a need page's card grid for the active category tab. All
-        prompts render together (no experimental section) so the page stays
-        simple; the rebuild reflows cleanly with no gaps."""
+    def _scroll_hall_to(self, need_key: str, cat_key: str) -> None:
+        """Rail subfamily click: glide the hall to `cat_key`'s section ("All"
+        glides to top). The rows are anchors, not filters - nothing is
+        rebuilt."""
         state = self._need_state.get(need_key)
         if not state:
             return
-        grid = state["grid"]
-        while grid.count():
-            item = grid.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                # setParent(None) removes it from view now; deleteLater alone is
-                # async, so a same-frame rebuild would briefly overlap old cells.
-                widget.setParent(None)
-                widget.deleteLater()
-
-        presets = state["all_presets"]
+        bar = state["scroll_area"].verticalScrollBar()
+        target = 0
         if cat_key != "__all__":
-            presets = [p for p in presets if p.get("source_category") == cat_key]
-        for idx, preset in enumerate(presets):
-            row, col = divmod(idx, 3)
-            grid.addWidget(self._build_top_pick_card(preset), row, col)
+            for ck, section in state["sections"]:
+                if ck == cat_key and _is_alive(section):
+                    target = self._hall_section_y(state, section)
+                    break
+        target = max(0, min(target, bar.maximum()))
+        self._set_hall_active_section(need_key, cat_key)
+        anim = state["anim"]
+        anim.stop()  # may itself emit finished() synchronously - clear the
+        # programmatic guard AFTER stop(), right before start(), so a second
+        # row clicked mid-glide still suppresses the spy for its own glide.
+        state["programmatic"] = True
+        anim.setStartValue(bar.value())
+        anim.setEndValue(target)
+        anim.start()
 
+    def _on_hall_scroll_anim_finished(self, need_key: str) -> None:
+        state = self._need_state.get(need_key)
+        if state is not None:
+            state["programmatic"] = False
+
+    def _on_hall_scrolled(self, need_key: str, _value: int) -> None:
+        """Scroll-spy: set the active section from the current scroll
+        position. Skipped while a rail click is driving a programmatic glide
+        (see the `programmatic` guard in `_scroll_hall_to`) so the two never
+        fight over which section is active."""
+        state = self._need_state.get(need_key)
+        if not state or state.get("programmatic"):
+            return
+        bar = state["scroll_area"].verticalScrollBar()
+        value = bar.value()
+        live = [(k, s) for k, s in state["sections"] if _is_alive(s)]
+        # Bottom clamp: a section near the end of a short hall may never be
+        # able to scroll its header all the way to the viewport top (not
+        # enough content below it), so the plain top-anchored check below
+        # would never select it. At the true scroll bottom the last live
+        # section is what fills the viewport, so it wins outright.
+        if bar.maximum() > 0 and value >= bar.maximum() and live:
+            active = live[-1][0]
+        else:
+            # Above the first section header the first section is still the
+            # one on screen (there is no "All" entry in the summary row).
+            active = live[0][0] if live else None
+            for cat_key, section in live:
+                if value >= self._hall_section_y(state, section):
+                    active = cat_key
+        if active is None:
+            return
+        self._set_hall_active_section(need_key, active)
+
+    def _set_hall_active_section(self, need_key: str, cat_key: str) -> None:
+        """Track which subfamily section the hall shows and mirror it in the
+        rail's subfamily rows (the hall itself carries no marker)."""
+        state = self._need_state.get(need_key)
+        if not state or state.get("active") == cat_key:
+            return
+        self._set_rail_active_subfamily(need_key, cat_key)
         state["active"] = cat_key
-        active_qss = self._tab_active_qss(state.get("accent", "#8bac27"))
-        for key, tab in self._need_chips.get(need_key, {}).items():
-            tab.setStyleSheet(active_qss if key == cat_key else _NEED_TAB)
 
     def _build_top_pick_card(self, preset: dict) -> QFrame:
         """One library card: always a compact before/after slider so every cell
@@ -538,12 +530,6 @@ class PagesMixin:
         # prompt" button is what selects it. Browse-only opens read-only.
         self._open_detail(preset=preset)
 
-    def _prune_dead_cards(self):
-        """Drop card refs whose underlying Qt widget has been destroyed."""
-        self._card_widgets = [
-            (c, k) for (c, k) in self._card_widgets if _is_alive(c)
-        ]
-
     def _reload_dynamic_pages(self, keys=("recent", "user_favorites")):
         """Rebuild the named generation tabs from the current job lists. Only
         rebuilds pages that are already built (lazy): an unvisited tab will pick
@@ -575,6 +561,18 @@ class PagesMixin:
         for key in _TABS_WITH_COUNT:
             if key in keyset:
                 self._refresh_sidebar_button(key)
+
+        # Landing shelves (Recent/Favorites in particular) must reflect the
+        # same data: reappear once a shelf gets its first entry, disappear if
+        # it goes back to empty (e.g. a favorite unstarred to zero).
+        self._refresh_shelves()
+
+        # The Sessions and Starred pages render from the same lists; keep the
+        # one on screen live (a hidden one rebuilds on open). This is also the
+        # path that keeps the rail's Starred count in step with star toggles
+        # (via _refresh_shelves -> _refresh_rail_counts above).
+        self._refresh_sessions_if_open()
+        self._refresh_starred_if_open()
 
         # If a search is active, re-run it so the results pick up new presets
         # (e.g. a newly-fetched Recent entry, or a card whose star state changed).

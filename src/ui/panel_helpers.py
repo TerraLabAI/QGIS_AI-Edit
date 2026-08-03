@@ -24,7 +24,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-BRAND_BLUE = "#1e88e5"
+from .dock.style import BRAND_BLUE
 
 SECTION_HEADER_QSS = (
     "font-weight: bold; font-size: 12px; color: palette(text);"
@@ -42,6 +42,27 @@ def make_section_header(text: str, extra_top: bool = False) -> QLabel:
     label.setStyleSheet(SECTION_HEADER_EXTRA_TOP_QSS if extra_top else SECTION_HEADER_QSS)
     label.setContentsMargins(0, 0, 0, 0)
     return label
+
+
+def main_window_for_dialog(fallback: QWidget):
+    """Parent to use for popup dialogs.
+
+    On macOS, parenting a dialog to a QDockWidget (especially when the
+    dock is floating, or when QGIS itself is in a fullscreen Space) makes
+    the dialog open in its own Mission Control Space, yanking the user
+    out of the QGIS workspace. The QGIS main window is always anchored
+    to the right Space, so we use it as the parent instead.
+
+    Returns ``fallback`` if iface isn't reachable for any reason.
+    """
+    try:
+        from qgis.utils import iface
+        mw = iface.mainWindow() if iface is not None else None
+        if mw is not None:
+            return mw
+    except Exception:  # nosec B110 - any failure falls back below.
+        pass
+    return fallback
 
 
 def build_panel_header(title: str, subtitle: str | None = None) -> QWidget:
@@ -66,26 +87,6 @@ def build_panel_header(title: str, subtitle: str | None = None) -> QWidget:
         )
         col.addWidget(sub)
     return bar
-
-
-def build_info_box(text: str) -> QLabel:
-    """Blue-tinted info box used as a panel-footer hint. Mirrors the
-    "Info Box" pattern in PLUGIN_DESIGN_SYSTEM.md (blue 8% bg, blue 20%
-    border) — used by Vectorize/Markup to surface the tool description
-    at the bottom of the panel instead of above the controls."""
-    label = QLabel(text)
-    label.setWordWrap(True)
-    label.setStyleSheet(
-        "QLabel {"
-        " background-color: rgba(30, 136, 229, 0.08);"
-        " border: 1px solid rgba(30, 136, 229, 0.2);"
-        " border-radius: 4px;"
-        " padding: 8px;"
-        " font-size: 11px;"
-        " color: palette(text);"
-        "}"
-    )
-    return label
 
 
 def panel_section_label(text: str) -> QLabel:

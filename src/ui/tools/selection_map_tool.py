@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import os
 
-from qgis.core import QgsPointXY, QgsRectangle
-from qgis.gui import QgsMapCanvasItem, QgsMapTool, QgsRubberBand
-from qgis.PyQt.QtCore import QPointF, QRectF, QSize, Qt, pyqtSignal
+from qgis.core import QgsPointXY
+from qgis.gui import QgsMapCanvasItem
+from qgis.PyQt.QtCore import QPointF, QRectF, QSize, Qt
 from qgis.PyQt.QtGui import (
     QBrush,
     QColor,
-    QCursor,
     QFont,
     QFontMetrics,
     QIcon,
@@ -16,11 +15,15 @@ from qgis.PyQt.QtGui import (
     QPen,
     QPixmap,
 )
-from qgis.PyQt.QtWidgets import QMenu
 
-from ...core import qt_compat as QtC
+from ...core.config_store import get_export_dial_seq
 from ...core.i18n import tr
+from ..dock.style import BRAND_BLUE
 
+# Aspect ratios the export/generation pipeline supports. The polygon zone
+# tool (polygon_selection_tool.py) expands a drawn shape's bounding box to
+# the nearest one of these on close; this used to also be the rectangle
+# tool's live drag-snap target before the polygon tool replaced it.
 SUPPORTED_RATIOS = [
     (1, 1),
     (5, 4),
@@ -33,6 +36,25 @@ SUPPORTED_RATIOS = [
     (9, 16),
     (21, 9),
 ]
+
+_MAX_RATIO_SIDE = 100
+
+
+def supported_ratios() -> list[tuple[int, int]]:
+    """The shipped ratios plus any the server adds at ``zone.ratios``, served
+    as "w:h" strings. Additive union only: a deploy adds a ratio, it never
+    removes a shipped one. Read at snap time, so a config arriving mid-session
+    applies to the next zone."""
+    base = [f"{w}:{h}" for w, h in SUPPORTED_RATIOS]
+    ratios: list[tuple[int, int]] = []
+    for entry in get_export_dial_seq("zone.ratios", base, max_len=24):
+        parts = entry.split(":")
+        if len(parts) != 2 or not all(p.strip().isdecimal() for p in parts):
+            continue
+        width, height = int(parts[0]), int(parts[1])
+        if 0 < width < _MAX_RATIO_SIDE and 0 < height < _MAX_RATIO_SIDE:
+            ratios.append((width, height))
+    return ratios or list(SUPPORTED_RATIOS)
 
 
 class _ZoneDeleteBadge(QgsMapCanvasItem):
@@ -47,7 +69,7 @@ class _ZoneDeleteBadge(QgsMapCanvasItem):
     """
 
     RADIUS = 12
-    _BRAND_BLUE = QColor("#1e88e5")
+    _BRAND_BLUE = QColor(BRAND_BLUE)
     _DISABLED_BG = QColor(30, 136, 229, 115)
 
     def __init__(self, canvas):
@@ -188,14 +210,16 @@ class _ZoneActionBadge(QgsMapCanvasItem):
         self._font = QFont()
         self._font.setPixelSize(11)
         self._font.setBold(True)
+        self._recompute_width()
+        if kind == "compare":
+            self._glyph = _tinted_pixmap("swipe.svg", self._WHITE)
+        else:
+            self._glyph = _polygon_glyph_pixmap(self._WHITE)
+
+    def _recompute_width(self) -> None:
         fm = QFontMetrics(self._font)
-        text_w = fm.horizontalAdvance(label)
+        text_w = fm.horizontalAdvance(self._label)
         self._width = self._PAD_X + self._ICON + self._ICON_GAP + text_w + self._PAD_X
-        self._glyph = (
-            _tinted_pixmap("swipe.svg", self._WHITE)
-            if kind == "compare"
-            else _polygon_glyph_pixmap(self._WHITE)
-        )
 
     @property
     def width(self) -> float:
@@ -276,428 +300,3 @@ class _ZoneActionBadge(QgsMapCanvasItem):
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
             self._label,
         )
-
-
-class RectangleSelectionTool(QgsMapTool):
-    """Map tool for selecting a rectangular zone on the canvas.
-
-    Stays active after selection so the user can right-click the zone
-    to delete it, or draw a new one to replace it.
-    """
-
-    selection_made = pyqtSignal(QgsRectangle)
-    zone_too_small = pyqtSignal()
-    zone_delete_requested = pyqtSignal()
-    # Emitted when the drawn zone fails the edge-case checks (antimeridian,
-    # polar, area too big, invalid CRS, map rotated). Args: (error_code, message).
-    zone_invalid = pyqtSignal(str, str)
-    # Post-generation action pills clicked on the canvas (beside the × badge).
-    # The plugin routes these to the swipe controller / Vectorize panel.
-    compare_requested = pyqtSignal()
-    vectorize_requested = pyqtSignal()
-
-    MIN_SIZE_PX = 50
-
-    def __init__(self, canvas):
-        super().__init__(canvas)
-        self._start_point = None
-        self._rubber_band = None
-        self._is_drawing = False
-        self._has_zone = False
-        self._zone_rect = None
-        self._locked = False
-        self._pending_context_menu = False
-        self._is_panning = False
-        self._refresh_cursor()
-
-        # Badge anchored to the rubber band's top-right corner. Lives in the
-        # canvas scene so it follows the rectangle during pan/zoom. Click is
-        # forwarded by canvasPressEvent because the active map tool gets the
-        # event before scene items would.
-        self._delete_badge: _ZoneDeleteBadge | None = None
-        # Post-generation action pills (Compare / Vectorize) shown to the left
-        # of the delete badge. Created lazily, armed by the plugin once a
-        # generation completes, hidden whenever the result becomes stale.
-        self._compare_badge: _ZoneActionBadge | None = None
-        self._vectorize_badge: _ZoneActionBadge | None = None
-
-    def activate(self):
-        super().activate()
-        self._refresh_cursor()
-
-    def _refresh_cursor(self) -> None:
-        """Crosshair while no zone is selected (draw mode), open hand once
-        a zone exists so left-drag pans the map like QGIS's native pan tool.
-        """
-        shape = Qt.CursorShape.OpenHandCursor if self._has_zone else QtC.CrossCursor
-        self.setCursor(QCursor(shape))
-
-    def canvasPressEvent(self, event):
-        # Pan stays available even while locked (during generation) so the
-        # user can move the map around. Drawing a new zone and deleting the
-        # current one are the only actions blocked by the lock.
-        badge_hit = self._delete_badge is not None and self._delete_badge.hit_test(QtC.event_pos(event))
-        if not self._locked and event.button() == QtC.LeftButton and self._has_zone and badge_hit:
-            self._on_delete_zone()
-            return
-        # Action pills (Compare / Vectorize) sit to the left of the × badge and
-        # only exist after a generation. hit_test already gates on isVisible, so
-        # hidden pills never match. Emit the request as the LAST statement and
-        # return without touching self afterwards: the slot may deactivate this
-        # very map tool synchronously (the swipe tool grabs the canvas).
-        if event.button() == QtC.LeftButton:
-            pos = QtC.event_pos(event)
-            if self._vectorize_badge is not None and self._vectorize_badge.hit_test(pos):
-                event.accept()
-                self.vectorize_requested.emit()
-                return
-            if self._compare_badge is not None and self._compare_badge.hit_test(pos):
-                event.accept()
-                self.compare_requested.emit()
-                return
-        if event.button() == QtC.RightButton and self._has_zone and not self._locked:
-            self._pending_context_menu = True
-            return
-        if event.button() == QtC.LeftButton:
-            if self._has_zone:
-                self._is_panning = True
-                self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
-                return
-            if self._locked:
-                return
-            self._start_point = self.toMapCoordinates(QtC.event_pos(event))
-            self._is_drawing = True
-            self._create_rubber_band()
-
-    def canvasMoveEvent(self, event):
-        if self._is_panning:
-            self.canvas().panAction(event)
-            return
-        if not self._is_drawing or self._start_point is None:
-            return
-        end_point = self.toMapCoordinates(QtC.event_pos(event))
-        rect = QgsRectangle(self._start_point, end_point)
-        rect.normalize()
-        if rect.width() > 0 and rect.height() > 0:
-            rect, _ = self._snap_to_ratio(rect)
-            self._update_rubber_band_from_rect(rect)
-        else:
-            self._update_rubber_band(self._start_point, end_point)
-
-    def canvasReleaseEvent(self, event):
-        if event.button() == QtC.RightButton and getattr(self, "_pending_context_menu", False):
-            self._pending_context_menu = False
-            self._show_zone_context_menu(event)
-            return
-        if event.button() == QtC.LeftButton and self._is_panning:
-            self._is_panning = False
-            self.canvas().panActionEnd(QtC.event_pos(event))
-            self._refresh_cursor()
-            return
-        if event.button() == QtC.LeftButton and self._is_drawing:
-            self._is_drawing = False
-            end_point = self.toMapCoordinates(QtC.event_pos(event))
-            rect = QgsRectangle(self._start_point, end_point)
-            rect.normalize()
-            rect, ratio = self._snap_to_ratio(rect)
-
-            p1 = self.toCanvasCoordinates(QgsPointXY(rect.xMinimum(), rect.yMinimum()))
-            p2 = self.toCanvasCoordinates(QgsPointXY(rect.xMaximum(), rect.yMaximum()))
-            width_px = abs(p2.x() - p1.x())
-            height_px = abs(p2.y() - p1.y())
-
-            if width_px < self.MIN_SIZE_PX or height_px < self.MIN_SIZE_PX:
-                self._clear_rubber_band()
-                self.zone_too_small.emit()
-                return
-
-            # Refuse antimeridian / polar / oversized / rotated / invalid-CRS at draw time.
-            try:
-                from ...core.errors import AIEditError
-                from ..canvas_exporter import validate_zone
-
-                canvas = self.canvas()
-                map_crs = canvas.mapSettings().destinationCrs() if canvas else None
-                rotation = canvas.rotation() if canvas else 0.0
-                validate_zone(rect, map_crs, rotation)
-            except AIEditError as err:
-                self._clear_rubber_band()
-                self.zone_invalid.emit(err.code.value, err.message)
-                return
-            except Exception:  # nosec B110
-                pass
-
-            self._clear_rubber_band()
-            self._has_zone = True
-            self._zone_rect = rect
-            self.selection_made.emit(rect)
-            self._show_delete_badge()
-            self._refresh_cursor()
-
-    def set_zone(self, rect: QgsRectangle) -> None:
-        """Install a zone programmatically (restoring a past generation).
-        Stores the rect, shows the delete badge, and switches to pan-mode
-        cursor, exactly as a freshly drawn zone would."""
-        self._clear_rubber_band()
-        self._has_zone = True
-        self._zone_rect = QgsRectangle(rect)
-        # A restored zone is a fresh, editable zone: make sure a stale lock from
-        # a previous generation does not leave the delete/resize affordances off.
-        self._locked = False
-        self._show_delete_badge()
-        self._refresh_cursor()
-
-    def set_has_zone(self, has_zone: bool) -> None:
-        """Called by the plugin when the zone state changes externally."""
-        self._has_zone = has_zone
-        if not has_zone:
-            self._zone_rect = None
-            self._hide_delete_badge()
-            self.hide_action_badges()
-        elif self._zone_rect is not None:
-            self._show_delete_badge()
-        self._refresh_cursor()
-
-    def set_locked(self, locked: bool) -> None:
-        """Lock drawing/deletion during generation."""
-        self._locked = locked
-        if self._delete_badge is not None:
-            self._delete_badge.set_enabled(not locked)
-        # A new generation makes the previous result's actions stale; drop the
-        # pills while it runs. The plugin re-arms them when the run completes.
-        if locked:
-            self.hide_action_badges()
-
-    def _show_zone_context_menu(self, event) -> None:
-        pos = event.globalPos() if hasattr(event, "globalPos") else event.globalPosition().toPoint()
-        menu = QMenu()
-        menu.addAction(tr("Clear zone"), self._on_delete_zone)
-        menu.exec(pos)
-
-    def _on_delete_zone(self) -> None:
-        self._clear_rubber_band()
-        self._has_zone = False
-        self._zone_rect = None
-        self._hide_delete_badge()
-        self.hide_action_badges()
-        self._refresh_cursor()
-        self.zone_delete_requested.emit()
-
-    def _snap_to_ratio(self, rect):
-        """Snap rectangle to nearest supported aspect ratio."""
-        if rect.width() == 0 or rect.height() == 0:
-            return rect, (1, 1)
-
-        current_ratio = rect.width() / rect.height()
-        best = min(SUPPORTED_RATIOS, key=lambda r: abs(r[0] / r[1] - current_ratio))
-        target_ratio = best[0] / best[1]
-
-        new_height = rect.width() / target_ratio
-        new_width = rect.height() * target_ratio
-        height_delta = abs(new_height - rect.height())
-        width_delta = abs(new_width - rect.width())
-
-        sp = self._start_point
-        if sp is not None:
-            if height_delta <= width_delta:
-                if abs(sp.y() - rect.yMinimum()) < abs(sp.y() - rect.yMaximum()):
-                    rect.setYMaximum(rect.yMinimum() + new_height)
-                else:
-                    rect.setYMinimum(rect.yMaximum() - new_height)
-            else:
-                if abs(sp.x() - rect.xMinimum()) < abs(sp.x() - rect.xMaximum()):
-                    rect.setXMaximum(rect.xMinimum() + new_width)
-                else:
-                    rect.setXMinimum(rect.xMaximum() - new_width)
-        else:
-            cx, cy = rect.center().x(), rect.center().y()
-            if height_delta <= width_delta:
-                rect.setYMinimum(cy - new_height / 2)
-                rect.setYMaximum(cy + new_height / 2)
-            else:
-                rect.setXMinimum(cx - new_width / 2)
-                rect.setXMaximum(cx + new_width / 2)
-
-        return rect, best
-
-    def keyPressEvent(self, event):
-        # We handle no keys here (Escape is handled globally by the dock's
-        # QShortcut). Ignore the event instead of calling super(): the base
-        # leaves it accepted, which makes QgsMapCanvas skip its own keyboard
-        # handling - in particular the hold-Space temporary pan and arrow-key
-        # scroll. Ignoring lets the canvas keep that behavior while our tool is
-        # active.
-        event.ignore()
-
-    def preserve_state_on_next_deactivate(self) -> None:
-        """Tell the next deactivate() to keep the zone + badge alive.
-
-        Plugin calls this right before switching the canvas to one of our
-        own tools (Mark up), so the zone outline survives the transition.
-        Without the flag, deactivate clears state - the right default when
-        the user picks pan / measure / another plugin's tool, which would
-        otherwise leave AI-Edit overlays hanging on the canvas.
-        """
-        self._preserve_on_deactivate = True
-
-    def deactivate(self):
-        # The in-progress drawing band is always discarded. Zone state, the
-        # × badge and the persistent rectangle outline only survive when the
-        # plugin explicitly asked us to keep them (i.e. switching to a Mark
-        # up tool). Otherwise we drop them so unrelated map-tool switches
-        # (pan, measure, other plugins) don't leave AI-Edit overlays behind.
-        self._clear_rubber_band()
-        if getattr(self, "_preserve_on_deactivate", False):
-            # A preserved switch (Compare / Mark up): keep the zone, the ×
-            # badge and the action pills alive. Compare relies on this so the
-            # pills stay live while the swipe owns the canvas; Mark up already
-            # pre-hides the pills at panel entry, so nothing lingers there.
-            self._preserve_on_deactivate = False
-        else:
-            # A real tool change (pan, measure, another plugin): drop our
-            # overlays so nothing hangs on the canvas.
-            self._has_zone = False
-            self._zone_rect = None
-            self._hide_delete_badge()
-            self.hide_action_badges()
-        super().deactivate()
-
-    def cleanup(self) -> None:
-        """Detach from the canvas before the plugin unloads."""
-        for attr in ("_delete_badge", "_compare_badge", "_vectorize_badge"):
-            badge = getattr(self, attr, None)
-            if badge is None:
-                continue
-            scene = badge.scene()
-            if scene is not None:
-                try:
-                    scene.removeItem(badge)
-                except RuntimeError:
-                    pass
-            setattr(self, attr, None)
-
-    # -- delete-badge overlay --------------------------------------------------
-
-    def _show_delete_badge(self) -> None:
-        if self._zone_rect is None:
-            return
-        if self._delete_badge is None:
-            self._delete_badge = _ZoneDeleteBadge(self.canvas())
-        top_right = QgsPointXY(
-            self._zone_rect.xMaximum(), self._zone_rect.yMaximum()
-        )
-        self._delete_badge.set_anchor(top_right)
-        self._delete_badge.set_enabled(not self._locked)
-        self._delete_badge.show()
-
-    def _hide_delete_badge(self) -> None:
-        if self._delete_badge is not None:
-            self._delete_badge.hide()
-
-    # -- post-generation action pills ------------------------------------------
-
-    _BADGE_GAP_FROM_CORNER = 8  # px between the × badge edge and the first pill
-    _BADGE_GAP_BETWEEN = 6  # px between two pills
-
-    def show_action_badges(self, compare: bool, vectorize: bool) -> None:
-        """Show the Compare / Vectorize pills to the left of the × badge.
-
-        Called by the plugin once a generation completes. ``compare`` is gated
-        on swipe eligibility; ``vectorize`` on the run being a detection /
-        segmentation template. No-op without a zone rectangle.
-        """
-        if self._zone_rect is None:
-            return
-        if compare and self._compare_badge is None:
-            self._compare_badge = _ZoneActionBadge(
-                self.canvas(), "compare", tr("Compare")
-            )
-        if vectorize and self._vectorize_badge is None:
-            self._vectorize_badge = _ZoneActionBadge(
-                self.canvas(), "vectorize", tr("Vectorize")
-            )
-        top_right = QgsPointXY(
-            self._zone_rect.xMaximum(), self._zone_rect.yMaximum()
-        )
-        # Lay the visible pills out leftward from the corner: Compare nearest
-        # the × badge, Vectorize beyond it. Offsets are pill-centre distances.
-        cursor = _ZoneDeleteBadge.RADIUS + self._BADGE_GAP_FROM_CORNER
-        ordered = (
-            (self._compare_badge, compare),
-            (self._vectorize_badge, vectorize),
-        )
-        for badge, wanted in ordered:
-            if badge is None:
-                continue
-            if not wanted:
-                badge.hide()
-                continue
-            badge.set_anchor(top_right)
-            badge.set_offset(cursor + badge.width / 2.0)
-            badge.show()
-            cursor += badge.width + self._BADGE_GAP_BETWEEN
-
-    def hide_action_badges(self) -> None:
-        if self._compare_badge is not None:
-            self._compare_badge.hide()
-        if self._vectorize_badge is not None:
-            self._vectorize_badge.hide()
-
-    def set_compare_active(self, active: bool) -> None:
-        """Reflect the live compare state on the Compare pill (pressed look)."""
-        if self._compare_badge is not None:
-            self._compare_badge.set_active(active)
-
-    def overlay_hit(self, canvas_pt) -> str | None:
-        """Hit-test the action pills at a canvas-pixel point, NO side effects.
-
-        Returns "vectorize" / "compare" / "delete" for the pill under the
-        point, else None. Used by the swipe tool (via a plugin callback) to
-        keep the pills clickable while a comparison owns the canvas. Pure
-        hit-test so the caller can defer the actual action out of the event
-        loop and avoid swapping the map tool mid-event.
-        """
-        if self._vectorize_badge is not None and self._vectorize_badge.hit_test(canvas_pt):
-            return "vectorize"
-        if self._compare_badge is not None and self._compare_badge.hit_test(canvas_pt):
-            return "compare"
-        if self._delete_badge is not None and self._delete_badge.hit_test(canvas_pt):
-            return "delete"
-        return None
-
-    def _create_rubber_band(self):
-        self._clear_rubber_band()
-        self._rubber_band = QgsRubberBand(self.canvas(), QtC.PolygonGeometry)
-        self._rubber_band.setColor(QColor(65, 105, 225, 80))
-        self._rubber_band.setStrokeColor(QColor(65, 105, 225, 200))
-        self._rubber_band.setWidth(2)
-
-    def _update_rubber_band_from_rect(self, rect):
-        if not self._rubber_band:
-            return
-        self._rubber_band.reset(QtC.PolygonGeometry)
-        self._rubber_band.addPoint(QgsPointXY(rect.xMinimum(), rect.yMinimum()), False)
-        self._rubber_band.addPoint(QgsPointXY(rect.xMaximum(), rect.yMinimum()), False)
-        self._rubber_band.addPoint(QgsPointXY(rect.xMaximum(), rect.yMaximum()), False)
-        self._rubber_band.addPoint(QgsPointXY(rect.xMinimum(), rect.yMaximum()), True)
-
-    def _update_rubber_band(self, start, end):
-        if not self._rubber_band:
-            return
-        self._rubber_band.reset(QtC.PolygonGeometry)
-        self._rubber_band.addPoint(QgsPointXY(start.x(), start.y()), False)
-        self._rubber_band.addPoint(QgsPointXY(end.x(), start.y()), False)
-        self._rubber_band.addPoint(QgsPointXY(end.x(), end.y()), False)
-        self._rubber_band.addPoint(QgsPointXY(start.x(), end.y()), True)
-
-    def _clear_rubber_band(self):
-        # Canvas/scene C++ side may be gone during shutdown; swallow to let exit proceed.
-        if self._rubber_band:
-            try:
-                canvas = self.canvas()
-                scene = canvas.scene() if canvas else None
-                if scene is not None:
-                    scene.removeItem(self._rubber_band)
-            except (RuntimeError, AttributeError):
-                pass
-            self._rubber_band = None

@@ -1,4 +1,9 @@
-"""Cooperative TerraLab menu management for QGIS plugins."""
+"""Cooperative TerraLab menu management for QGIS plugins.
+
+SHARED: keep in sync with the copy in the sibling TerraLab plugin. TERRALAB_URL
+stays spelled out here for that reason; the dock's own link is DOCK_BRANDING_URL
+in ui/dock/style.py.
+"""
 from __future__ import annotations
 
 import os

@@ -1,6 +1,7 @@
 """BeforeAfterSlider - custom Qt widget that mimics the dashboard's
-react slider in PyQt. Two QPixmap layers, vertically split by an animated
-divider. Idle: auto-loop animation. Hover: pause + accept mouse drag.
+react slider in PyQt. Two QPixmap layers, vertically split by a divider the
+user drags with the mouse or moves with the arrow keys. Auto-loop animation is
+opt-in (``auto_loop=True``) and pauses on hover and during a drag.
 
 Cross-version: works on PyQt5 (QGIS 3 / Qt 5) and PyQt6 (QGIS 4 / Qt 6).
 """
@@ -12,6 +13,7 @@ from qgis.PyQt.QtWidgets import QWidget
 
 from ..core import qt_compat as QtC
 from ..core.i18n import tr
+from .dock.style import FOCUS_RING
 
 QT6 = QT_VERSION >= 0x060000
 
@@ -20,6 +22,11 @@ _AUTO_LOOP_PERIOD_MS = 5800
 # Frame interval (ms): ~30 fps is plenty for the slow triangle-wave loop and
 # halves the repaint load versus 60 fps.
 _FRAME_INTERVAL_MS = 33
+# Divider travel per arrow key, as a fraction of the widget width. Shift jumps
+# by the larger one so the whole range is a few keystrokes wide.
+_KEY_STEP = 0.02
+_KEY_STEP_LARGE = 0.10
+_FOCUS_RING_PX = 2
 # Divider visuals.
 _DIVIDER_COLOR = QColor("#FFFFFF")
 _DIVIDER_SHADOW = QColor(0, 0, 0, 64)
@@ -41,7 +48,7 @@ def _ease_in_out(t: float) -> float:
 
 
 class BeforeAfterSlider(QWidget):
-    """Two-image overlay slider with auto-loop + drag.
+    """Two-image overlay slider: drag, arrow keys, optional auto-loop.
 
     Owners set ``before_pixmap`` and ``after_pixmap`` and the widget paints
     itself. Sliders that lack either pixmap show a tinted placeholder.
@@ -52,12 +59,17 @@ class BeforeAfterSlider(QWidget):
     def __init__(
         self,
         parent: QWidget | None = None,
-        auto_loop: bool = True,
+        auto_loop: bool = False,
         show_badges: bool = True,
         example_badge: str | None = None,
+        handle_grab_only: bool = False,
     ):
         super().__init__(parent)
         self._show_badges = show_badges
+        # Library cards open a detail popup on click, so a press on the image
+        # must NOT move the divider: only a press on/near the handle drags it.
+        # Hero/detail sliders keep the default press-anywhere adjustment.
+        self._handle_grab_only = handle_grab_only
         # Optional "Example" pill: marks a curated demo so the user reads the
         # before/after as a sample, not the exact result they will get.
         self._example_badge = example_badge or None
@@ -66,10 +78,15 @@ class BeforeAfterSlider(QWidget):
         self._placeholder_text = tr("Loading...")
         self.setMinimumHeight(140)
         self.setMouseTracking(False)
+        # The result view of the whole plugin: it has to be reachable and
+        # movable from the keyboard, not by drag alone.
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(tr("Before and after comparison"))
         self._before: QPixmap | None = None
         self._after: QPixmap | None = None
         # Divider position 0..1 (0 = fully before visible, 1 = fully after).
         self._pos = 0.5
+        self._sync_accessible_description()
         self._dragging = False
         self._hovering = False
         self._elapsed_ms = 0
@@ -79,9 +96,10 @@ class BeforeAfterSlider(QWidget):
         self._press_x: float | None = None
         self._moved_far = False
         # Auto-loop drives a calm idle animation when the slider is the only
-        # thing the user looks at (hero, detail view). On a Top Picks grid the
-        # caller passes auto_loop=False so 6 sliders don't all wiggle at once;
-        # the divider stays at 50/50 until the user drags.
+        # thing the user looks at (hero, detail view). Off by default: it is a
+        # non-stop 30 fps oscillation with no way to stop it, and a grid of them
+        # pulls the eye six ways at once. The divider stays at 50/50 until the
+        # user drags it or moves it with the arrow keys.
         self._auto_loop = auto_loop
         self._timer = QTimer(self)
         self._timer.setInterval(_FRAME_INTERVAL_MS)
@@ -145,6 +163,34 @@ class BeforeAfterSlider(QWidget):
         self._pos = _ease_in_out(t)
         self.update()
 
+    # ---- keyboard handling -----------------------------------------------
+
+    def keyPressEvent(self, ev):  # noqa: N802 - Qt signature
+        key = ev.key()
+        step = _KEY_STEP_LARGE if ev.modifiers() & QtC.ShiftModifier else _KEY_STEP
+        if key == Qt.Key.Key_Left:
+            self._set_pos(self._pos - step)
+        elif key == Qt.Key.Key_Right:
+            self._set_pos(self._pos + step)
+        elif key == Qt.Key.Key_Home:
+            self._set_pos(0.0)
+        elif key == Qt.Key.Key_End:
+            self._set_pos(1.0)
+        else:
+            # Keys we don't handle: ignore, so Tab, Escape and the parent card's
+            # own Space/Return activation keep working.
+            ev.ignore()
+            return
+        ev.accept()
+
+    def focusInEvent(self, ev):  # noqa: N802 - Qt signature
+        self.update()
+        super().focusInEvent(ev)
+
+    def focusOutEvent(self, ev):  # noqa: N802 - Qt signature
+        self.update()
+        super().focusOutEvent(ev)
+
     # ---- mouse handling --------------------------------------------------
 
     def enterEvent(self, ev):  # noqa: N802 - Qt signature
@@ -165,36 +211,47 @@ class BeforeAfterSlider(QWidget):
     # If the mouse moved more than this from the press point, treat the
     # interaction as a drag (slider adjust) rather than a click (select).
     _CLICK_DRAG_THRESHOLD_PX = 5
+    # In handle_grab_only mode, how far from the divider a press may land and
+    # still grab it (matches the painted handle's radius plus slack).
+    _HANDLE_GRAB_PX = 16
 
     def mousePressEvent(self, ev):  # noqa: N802 - Qt signature
         if ev.button() == Qt.MouseButton.LeftButton:
-            self._dragging = True
             self._press_x = self._event_x(ev)
             self._moved_far = False
-            self._update_pos_from_event(ev)
+            if self._handle_grab_only:
+                divider_x = self._pos * max(1, self.width())
+                self._dragging = abs(self._press_x - divider_x) <= self._HANDLE_GRAB_PX
+            else:
+                self._dragging = True
+            if self._dragging:
+                self._update_pos_from_event(ev)
         super().mousePressEvent(ev)
 
     def mouseReleaseEvent(self, ev):  # noqa: N802 - Qt signature
         if ev.button() == Qt.MouseButton.LeftButton:
+            was_pressed = self._press_x is not None
             was_dragging = self._dragging
             moved_far = self._moved_far
             self._dragging = False
             self._moved_far = False
+            self._press_x = None
             # If the drag ended with the cursor outside the widget, drop the
             # hover-tracking we kept alive during the drag.
             if not self._hovering:
                 self.setMouseTracking(False)
             # Click only when the press barely moved; drag-to-adjust must
-            # never accidentally select the preset.
-            if was_dragging and not moved_far:
+            # never accidentally select the preset. A handle grab that never
+            # moved stays a slider interaction, not a click.
+            if was_pressed and not moved_far and not (self._handle_grab_only and was_dragging):
                 self.clicked.emit()
         super().mouseReleaseEvent(ev)
 
     def mouseMoveEvent(self, ev):  # noqa: N802 - Qt signature
+        if self._press_x is not None and not self._moved_far:
+            if abs(self._event_x(ev) - self._press_x) > self._CLICK_DRAG_THRESHOLD_PX:
+                self._moved_far = True
         if self._dragging:
-            if not self._moved_far and self._press_x is not None:
-                if abs(self._event_x(ev) - self._press_x) > self._CLICK_DRAG_THRESHOLD_PX:
-                    self._moved_far = True
             self._update_pos_from_event(ev)
         super().mouseMoveEvent(ev)
 
@@ -206,9 +263,21 @@ class BeforeAfterSlider(QWidget):
 
     def _update_pos_from_event(self, ev) -> None:
         x = QtC.event_pos(ev).x()
-        w = max(1, self.width())
-        self._pos = max(0.0, min(1.0, x / w))
+        self._set_pos(x / max(1, self.width()))
+
+    def _set_pos(self, value: float) -> None:
+        """Move the divider, clamped to 0..1, and repaint. The auto-loop tick
+        sets ``_pos`` straight so it does not rewrite the description 30x/s."""
+        self._pos = max(0.0, min(1.0, value))
+        self._sync_accessible_description()
         self.update()
+
+    def _sync_accessible_description(self) -> None:
+        self.setAccessibleDescription(
+            tr("Divider at {pct}%. Left and right arrows move it.").format(
+                pct=int(round(self._pos * 100))
+            )
+        )
 
     # ---- paint -----------------------------------------------------------
 
@@ -228,6 +297,7 @@ class BeforeAfterSlider(QWidget):
         # --- backdrop ----------------------------------------------------
         if self._before is None and self._after is None:
             self._paint_placeholder(painter, rect)
+            self._draw_focus_ring(painter, rect, radius)
             painter.end()
             return
 
@@ -299,7 +369,27 @@ class BeforeAfterSlider(QWidget):
         if self._example_badge:
             self._draw_example_badge(painter, rect, self._example_badge)
 
+        self._draw_focus_ring(painter, rect, radius)
         painter.end()
+
+    def _draw_focus_ring(self, painter: QPainter, rect, radius: float) -> None:
+        """Keyboard focus marker. Painted by hand because the widget draws all
+        of itself: no stylesheet and no platform focus rect ever shows here.
+        Same FOCUS_RING as every other focusable control; against a photograph
+        no single colour has a contrast figure, so consistency is what is
+        left to pick on."""
+        if not self.hasFocus():
+            return
+        pen = QPen(QColor(FOCUS_RING))
+        pen.setWidth(_FOCUS_RING_PX)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        # Half the stroke sits outside the path it follows, and the widget is
+        # clipped to that path, so inset by half or only half the ring shows.
+        inset = _FOCUS_RING_PX / 2.0
+        painter.drawRoundedRect(
+            QRectF(rect).adjusted(inset, inset, -inset, -inset), radius, radius
+        )
 
     def _draw_pixmap_cover(self, painter: QPainter, pm: QPixmap, rect) -> None:
         """Center-crop the pixmap to fully cover the widget rect (object-fit:cover)."""

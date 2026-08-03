@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import os
 
-from qgis.PyQt.QtGui import QAction, QShortcut
-
 from ..api.terralab_client import TerraLabClient
 from ..core.auth.auth_manager import AuthManager
 from ..core.config_store import ConfigStore, set_store
 from ..core.generation.generation_service import GenerationService
 from ..core.logger import log_warning
+from ..core.qt_compat import QAction, QShortcut
 from ..core.reference_image_store import ReferenceImageStore
 from ..workers.export_worker import ExportWorker
 from .plugin_parts.activation import ActivationMixin
+from .plugin_parts.conversations import ConversationsMixin
 from .plugin_parts.generation import GenerationMixin
 from .plugin_parts.generation_results import GenerationResultsMixin
 from .plugin_parts.history import HistoryMixin
@@ -29,6 +29,7 @@ class AIEditPlugin(
     ActivationMixin,
     ZoneVersionsMixin,
     HistoryMixin,
+    ConversationsMixin,
     ToolPanelsMixin,
     GenerationMixin,
     GenerationResultsMixin,
@@ -45,6 +46,11 @@ class AIEditPlugin(
         self._action = None
         self._settings_action = None
         self._selected_extent = None
+        # Polygon (canvas CRS) behind the current _selected_extent bbox, or
+        # None when the zone isn't a fresh polygon draw (history restore,
+        # MCP/dev extents): see PolygonSelectionTool.selection_made and
+        # zone_versions.py._on_zone_selected.
+        self._selected_polygon = None
         self._worker = None
         # Off-thread canvas exporter. Built fresh per click in _on_generate so
         # the heavy render+PNG-encode doesn't freeze the UI.
@@ -72,6 +78,9 @@ class AIEditPlugin(
         # Holds in-flight history actions (add-to-map / download) so the task
         # isn't garbage-collected mid-run.
         self._history_tasks: list = []
+        # True while a restored version's layer downloads; one at a time, the
+        # strip is locked meanwhile (see history.py._materialize_version_layer).
+        self._version_fetch_active = False
         # Preserved for retry (re-generate from original, not from AI result)
         self._last_image_b64 = None
         self._last_guidance_b64 = None
@@ -102,6 +111,10 @@ class AIEditPlugin(
         self._markup_manager: MarkupLayerManager | None = None
         self._markup_tool_objs: dict[str, object] = {}
         self._pre_markup_map_tool = None
+        # True while canvas.mapToolSet is wired to _on_markup_maptool_set (only
+        # while the Mark up panel is open), so Line's self-deactivating Escape
+        # can resync the panel button; see tool_panels.py.
+        self._markup_maptool_set_connected = False
         # Re-entrancy guard for the markup Done/close path (capture pumps events).
         self._markup_done_in_progress = False
         # Throttle for the "draw inside the zone" notice so repeated out-of-zone

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QKeySequence, QShortcut
+from qgis.PyQt.QtGui import QColor, QKeySequence
 from qgis.PyQt.QtWidgets import QDockWidget
 
 from ...core import qt_compat as QtC
 from ...core.i18n import tr
+from ...core.qt_compat import QShortcut
 from ...core.reference_image_store import ReferenceImageStore
 from ...core.resolution_labels import DEFAULT_RESOLUTION_CREDIT_COSTS
 from ..panel_helpers import make_section_header
@@ -55,6 +56,10 @@ class AIEditDockWidget(
     zone_clear_requested = pyqtSignal()    # Escape pressed while a zone was selected
     markup_clicked = pyqtSignal()          # user picked Tools → Mark up
     vectorize_clicked = pyqtSignal()       # user picked Tools → Vectorize
+    # Reference chip clicked (either prompt container): open the Reference
+    # panel. Done in that panel routes back through reference_done_clicked.
+    reference_panel_requested = pyqtSignal()
+    reference_done_clicked = pyqtSignal()
     # (layer_id, color_hex, class_label, trigger) from the "Vectorize this
     # result" CTA in the result panel. class_label seeds the class_name
     # attribute on every produced polygon (empty for mono-class templates
@@ -85,6 +90,15 @@ class AIEditDockWidget(
     # A past generation the user chose to fully reproduce: the plugin restores
     # the prompt, the reference image(s), and the original zone on the map.
     history_restore = pyqtSignal(dict)
+    # Sessions (emitter moving to the Prompt Library page): a row asked for a
+    # delete or a rename (payload is the conversation entry dict), or an older
+    # history page is wanted (payload is the oldest cached created_at).
+    conversation_delete = pyqtSignal(dict)
+    conversation_rename = pyqtSignal(dict)
+    conversations_page_requested = pyqtSignal(str)
+    # The sessions list opened on a cache that never synced (or whose last
+    # sync failed): the plugin retries the history fetch.
+    conversations_refresh_requested = pyqtSignal()
     # Fired when the Help (?) menu opens (True) or closes (False). The
     # plugin uses this to light the green active tint on the help button
     # and to disarm the swipe map tool when the user opens another action.
@@ -153,6 +167,10 @@ class AIEditDockWidget(
 
         build_ui(self)
 
+        # "Guide the AI" tip: retires for good once either grounding feature
+        # is used, even once (see _mark_guide_ai_touched).
+        self.markup_clicked.connect(self._mark_guide_ai_touched)
+
         # State
         self._zone_selected = False
         # While an onboarding basemap warms its online tiles, Generate is held
@@ -198,16 +216,22 @@ class AIEditDockWidget(
     def _on_escape_pressed(self):
         """Escape walks the flow back one step at a time.
 
-        SWIPE ACTIVE → disarm swipe (highest priority, the canvas-tool
-        Escape handler only fires when canvas has focus, but the swipe
-        button stays checked otherwise; route the dock-level Escape
-        through here so swipe always exits cleanly).
+        COMPARISON LIVE (before/after swipe armed) → end the comparison and
+        stop there (first stage). The canvas-tool Escape handler only fires
+        when the canvas has focus, and the × badge that used to sit beside the
+        Compare pill is hidden while a comparison runs, so Escape is the
+        keyboard way out and must never walk past it into clearing the zone.
+        MID-DRAW (points already placed on the polygon zone tool) → clear
+        those points, stay armed (see _active_polygon_draw_tool - the dock's
+        global shortcut wins the keyboard race before the tool's own
+        keyPressEvent, so it has to delegate here instead of letting the tool
+        handle it directly).
         ZONE_SELECTED → SELECTING_ZONE (drop the zone, keep the panel open).
         SELECTING_ZONE / LAUNCH / RESULT → exit to LAUNCH.
         A generation in progress is never cancelable by Escape - credits are
         already booked; only the Stop button can cancel.
         """
-        if not self.isVisible() or not self._main_widget.isVisible():
+        if not self.isVisible():
             return
         if self._progress_widget.isVisible():
             return
@@ -218,11 +242,29 @@ class AIEditDockWidget(
         # measure tool, identify panel, etc.
         if not self._is_escape_for_us():
             return
-        # Swipe takes priority: clicking the (already-checked) button
-        # toggles it off, which routes through swipe_toggled → plugin →
-        # swipe_controller.stop().
+        # Stage one, ahead of every other stage: a live before/after
+        # comparison. The × badge is off the canvas for its whole duration
+        # (polygon_selection_tool.set_compare_active), so Escape has to end the
+        # comparison and stop, never carry on to clearing the zone. Clicking
+        # the (already-checked) button toggles it off, which routes through
+        # swipe_toggled → plugin → swipe_controller.stop() and brings the ×
+        # back. No markup tool can be armed at the same time (opening one
+        # disarms the swipe first), so this cannot steal their Escape.
         if self._swipe_btn.isChecked():
             self._swipe_btn.click()
+            return
+        # The markup Line tool draws while the Mark up panel hides
+        # _main_widget, so its delegation must run BEFORE the visibility
+        # early-return below or the shortcut eats the key and does nothing.
+        line_tool = self._active_markup_line_tool()
+        if line_tool is not None:
+            line_tool.escape_step()
+            return
+        if not self._main_widget.isVisible():
+            return
+        draw_tool = self._active_polygon_draw_tool()
+        if draw_tool is not None:
+            draw_tool.clear_in_progress_drawing()
             return
         if self._zone_selected and self._prompt_section.isVisible():
             self.zone_clear_requested.emit()
@@ -233,7 +275,7 @@ class AIEditDockWidget(
         """Decide whether an Escape keypress should drive AI Edit's flow.
 
         True when focus is inside the dock, OR the canvas currently runs
-        one of our map tools (rectangle selection / Mark up pencil/arrow/
+        one of our map tools (polygon zone selection / Mark up pencil/arrow/
         circle). Anywhere else, Escape belongs to the active QGIS tool.
         """
         from qgis.PyQt.QtWidgets import QApplication
@@ -256,10 +298,54 @@ class AIEditDockWidget(
             return False
         from ..panels.swipe_panel import _SwipeMapTool
         from ..tools.markup_tools import _MarkupBaseMapTool
-        from ..tools.selection_map_tool import RectangleSelectionTool
+        from ..tools.polygon_selection_tool import PolygonSelectionTool
         return isinstance(
-            tool, (RectangleSelectionTool, _MarkupBaseMapTool, _SwipeMapTool)
+            tool, (PolygonSelectionTool, _MarkupBaseMapTool, _SwipeMapTool)
         )
+
+    def _active_polygon_draw_tool(self):
+        """The active canvas map tool, if it is AI Edit's polygon zone tool
+        AND it currently has an in-progress (uncommitted) shape - else None.
+
+        The dock's Enter/Return and Escape shortcuts are QShortcut(WindowShortcut),
+        which win the keyboard race before the map tool's own keyPressEvent
+        ever runs. Mid-draw, both shortcuts delegate to the tool through this
+        helper instead of doing their normal thing (see _on_escape_pressed and
+        DockPromptMixin._on_generate_shortcut).
+        """
+        from ..tools.polygon_selection_tool import PolygonSelectionTool
+
+        try:
+            from qgis.utils import iface as _iface
+            if _iface is None:
+                return None
+            tool = _iface.mapCanvas().mapTool()
+        except Exception:
+            return None
+        if isinstance(tool, PolygonSelectionTool) and tool.has_points():
+            return tool
+        return None
+
+    def _active_markup_line_tool(self):
+        """The active canvas map tool, if it is the markup Line tool - else None.
+
+        Unlike :meth:`_active_polygon_draw_tool` this returns the tool even
+        with no points placed: Escape's second stage (deactivate, un-check the
+        panel button) must work from the dock shortcut too, since the tool's
+        own keyPressEvent never sees the key (WindowShortcut race).
+        """
+        from ..tools.markup_line_tool import LineMapTool
+
+        try:
+            from qgis.utils import iface as _iface
+            if _iface is None:
+                return None
+            tool = _iface.mapCanvas().mapTool()
+        except Exception:
+            return None
+        if isinstance(tool, LineMapTool):
+            return tool
+        return None
 
     def closeEvent(self, event):
         """Visibility-only teardown. Persistent disconnects live in cleanup()."""
@@ -271,6 +357,18 @@ class AIEditDockWidget(
 
     def cleanup(self):
         """Called once from plugin.unload() before the dock is removed."""
+        # removeDockWidget() + deleteLater() never fire closeEvent, so nothing
+        # else stops the Vectorize panel: unloading mid-run left a QgsTask
+        # grinding on a project the plugin no longer owns, with succeeded /
+        # failed bound to a panel about to be destroyed.
+        try:
+            self._vectorize_panel.deactivate()
+        except Exception:  # nosec B110
+            pass
+        try:
+            self._vectorize_panel.cancel_eyedropper()
+        except Exception:  # nosec B110
+            pass
         try:
             QgsProject.instance().layersAdded.disconnect(self._schedule_layer_warning_update)
         except (TypeError, RuntimeError):

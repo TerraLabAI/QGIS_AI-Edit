@@ -24,6 +24,7 @@ from qgis.PyQt.QtCore import QDate, QLocale, Qt
 from ..errors import AIEditError, ErrorCode
 from ..i18n import tr
 from ..logger import log_debug, log_warning
+from ..raster_writer import ascii_safe_dir
 
 # One GeoPackage next to the generated rasters holds every vectorize run (one
 # table per run). Hoisted to a constant so the filename lives in exactly one
@@ -33,18 +34,9 @@ AI_EDIT_GPKG_FILENAME = "ai_edit.gpkg"
 
 def _plugin_version() -> str:
     """Plugin version from metadata.txt (best-effort, '' if unreadable)."""
-    root = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    )
-    try:
-        with open(os.path.join(root, "metadata.txt"), encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("version="):
-                    return line.split("=", 1)[1].strip()
-    except OSError:
-        pass  # nosec B110 - version is cosmetic provenance, never block a run
-    return ""
+    from ..request_context import plugin_version
+
+    return plugin_version()
 
 
 def _project_layer_names() -> set[str]:
@@ -153,6 +145,13 @@ def make_layer_permanent(
 
     try:
         os.makedirs(os.path.dirname(gpkg_path), exist_ok=True)
+        # Same Windows trap the GeoTIFF writer already handles: an accented
+        # output directory (C:\\Users\\Frédéric) writes fine but reads back as
+        # an invalid OGR layer, so the run would fall back to a memory layer
+        # that vanishes when the project closes.
+        gpkg_path = os.path.join(
+            ascii_safe_dir(os.path.dirname(gpkg_path)), os.path.basename(gpkg_path)
+        )
         options = QgsVectorFileWriter.SaveVectorOptions()
         options.driverName = "GPKG"
         options.layerName = table_name

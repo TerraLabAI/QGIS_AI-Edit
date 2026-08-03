@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from qgis.PyQt.QtCore import Qt, pyqtSignal
-from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtGui import QGuiApplication, QIcon
 from qgis.PyQt.QtWidgets import QDialog
 
 from ....core import telemetry
@@ -37,10 +37,16 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
         on_action=None,
         on_favorite=None,
         browse_only: bool = False,
+        session_entry: dict | None = None,
     ):
+        """``session_entry`` switches the dialog to session mode: ``job`` is
+        the session's cover generation (images, prompt, metadata render from
+        it) while the entry supplies the title, the generation count, and the
+        Resume / Rename / Delete footer in place of the generation one."""
         super().__init__(parent)
         self._job = job
         self._preset = preset
+        self._session = session_entry
         self._is_generation = job is not None
         self._client = client
         self._demo_loader = demo_loader
@@ -48,7 +54,8 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
         self._on_action = on_action
         self._on_favorite = on_favorite
         self._browse_only = browse_only
-        self._outcome: str | None = None  # None | "use" | "close"
+        # None | "use" | "close" | (session mode) "resume" | "rename" | "delete"
+        self._outcome: str | None = None
         self._fullscreen = False
         self._is_favorite = bool((job or {}).get("is_favorite"))
 
@@ -127,13 +134,27 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
         # spans the full pane height (the toolbar row moved onto the image).
         width = int(disp_w) + info_w + 12 + 24
         height = int(disp_h) + 24
-        self.resize(width, height)
+        # Clamp to the screen, like the library dialog does. Unclamped this
+        # asks for up to 1316x624 logical px, which overflows a 1366x768 panel
+        # at 125% (1093x614) and an FHD one at the Windows-recommended 150%
+        # (1280x720): the info pane and the action row land off-screen.
+        # The screen the dialog will actually open on (Qt centres it on its
+        # parent), never the primary one: on a two-monitor desk, measuring the
+        # 1920x1080 primary hands the laptop panel a window it cannot fit.
+        screen = self.screen() or QGuiApplication.primaryScreen()
+        if screen is not None:
+            avail = screen.availableGeometry()
+            width = min(width, int(avail.width() * 0.96))
+            height = min(height, int(avail.height() * 0.92))
+        self.resize(max(width, 560), max(height, 420))
 
     # -- public --------------------------------------------------------------
 
     def outcome(self) -> str | None:
-        """``"use"`` (apply the payload), ``"close"`` (just close the library),
-        or None (do nothing). Read by the library dialog after exec()."""
+        """``"use"`` (apply the payload), ``"close"`` (just close the
+        library), a session action (``"resume"`` / ``"rename"`` /
+        ``"delete"``), or None (do nothing). Read by the library dialog
+        after exec()."""
         return self._outcome
 
     def payload(self) -> dict | None:
@@ -143,6 +164,20 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
 
     def _on_use(self) -> None:
         self._outcome = "use"
+        self.accept()
+
+    # Session-mode footer: each action just records its outcome and closes;
+    # the library maps the outcome onto its session_* signals.
+    def _on_resume_session(self) -> None:
+        self._outcome = "resume"
+        self.accept()
+
+    def _on_rename_session(self) -> None:
+        self._outcome = "rename"
+        self.accept()
+
+    def _on_delete_session(self) -> None:
+        self._outcome = "delete"
         self.accept()
 
     def _on_download(self, side: str) -> None:
@@ -223,6 +258,10 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
                 self._demo_loader.loaded.disconnect(slot)
             except (RuntimeError, TypeError):
                 pass
+        try:
+            self._demo_loader.failed.disconnect(self._on_image_failed)
+        except (RuntimeError, TypeError):
+            pass
 
     def keyPressEvent(self, event):  # noqa: N802 - Qt signature
         if event.key() == Qt.Key.Key_Escape and self._fullscreen:

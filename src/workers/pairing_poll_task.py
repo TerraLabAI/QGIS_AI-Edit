@@ -12,8 +12,15 @@ from qgis.core import QgsTask
 from qgis.PyQt.QtCore import pyqtSignal
 
 from ..core.auth.activation_manager import _KEY_RE
+from ..core.config_store import get_export_dial
 from ..core.i18n import tr
-from ..core.logger import log_debug
+from ..core.logger import log_debug, log_warning
+
+# Poll cadence and overall deadline. Server override via export-config
+# `pairing` {stall_s, interval_s, total_s}; cache-only reads, so the worker
+# thread never touches the network or QSettings for a dial.
+_POLL_INTERVAL_S = 3.0
+_TOTAL_TIMEOUT_S = 600.0
 
 
 class PairingPollTask(QgsTask):
@@ -43,12 +50,16 @@ class PairingPollTask(QgsTask):
         self,
         client,
         code: str,
-        interval_s: float = 3.0,
-        total_timeout_s: float = 600.0,
+        interval_s: float | None = None,
+        total_timeout_s: float | None = None,
     ):
         super().__init__(tr("Connecting AI Edit"), QgsTask.Flag.CanCancel)
         self._client = client
         self._code = code
+        if interval_s is None:
+            interval_s = get_export_dial("pairing.interval_s", _POLL_INTERVAL_S)
+        if total_timeout_s is None:
+            total_timeout_s = get_export_dial("pairing.total_s", _TOTAL_TIMEOUT_S)
         self._interval_s = interval_s
         self._total_timeout_s = total_timeout_s
         self._key: str | None = None
@@ -65,9 +76,33 @@ class PairingPollTask(QgsTask):
         except Exception:
             return False
 
+    @staticmethod
+    def _unexpected_failure() -> tuple[str, str]:
+        """Message + code used when the poll dies in a way nothing else caught."""
+        return (
+            tr("Sign-in failed unexpectedly. Click Connect to try again."),
+            "POLL_ERROR",
+        )
+
     def run(self) -> bool:
+        # Last-resort guard. Only the poll_pairing() call is guarded below; the
+        # dial read, the key match, the .get() chains and the emits are not, and
+        # a raise out of run() reaches finished() as a bare False with nothing
+        # recorded. Browser sign-in would then sit on "waiting" for the rest of
+        # the session, because only the failure and timeout paths restore idle.
+        try:
+            return self._run_poll()
+        except Exception as err:  # noqa: BLE001
+            if self.isCanceled():
+                return False
+            log_warning(f"Pairing poll failed unexpectedly: {err}")
+            self._failure = self._unexpected_failure()
+            return False
+
+    def _run_poll(self) -> bool:
         started = time.monotonic()
         deadline = started + self._total_timeout_s
+        stall_after_s = get_export_dial("pairing.stall_s", self.STALL_AFTER_S)
         browser_seen = False
         stall_hinted = False
         while not self.isCanceled() and time.monotonic() < deadline:
@@ -124,7 +159,7 @@ class PairingPollTask(QgsTask):
             if status == "pending" and not browser_seen:
                 browser_seen = True
                 self.pairing_browser_seen.emit()
-            elif not browser_seen and not stall_hinted and time.monotonic() - started >= self.STALL_AFTER_S:
+            elif not browser_seen and not stall_hinted and time.monotonic() - started >= stall_after_s:
                 # Long wait and the server never saw the browser: the page
                 # probably never opened (blocked browser, page error). Hint
                 # the recovery paths instead of spinning silently.
@@ -167,3 +202,7 @@ class PairingPollTask(QgsTask):
             self.pairing_timeout.emit()
         elif self._failure is not None:
             self.pairing_failed.emit(*self._failure)
+        else:
+            # No slot filled: run() died somewhere sip could not report. Answer
+            # anyway, or the Connect button waits for a signal that never comes.
+            self.pairing_failed.emit(*self._unexpected_failure())

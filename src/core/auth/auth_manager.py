@@ -3,9 +3,12 @@ from __future__ import annotations
 import threading
 import time
 
+from ..config_store import get_export_dial
 from ..errors import NETWORK_ERROR_CODES, ErrorCode
 from ..i18n import tr
 
+# Server override for the three dials below via export-config `auth`
+# {preflight_timeout_ms, credits_timeout_ms, usage_cache_ttl_s}.
 # Pre-generation usage check budget. A working link answers in well under a
 # second, so a short ceiling lets an offline/stalled connection surface the
 # network error fast instead of making the user wait the full API timeout.
@@ -50,9 +53,10 @@ class AuthManager:
 
     def _fresh_cached_usage(self) -> dict | None:
         with self._usage_lock:
+            ttl_s = get_export_dial("auth.usage_cache_ttl_s", _USAGE_CACHE_TTL_S)
             cache_fresh = all((
                 self._usage_cache is not None,
-                time.monotonic() - self._usage_cache_monotonic < _USAGE_CACHE_TTL_S,
+                time.monotonic() - self._usage_cache_monotonic < ttl_s,
             ))
             if cache_fresh:
                 return dict(self._usage_cache)
@@ -102,7 +106,12 @@ class AuthManager:
         if usage is None:
             auth = self.get_auth_header()
             try:
-                usage = self._client.get_usage(auth=auth, timeout_ms=_PREFLIGHT_TIMEOUT_MS)
+                usage = self._client.get_usage(
+                    auth=auth,
+                    timeout_ms=get_export_dial(
+                        "auth.preflight_timeout_ms", _PREFLIGHT_TIMEOUT_MS
+                    ),
+                )
             except Exception:
                 return (
                     False,
@@ -167,7 +176,8 @@ class AuthManager:
             return {"error": tr("No activation key"), "code": ErrorCode.NO_KEY.value}
         try:
             usage = self._client.get_usage(
-                auth=self.get_auth_header(), timeout_ms=_CREDITS_TIMEOUT_MS
+                auth=self.get_auth_header(),
+                timeout_ms=get_export_dial("auth.credits_timeout_ms", _CREDITS_TIMEOUT_MS),
             )
         except Exception:
             return {"error": tr("Connection error"), "code": ErrorCode.NO_NETWORK.value}

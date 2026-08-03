@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from qgis.PyQt.QtCore import QSize
-from qgis.PyQt.QtGui import QKeySequence, QShortcut
+from qgis.PyQt.QtCore import QSize, Qt
+from qgis.PyQt.QtGui import QKeySequence
 from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -24,6 +24,7 @@ from qgis.PyQt.QtWidgets import (
 
 from ...core import qt_compat as QtC
 from ...core.i18n import tr
+from ...core.qt_compat import QShortcut
 from ..credit_ring import CreditRing
 from ..onboarding_hint import (
     BLUE_TINT,
@@ -33,16 +34,16 @@ from ..onboarding_hint import (
     open_guide,
 )
 from ..panels.markup_panel import MarkupPanel
+from ..panels.reference_panel import ReferencePanel
 from ..panels.vectorize_panel import VectorizePanel
 from ..version_strip import VersionStrip
 from .prompt_container import _PromptContainer
 from .style import (
     _BTN_BLUE,
     _BTN_BLUE_OUTLINE,
-    _BTN_GHOST,
     _BTN_GREEN,
+    _BTN_GREEN_OUTLINE,
     _FOOTER_ICON_BTN_STYLE,
-    _FOOTER_ICON_TOGGLE_STYLE,
     _FOOTER_MENU_STYLE,
     BRAND_BLUE,
 )
@@ -93,17 +94,23 @@ def _build_result_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     )
     dock._result_prompt_container.markup_clicked.connect(dock.markup_clicked.emit)
     if dock._reference_widget is not None:
+        # Behind the same click-time kill switch as the idle container: the
+        # five ways in must not diverge just because the user has a result
+        # on screen.
+        def _gated(handler):
+            return dock._gated_by_feature("references", handler)
+
         dock._result_prompt_container.files_dropped.connect(
-            dock._reference_widget.add_paths
+            _gated(dock._reference_widget.add_paths)
         )
         dock._result_prompt_container.layers_dropped.connect(
-            dock._reference_widget.add_layers
+            _gated(dock._reference_widget.add_layers)
         )
-        dock._result_prompt_container.attach_clicked.connect(
-            dock._reference_widget.open_file_picker
+        dock._result_prompt_container.reference_clicked.connect(
+            _gated(dock.reference_panel_requested.emit)
         )
         dock._result_prompt_input.images_pasted.connect(
-            dock._reference_widget.add_paths
+            _gated(dock._reference_widget.add_paths)
         )
     dock._result_prompt_layout.addWidget(dock._result_prompt_container)
 
@@ -116,6 +123,12 @@ def _build_result_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
         "border: 1px solid rgba(30, 136, 229, 0.2); border-radius: 4px; "
         "padding: 6px 8px; font-size: 11px; color: palette(text); }"
     )
+    # Same AI Segmentation link handling as the first-run hint.
+    dock._result_guidance_hint.setTextInteractionFlags(
+        Qt.TextInteractionFlag.LinksAccessibleByMouse
+    )
+    dock._result_guidance_hint.setOpenExternalLinks(False)
+    dock._result_guidance_hint.linkActivated.connect(dock._on_guidance_link_activated)
     dock._result_guidance_hint.setVisible(False)
     dock._result_prompt_layout.addWidget(dock._result_guidance_hint)
 
@@ -125,7 +138,15 @@ def _build_result_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     dock._version_strip.version_selected.connect(dock._on_version_selected)
     dock._result_prompt_layout.addWidget(dock._version_strip)
 
-    # Action row: Generate (primary, flex) + Exit (ghost, fixed).
+    # Action row: Generate (primary, filled) + Finish (green outline, fixed).
+    # This is the one step where leaving means the user got what they came for,
+    # so the way out is named for that: "Finish", not "Exit". It keeps the same
+    # handler as every other exit - the layer stays in the project and the
+    # session stays resumable from Resume, which the exit message says out loud
+    # - and it stays an outline, because iterating again is still the primary
+    # action. A separate Keep BUTTON read as a mystery third choice (Yvann
+    # 2026-07-31), and the per-version keep mark that replaced it was removed
+    # too (owner call 2026-08-03): finishing needs no extra choice at all.
     result_actions_row = QHBoxLayout()
     result_actions_row.setContentsMargins(0, 4, 0, 0)
     result_actions_row.setSpacing(6)
@@ -139,14 +160,16 @@ def _build_result_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     dock._result_regenerate_btn.clicked.connect(dock._on_retry_clicked)
     result_actions_row.addWidget(dock._result_regenerate_btn, 1)
 
-    dock._result_exit_btn = QPushButton(tr("Exit"))
-    dock._result_exit_btn.setToolTip(tr("Exit and return to the start"))
+    dock._result_exit_btn = QPushButton(tr("Finish"))
+    dock._result_exit_btn.setToolTip(
+        tr("Finish this session and return to the start")
+    )
     dock._result_exit_btn.setCursor(QtC.PointingHandCursor)
     # See `_exit_btn` above for why this is a minimum rather than fixed
     # width.
     dock._result_exit_btn.setMinimumWidth(88)
     dock._result_exit_btn.setMinimumHeight(36)
-    dock._result_exit_btn.setStyleSheet(_BTN_GHOST)
+    dock._result_exit_btn.setStyleSheet(_BTN_GREEN_OUTLINE)
     dock._result_exit_btn.clicked.connect(dock._on_exit_clicked)
     result_actions_row.addWidget(dock._result_exit_btn, 0)
 
@@ -205,6 +228,44 @@ def _build_result_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     dock._vectorize_cta_btn.setStyleSheet(_BTN_BLUE_OUTLINE)
     dock._vectorize_cta_btn.clicked.connect(dock._on_vectorize_cta_clicked)
     cta_layout.addWidget(dock._vectorize_cta_btn)
+    # One-line AI Segmentation cross-promo under the button: a segmentation-
+    # style result is the moment the user judges outline quality, so the
+    # dedicated plugin is named right here (#47). Closable for good with the
+    # ✕ (HINT_SEG_CROSS); the row rides the card's visibility otherwise.
+    dock._vectorize_seg_row = QWidget()
+    seg_row = QHBoxLayout(dock._vectorize_seg_row)
+    seg_row.setContentsMargins(0, 2, 0, 0)
+    seg_row.setSpacing(4)
+    dock._vectorize_seg_label = QLabel(
+        "ⓘ  " + tr("Need cleaner outlines? Try our "
+                   "<a href='ai_seg'>AI Segmentation</a> plugin.")
+    )
+    dock._vectorize_seg_label.setWordWrap(True)
+    dock._vectorize_seg_label.setStyleSheet(
+        "font-size: 11px; color: palette(text);"
+        " background: transparent; border: none;"
+    )
+    dock._vectorize_seg_label.setTextInteractionFlags(
+        Qt.TextInteractionFlag.LinksAccessibleByMouse
+    )
+    dock._vectorize_seg_label.setOpenExternalLinks(False)
+    dock._vectorize_seg_label.linkActivated.connect(
+        dock._on_vectorize_seg_link_activated
+    )
+    seg_row.addWidget(dock._vectorize_seg_label, 1)
+    seg_close = QToolButton()
+    seg_close.setText("✕")
+    seg_close.setAccessibleName(tr("Dismiss"))
+    seg_close.setToolTip(tr("Dismiss"))
+    seg_close.setCursor(QtC.PointingHandCursor)
+    seg_close.setStyleSheet(
+        "QToolButton { border: none; background: transparent;"
+        " color: rgba(128,128,128,0.8); font-size: 11px; padding: 0; }"
+        "QToolButton:hover { color: palette(text); }"
+    )
+    seg_close.clicked.connect(dock._on_vectorize_seg_dismissed)
+    seg_row.addWidget(seg_close, 0, Qt.AlignmentFlag.AlignTop)
+    cta_layout.addWidget(dock._vectorize_seg_row)
     dock._vectorize_cta_section.setVisible(False)
     dock._vectorize_cta_pending: tuple[str, str, str, str] | None = None
     dock._result_prompt_layout.addWidget(dock._vectorize_cta_section)
@@ -279,6 +340,17 @@ def _build_side_panels(dock: AIEditDockWidget, layout: QVBoxLayout) -> None:
     dock._markup_panel.clear_clicked.connect(dock.markup_clear_clicked.emit)
     dock._markup_panel.done_clicked.connect(dock.markup_done_clicked.emit)
     layout.addWidget(dock._markup_panel)
+
+    # Reference panel - same swap pattern; the dedicated import/notes home.
+    # None without the strip (no reference store): the chip is hidden then too.
+    dock._reference_panel = None
+    if dock._reference_widget is not None:
+        dock._reference_panel = ReferencePanel(
+            dock._reference_store, dock._reference_widget, dock
+        )
+        dock._reference_panel.setVisible(False)
+        dock._reference_panel.done_clicked.connect(dock.reference_done_clicked.emit)
+        layout.addWidget(dock._reference_panel)
 
     # Vectorize panel - same swap pattern as Mark up.
     dock._vectorize_panel = VectorizePanel(dock)
@@ -374,7 +446,6 @@ def _build_footer(dock: AIEditDockWidget, layout: QVBoxLayout) -> None:
     dock._vectorize_btn.setToolTip(tr("Vectorize"))
     dock._vectorize_btn.setAccessibleName(tr("Vectorize"))
     dock._vectorize_btn.setCursor(QtC.PointingHandCursor)
-    dock._vectorize_btn.setFocusPolicy(QtC.NoFocus)
     dock._vectorize_btn.setStyleSheet(_FOOTER_ICON_BTN_STYLE)
     dock._vectorize_btn.setIcon(dock._make_polygon_glyph_icon())
     dock._vectorize_btn.setIconSize(QSize(20, 20))
@@ -400,8 +471,7 @@ def _build_footer(dock: AIEditDockWidget, layout: QVBoxLayout) -> None:
     dock._swipe_btn = _FooterIconButton(footer_widget)
     dock._swipe_btn.setAccessibleName(tr("Before / after"))
     dock._swipe_btn.setCursor(QtC.PointingHandCursor)
-    dock._swipe_btn.setFocusPolicy(QtC.NoFocus)
-    dock._swipe_btn.setStyleSheet(_FOOTER_ICON_TOGGLE_STYLE)
+    dock._swipe_btn.setStyleSheet(_FOOTER_ICON_BTN_STYLE)
     dock._swipe_btn.setIcon(dock._make_swipe_glyph_icon())
     dock._swipe_btn.setIconSize(QSize(20, 20))
     dock._swipe_btn.setCheckable(True)
@@ -422,13 +492,14 @@ def _build_footer(dock: AIEditDockWidget, layout: QVBoxLayout) -> None:
     # anywhere. Order: tutorial, gear, help - it groups with the help "?" as
     # a learn action. Opens the written guide with UTM + best-effort event.
     dock._tutorial_btn = _FooterIconButton(footer_widget)
-    # U+1F4D6 OPEN BOOK as text (the footer style is already 22px), matching
-    # AI Segmentation's footer tutorial glyph exactly so the two plugins'
-    # tutorial icons look identical.
-    dock._tutorial_btn.setText("\U0001F4D6")
+    # A painted open book, not U+1F4D6: Windows renders that character as a
+    # colour emoji at the full em box, which broke the footer's shared baseline
+    # and grew the row. AI Segmentation still ships the character.
+    dock._tutorial_btn.setIcon(dock._make_book_glyph_icon())
+    dock._tutorial_btn.setIconSize(QSize(20, 20))
     dock._tutorial_btn.setToolTip(tr("Open the step-by-step tutorial"))
+    dock._tutorial_btn.setAccessibleName(tr("Tutorial"))
     dock._tutorial_btn.setCursor(QtC.PointingHandCursor)
-    dock._tutorial_btn.setFocusPolicy(QtC.NoFocus)
     dock._tutorial_btn.setStyleSheet(_FOOTER_ICON_BTN_STYLE)
     dock._tutorial_btn.clicked.connect(dock._on_open_guide_footer)
     footer_row.addWidget(dock._tutorial_btn)
@@ -439,8 +510,8 @@ def _build_footer(dock: AIEditDockWidget, layout: QVBoxLayout) -> None:
     dock._settings_btn.setIcon(dock._make_gear_glyph_icon())
     dock._settings_btn.setIconSize(QSize(20, 20))
     dock._settings_btn.setToolTip(tr("Settings"))
+    dock._settings_btn.setAccessibleName(tr("Settings"))
     dock._settings_btn.setCursor(QtC.PointingHandCursor)
-    dock._settings_btn.setFocusPolicy(QtC.NoFocus)
     dock._settings_btn.setStyleSheet(_FOOTER_ICON_BTN_STYLE)
     dock._settings_btn.clicked.connect(dock._on_settings_btn_clicked)
     dock._settings_btn.setVisible(False)  # shown when activated
@@ -450,8 +521,8 @@ def _build_footer(dock: AIEditDockWidget, layout: QVBoxLayout) -> None:
     dock._help_btn = _FooterIconButton(footer_widget)
     dock._help_btn.setText("?")
     dock._help_btn.setToolTip(tr("Help"))
+    dock._help_btn.setAccessibleName(tr("Help"))
     dock._help_btn.setCursor(QtC.PointingHandCursor)
-    dock._help_btn.setFocusPolicy(QtC.NoFocus)
     dock._help_btn.setStyleSheet(_FOOTER_ICON_BTN_STYLE)
     dock._help_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
     help_menu = QMenu(dock._help_btn)

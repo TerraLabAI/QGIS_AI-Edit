@@ -24,8 +24,8 @@ from ..core.raster_writer import (  # noqa: F401
     _FOREIGN_PROJ_MARKERS,
     _GDAL_SAFE_FORMATS,
     _GTIFF_CREATION_OPTIONS,
+    BEFORE_PATH_PROPERTY,
     OUTPUT_DIR_SETTING,
-    _ascii_safe_dir,
     _create_gtiff,
     _detect_image_format,
     _documents_default_dir,
@@ -36,8 +36,12 @@ from ..core.raster_writer import (  # noqa: F401
     _safe_projection_wkt,
     _unique_output_path,
     _write_geotiff_gdal,
+    ascii_safe_dir,
+    before_file_base,
     extent_and_crs_from_job,
     get_output_dir,
+    read_crop_polygon_wkt,
+    replace_staged_file,
     set_output_dir,
     write_geotiff,
 )
@@ -73,7 +77,7 @@ def _reload_from_ascii_copy(src_path: str, display_name: str) -> QgsRasterLayer 
     """
     try:
         base = tempfile.mkdtemp(prefix="terralab_ai_edit_")
-        safe_dir = _ascii_safe_dir(base)
+        safe_dir = ascii_safe_dir(base)
         # Keep the original (ASCII, _slugify-guaranteed) name so two recoveries
         # don't collide; only synthesize one if the basename isn't ASCII.
         name = os.path.basename(src_path)
@@ -94,8 +98,12 @@ def add_geotiff_to_project(
     geotiff_path: str,
     prompt: str = "",
     crs_wkt: str = "",
+    before_path: str = "",
 ) -> QgsRasterLayer:
-    """Add GeoTIFF as a flat child of AI-Edit. Sub-group is created lazily on first vectorize."""
+    """Add GeoTIFF as a flat child of AI-Edit. Sub-group is created lazily on
+    first vectorize. ``before_path`` is the sibling GeoTIFF of the imagery the
+    generation ran from; stored on the layer so the swipe can paint the true
+    before side."""
     display_name = _build_layer_name(prompt)
 
     existing_names = {lyr.name() for lyr in QgsProject.instance().mapLayers().values()}
@@ -133,8 +141,11 @@ def add_geotiff_to_project(
         except Exception as err:  # noqa: BLE001 - layer is still usable
             log_warning(f"layer CRS fallback failed: {err}")
 
-    _apply_default_raster_style(layer)
+    has_crop = read_crop_polygon_wkt(geotiff_path) is not None
+    _apply_default_raster_style(layer, has_crop=has_crop)
     _set_raster_layer_metadata(layer, prompt, _read_model_tag(geotiff_path))
+    if before_path and os.path.exists(before_path):
+        layer.setCustomProperty(BEFORE_PATH_PROPERTY, before_path)
 
     project.addMapLayer(layer, False)
     node = add_layer_to_ai_edit_top(layer)
@@ -177,8 +188,13 @@ def _set_raster_layer_metadata(
         log_warning(f"raster layer metadata skipped: {err}")
 
 
-def _apply_default_raster_style(layer: QgsRasterLayer) -> None:
-    """Pin the 3-band RGB renderer; the style travels with the project file."""
+def _apply_default_raster_style(layer: QgsRasterLayer, has_crop: bool = False) -> None:
+    """Pin the 3-band RGB renderer; the style travels with the project file.
+
+    ``has_crop`` (P3 alpha crop) turns on the renderer's alpha band so only the
+    selected polygon shows: everything outside the shape stays transparent.
+    There is no full-frame view, the result always renders cropped to the shape.
+    """
     try:
         from qgis.core import QgsMultiBandColorRenderer
 
@@ -186,6 +202,8 @@ def _apply_default_raster_style(layer: QgsRasterLayer) -> None:
         if provider is None or provider.bandCount() < 3:
             return
         renderer = QgsMultiBandColorRenderer(provider, 1, 2, 3)
+        if has_crop and provider.bandCount() >= 4:
+            renderer.setAlphaBand(4)
         layer.setRenderer(renderer)
         layer.triggerRepaint()
     except Exception as err:  # nosec B110

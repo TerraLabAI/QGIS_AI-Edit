@@ -19,42 +19,84 @@ from qgis.PyQt.QtCore import QByteArray, QObject, QStandardPaths, QUrl, pyqtSign
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 
+from ..core.config_store import get_export_dial
 from ..core.logger import log_debug, log_warning
 from ..core.qt_compat import (
+    CacheLocation,
+    HttpStatusCodeAttribute,
+    NetworkNoError,
     NoLessSafeRedirectPolicy,
     RedirectPolicyAttribute,
     safe_single_shot,
+    set_transfer_timeout,
 )
 
-# Bump this when the server-side demo set is re-seeded in a way that must
-# invalidate every client's on-disk cache at once (the 7-day TTL is too slow).
-# v3: non-curated auto-picked demos purged server-side; force every client to
-# drop any v2 cache poisoned before the purge and re-fetch (404 -> text card).
-# v4: Top Picks demos re-generated; the card grid still served the old cached
-# preview while the detail popup (separate "_preview" key) fetched the new one,
-# so they disagreed. Drop every client's cache so cards re-fetch the new demos.
 # Demos the server returned 404 for (not yet seeded). Module-level so the
 # knowledge survives reopening the library dialog within a QGIS session and we
 # don't re-issue doomed requests (each burns a concurrency slot + 15s timeout).
 _KNOWN_MISSING: set[tuple[str, str]] = set()
 
-_CACHE_DIR_NAME = "ai-edit-template-demos-v4"
+# Cache version: server-bumpable via demo_cache_version in /api/plugin/config
+# (a re-seed that must invalidate every client's cache is now a website deploy,
+# not a plugin release; v3 and v4 each cost one). The fallback is the shipped
+# version used when no server config is cached.
+_CACHE_DIR_PREFIX = "ai-edit-template-demos-v"
+_CACHE_DIR_FALLBACK_VERSION = "4"
+
+
+def _cache_dir_name() -> str:
+    """Cache dir name with a server-bumpable version suffix.
+
+    Reads demo_cache_version from the cached server config (cache-only, no
+    network); absent or garbage falls back to the shipped version, so past
+    cache-poisoning incidents need a website deploy, not a plugin release."""
+    from ..core.auth.activation_manager import get_server_config
+
+    version = get_server_config().get("demo_cache_version")
+    if isinstance(version, bool):
+        version = None
+    if isinstance(version, int):
+        version = str(version)
+    if (
+        not isinstance(version, str)
+        or not version.strip()
+        or not all(c.isalnum() or c in "._-" for c in version.strip())
+    ):
+        version = _CACHE_DIR_FALLBACK_VERSION
+    return f"{_CACHE_DIR_PREFIX}{version.strip()}"
 
 
 def _cache_root() -> Path:
     """Per-platform cache dir for demo image bytes.
 
-    Returns ``CacheLocation/<_CACHE_DIR_NAME>`` which is:
-        - Windows: ``%LOCALAPPDATA%/<org>/<app>/cache/<_CACHE_DIR_NAME>``
-        - macOS:   ``~/Library/Caches/<org>/<app>/<_CACHE_DIR_NAME>``
-        - Linux:   ``~/.cache/<app>/<_CACHE_DIR_NAME>``
+    Returns ``CacheLocation/<cache dir name>`` which is:
+        - Windows: ``%LOCALAPPDATA%/<org>/<app>/cache/<name>``
+        - macOS:   ``~/Library/Caches/<org>/<app>/<name>``
+        - Linux:   ``~/.cache/<name>``
     Falls back to the historical Linux-style path when QStandardPaths
     returns nothing (rare, mostly headless test envs).
     """
-    base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation)
+    name = _cache_dir_name()
+    base = QStandardPaths.writableLocation(CacheLocation)
     if base:
-        return Path(base) / _CACHE_DIR_NAME
-    return Path.home() / ".cache" / _CACHE_DIR_NAME
+        return Path(base) / name
+    return Path.home() / ".cache" / name
+
+
+def _cleanup_stale_cache_dirs(active: Path) -> None:
+    """Best-effort removal of sibling demo caches from other versions."""
+    import shutil
+
+    try:
+        for child in active.parent.iterdir():
+            if (
+                child.name.startswith(_CACHE_DIR_PREFIX)
+                and child.name != active.name
+                and child.is_dir()
+            ):
+                shutil.rmtree(child, ignore_errors=True)
+    except OSError:
+        pass  # nosec B110  Cleanup must never block the loader.
 
 
 def _cache_path(template_id: str, which: str) -> Path:
@@ -65,7 +107,14 @@ def _cache_path(template_id: str, which: str) -> Path:
 # Demos rarely change, but a curated demo can be re-seeded server-side. Without
 # expiry the on-disk cache would pin the old image forever; a 7-day TTL lets
 # updates propagate while still keeping repeat opens instant.
-_CACHE_TTL_SECONDS = 7 * 24 * 3600
+_DEMO_CACHE_TTL_SECONDS = 7 * 24 * 3600
+
+
+def _demo_cache_ttl() -> int:
+    """Seconds a cached demo image stays usable, read at use time. Distinct
+    from demo_cache_version above, which comes from the activation config and
+    renames the whole cache dir; this one only ages the files inside it."""
+    return get_export_dial("cache_ttl_s.demos", _DEMO_CACHE_TTL_SECONDS)
 
 
 def read_cached_pixmap(template_id: str, which: str) -> QPixmap | None:
@@ -74,7 +123,7 @@ def read_cached_pixmap(template_id: str, which: str) -> QPixmap | None:
     if not path.is_file():
         return None
     try:
-        if (time.time() - path.stat().st_mtime) > _CACHE_TTL_SECONDS:
+        if (time.time() - path.stat().st_mtime) > _demo_cache_ttl():
             return None
         pm = QPixmap(str(path))
         if pm.isNull() or pm.width() < 2:
@@ -110,7 +159,14 @@ class TemplateDemoLoader(QObject):
         super().__init__(parent)
         self._queue: list[tuple[str, str, str]] = []
         self._in_flight = 0
-        _cache_root().mkdir(parents=True, exist_ok=True)
+        # The cache only saves a refetch, so a locked or over-long cache path
+        # must not raise inside the Prompt Library dialog's constructor.
+        try:
+            root = _cache_root()
+            root.mkdir(parents=True, exist_ok=True)
+            _cleanup_stale_cache_dirs(root)
+        except OSError as err:
+            log_warning(f"Demo cache dir unavailable: {err}")
 
     def request(self, template_id: str, which: str, url: str) -> None:
         """Try cache first; if miss, queue an async network fetch.
@@ -153,7 +209,7 @@ class TemplateDemoLoader(QObject):
         # PyQt5 on some QGIS 3 builds exposes these enums flat, not scoped.
         req.setAttribute(RedirectPolicyAttribute, NoLessSafeRedirectPolicy)
         req.setRawHeader(b"Accept", b"image/jpeg, image/png, image/webp, image/*")
-        req.setTransferTimeout(15_000)
+        set_transfer_timeout(req, 15_000)  # no-op before Qt 5.15
         # Route through QGIS's network manager so the fetch inherits its SSL CA
         # bundle, proxy, and auth config. A bare QNetworkAccessManager fails
         # silently on some CDN hosts. Parent the reply to this loader so it dies
@@ -165,47 +221,80 @@ class TemplateDemoLoader(QObject):
         )
 
     def _on_finished(self, reply: QNetworkReply, template_id: str, which: str) -> None:
+        """Resolve exactly one card, whatever happened.
+
+        This runs inside a ``QNetworkReply.finished`` slot, where a raise has
+        nowhere to go and would leave the card reading "Loading..." for the
+        life of the dialog. Every path therefore ends in one of the two
+        signals, and the decode happens in a helper so the emit itself is
+        outside the guard (a crashing card slot can never turn into a second,
+        contradictory signal for the same card).
+
+        The housekeeping between the two is guarded per step for the same
+        reason: it used to sit in a ``finally``, which runs BEFORE the emits,
+        so a ``deleteLater`` on a dead wrapper or a raise inside ``_pump``
+        skipped the card's answer entirely."""
+        pixmap = None
         try:
-            err_code = reply.error()
-            no_err = QNetworkReply.NetworkError.NoError
-            http_status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
-            try:
-                http_int = int(http_status) if http_status is not None else 0
-            except (TypeError, ValueError):
-                http_int = 0
-            if err_code != no_err or http_int >= 400:
-                if http_int == 404:
-                    _KNOWN_MISSING.add((template_id, which))
-                else:
-                    log_debug(
-                        f"Demo fetch failed for {template_id}/{which}: "
-                        f"err={err_code} http={http_int}"
-                    )
-                self.failed.emit(template_id, which)
-                return
-            data: QByteArray = reply.readAll()
-            buf = bytes(data)
-            if len(buf) < 256:
-                self.failed.emit(template_id, which)
-                return
-            pm = QPixmap()
-            if not pm.loadFromData(buf):
-                log_debug(f"Demo bytes did not decode for {template_id}/{which}")
-                self.failed.emit(template_id, which)
-                return
-            self._write_cache(template_id, which, buf)
-            self.loaded.emit(template_id, which, pm)
-        finally:
+            pixmap = self._pixmap_from_reply(reply, template_id, which)
+        except Exception as err:  # noqa: BLE001
+            log_warning(f"Demo fetch handling failed for {template_id}/{which}: {err}")
+        try:
             reply.deleteLater()
-            self._in_flight = max(0, self._in_flight - 1)
+        except (RuntimeError, AttributeError):  # nosec B110 - wrapper already dead
+            pass
+        self._in_flight = max(0, self._in_flight - 1)
+        # Pumped before the emit so a card slot that raises cannot stall the
+        # queue; pumping cannot stop the emit either way.
+        try:
             self._pump()
+        except Exception as err:  # noqa: BLE001
+            log_warning(f"Demo queue pump failed after {template_id}/{which}: {err}")
+        if pixmap is None:
+            self.failed.emit(template_id, which)
+        else:
+            self.loaded.emit(template_id, which, pixmap)
+
+    def _pixmap_from_reply(
+        self, reply: QNetworkReply, template_id: str, which: str
+    ) -> QPixmap | None:
+        """Decode the finished reply and cache its bytes. None means unusable."""
+        err_code = reply.error()
+        no_err = NetworkNoError
+        http_status = reply.attribute(HttpStatusCodeAttribute)
+        try:
+            http_int = int(http_status) if http_status is not None else 0
+        except (TypeError, ValueError):
+            http_int = 0
+        if err_code != no_err or http_int >= 400:
+            if http_int == 404:
+                _KNOWN_MISSING.add((template_id, which))
+            else:
+                log_debug(
+                    f"Demo fetch failed for {template_id}/{which}: "
+                    f"err={err_code} http={http_int}"
+                )
+            return None
+        data: QByteArray = reply.readAll()
+        buf = bytes(data)
+        if len(buf) < 256:
+            return None
+        pm = QPixmap()
+        if not pm.loadFromData(buf):
+            log_debug(f"Demo bytes did not decode for {template_id}/{which}")
+            return None
+        self._write_cache(template_id, which, buf)
+        return pm
 
     @staticmethod
     def _write_cache(template_id: str, which: str, buf: bytes) -> None:
         path = _cache_path(template_id, which)
-        path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".jpg.tmp")
         try:
+            # mkdir belongs INSIDE the guard: on Windows a long path or a
+            # locked cache dir raises OSError, and letting that escape would
+            # skip the caller's loaded.emit and hang the card on "Loading...".
+            path.parent.mkdir(parents=True, exist_ok=True)
             with open(tmp, "wb") as f:
                 f.write(buf)
             os.replace(tmp, path)

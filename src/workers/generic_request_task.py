@@ -6,23 +6,14 @@ from typing import Any, Callable
 from qgis.core import QgsTask
 from qgis.PyQt.QtCore import pyqtSignal
 
+from ..core.i18n import tr
+from ..core.qt_compat import silent_task_flags
 
-def silent_task_flags(can_cancel: bool = True):
-    """CanCancel plus Hidden/Silent when the running QGIS exposes them.
-
-    Hidden / Silent landed in QGIS 3.26; the plugin floor (metadata.txt
-    qgisMinimumVersion) is older, so resolve each flag defensively. Naming
-    QgsTask.Flag.Hidden directly would AttributeError at import on older builds;
-    there the task degrades to a plain (visible) cancellable task, which is
-    harmless. Keeping startup/background requests hidden stops the task-manager
-    widget from filling with alarming "AI Edit ..." rows on every launch.
-    """
-    flags = QgsTask.Flag.CanCancel if can_cancel else QgsTask.Flag(0)
-    for name in ("Hidden", "Silent"):
-        flag = getattr(QgsTask.Flag, name, None)
-        if flag is not None:
-            flags = flags | flag
-    return flags
+# A failure message is shown to the user, so the cap is only there to keep a
+# runaway exception out of a notification banner. It has to clear a translated
+# sentence: the German write error is 202 characters before the filename is
+# substituted in, and the old 200 cut it mid-word in every download failure.
+_MAX_FAILURE_CHARS = 500
 
 
 class GenericRequestTask(QgsTask):
@@ -51,11 +42,28 @@ class GenericRequestTask(QgsTask):
         except Exception:
             return False
 
+    @staticmethod
+    def _unexpected_failure() -> tuple[str, str]:
+        """Message + code for a request that died in a way nothing else caught."""
+        from ..core.errors import ErrorCode
+        return (tr("The request failed unexpectedly."), ErrorCode.UNKNOWN.value)
+
+    @staticmethod
+    def _failure_text(err: Exception) -> str:
+        """The sentence the user reads. ``AIEditError.__str__`` puts ``[CODE]``
+        in front of it, and the failure tuple already carries that code in its
+        own slot, so read the plain ``message`` when the exception has one."""
+        message = getattr(err, "message", "")
+        text = message if isinstance(message, str) and message else str(err)
+        return text[:_MAX_FAILURE_CHARS]
+
     def run(self) -> bool:
-        if self.isCanceled():
-            return False
+        # The guard covers the whole body, not just the call: unpacking the
+        # response dict below can raise too, and a raise out of run() reaches
+        # finished() as a bare False with no failure recorded, leaving whoever
+        # is waiting on succeeded/failed with no answer at all.
         try:
-            result = self._request_fn()
+            return self._run_request()
         except Exception as e:
             # Preserve a usable code so consumers that branch on it (network vs
             # app error, whether to open the bug-report dialog) don't misread a
@@ -63,8 +71,13 @@ class GenericRequestTask(QgsTask):
             from ..core.errors import ErrorCode
             raw_code = getattr(e, "code", "")
             code = getattr(raw_code, "value", raw_code) or ErrorCode.UNKNOWN.value
-            self._failure = (str(e)[:200], str(code))
+            self._failure = (self._failure_text(e), str(code))
             return False
+
+    def _run_request(self) -> bool:
+        if self.isCanceled():
+            return False
+        result = self._request_fn()
 
         if self.isCanceled():
             return False
@@ -86,3 +99,7 @@ class GenericRequestTask(QgsTask):
             self.succeeded.emit(self._result)
         elif self._failure is not None:
             self.failed.emit(*self._failure)
+        else:
+            # No slot filled: run() died somewhere sip could not report. Answer
+            # anyway, or the caller's "checking..." state never resolves.
+            self.failed.emit(*self._unexpected_failure())

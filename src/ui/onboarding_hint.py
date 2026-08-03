@@ -29,32 +29,54 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..core import qt_compat as QtC
+from ..core.config_store import get_export_dial_list
 from ..core.i18n import tr
+from .dock.style import ICONS_DIR
 
 _SETTINGS_PREFIX = "AIEdit/hints/"
 
 # Hint ids. Listed here so settings can reset them all at once.
 HINT_LIBRARY_INTRO = "library_intro"
-HINT_ZONE = "flow_zone"
-HINT_PROMPT = "flow_prompt"
-HINT_TOOLS = "flow_tools"
 HINT_MARKUP = "flow_markup"
 HINT_VECTORIZE = "flow_vectorize"
+# Reference panel's one-line "what references are" note, same role as the
+# Mark up panel's hint: concise, closable, restorable from Account Settings.
+HINT_REFERENCE = "flow_reference"
 # Post-sign-in first-steps banner pointing at the step-by-step guide.
 HINT_FIRST_STEPS = "first_steps"
+# Reference + Markup discoverability tip, shown under the prompt input once
+# the first zone is drawn. Closing it, attaching a reference or touching
+# markup retires it for the rest of the QGIS session only: it is back on the
+# first zone of the next session (see SESSION_ONLY_HINTS).
+HINT_GUIDE_AI = "guide_ai"
+# One-line AI Segmentation cross-promo inside the Vectorize CTA card, shown
+# on segmentation-style results (the moment outline quality is being judged).
+HINT_SEG_CROSS = "seg_cross_promo"
+# "Name your marks in the prompt" tip, shown under the prompt input while
+# saved Mark up strokes exist for the current zone. First-time markers come
+# back from Mark up with no idea the marks must be referenced in the prompt
+# to matter, so this rides the same slot as HINT_GUIDE_AI and outranks it
+# (markup is the more specific state). Session-only, and a Generate click
+# with marks present retires it too (see DockPromptMixin).
+HINT_MARKUP_PROMPT = "markup_prompt_tip"
 ALL_HINTS = [
-    HINT_LIBRARY_INTRO, HINT_ZONE, HINT_PROMPT, HINT_TOOLS,
-    HINT_MARKUP, HINT_VECTORIZE, HINT_FIRST_STEPS,
+    HINT_LIBRARY_INTRO, HINT_MARKUP, HINT_VECTORIZE, HINT_FIRST_STEPS,
+    HINT_GUIDE_AI, HINT_SEG_CROSS, HINT_MARKUP_PROMPT, HINT_REFERENCE,
 ]
 
-_ICONS_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "resources", "icons"
-)
+# Hints whose dismissal lasts one QGIS session instead of for good. Reference
+# and Mark up are the two features that decide whether a generation lands, and
+# a user who saw the tip in March does not remember it in July, so these come
+# back on the first zone of every session (Yvann 2026-07-31). Nothing is
+# written to QSettings for these: the set below IS the memory, and it dies
+# with the process.
+SESSION_ONLY_HINTS = frozenset({HINT_GUIDE_AI, HINT_MARKUP_PROMPT})
+_SESSION_DISMISSED: set[str] = set()
 
-# Step-by-step written guide. Defined once here; every touchpoint derives its
-# own variant via guide_url(<utm_content>) so the base + UTM stem never gets
-# copy-pasted.
-GUIDE_URL_BASE = "https://terra-lab.ai/blog/ai-edit-complete-guide"
+
+# Step-by-step written guide: base URL comes from activation_manager's
+# get_guide_url() (server override, shipped constant fallback); every
+# touchpoint derives its own variant via guide_url(<utm_content>).
 
 # Card tints as RGB components: the TerraLab leaf green is the default (matches
 # the rest of the AI Edit dock chrome); blue is available for automatic-style
@@ -72,9 +94,12 @@ _LIVE_HINTS: list[weakref.ref[DismissibleHint]] = []
 
 def guide_url(content: str) -> str:
     """Written-guide URL with the shared UTM stem and a per-touchpoint content."""
+    from ..core.auth.activation_manager import get_guide_url
+
+    base = get_guide_url()
+    sep = "&" if "?" in base else "?"
     return (
-        f"{GUIDE_URL_BASE}"
-        "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit"
+        f"{base}{sep}utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit"
         f"&utm_content={content}"
     )
 
@@ -99,10 +124,28 @@ def open_guide(content: str) -> None:
 
 
 def is_hint_dismissed(hint_id: str) -> bool:
-    return bool(QSettings().value(_SETTINGS_PREFIX + hint_id, False, type=bool))
+    """True when the user closed the hint, or when the server suppresses it.
+
+    The served list (hints.suppressed) is an additive union, so it is only ever
+    an extra reason to HIDE: one deploy retires a hint that nags or reads wrong
+    on every install, whatever plugin version it runs, and a deploy can never
+    make a hint the user dismissed come back.
+
+    A session-only hint reads its dismissal from memory, never from QSettings,
+    so a value an older version stored under the same key is ignored and the
+    hint comes back."""
+    if hint_id in SESSION_ONLY_HINTS:
+        if hint_id in _SESSION_DISMISSED:
+            return True
+    elif bool(QSettings().value(_SETTINGS_PREFIX + hint_id, False, type=bool)):
+        return True
+    return hint_id in get_export_dial_list("hints.suppressed", ())
 
 
 def dismiss_hint(hint_id: str) -> None:
+    if hint_id in SESSION_ONLY_HINTS:
+        _SESSION_DISMISSED.add(hint_id)
+        return
     QSettings().setValue(_SETTINGS_PREFIX + hint_id, True)
 
 
@@ -115,6 +158,7 @@ def reset_hints() -> None:
     s = QSettings()
     for hint_id in ALL_HINTS:
         s.remove(_SETTINGS_PREFIX + hint_id)
+    _SESSION_DISMISSED.clear()
     for ref in list(_LIVE_HINTS):
         widget = ref()
         if widget is None:
@@ -131,7 +175,7 @@ def _card_qss(tint: tuple[int, int, int]) -> str:
     )
 
 
-_TITLE_STYLE = (
+_HINT_TITLE_STYLE = (
     "color: palette(text); font-size: 14px; font-weight: 800; "
     "background: transparent; border: none;"
 )
@@ -166,7 +210,8 @@ class DismissibleHint(QWidget):
 
     ``steps`` is a list of ``(glyph, title, subtitle)`` tuples rendered as a
     1-2-3 row. ``action_text`` (optional) renders a small link-style button
-    whose click emits ``action``. ``visibility_gate`` (optional callable ->
+    whose click emits ``action``. ``rich_body`` renders the body as HTML,
+    for a sentence that shows a UI icon inline. ``visibility_gate`` (optional callable ->
     bool) constrains ``reshow()`` so a guidance reset never flashes a pinned
     banner into a state where it does not belong. Closing the card stores the
     dismissal so it stays hidden until the user resets guidance from settings.
@@ -182,6 +227,7 @@ class DismissibleHint(QWidget):
         body: str,
         steps: list[tuple[str, str, str]] | None = None,
         action_text: str | None = None,
+        rich_body: bool = False,
         visibility_gate=None,
         tint: tuple[int, int, int] | None = None,
         action_color: tuple[int, int, int] | None = None,
@@ -219,6 +265,10 @@ class DismissibleHint(QWidget):
         body_lbl = QLabel(body)
         body_lbl.setWordWrap(True)
         body_lbl.setStyleSheet(_BODY_STYLE)
+        # Explicit, never auto-detected: a body that carries an <img> pointing
+        # at a UI button must render, and a plain body must keep showing any
+        # bracket or ampersand a translation puts in it.
+        body_lbl.setTextFormat(QtC.RichText if rich_body else QtC.PlainText)
 
         act_btn = None
         if action_text:
@@ -242,7 +292,7 @@ class DismissibleHint(QWidget):
             head.setContentsMargins(0, 0, 0, 0)
             head.setSpacing(8)
             title_lbl = QLabel(title)
-            title_lbl.setStyleSheet(_TITLE_STYLE)
+            title_lbl.setStyleSheet(_HINT_TITLE_STYLE)
             title_lbl.setWordWrap(True)
             head.addWidget(title_lbl, 1)
             head.addWidget(close_btn, 0, QtC.AlignTop)
@@ -305,7 +355,13 @@ class DismissibleHint(QWidget):
         A gate that returns False keeps the hint hidden (its owner shows it when
         the relevant screen is next active), so a reset never flashes a pinned
         banner into a state where it does not belong.
+
+        The reset clears the local dismissal before calling this, so the check
+        below is the served suppression alone: a hint the server retired stays
+        hidden through a reset.
         """
+        if is_hint_dismissed(self._hint_id):
+            return
         gate = self._visibility_gate
         if gate is not None:
             try:
@@ -323,4 +379,4 @@ class DismissibleHint(QWidget):
 
 def search_icon() -> QIcon:
     """Magnifier icon for the prompt-library search field."""
-    return QIcon(os.path.join(_ICONS_DIR, "search.svg"))
+    return QIcon(os.path.join(ICONS_DIR, "search.svg"))

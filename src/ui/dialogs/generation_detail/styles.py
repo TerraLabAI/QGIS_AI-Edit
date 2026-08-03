@@ -3,30 +3,39 @@ from __future__ import annotations
 
 import os
 
-from ...dock.style import BRAND_GREEN
-
-_PLUGIN_DIR = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+from ...dock.style import (
+    _BTN_LABEL_WEIGHT,
+    BRAND_GREEN,
+    COPY_BTN_QSS,
+    COPY_SVG,
+    ICONS_DIR,
+    STAR_FILLED_SVG,
+    STAR_OUTLINE_SVG,
 )
-_ICONS_DIR = os.path.join(_PLUGIN_DIR, "resources", "icons")
-_STAR_OUTLINE_SVG = os.path.join(_ICONS_DIR, "star.svg")
-_STAR_FILLED_SVG = os.path.join(_ICONS_DIR, "star-filled.svg")
-_DOWNLOAD_SVG = os.path.join(_ICONS_DIR, "download.svg")
-_COPY_SVG = os.path.join(_ICONS_DIR, "copy.svg")
+
+# The dock's style module owns the icon paths and the copy button. Re-exported
+# under the local names this package and its facade already import.
+_ICONS_DIR = ICONS_DIR
+_STAR_OUTLINE_SVG = STAR_OUTLINE_SVG
+_STAR_FILLED_SVG = STAR_FILLED_SVG
+_COPY_SVG = COPY_SVG
+_COPY_BTN = COPY_BTN_QSS
+_DOWNLOAD_SVG = os.path.join(ICONS_DIR, "download.svg")
 
 
-_TITLE_STYLE = (
+_DETAIL_TITLE_STYLE = (
     "color: palette(text); font-size: 18px; font-weight: 800; "
     "letter-spacing: -0.2px; background: transparent; border: none;"
 )
-_SECTION_STYLE = (
+_DETAIL_SECTION_STYLE = (
     "color: rgba(128,128,128,0.95); font-size: 10px; font-weight: 700; "
     "letter-spacing: 1.2px; background: transparent; border: none;"
 )
-# Type/category tag above the title. Brand-green tint, hugs its content.
-_BADGE_STYLE = (
-    "QLabel { color: #6f8c1e; background: rgba(139,172,39,0.13); "
-    "border: 1px solid rgba(139,172,39,0.40); border-radius: 9px; "
+# Type/category tag above the title. Neutral pill: the tag is metadata, not
+# an action, so it carries no brand colour (green is reserved for actions).
+_DETAIL_BADGE_STYLE = (
+    "QLabel { color: palette(text); background: rgba(128,128,128,0.10); "
+    "border: 1px solid rgba(128,128,128,0.30); border-radius: 9px; "
     "font-size: 10px; font-weight: 800; letter-spacing: 1.0px; "
     "padding: 2px 9px; }"
 )
@@ -35,13 +44,6 @@ _PROMPT_STYLE = (
     "QLabel { color: palette(text); font-size: 12px; "
     "background: rgba(128,128,128,0.05); border: 1px solid rgba(128,128,128,0.15); "
     "border-radius: 4px; padding: 8px 10px; }"
-)
-# Tiny flat "Copy" affordance sitting on the PROMPT section header.
-_COPY_BTN = (
-    "QPushButton { background: transparent; border: none; "
-    "color: rgba(128,128,128,0.95); font-size: 11px; font-weight: 600; "
-    "padding: 1px 6px; border-radius: 4px; }"
-    "QPushButton:hover { background: rgba(128,128,128,0.14); color: palette(text); }"
 )
 _CHIP_STYLE = (
     "QFrame { background: rgba(128,128,128,0.06); "
@@ -57,7 +59,8 @@ _CHIP_VALUE = (
 )
 _ACTION_BTN = (
     "QPushButton { background: transparent; border: 1px solid rgba(128,128,128,0.35); "
-    "border-radius: 4px; padding: 7px 12px; font-size: 12px; color: palette(text); }"
+    f"border-radius: 4px; padding: 7px 12px; font-size: 12px; color: palette(text); "
+    f"{_BTN_LABEL_WEIGHT} }}"
     "QPushButton:hover { background: rgba(128,128,128,0.12); "
     "border-color: rgba(128,128,128,0.55); }"
     "QPushButton:disabled { color: rgba(128,128,128,0.5); "
@@ -68,6 +71,15 @@ _PRIMARY_BTN = (
     "padding: 8px 14px; font-size: 12px; font-weight: 600; color: #14210A; }"
     "QPushButton:hover { background: #76a32a; }"
     "QPushButton:disabled { background: rgba(128,128,128,0.25); color: rgba(128,128,128,0.6); }"
+)
+# Destructive secondary (session Delete): the shape of _ACTION_BTN with the
+# brand red as text + a soft tint on hover, never a full red fill (design
+# system rule). Hues are the existing BRAND_RED rgb(211,47,47) / ERROR_TEXT.
+_DANGER_BTN = (
+    "QPushButton { background: transparent; border: 1px solid rgba(211,47,47,0.35); "
+    "border-radius: 4px; padding: 7px 12px; font-size: 12px; color: #ef5350; }"
+    "QPushButton:hover { background: rgba(211,47,47,0.10); "
+    "border-color: rgba(211,47,47,0.55); }"
 )
 _FS_BTN = (
     "QToolButton { background: rgba(0,0,0,0.55); color: white; border: none; "

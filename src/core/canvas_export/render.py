@@ -36,6 +36,7 @@ class ExportPrep:
         "map_crs",
         "clean_base_settings",
         "markup_overlay",
+        "clean_base_encoded",
     )
 
     def __init__(
@@ -63,6 +64,11 @@ class ExportPrep:
         # worker composites it onto the clean main render (the live markup
         # memory layer must never be rendered off-thread). None when no markup.
         self.markup_overlay = markup_overlay
+        # ``(b64, format_token)`` of the clean base, filled by render_export:
+        # the marked main image is the SAME render with the overlay painted on
+        # top, so the base is encoded once before compositing and reused
+        # instead of being rendered a second time.
+        self.clean_base_encoded: tuple[str, str] | None = None
 
 
 def prepare_export(
@@ -276,6 +282,13 @@ def _encode_image(image: QImage, out_w: int, out_h: int) -> tuple[str, int, str]
     return b64, len(raw), fmt_token
 
 
+def _marks_are_baked(prep: ExportPrep) -> bool:
+    """True when the main render carries rasterized marks, the only case where
+    the clean base is a different image from the main one."""
+    overlay = prep.markup_overlay
+    return overlay is not None and not overlay.isNull()
+
+
 def render_export(
     prep: ExportPrep,
     progress_cb=None,
@@ -285,11 +298,17 @@ def render_export(
     Returns ``(b64, raw_bytes, extent, format_token)`` where ``format_token`` is
     the actual format written ('webp' | 'jpeg' | 'png'), used so the upload is
     labeled with a matching content-type.
+
+    ``prep.settings`` and ``prep.clean_base_settings`` hold the same layers at
+    the same extent and output size, so this render IS the clean base. It is
+    encoded here, before the marks go on, and stashed on ``prep`` for
+    render_clean_base to pick up.
     """
     image = _render_settings_to_image(
         prep.settings, prep.out_w, prep.out_h, prep.background_color, progress_cb
     )
-    if prep.markup_overlay is not None and not prep.markup_overlay.isNull():
+    if _marks_are_baked(prep):
+        prep.clean_base_encoded = _encode_clean_base(image, prep)
         # Marks were rasterized on the main thread (the live markup memory layer
         # cannot be rendered off-thread); bake them onto the clean main render.
         painter = QPainter(image)
@@ -301,27 +320,38 @@ def render_export(
     return b64, raw_len, prep.actual_extent, fmt_token
 
 
-def render_clean_base(prep: ExportPrep) -> tuple[str, str] | None:
-    """Render the clean base image (the zone with the markup removed).
-
-    Sent as a second image alongside the marked main image so the model can
-    restore the pixels under each mark and leave no stroke in the result.
-    Returns ``(b64, format_token)``, or ``None`` when there is no markup. The
-    format token is this render's OWN actual format so the upload content-type
-    stays correct even if its encode falls back to PNG independently of the
-    main image.
-    """
-    if prep.clean_base_settings is None:
-        return None
-    image = _render_settings_to_image(
-        prep.clean_base_settings, prep.out_w, prep.out_h, prep.background_color
-    )
+def _encode_clean_base(image: QImage, prep: ExportPrep) -> tuple[str, str]:
+    """Encode the unmarked base render to ``(b64, format_token)``. The token is
+    this encode's OWN actual format, so the upload content-type stays right even
+    when it falls back to PNG independently of the main image."""
     b64, raw_len, fmt_token = _encode_image(image, prep.out_w, prep.out_h)
     log_debug(
-        f"Clean base image rendered: dims={prep.out_w}x{prep.out_h} "
+        f"Clean base image encoded: dims={prep.out_w}x{prep.out_h} "
         f"format={fmt_token} raw_bytes={raw_len} b64_bytes={len(b64)}"
     )
     return b64, fmt_token
+
+
+def render_clean_base(prep: ExportPrep) -> tuple[str, str] | None:
+    """The clean base image (the zone with the markup removed).
+
+    Sent as a second image alongside the marked main image so the model can
+    restore the pixels under each mark and leave no stroke in the result.
+    Returns ``(b64, format_token)``, or ``None`` when the main image carries no
+    marks: the base would then be byte-identical to it, so sending it would
+    upload the same pixels twice and set marks_on_input over marks that are not
+    there. Call after render_export, which does the encoding.
+    """
+    if prep.clean_base_settings is None or not _marks_are_baked(prep):
+        return None
+    if prep.clean_base_encoded is not None:
+        return prep.clean_base_encoded
+    # render_export skipped or failed before the encode; render our own base
+    # rather than drop the guidance image.
+    image = _render_settings_to_image(
+        prep.clean_base_settings, prep.out_w, prep.out_h, prep.background_color
+    )
+    return _encode_clean_base(image, prep)
 
 
 def _clone_map_settings(src: QgsMapSettings) -> QgsMapSettings:

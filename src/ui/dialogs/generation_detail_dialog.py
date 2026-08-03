@@ -6,11 +6,13 @@ slider on the left (expandable to fullscreen), and an info panel on the right
 with the full prompt, the reference image(s), generation metadata, and the
 actions that fit the card type.
 
-Two modes, chosen by what the caller passes:
+Three modes, chosen by what the caller passes:
   - ``preset`` (curated template): demo slider + prompt + "Use this prompt".
   - ``job`` (past generation): real before/after + reference thumbnails +
     resolution/ratio/duration/date + Use (full restore) / Add to map /
     Download input+output / favorite.
+  - ``session_entry`` (a Sessions-page card): the cover job's view plus the
+    session title, generation count, and Resume / Rename / Delete actions.
 
 The dialog never applies anything itself. It records an outcome the parent
 library dialog reads after ``exec()`` (so nested modal event loops stay sane),

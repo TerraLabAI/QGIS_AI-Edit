@@ -6,22 +6,24 @@ from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import QSettings, QUrl
 from qgis.PyQt.QtGui import QDesktopServices
 
+from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.auth.activation_manager import (
     clear_activation,
     get_activation_key,
     get_dashboard_url,
-    get_server_config,
+    get_server_url,
     save_activation,
     validate_key_with_server,
 )
 from ...core.errors import NETWORK_ERROR_CODES, TRANSIENT_SERVER_ERROR_CODES
 from ...core.i18n import tr
 from ...core.logger import log, log_debug, log_warning
+from ...core.window_focus import bring_qgis_window_to_front
 from ...workers.generic_request_task import GenericRequestTask
 from ...workers.pairing_poll_task import PairingPollTask
-from .errors import SUBSCRIBE_ERROR_URL
+from .errors import subscribe_error_url
 
 
 def _key_validation_request(client, key):
@@ -97,6 +99,10 @@ class ActivationMixin:
         self._last_key_validation_unix = time.time()
         self._dock_widget.set_activated(True)
         self._settings_action.setEnabled(True)
+        # History refresh + thumb backfill want a confirmed key and a live
+        # network, both of which this callback just proved. The lifecycle
+        # startup call can run before the key is restored and then skips.
+        self._refresh_conversations_cache()
         # Stay on LAUNCH state; tool is activated on user click.
         if isinstance(usage, dict) and "images_used" in usage:
             self._auth_manager.seed_usage(usage)
@@ -169,6 +175,11 @@ class ActivationMixin:
         self._last_key_validation_unix = 0.0
         clear_activation()
         self._auth_manager.set_activation_key("")
+        # The conversation cache is per QGIS profile, not per account, and the
+        # server refresh only runs once the next key validates. Without this,
+        # whoever signs in next sees the previous account's rows until that
+        # call returns, and for good if it never does (offline, server error).
+        self._clear_local_conversations()
         self._dock_widget.set_activated(False)
         self._settings_action.setEnabled(False)
         log_debug("Signed out")
@@ -184,11 +195,14 @@ class ActivationMixin:
         self._auth_manager.set_activation_key(key)
         self._dock_widget.set_activated(True)
         self._dock_widget.set_activation_message(tr("Activation key verified!"), is_error=False)
-        self._dock_widget.hide_activation_limit_cta()
         self._settings_action.setEnabled(True)
         # Stay on LAUNCH state; tool is activated on user click.
         self._dock_widget.set_checking_credits(True)
         self._refresh_credits()
+        # A just-paired account may already have server history (a plugin
+        # update, a second machine, a re-sign-in): fetch it now instead of
+        # waiting for the next key validation cycle (900 s or a restart).
+        self._refresh_conversations_cache()
         # Persist activation timestamp once for cohort analysis.
         settings = QSettings()
         if not settings.value("AIEdit/activation_timestamp_unix", "", type=str):
@@ -258,12 +272,10 @@ class ActivationMixin:
 
     def _on_pairing_succeeded(self, key: str):
         self._apply_activation(key)
-        # Bring QGIS back to front so the user sees the activated dock.
+        # Bring QGIS back to front so the user sees the activated dock. Windows
+        # needs more than activateWindow(), hence the helper.
         try:
-            mw = self._iface.mainWindow()
-            mw.activateWindow()
-            mw.raise_()
-            self._dock_widget.raise_()
+            bring_qgis_window_to_front(self._iface.mainWindow(), self._dock_widget)
         except Exception:  # nosec B110
             pass
         telemetry.track(te.AI_EDIT_PAIR_SUCCEEDED, {
@@ -275,6 +287,10 @@ class ActivationMixin:
         telemetry.track(te.PLUGIN_ACTIVATED, {"activation_method": "pairing"})
         telemetry.flush()
         log("Pairing successful")
+        # Post-signup continuity: on an empty canvas, load the demo scene and
+        # arm the zone tool instead of leaving the fresh account on a choice
+        # screen. Deferred a tick so the activated dock state settles first.
+        QtC.safe_single_shot(0, self._dock_widget, self._auto_load_example_after_signup)
 
     def _on_pairing_failed(self, message: str, code: str):
         self._dock_widget.show_pairing_idle()
@@ -361,9 +377,9 @@ class ActivationMixin:
                 # Cache-only (no client): the config is pre-warmed off-thread at
                 # startup, so this never blocks the UI on the network. Falls back
                 # to the default upgrade URL for the brief pre-warm window.
-                config = get_server_config()
-                dashboard = config.get("upgrade_url", get_dashboard_url())
-                self._dock_widget.set_subscribe_url(dashboard)
+                self._dock_widget.set_subscribe_url(
+                    get_server_url("upgrade_url", get_dashboard_url())
+                )
             self._dock_widget.set_credits(
                 used=used,
                 limit=limit,
@@ -375,5 +391,5 @@ class ActivationMixin:
             if both_ints and limit > 0 and used >= limit and not is_free:
                 self._dock_widget.show_usage_limit_info(
                     tr("Monthly limit reached ({used}/{limit}).").format(used=used, limit=limit),
-                    SUBSCRIBE_ERROR_URL,
+                    subscribe_error_url(),
                 )

@@ -3,9 +3,25 @@ from __future__ import annotations
 from qgis.PyQt.QtCore import QTimer
 
 from ...core.auth.activation_manager import get_subscribe_url
+from ...core.config_store import get_export_copy
+from ...core.entitlements import coerce_tier, is_tier_allowed
 from ...core.i18n import tr
-from ..reference_images_widget import FREE_TIER_MAX_REFERENCES
+from ..reference_images_widget import free_tier_max_references
 from .style import BRAND_BLUE
+
+
+def _reference_cap_message(cap: int) -> str:
+    """The free-plan reference-image nudge, in the right number.
+
+    The cap is a dial and it ships at 3, so the singular sentence this used to
+    show was already wrong ("limited to 3 reference image"). Both readings are
+    sentences the plugin already ships, so both stay translated, and a served
+    entry can replace either."""
+    if cap == 1:
+        shipped = tr("Free plan is limited to {n} reference image.").format(n=cap)
+    else:
+        shipped = tr("Maximum {n} reference images reached").format(n=cap)
+    return get_export_copy("upsell.reference_cap", shipped, escape=True)
 
 
 class DockVersionsMixin:
@@ -32,6 +48,23 @@ class DockVersionsMixin:
         """Move the strip's selection ring without emitting version_selected."""
         self._version_strip.set_selected(index)
 
+    def set_version_strip_locked(self, locked: bool) -> None:
+        """Lock the strip while a restored version's layer downloads, so two
+        materializations can never race. Generation runs lock it through
+        set_generating, which owns the readonly state while active."""
+        self._version_strip.set_readonly(locked)
+
+    def set_result_prompt_text(self, text: str) -> None:
+        """Mirror the selected version's prompt into the iterate box, so the
+        user edits from what actually produced that version (Original clears
+        the box, it has no prompt)."""
+        self._result_prompt_input.blockSignals(True)
+        self._result_prompt_input.setPlainText(text or "")
+        self._result_prompt_input.blockSignals(False)
+        # Blocked signals skip the star's textChanged debounce: re-sync it so
+        # a mirrored version prompt shows its star like a typed one.
+        self._result_prompt_container.refresh_favorite_star()
+
     def reveal_version_strip(self) -> None:
         """Keep the restored lineage in its iterate home (above the Generate
         row). Restoring already entered the iterate state; this just re-asserts
@@ -43,9 +76,6 @@ class DockVersionsMixin:
         iteration chain when the user reuses a generation from Recent."""
         return list(self._library_recent_cache or [])
 
-    def set_version_strip_readonly(self, readonly: bool) -> None:
-        self._version_strip.set_readonly(readonly)
-
     # ------------------------------------------------------------------
     # Resolution helpers
     # ------------------------------------------------------------------
@@ -53,13 +83,14 @@ class DockVersionsMixin:
     def _refresh_resolution_triggers(self):
         """Push the current selection / costs / tier into both prompt containers.
 
-        Also coerces the selection to "1K" when a free-tier user is ever
-        confirmed (downgrades the "2K" default that set_credits applies to
-        paid accounts), so the Generate button never quotes a price the user
-        can't actually pay.
+        Also coerces the selection back to what the plan allows once a
+        free-tier user is confirmed (downgrading the paid default that
+        set_credits applies), so the Generate button never quotes a price the
+        user can't actually pay. Same helper the submit path uses.
         """
-        if self._is_free_tier and self._selected_resolution != "1K":
-            self._selected_resolution = "1K"
+        self._selected_resolution = coerce_tier(
+            self._selected_resolution, self._is_free_tier
+        )
         for container in (self._prompt_container, self._result_prompt_container):
             container.set_resolution_state(
                 self._selected_resolution,
@@ -87,20 +118,18 @@ class DockVersionsMixin:
         self._status_hide_timer = timer
 
     def _show_reference_upsell(self) -> None:
-        """Free-tier user tried to add a second reference image: nudge to
-        subscribe instead of adding it."""
-        self._show_subscribe_banner(
-            tr("Free plan is limited to {n} reference image.").format(
-                n=FREE_TIER_MAX_REFERENCES
-            )
-        )
+        """Free-tier user hit the reference-image cap: nudge to subscribe
+        instead of adding another one."""
+        self._show_subscribe_banner(_reference_cap_message(free_tier_max_references()))
 
     def _on_resolution_selected(self, label: str):
         """Handle a click inside the resolution dropdown of either container."""
-        if self._is_free_tier and label != "1K":
-            self._show_subscribe_banner(
-                tr("{} outputs are unlocked with a subscription.").format(label)
-            )
+        if not is_tier_allowed(label, self._is_free_tier):
+            shipped = tr("{} outputs are unlocked with a subscription.").format(label)
+            served = get_export_copy("upsell.resolution", shipped, escape=True)
+            # A served sentence can name the tier with {tier}. A plain replace,
+            # never format(), so a stray brace cannot raise on the click path.
+            self._show_subscribe_banner(served.replace("{tier}", label))
             return
 
         # Clear any existing status message if switching resolutions
@@ -116,22 +145,35 @@ class DockVersionsMixin:
     def _update_generate_button_text(self):
         """Keep the first Generate label stable. The result-state button reflects
         which version the next edit builds on (see _update_result_generate_label).
+
+        Both halves early-out on an unchanged label. This sits on the keystroke
+        path (through _update_generate_enabled), where it otherwise ran four
+        tr() lookups and four setters per key to write back the same strings.
         """
-        if self._imagery_loading:
-            self._generate_btn.setText(tr("Loading imagery..."))
-            self._generate_btn.setToolTip(tr(
-                "Waiting for the example basemap to finish loading before you generate"
-            ))
-        else:
-            self._generate_btn.setText(tr("Generate"))
-            self._generate_btn.setToolTip(tr("Run the AI edit on your selected zone"))
+        loading = bool(self._imagery_loading)
+        if getattr(self, "_generate_label_loading", None) is not loading:
+            self._generate_label_loading = loading
+            if loading:
+                self._generate_btn.setText(tr("Loading imagery..."))
+                self._generate_btn.setToolTip(tr(
+                    "Waiting for the example basemap to finish loading before you generate"
+                ))
+            else:
+                self._generate_btn.setText(tr("Generate"))
+                self._generate_btn.setToolTip(tr("Run the AI edit on your selected zone"))
         self._update_result_generate_label()
 
     def _update_result_generate_label(self):
         """Result button + prompt placeholder both name the selected base, so the
         user sees that what they type generates FROM the selected version
-        ('Generate from Original' / 'Generate from V2')."""
+        ('Generate from Original' / 'Generate from V2').
+
+        State: the base name the two strings were last written for. Nothing
+        else writes either of them, so an unchanged base means unchanged text."""
         base = self._version_strip.label_for(self._version_strip.selected_index())
+        if getattr(self, "_result_generate_base", None) == base:
+            return
+        self._result_generate_base = base
         self._result_regenerate_btn.setText(tr("Generate from {base}").format(base=base))
         self._result_prompt_input.setPlaceholderText(
             tr("Type a prompt to edit {base}...").format(base=base)
@@ -154,10 +196,6 @@ class DockVersionsMixin:
         """Return the user-selected resolution label."""
         return self._selected_resolution
 
-    def get_base_version_index(self) -> int:
-        """Strip index the next edit builds on (0 = Original)."""
-        return self._version_strip.selected_index()
-
     def clear_references(self) -> None:
         """Drop every reference image (store + strip). Used when reusing a past
         generation so its references replace, not stack onto, the current ones."""
@@ -168,12 +206,6 @@ class DockVersionsMixin:
         """Inject reloaded reference images (QImage, name) into the strip."""
         if self._reference_widget is not None:
             self._reference_widget.add_qimages(items)
-
-    def set_markup_reference(self, image) -> None:
-        """Show the rendered zone+marks as the (single) Mark up reference in the
-        strip. Replaces any previous one."""
-        if self._reference_widget is not None:
-            self._reference_widget.set_markup_image(image)
 
     def clear_markup_reference(self) -> None:
         """Drop the Mark up reference (e.g. strokes cleared)."""

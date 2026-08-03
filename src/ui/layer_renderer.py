@@ -9,10 +9,8 @@ as context. We let QGIS do the rasterization so the layer's own symbology
 from __future__ import annotations
 
 import os
-import time
 
 from qgis.core import (
-    QgsApplication,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsMapRendererCustomPainterJob,
@@ -25,9 +23,10 @@ from qgis.core import (
     QgsRectangle,
     QgsVectorLayer,
 )
-from qgis.PyQt.QtCore import QSize
+from qgis.PyQt.QtCore import QEventLoop, QSize, QTimer
 from qgis.PyQt.QtGui import QColor, QImage, QPainter
 
+from ..core.config_store import get_export_dial
 from ..core.logger import log_warning
 
 # Matches the reference store's 1536 px target (the model's effective per-image
@@ -40,12 +39,27 @@ MAX_RENDER_PX = 1536
 _RENDER_DPI = 192
 _FALLBACK_CRS = "EPSG:3857"
 
-# Online tile/WMS providers fetch tiles asynchronously: the first render comes
-# back blank because replies arrive on the main event loop after the render
-# returns. We render, pump the event loop, reload, and re-render until two
-# consecutive frames match (tiles settled) or we exhaust the attempts.
-_SETTLE_MAX_ATTEMPTS = 8
-_SETTLE_PUMP_SECONDS = 0.6
+# Online tile/WMS providers fetch tiles asynchronously and their replies land on
+# the main event loop, so a render that blocks that loop comes back blank. Each
+# settling pass keeps the loop turning during the render, then leaves a short
+# window for the stragglers, reloads the providers and re-renders, until two
+# consecutive frames match (tiles settled) or the attempts run out.
+_SETTLE_MAX_ATTEMPTS = 4
+# 4 attempts x 300 ms caps the BETWEEN-PASS waiting at 0.9 s (the trailing pass
+# never waits), against 8 x 0.6 s = 4.8 s before. The renders themselves are on
+# top of that; what the budget buys is a window that stays responsive, since the
+# wait now turns the real event loop instead of busy-looping on processEvents.
+_SETTLE_WAIT_MS = 300
+# How long one render may hold the nested event loop. waitForFinished() waits
+# for a natural finish and asks nobody to stop, so a stalled provider held the
+# window for as long as its own network timeout ran.
+# This is NOT a ceiling on the whole render. The job that overran it is stopped
+# with QgsMapRendererJob::cancel(), documented as not returning until the job
+# has terminated, so that call is itself a wait. What bounds it is how fast the
+# renderers notice the stop flag cancel() sets, which waitForFinished() never
+# set. Measured on a 120k-point vector job: 18 ms on QGIS 4.0.0 / Qt 6.8.1,
+# 23 ms on QGIS 3.22.0 / Qt 5.15.2.
+_RENDER_TIMEOUT_MS = 15000
 
 # Providers that fetch their data over the network during render. We render
 # these with the settling loop (tiles arrive async) and use the view extent
@@ -54,6 +68,33 @@ _SETTLE_PUMP_SECONDS = 0.6
 _REMOTE_PROVIDERS = frozenset(
     {"wms", "wfs", "wcs", "arcgismapserver", "arcgisfeatureserver", "oapif"}
 )
+
+
+def _event_loop_flag(name: str):
+    """Resolve a QEventLoop.ProcessEventsFlag member on Qt6 (scoped) and on the
+    PyQt5 builds that still expose it flat. Same shape as the resolver in
+    src/core/qt_compat.py, which carries no QEventLoop entry."""
+    scoped = getattr(getattr(QEventLoop, "ProcessEventsFlag", None), name, None)
+    if scoped is not None:
+        return scoped
+    return getattr(QEventLoop, name)
+
+
+# Settling turns a nested event loop, which would otherwise deliver a queued
+# click straight back into the caller mid-loop. User input stays queued instead,
+# and that is ALL this flag holds back. Measured on QGIS 3.22.0 / Qt 5.15.2 and
+# QGIS 4.0.0 / Qt 6.8.1, both the same: a QTimer slot armed before the nested
+# loop DOES run inside it, and a queued signal emitted before it IS delivered
+# inside it. So safe_single_shot callbacks, the progress ticker, poll tasks and
+# QgsTask.finished all re-enter plugin code here. The one thing that stays out
+# is a deleteLater() posted at the outer loop level, which Qt holds until that
+# loop resumes. `_settling_in_progress` below is the guard that follows from it.
+_EXCLUDE_USER_INPUT = _event_loop_flag("ExcludeUserInputEvents")
+
+# True while a settling render holds a nested event loop. Re-entering would
+# stack a second loop inside the first, and the outer one could then only end
+# after the inner one.
+_settling_in_progress = False
 
 
 def is_remote_layer(layer) -> bool:
@@ -208,7 +249,7 @@ def _combined_layer_extent(layers: list, dest_crs) -> QgsRectangle | None:
 def render_layers_to_qimage(
     layers: list,
     *,
-    max_px: int = MAX_RENDER_PX,
+    max_px: int | None = None,
     fallback_extent: QgsRectangle | None = None,
     fallback_crs: QgsCoordinateReferenceSystem | None = None,
     force_extent: QgsRectangle | None = None,
@@ -221,13 +262,18 @@ def render_layers_to_qimage(
     extent, so a reference lines up pixel-for-pixel with the generation zone.
     Without it, the combined extent of all layers is used, falling back to
     ``fallback_extent`` (typical WMS/XYZ). Layers are drawn stacked, first on
-    top. ``settle=False`` skips the online-tile settling loop (a multi-second
-    main-thread block); pass it when the tiles are already warm on the canvas.
-    Returns None on failure.
+    top. ``settle=False`` skips the online-tile settling passes; pass it when
+    the tiles are already warm on the canvas.
+
+    Returns None on failure, and a render that overran its time ceiling counts
+    as one: the half-painted frame such a render leaves behind is never handed
+    back as a reference.
     """
     layers = [lyr for lyr in layers if lyr is not None]
     if not layers:
         return None
+    if max_px is None:
+        max_px = get_export_dial("render.max_px", MAX_RENDER_PX)
 
     if force_extent is not None and _usable(force_extent):
         dest_crs = force_crs if (force_crs is not None and force_crs.isValid()) else _resolve_crs(layers[0])
@@ -281,7 +327,7 @@ def _render_at_extent(
     _hq_flag = getattr(QgsMapSettings.Flag, "HighQualityImageTransforms", None)
     if _hq_flag is not None:
         settings.setFlag(_hq_flag, True)
-    settings.setOutputDpi(_RENDER_DPI)
+    settings.setOutputDpi(get_export_dial("render.dpi", _RENDER_DPI))
 
     if settle and any(is_remote_layer(lyr) for lyr in layers):
         _enable_online_resampling(layers)
@@ -311,41 +357,130 @@ def _enable_online_resampling(layers: list) -> None:
             continue
 
 
-def _pump_events(seconds: float) -> None:
-    """Run the event loop briefly so async tile network replies are delivered."""
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        QgsApplication.processEvents()
-        time.sleep(0.03)
+def _spin_event_loop(msec: int) -> None:
+    """Turn the real event loop for ``msec`` so async tile replies are delivered.
+
+    A processEvents() + sleep() busy-wait never let the window repaint, so the
+    whole settle read as "Not Responding" on Windows."""
+    loop = QEventLoop()
+    timer = QTimer()
+    timer.setSingleShot(True)
+    timer.timeout.connect(loop.quit)
+    timer.start(max(0, int(msec)))
+    loop.exec(_EXCLUDE_USER_INPUT)
+    timer.stop()
 
 
 def _run_settling_render(settings: QgsMapSettings, layers: list) -> QImage | None:
     """Render online layers, waiting for tiles to settle.
 
-    Online providers fetch tiles on the main event loop, so a single blocking
-    render returns blank. We render, pump events, reload the providers, and
-    repeat until two consecutive frames are identical (tiles in) or attempts run
-    out. Returns the last frame either way so a slow network degrades to a
-    partial reference rather than an error."""
-    prev: QImage | None = None
-    for _attempt in range(_SETTLE_MAX_ATTEMPTS):
-        image = _run_render(settings)
-        _pump_events(_SETTLE_PUMP_SECONDS)
-        if image is not None and not image.isNull():
+    Each pass renders with the event loop live, then leaves the stragglers a
+    short window and reloads the providers, until two consecutive frames are
+    identical (tiles in) or attempts run out. The last pass never waits: its
+    frame is what we return. A finished-but-partial frame is still returned, so
+    a slow network degrades to a partial reference rather than an error.
+
+    A pass that fails ends the loop instead of feeding it. `_run_live_render`
+    answers None for a render that overran its ceiling, so the near-blank frame
+    such a render leaves behind can never become `prev`, and the loop cannot
+    converge on two identical blank frames and hand one back as a reference."""
+    global _settling_in_progress
+    if _settling_in_progress:
+        # `_run_render` on purpose: waitForFinished() runs no Python and
+        # delivers no events, so it cannot re-enter here in turn. Anything that
+        # turns a loop could, and the recursion would have no floor.
+        log_warning("Settling render re-entered; rendering without settling")
+        return _run_render(settings)
+    _settling_in_progress = True
+    attempts = get_export_dial("render.settle_attempts", _SETTLE_MAX_ATTEMPTS)
+    wait_ms = get_export_dial("render.settle_wait_ms", _SETTLE_WAIT_MS)
+    try:
+        prev: QImage | None = None
+        for attempt in range(attempts):
+            image = _run_live_render(settings)
+            if image is None or image.isNull():
+                break
             if prev is not None and image == prev:
                 return image
             prev = image
-        for lyr in layers:
-            try:
-                provider = lyr.dataProvider()
-                if provider is not None:
-                    provider.reloadData()
-            except Exception:  # nosec B110 - reload is best-effort per layer.
-                pass
-    return prev
+            if attempt == attempts - 1:
+                break
+            _spin_event_loop(wait_ms)
+            for lyr in layers:
+                try:
+                    provider = lyr.dataProvider()
+                    if provider is not None:
+                        provider.reloadData()
+                except Exception:  # nosec B110 - reload is best-effort per layer.
+                    pass
+        return prev
+    finally:
+        _settling_in_progress = False
+
+
+def _stop_render_job(job) -> None:
+    """Stop a job that is still running, before the last reference to it goes.
+
+    A job left active is a job whose worker threads are still painting into an
+    image the caller is about to drop. cancel() is the blocking variant on
+    purpose: cancelWithoutBlocking() would hand back a job still rendering
+    layers that the caller releases as soon as this function returns."""
+    if job is None:
+        return
+    try:
+        if job.isActive():
+            job.cancel()
+    except Exception as err:  # nosec B110 - a job we cannot stop is not fatal.
+        log_warning(f"Could not stop the render job: {err}")
+
+
+def _run_live_render(settings: QgsMapSettings) -> QImage | None:
+    """Render while the event loop keeps turning. None when the render overran
+    ``_RENDER_TIMEOUT_MS``.
+
+    waitForFinished() blocks the main loop, so the tile replies an online
+    provider is waiting on cannot be delivered and the frame comes back blank:
+    that is what forced a render per settling pass. Waiting on the job's
+    finished signal instead lets those replies land DURING the render, so the
+    tiles are usually in on the first pass.
+
+    A render that overruns the ceiling is a failure, never a result.
+    renderedImage() on a stopped job hands back whatever was painted so far,
+    and that reads as a success: measured on QGIS 3.22.0 / Qt 5.15.2 and on
+    QGIS 4.0.0 / Qt 6.8.1, a job stopped after 1 ms returns a non-null image
+    with 0% of its pixels painted. A reference that renders blank quietly ruins
+    the generation, so the caller gets None and can say so."""
+    job = None
+    try:
+        job = QgsMapRendererParallelJob(settings)
+        loop = QEventLoop()
+        job.finished.connect(loop.quit)
+        guard = QTimer()
+        guard.setSingleShot(True)
+        guard.timeout.connect(loop.quit)
+        job.start()
+        if job.isActive():
+            guard.start(get_export_dial("render.timeout_ms", _RENDER_TIMEOUT_MS))
+            loop.exec(_EXCLUDE_USER_INPUT)
+            guard.stop()
+        if job.isActive():
+            log_warning("Layer render timed out; the partial frame is discarded")
+            return None
+        image = job.renderedImage()
+        if image is not None and not image.isNull():
+            return image
+    except Exception as err:  # nosec B110 - fall back to painter job below.
+        log_warning(f"Live render failed, falling back: {err}")
+    finally:
+        # loop.exec() runs the whole application event loop, so anything in it
+        # can raise and leave the job running under a local about to be freed.
+        _stop_render_job(job)
+    return _run_painter_render(settings)
 
 
 def _run_render(settings: QgsMapSettings) -> QImage | None:
+    """Blocking render, for layers whose pixels need nothing from the main loop."""
+    job = None
     try:
         job = QgsMapRendererParallelJob(settings)
         job.start()
@@ -355,18 +490,29 @@ def _run_render(settings: QgsMapSettings) -> QImage | None:
             return image
     except Exception as err:  # nosec B110 - fall back to painter job below.
         log_warning(f"Parallel render failed, falling back: {err}")
+    finally:
+        _stop_render_job(job)
+    return _run_painter_render(settings)
 
+
+def _run_painter_render(settings: QgsMapSettings) -> QImage | None:
+    """Last-resort render for providers the parallel job cannot handle."""
     size = settings.outputSize()
     image = QImage(size, QImage.Format.Format_ARGB32_Premultiplied)
     image.fill(QColor(255, 255, 255))
     painter = QPainter(image)
+    job = None
+    failed = False
     try:
         job = QgsMapRendererCustomPainterJob(settings, painter)
         job.start()
         job.waitForFinished()
     except Exception as err:  # nosec B110
         log_warning(f"Painter render failed: {err}")
+        failed = True
+    finally:
+        # The painter has to outlive the job: ending it while the job still
+        # draws would leave it painting into a device that is gone.
+        _stop_render_job(job)
         painter.end()
-        return None
-    painter.end()
-    return image
+    return None if failed else image

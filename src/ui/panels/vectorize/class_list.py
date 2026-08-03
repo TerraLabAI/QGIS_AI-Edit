@@ -21,6 +21,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ....core import qt_compat as QtC
+from ....core.config_store import get_export_dial
 from ....core.i18n import tr
 from ...panel_helpers import apply_swatch_style
 
@@ -135,7 +136,7 @@ class ClassListWidget(QWidget):
                   checked: bool = True) -> None:
         """Add a color (eyedropper pick). A near-duplicate of an existing row
         checks that row instead of stacking a twin."""
-        existing = self._nearest_row(rgb, _SAME_CLASS_L1)
+        existing = self._nearest_row(rgb, get_export_dial("vectorize.same_class_l1", _SAME_CLASS_L1))
         if existing is not None:
             existing.check.setChecked(checked)
             if label:
@@ -152,7 +153,7 @@ class ClassListWidget(QWidget):
     def ensure_class(self, rgb: tuple[int, int, int], label: str = "") -> None:
         """Preconfigure path (template CTA): make sure ``rgb`` is present and
         checked, carrying the template's class label."""
-        existing = self._nearest_row(rgb, _SAME_CLASS_L1 * 2)
+        existing = self._nearest_row(rgb, get_export_dial("vectorize.same_class_l1", _SAME_CLASS_L1) * 2)
         if existing is not None:
             existing.check.blockSignals(True)
             existing.check.setChecked(True)

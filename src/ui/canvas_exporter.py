@@ -11,6 +11,7 @@ from ..core.canvas_export.context_metadata import (  # noqa: F401
     _detect_basemap,
     apply_export_context,
     estimate_native_ground_resolution_m,
+    estimate_zone_area_km2,
 )
 from ..core.canvas_export.export_config import (  # noqa: F401
     _DEFAULT_INPUT_FORMAT,

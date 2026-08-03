@@ -16,6 +16,7 @@ except ImportError:  # pragma: no cover
 
 from osgeo import gdal
 
+from ..config_store import get_export_dial
 from ..i18n import tr
 
 # Colors that name themselves. The ESA WorldCover palette is the one users
@@ -57,8 +58,9 @@ def suggest_class_label(rgb: tuple[int, int, int]) -> str:
         if mx <= 40:
             return ""  # near-black: roads on some maps, void on others
         return tr("paved")
+    match_l1 = get_export_dial("vectorize.known_match_l1", _KNOWN_MATCH_L1)
     for known_rgb, label in _KNOWN_CLASS_COLORS:
-        if abs(known_rgb[0] - r) + abs(known_rgb[1] - g) + abs(known_rgb[2] - b) <= _KNOWN_MATCH_L1:
+        if abs(known_rgb[0] - r) + abs(known_rgb[1] - g) + abs(known_rgb[2] - b) <= match_l1:
             return tr(label)
     if b > r + 30 and b > g + 20:
         return tr("water")

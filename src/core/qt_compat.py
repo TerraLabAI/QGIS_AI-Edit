@@ -6,8 +6,8 @@ them once at import time so the rest of the codebase stays clean.
 """
 from __future__ import annotations
 
-from qgis.core import QgsBlockingNetworkRequest, QgsRaster
-from qgis.PyQt.QtCore import QIODevice, QObject, Qt, QTimer
+from qgis.core import QgsBlockingNetworkRequest, QgsRaster, QgsTask
+from qgis.PyQt.QtCore import QIODevice, QObject, QStandardPaths, Qt, QTimer
 from qgis.PyQt.QtGui import QImage, QPalette, QTextCursor, QTextOption
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 from qgis.PyQt.QtWidgets import QFrame, QSizePolicy, QTextEdit
@@ -34,6 +34,7 @@ ArrowCursor = _resolve(Qt, "CursorShape", "ArrowCursor")
 # Qt.AlignmentFlag
 AlignCenter = _resolve(Qt, "AlignmentFlag", "AlignCenter")
 AlignTop = _resolve(Qt, "AlignmentFlag", "AlignTop")
+AlignBottom = _resolve(Qt, "AlignmentFlag", "AlignBottom")
 AlignLeft = _resolve(Qt, "AlignmentFlag", "AlignLeft")
 AlignVCenter = _resolve(Qt, "AlignmentFlag", "AlignVCenter")
 
@@ -41,6 +42,8 @@ AlignVCenter = _resolve(Qt, "AlignmentFlag", "AlignVCenter")
 Key_Return = _resolve(Qt, "Key", "Key_Return")
 Key_Enter = _resolve(Qt, "Key", "Key_Enter")
 Key_Escape = _resolve(Qt, "Key", "Key_Escape")
+Key_Backspace = _resolve(Qt, "Key", "Key_Backspace")
+Key_Delete = _resolve(Qt, "Key", "Key_Delete")
 
 # Qt.ShortcutContext
 WindowShortcut = _resolve(Qt, "ShortcutContext", "WindowShortcut")
@@ -121,6 +124,9 @@ TextBrowserInteraction = _resolve(Qt, "TextInteractionFlag", "TextBrowserInterac
 # QIODevice.OpenModeFlag
 WriteOnly = _resolve(QIODevice, "OpenModeFlag", "WriteOnly")
 
+# QStandardPaths.StandardLocation
+CacheLocation = _resolve(QStandardPaths, "StandardLocation", "CacheLocation")
+
 # QImage.Format
 FormatARGB32 = _resolve(QImage, "Format", "Format_ARGB32")
 
@@ -149,18 +155,32 @@ try:
     _gt = getattr(Qgis, "GeometryType", None)
     PolygonGeometry = getattr(_gt, "Polygon", None)
     LineGeometry = getattr(_gt, "Line", None)
+    # Qgis.LayerType is the only spelling left on QGIS 4; QgsMapLayer.LayerType
+    # is the QGIS 3 one. Same scoped-then-flat treatment as the geometry types.
+    RasterLayerType = getattr(getattr(Qgis, "LayerType", None), "Raster", None)
 except Exception:
     PolygonGeometry = None
     LineGeometry = None
+    RasterLayerType = None
 if PolygonGeometry is None:
     from qgis.core import QgsWkbTypes
     PolygonGeometry = _resolve(QgsWkbTypes, "GeometryType", "PolygonGeometry")
 if LineGeometry is None:
     from qgis.core import QgsWkbTypes
     LineGeometry = _resolve(QgsWkbTypes, "GeometryType", "LineGeometry")
+if RasterLayerType is None:
+    from qgis.core import QgsMapLayer
+    RasterLayerType = _resolve(QgsMapLayer, "LayerType", "RasterLayer")
 
 # QgsRaster.IdentifyFormat (scoped on QGIS 4, flat attribute on QGIS 3)
 IdentifyFormatValue = _resolve(QgsRaster, "IdentifyFormat", "IdentifyFormatValue")
+
+# QgsVertexMarker.IconType.ICON_CIRCLE - scoped on QGIS 4, flat also on QGIS 3.
+try:
+    from qgis.gui import QgsVertexMarker
+    VertexIconCircle = _resolve(QgsVertexMarker, "IconType", "ICON_CIRCLE")
+except Exception:
+    VertexIconCircle = None
 
 
 # QNetworkReply.NetworkError
@@ -168,6 +188,7 @@ def _net_enum(name: str):
     return _resolve(QNetworkReply, "NetworkError", name)
 
 
+NetworkNoError = _net_enum("NoError")
 HostNotFoundError = _net_enum("HostNotFoundError")
 ConnectionRefusedError_ = _net_enum("ConnectionRefusedError")
 TimeoutError_ = _net_enum("TimeoutError")
@@ -199,6 +220,68 @@ RedirectPolicyAttribute = _resolve(
 NoLessSafeRedirectPolicy = _resolve(
     QNetworkRequest, "RedirectPolicy", "NoLessSafeRedirectPolicy"
 )
+
+
+def set_transfer_timeout(request: QNetworkRequest, msec: int) -> bool:
+    """Apply a per-request transfer timeout when the running Qt has one.
+
+    ``QNetworkRequest.setTransferTimeout`` landed in Qt 5.15, which every build
+    in the declared range ships (the 3.22 floor already requires it), so the
+    guard is now belt and braces rather than load-bearing. It stays because a
+    missing method here raises AttributeError on every single request, and that
+    would kill the plugin outright on any build we guessed wrong about. Returns True when the
+    timeout was applied; on an older Qt the request just falls back to Qt's own
+    (much longer) socket timeouts, which is slow but still works.
+    """
+    setter = getattr(request, "setTransferTimeout", None)
+    if setter is None:
+        return False
+    try:
+        setter(int(msec))
+    except (AttributeError, TypeError, ValueError):
+        return False
+    return True
+
+
+def silent_task_flags(can_cancel: bool = True):
+    """CanCancel plus Hidden/Silent when the running QGIS exposes them.
+
+    Hidden / Silent landed in QGIS 3.26; the plugin floor (metadata.txt
+    qgisMinimumVersion) is older, so resolve each flag defensively. Naming
+    QgsTask.Flag.Hidden directly would AttributeError at import on older builds;
+    there the task degrades to a plain (visible) cancellable task, which is
+    harmless. Keeping startup/background requests hidden stops the task-manager
+    widget from filling with alarming "AI Edit ..." rows on every launch.
+    """
+    flags = QgsTask.Flag.CanCancel if can_cancel else QgsTask.Flag(0)
+    for name in ("Hidden", "Silent"):
+        flag = getattr(QgsTask.Flag, name, None)
+        if flag is not None:
+            flags = flags | flag
+    return flags
+
+
+def _gui_or_widget_class(name: str):
+    """Resolve a class that Qt6 moved from QtWidgets into QtGui.
+
+    Measured by importing each name on both builds: on QGIS 3.22.0 (Qt5)
+    ``QAction``, ``QActionGroup``, ``QShortcut``, ``QUndoCommand``,
+    ``QUndoStack``, ``QUndoGroup`` and ``QFileSystemModel`` all sit in
+    QtWidgets and the QtGui spelling raises ImportError; on QGIS 4.0.0 all
+    seven answer from QtGui and the last four have left QtWidgets. Neither
+    module alone covers both, so naming one directly is a load-time failure on
+    the other across the whole range metadata.txt advertises (3.22 to 4.99).
+    Try the Qt6 home first, fall back to the Qt5 one.
+    """
+    from qgis.PyQt import QtGui, QtWidgets
+
+    found = getattr(QtGui, name, None)
+    return found if found is not None else getattr(QtWidgets, name)
+
+
+QAction = _gui_or_widget_class("QAction")
+QActionGroup = _gui_or_widget_class("QActionGroup")
+QShortcut = _gui_or_widget_class("QShortcut")
 
 
 def safe_single_shot(msec: int, owner: QObject, callback) -> QTimer:

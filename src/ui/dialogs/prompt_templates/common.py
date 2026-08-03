@@ -8,13 +8,26 @@ try:  # SIP comes packaged with both PyQt5 and PyQt6 - used to detect dead C++ o
 except ImportError:  # pragma: no cover - defensive only
     _sip = None
 
-from qgis.PyQt.QtCore import QUrl
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QLabel
 
 from ....core import qt_compat as QtC
+from ....core.config_store import get_export_dial
 from ....core.i18n import tr
 from ....core.prompts.prompt_presets import _CATEGORY_ORDER
+from ...dock.style import (
+    _BTN_LABEL_WEIGHT,
+    ICONS_DIR,
+    STAR_FILLED_SVG,
+    STAR_OUTLINE_SVG,
+    svg_url,
+)
+
+# The dock's style module owns the icon paths. Re-exported under the local names
+# this package and its facade already import.
+_ICONS_DIR = ICONS_DIR
+_STAR_OUTLINE_SVG = STAR_OUTLINE_SVG
+_STAR_FILLED_SVG = STAR_FILLED_SVG
 
 
 def _is_alive(obj) -> bool:
@@ -29,35 +42,7 @@ def _is_alive(obj) -> bool:
         return False
 
 
-# Themed categories show every reliable card up front; curation is enforced
-# by `experimental: true` on fragile presets, which are gated behind their
-# own amber disclosure button. There's no second "Show N more" reveal.
-
-
-def _split_experimental(presets: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Partition a category's presets into (reliable, experimental).
-
-    Experimental presets are server-flagged templates that Nano Banana 2
-    hallucinates on often (NDVI maps, individual-instance counting, watershed
-    delineation, etc). The dialog renders them behind a separate disclosure
-    so the curated default view stays trustworthy."""
-    reliable: list[dict] = []
-    experimental: list[dict] = []
-    for p in presets:
-        if p.get("experimental"):
-            experimental.append(p)
-        else:
-            reliable.append(p)
-    return reliable, experimental
-
-
-_PLUGIN_DIR = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-)
-_ICONS_DIR = os.path.join(_PLUGIN_DIR, "resources", "icons")
 _HISTORY_SVG = os.path.join(_ICONS_DIR, "history.svg")
-_STAR_OUTLINE_SVG = os.path.join(_ICONS_DIR, "star.svg")
-_STAR_FILLED_SVG = os.path.join(_ICONS_DIR, "star-filled.svg")
 _TROPHY_SVG = os.path.join(_ICONS_DIR, "trophy.svg")
 
 # QIcon parses the SVG on construction; memoize so a 50-card gallery doesn't
@@ -105,9 +90,12 @@ _NEED_HEADER_BTN = (
     "QPushButton:hover { background: rgba(128,128,128,0.10); }"
 )
 
+# Search boxes (the landing's global search and the Sessions page's session
+# filter): promoted a step over the default line edit (roomier padding, 14px)
+# so search reads as a first-class way in, not a side utility.
 _SEARCH_BOX = (
     "QLineEdit { border: 1px solid rgba(128,128,128,0.3); "
-    "border-radius: 4px; padding: 6px 10px; font-size: 13px; "
+    "border-radius: 4px; padding: 8px 12px; font-size: 14px; "
     "color: palette(text); background: palette(base); }"
 )
 
@@ -166,22 +154,10 @@ _EMPTY_MSG = (
 _LOAD_MORE_BTN = (
     "QPushButton { background: transparent; "
     "border: 1px solid rgba(128,128,128,0.3); border-radius: 4px; "
-    "padding: 8px 14px; font-size: 12px; color: palette(text); }"
+    f"padding: 8px 14px; font-size: 12px; color: palette(text); "
+    f"{_BTN_LABEL_WEIGHT} }}"
     "QPushButton:hover { background: rgba(128,128,128,0.12); "
     "border-color: rgba(128,128,128,0.5); }"
-)
-
-# Neutral disclosure button + header for the experimental section. It used to
-# be amber/goldenrod, which read as an error or warning and undercut trust in
-# the whole library (#128). The reveal is just an "advanced" affordance, so it
-# now matches the Load-more button's calm grey; the word "experimental" carries
-# the caution on its own.
-_EXPERIMENTAL_BTN = _LOAD_MORE_BTN
-
-_EXPERIMENTAL_HEADER = (
-    "QLabel { color: rgba(128,128,128,0.9); font-size: 11px; font-weight: 600; "
-    "background: transparent; border: none; padding: 4px 2px 0px 2px; "
-    "letter-spacing: 0.5px; }"
 )
 
 # Small rounded pill marking a Favorites entry's origin (curated template vs
@@ -191,21 +167,8 @@ _ORIGIN_PILL = (
     "padding: 1px 8px; font-size: 10px; color: palette(text); }"
 )
 
-# ---------------------------------------------------------------------------
-# Landing redesign: need tiles, feed segmented control, category chips, back.
-# Same visual language as the gallery cards (neutral frame at rest, brand-green
-# lift on hover) so the landing reads as one system. No new hues: the per-need
-# tile accent is applied at build time from the need's representative category
-# glyph colour (reused from `_SIDEBAR_GLYPHS`), never invented here.
-# ---------------------------------------------------------------------------
-_NEED_TILE = (
-    "QFrame#needtile { border: 1px solid rgba(128,128,128,0.30); "
-    "border-radius: 8px; background: rgba(128,128,128,0.05); }"
-)
-_NEED_TILE_HOVER = (
-    "QFrame#needtile { border: 1px solid rgba(139,172,39,0.75); "
-    "border-radius: 8px; background: rgba(139,172,39,0.09); }"
-)
+# Page-header title + one-line tagline (the back headers on the need pages
+# and the Sessions page).
 _NEED_TILE_TITLE = (
     "QLabel { color: palette(text); font-size: 16px; font-weight: 700; "
     "background: transparent; border: none; }"
@@ -213,44 +176,6 @@ _NEED_TILE_TITLE = (
 _NEED_TILE_SUB = (
     "QLabel { color: palette(text); font-size: 11px; "
     "background: transparent; border: none; }"
-)
-_NEED_TILE_COUNT = (
-    "QLabel { color: rgba(128,128,128,0.9); font-size: 11px; "
-    "background: transparent; border: none; }"
-)
-
-# Feed segmented control (Popular / Recent / Favorites): reuses the sidebar
-# item's rest/active language, laid out horizontally inside a subtle track.
-_FEED_SEG = "QWidget#feedseg { background: rgba(128,128,128,0.08); border-radius: 6px; }"
-_FEED_SEG_BTN = (
-    "QPushButton { border: none; border-radius: 4px; padding: 6px 14px; "
-    "font-size: 13px; color: palette(text); background: transparent; }"
-    "QPushButton:hover { background: rgba(128,128,128,0.12); }"
-)
-_FEED_SEG_BTN_ACTIVE = (
-    "QPushButton { border: none; border-radius: 4px; padding: 6px 14px; "
-    "font-size: 13px; font-weight: bold; color: palette(text); "
-    "background: rgba(128,128,128,0.20); }"
-)
-
-# Category filter chips on a need page (All / Land cover / ...): neutral pill at
-# rest (matches _ORIGIN_PILL), brand-green tint when active.
-_NEED_CHIP = (
-    "QPushButton { background: rgba(128,128,128,0.10); border: none; "
-    "border-radius: 11px; padding: 4px 12px; font-size: 12px; color: palette(text); }"
-    "QPushButton:hover { background: rgba(128,128,128,0.18); }"
-)
-_NEED_CHIP_ACTIVE = (
-    "QPushButton { background: rgba(139,172,39,0.20); border: none; "
-    "border-radius: 11px; padding: 4px 12px; font-size: 12px; "
-    "font-weight: 700; color: palette(text); }"
-)
-
-# Flat back button on a need-page header.
-_BACK_BTN = (
-    "QPushButton { background: transparent; border: 1px solid rgba(128,128,128,0.3); "
-    "border-radius: 4px; padding: 4px 10px; font-size: 14px; color: palette(text); }"
-    "QPushButton:hover { background: rgba(128,128,128,0.12); }"
 )
 
 # Compact borderless back arrow (need / feed-all headers): small footprint,
@@ -261,70 +186,85 @@ _BACK_BTN_SMALL = (
     "QPushButton:hover { color: #8bac27; }"
 )
 
-# Sub-group selector as underlined tabs: exactly one active (a brand-green
-# underline), the rest plain. Reads as single-select, unlike the pill chips
-# that looked like an accumulating multi-select.
-_NEED_TAB = (
-    "QPushButton { border: none; background: transparent; padding: 6px 2px 5px 2px; "
-    "font-size: 13px; color: palette(text); }"
-    "QPushButton:hover { color: #8bac27; }"
-)
-_NEED_TAB_ACTIVE = (
-    "QPushButton { border: none; border-bottom: 2px solid #8bac27; background: transparent; "
-    "padding: 6px 2px 3px 2px; font-size: 13px; font-weight: 700; color: palette(text); }"
-)
-
-# "See all" link on a landing feed row.
-_FEED_LINK = (
-    "QPushButton { background: transparent; border: none; font-size: 12px; "
-    "color: #8bac27; padding: 2px 4px; }"
-    "QPushButton:hover { color: #4d7c0f; }"
-)
-
-# "See all" as a visible bordered button, sat at the bottom-right of a feed.
-_SEE_ALL_BTN = (
-    "QPushButton { background: rgba(139,172,39,0.12); border: 1px solid rgba(139,172,39,0.5); "
-    "border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 600; color: #8bac27; }"
-    "QPushButton:hover { background: rgba(139,172,39,0.20); }"
-)
-
-# Need-tile family name (dominant) and its inline "Explore" affordance.
-_NEED_TILE_NAME = (
-    "QLabel { color: palette(text); font-size: 18px; font-weight: 800; "
-    "background: transparent; border: none; }"
-)
-_NEED_TILE_EXPLORE = (
-    "QLabel { color: #8bac27; font-size: 12px; font-weight: 700; "
-    "background: transparent; border: none; }"
-)
-
-# Per-family accent colours, taken from the category glyph palette (not
-# invented): green = Classify/Analyser, blue = Project/Simuler,
-# violet = Render/Habiller. Keyed by need key so it survives a label rename.
-_NEED_ACCENT = {"classify": "#68a868", "project": "#5ca0c0", "render": "#9880b0"}
-# Family emblem glyphs (reused from _SIDEBAR_GLYPHS so they are known to render).
-_NEED_ICON = {"classify": "◉", "project": "⛅", "render": "❖"}
-
-# Family name + arrow overlaid on the tile image (white on a coloured scrim),
-# so a family tile reads as a branded portal, not a prompt card.
-_TILE_NAME_OVERLAY = (
-    "QLabel { color: #ffffff; font-size: 22px; font-weight: 800; "
-    "background: transparent; border: none; }"
-)
-_TILE_ARROW_OVERLAY = (
-    "QLabel { color: #ffffff; font-size: 20px; font-weight: 700; "
-    "background: transparent; border: none; }"
-)
-
-# Landing section heading and feed subtitle.
+# Landing section heading (also reused for each shelf's title) and the
+# one-line shelf tagline next to it (secondary text: palette(text) + 11px,
+# per the design system).
 _LANDING_HEADING = (
     "QLabel { color: palette(text); font-size: 14px; font-weight: 700; "
+    "background: transparent; border: none; }"
+)
+# Hall section header (family page): bigger than the landing headings so the
+# subfamily structure is what the eye catches while scrolling the hall.
+_HALL_SECTION_TITLE = (
+    "QLabel { color: palette(text); font-size: 17px; font-weight: 700; "
+    "background: transparent; border: none; }"
+)
+_HALL_SECTION_COUNT = (
+    "QLabel { color: palette(text); font-size: 12px; "
     "background: transparent; border: none; }"
 )
 _FEED_SUBTITLE = (
     "QLabel { color: palette(text); font-size: 11px; "
     "background: transparent; border: none; }"
 )
+
+# ---------------------------------------------------------------------------
+# Persistent navigation rail (left of the page stack). Replaces the landing's
+# Your work sidebar + family tiles + Top picks spotlight as the entry surface.
+# The rail NAVIGATES (one item is "you are here"); it never filters. It stays
+# monochrome: the active row is a quiet neutral fill + bold label, never a
+# coloured marker (colour is reserved for real actions).
+# ---------------------------------------------------------------------------
+_RAIL_PANEL = (
+    "QFrame#librail { border: none; "
+    "border-right: 1px solid rgba(128,128,128,0.22); background: transparent; }"
+)
+# Group label above a cluster of rail items (Featured / Categories / My work):
+# faint grey small-caps, one clear tier below the item labels.
+_RAIL_GROUP = (
+    "QLabel { color: rgba(128,128,128,0.85); font-size: 10px; font-weight: 700; "
+    "letter-spacing: 0.9px; text-transform: uppercase; "
+    "background: transparent; border: none; }"
+)
+# Muted count on the right of a rail item.
+_RAIL_ITEM_COUNT = (
+    "QLabel { color: rgba(128,128,128,0.85); font-size: 11px; "
+    "background: transparent; border: none; }"
+)
+
+
+def _rail_subitem_style(active: bool) -> str:
+    """QSS for a subfamily row nested under the active category row: smaller
+    and indented so it reads as a table of contents inside the family, not a
+    sibling category. Active = bold in the normal text colour, no box: weight
+    alone marks it, never a per-family hue."""
+    weight = "font-weight: 700; " if active else ""
+    return (
+        "QPushButton#railsubitem { text-align: left; border: none; "
+        "border-radius: 4px; padding: 4px 8px 4px 27px; font-size: 12px; "
+        f"{weight}color: palette(text); background: transparent; }}"
+        "QPushButton#railsubitem:hover { background: rgba(128,128,128,0.10); }"
+    )
+
+
+def _rail_item_style(active: bool) -> str:
+    """QSS for one rail row. At rest: flat, transparent, hover tint. Active:
+    a quiet neutral fill + bold label, so the selection reads as "you are
+    here", not a pressed button. No coloured bar and no per-family hue."""
+    if active:
+        return (
+            "QPushButton#railitem { text-align: left; "
+            "border: none; border-radius: 4px; "
+            "padding: 8px 10px; font-size: 13px; font-weight: 700; "
+            "color: palette(text); background: rgba(128,128,128,0.16); }"
+        )
+    return (
+        "QPushButton#railitem { text-align: left; "
+        "border: none; border-radius: 4px; "
+        "padding: 8px 10px; font-size: 13px; "
+        "color: palette(text); background: transparent; }"
+        "QPushButton#railitem:hover { background: rgba(128,128,128,0.10); }"
+    )
 
 
 # Sidebar tab order. Themed tabs are sourced from `_CATEGORY_ORDER` so the
@@ -350,6 +290,12 @@ _NEED_COLLAPSED_SETTING = "AIEdit/library_need_collapsed_{key}"
 # in batches behind a "Show more" button so the page stays light. 9 = a full
 # 3x3 grid per batch.
 _GALLERY_PAGE_SIZE = 9
+
+
+def _gallery_batch_size() -> int:
+    """Cards a Recent/Favorites gallery reveals per batch, read at use time."""
+    return get_export_dial("library.gallery_page_size", _GALLERY_PAGE_SIZE)
+
 
 # Sidebar glyph: Recent + Top Picks use an SVG image, others use Unicode with a tint.
 # Mirror `prompt_presets._CATEGORY_META` so every category in _TAB_ORDER has a glyph.
@@ -402,8 +348,7 @@ def _preset_matches(preset: dict, query: str) -> bool:
     return query in haystack
 
 
-def _svg_url(path: str) -> str:
-    return QUrl.fromLocalFile(path).toString()
+_svg_url = svg_url  # the dock's style module owns this helper
 
 
 def _sidebar_icon_html(cat_key: str) -> str:

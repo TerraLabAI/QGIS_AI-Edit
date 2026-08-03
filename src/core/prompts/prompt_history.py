@@ -10,9 +10,8 @@ from __future__ import annotations
 import json
 import time
 
-from qgis.core import QgsSettings
-
 from ..auth.activation_manager import SETTINGS_PREFIX
+from ..config_store import get_export_dial
 
 _RECENT_KEY = f"{SETTINGS_PREFIX}prompt_history"
 _FAVORITES_KEY = f"{SETTINGS_PREFIX}favorite_prompts"
@@ -33,8 +32,19 @@ def _normalize(prompt: str) -> str:
     return (prompt or "").strip()
 
 
-def _load(key: str) -> list[dict]:
-    raw = QgsSettings().value(key, "")
+def _settings():
+    """QgsSettings, or None headless (tests without QGIS): history is then
+    empty and writes are dropped, which only ever happens outside QGIS."""
+    try:
+        from qgis.core import QgsSettings
+    except ImportError:
+        return None
+    return QgsSettings()
+
+
+def _load_entries(key: str) -> list[dict]:
+    settings = _settings()
+    raw = settings.value(key, "") if settings is not None else ""
     if not raw:
         return []
     try:
@@ -44,8 +54,11 @@ def _load(key: str) -> list[dict]:
     return data if isinstance(data, list) else []
 
 
-def _save(key: str, entries: list[dict]) -> None:
-    QgsSettings().setValue(key, json.dumps(entries, ensure_ascii=False))
+def _save_entries(key: str, entries: list[dict]) -> None:
+    settings = _settings()
+    if settings is None:
+        return
+    settings.setValue(key, json.dumps(entries, ensure_ascii=False))
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +67,7 @@ def _save(key: str, entries: list[dict]) -> None:
 
 def get_recent() -> list[dict]:
     """Return Recent entries, newest first. Each: {prompt, ts}."""
-    return _load(_RECENT_KEY)
+    return _load_entries(_RECENT_KEY)
 
 
 def add_recent(prompt: str) -> None:
@@ -64,31 +77,10 @@ def add_recent(prompt: str) -> None:
         return
     entries = [e for e in get_recent() if _normalize(e.get("prompt", "")) != text]
     entries.insert(0, {"prompt": text, "ts": _now_iso()})
-    if len(entries) > _RECENT_CAP:
-        entries = entries[:_RECENT_CAP]
-    _save(_RECENT_KEY, entries)
-
-
-def clear_recent() -> None:
-    _save(_RECENT_KEY, [])
-
-
-def replace_recent(entries: list[dict]) -> None:
-    """Overwrite local Recent cache with server data. Newest first, deduped, capped."""
-    seen: set[str] = set()
-    normalized: list[dict] = []
-    for e in entries:
-        prompt = _normalize(e.get("prompt") or "")
-        if not prompt or prompt in seen:
-            continue
-        seen.add(prompt)
-        normalized.append({
-            "prompt": prompt,
-            "ts": e.get("ts") or _now_iso(),
-        })
-        if len(normalized) >= _RECENT_CAP:
-            break
-    _save(_RECENT_KEY, normalized)
+    cap = get_export_dial("history.recent_cap", _RECENT_CAP)
+    if len(entries) > cap:
+        entries = entries[:cap]
+    _save_entries(_RECENT_KEY, entries)
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +89,7 @@ def replace_recent(entries: list[dict]) -> None:
 
 def get_favorites() -> list[dict]:
     """Return Favorites, newest-starred first. Each: {prompt, label, source_category, ts}."""
-    return _load(_FAVORITES_KEY)
+    return _load_entries(_FAVORITES_KEY)
 
 
 def is_favorite(prompt: str) -> bool:
@@ -123,7 +115,7 @@ def toggle_favorite(
     )
     if existing_idx is not None:
         entries.pop(existing_idx)
-        _save(_FAVORITES_KEY, entries)
+        _save_entries(_FAVORITES_KEY, entries)
         return False
     entries.insert(0, {
         "prompt": text,
@@ -131,23 +123,5 @@ def toggle_favorite(
         "source_category": source_category or None,
         "ts": _now_iso(),
     })
-    _save(_FAVORITES_KEY, entries)
+    _save_entries(_FAVORITES_KEY, entries)
     return True
-
-
-def replace_favorites(entries: list[dict]) -> None:
-    """Overwrite local Favorites cache with server data."""
-    seen: set[str] = set()
-    normalized: list[dict] = []
-    for e in entries:
-        prompt = _normalize(e.get("prompt") or "")
-        if not prompt or prompt in seen:
-            continue
-        seen.add(prompt)
-        normalized.append({
-            "prompt": prompt,
-            "label": e.get("label") or None,
-            "source_category": e.get("source_category") or None,
-            "ts": e.get("ts") or _now_iso(),
-        })
-    _save(_FAVORITES_KEY, normalized)

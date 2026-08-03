@@ -5,7 +5,9 @@ open the product page.
 from __future__ import annotations
 
 from qgis.PyQt.QtCore import QUrl
-from qgis.PyQt.QtGui import QAction, QDesktopServices, QIcon
+from qgis.PyQt.QtGui import QDesktopServices, QIcon
+
+from ..core.qt_compat import QAction
 
 _AI_SEG_KEYS = ("AI_Segmentation", "QGIS_AI-Segmentation", "QGIS_AI-Segmentation-Team")
 _AI_SEG_PRODUCT_URL = (
@@ -132,17 +134,25 @@ def _prefill_plugin_filter(text: str, attempts: int = 14, confirmed: int = 0) ->
             70, lambda: _prefill_plugin_filter(text, attempts - 1, confirmed))
 
 
+def open_ai_segmentation() -> bool:
+    """Open the AI Segmentation dock if installed, else the Plugin Manager
+    pre-filtered to it (product page as last resort). Returns True when the
+    sibling plugin was already installed and its dock came up."""
+    from ..core.auth.activation_manager import get_cross_promo_url
+
+    plugin = _find_installed_plugin(_AI_SEG_KEYS)
+    if plugin is not None and _activate_dock(plugin):
+        return True
+    open_plugin_manager(
+        "AI Segmentation by TerraLab", get_cross_promo_url(_AI_SEG_PRODUCT_URL)
+    )
+    return False
+
+
 def make_ai_seg_action(parent, iface, label: str, tooltip: str,
                        icon: QIcon | None = None) -> QAction:
     """Create a QAction that opens AI Segmentation if installed, else the Plugin Manager."""
     action = QAction(icon or QIcon(), label, parent)
     action.setToolTip(tooltip)
-
-    def triggered():
-        plugin = _find_installed_plugin(_AI_SEG_KEYS)
-        if plugin is not None and _activate_dock(plugin):
-            return
-        open_plugin_manager("AI Segmentation by TerraLab", _AI_SEG_PRODUCT_URL)
-
-    action.triggered.connect(triggered)
+    action.triggered.connect(open_ai_segmentation)
     return action

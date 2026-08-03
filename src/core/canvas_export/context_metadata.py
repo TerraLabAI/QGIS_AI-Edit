@@ -3,11 +3,13 @@ from __future__ import annotations
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
+    QgsGeometry,
     QgsPointXY,
     QgsProject,
     QgsRectangle,
 )
 
+from ..config_store import get_export_dial_seq
 from .export_config import _get_align, _get_max_dimension
 from .native_resolution import _best_native_longest_px, _zone_dims_meters
 from .render import ExportPrep
@@ -20,8 +22,17 @@ def apply_export_context(
     actual_extent: QgsRectangle,
     image_size_bytes: int,
     input_format: str | None = None,
+    zone_polygon: QgsGeometry | None = None,
 ) -> None:
-    """Main-thread ctx mutation after the worker returns extent + size."""
+    """Main-thread ctx mutation after the worker returns extent + size.
+
+    ``zone_polygon`` (canvas CRS, same as ``ctx.crs_wkt``/``crs_authid`` set
+    below), when given, is copied onto ``ctx`` as plain WKT text, never as a
+    live QgsGeometry: the ctx object crosses onto the worker thread right
+    after this call, and the plugin's threading rule bars a live QGIS object
+    from riding along. None (no polygon drawn, or a bbox-only zone) leaves
+    ``ctx.zone_polygon_wkt`` at its default of None.
+    """
     if ctx is None:
         return
     ctx.extent = {
@@ -42,6 +53,8 @@ def apply_export_context(
     ctx.export_height = prep.out_h
     ctx.image_size_bytes = image_size_bytes
     ctx.input_format = input_format
+    if zone_polygon is not None and not zone_polygon.isEmpty():
+        ctx.zone_polygon_wkt = zone_polygon.asWkt()
 
 
 def _centroid_wgs84(extent: QgsRectangle, src_crs) -> tuple[float | None, float | None]:
@@ -102,6 +115,39 @@ _BASEMAP_HOSTS = (
     ("swisstopo", "Swisstopo"),
 )
 
+# Bounds on a served pair. 40 chars covers the longest real host fragment and
+# the longest provider name, and the length cap keeps a garbled config out of
+# the metadata field.
+_MAX_BASEMAP_HOST_CHARS = 40
+_MAX_BASEMAP_HOSTS = 40
+
+
+def _basemap_host_pairs() -> tuple[tuple[str, str], ...]:
+    """Host fragment -> label pairs, shipped ones first and in shipped order,
+    then server additions served at basemap_hosts_extra as "substring|Label".
+
+    Order is the matching order, so a served entry can only name a host the
+    shipped list does not already catch. Union-only: a deploy adds a provider,
+    it never drops one. An entry without a separator, with an empty half or
+    with an over-long half is dropped."""
+    base = tuple(f"{needle}|{label}" for needle, label in _BASEMAP_HOSTS)
+    pairs: list[tuple[str, str]] = []
+    for entry in get_export_dial_seq(
+        "basemap_hosts_extra", base, max_len=_MAX_BASEMAP_HOSTS
+    ):
+        needle, sep, label = entry.partition("|")
+        needle = needle.strip().lower()
+        label = label.strip()
+        if not sep or not needle or not label:
+            continue
+        if (
+            len(needle) > _MAX_BASEMAP_HOST_CHARS
+            or len(label) > _MAX_BASEMAP_HOST_CHARS
+        ):
+            continue
+        pairs.append((needle, label))
+    return tuple(pairs)
+
 
 def _basemap_label(layer) -> str | None:
     """Sanitized identity of one raster basemap layer.
@@ -125,7 +171,7 @@ def _basemap_label(layer) -> str | None:
         url = (params.get("url") or [""])[0]
         kind = "XYZ" if (params.get("type") or [""])[0] == "xyz" else "WMS"
         host = (urlsplit(url).hostname or "").lower()
-        for needle, label in _BASEMAP_HOSTS:
+        for needle, label in _basemap_host_pairs():
             if needle in host:
                 return label
         return (f"{kind}:{host}" if host else kind)[:64]
@@ -162,6 +208,23 @@ def _compute_ground_resolution_m(extent, out_w: int, out_h: int, crs) -> float |
         result = ((width_m / max(out_w, 1)) + (height_m / max(out_h, 1))) / 2
         if result > 0 and result < 1_000_000:
             return float(result)
+    except Exception:
+        pass  # nosec B110
+    return None
+
+
+def estimate_zone_area_km2(extent, crs) -> float | None:
+    """Geodesic ground area of the zone rectangle in square kilometers, or
+    None when it cannot be measured. Drives the large-zone guidance at draw
+    time; measured like the ground resolution below so Web Mercator's
+    latitude stretch never inflates the number."""
+    try:
+        width_m, height_m = _zone_dims_meters(extent, crs)
+        if width_m is None or height_m is None:
+            return None
+        area = (width_m * height_m) / 1_000_000.0
+        if area >= 0:
+            return float(area)
     except Exception:
         pass  # nosec B110
     return None

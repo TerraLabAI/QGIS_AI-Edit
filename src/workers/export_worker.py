@@ -5,6 +5,8 @@ from qgis.core import QgsTask
 from qgis.PyQt.QtCore import pyqtSignal
 
 from ..core.canvas_export import ExportPrep, render_clean_base, render_export
+from ..core.i18n import tr
+from ..core.logger import log_warning
 
 
 class ExportWorker(QgsTask):
@@ -31,7 +33,27 @@ class ExportWorker(QgsTask):
         except Exception:
             return False
 
+    @staticmethod
+    def _unexpected_failure() -> str:
+        """The message used when the render dies in a way nothing else caught."""
+        return tr("Unexpected error while rendering the map.")
+
     def run(self) -> bool:
+        # Last-resort guard. sip swallows a Python exception raised out of
+        # run() and hands finished() a plain False with no failure recorded,
+        # and the dock is already locked on the generating view by then. The
+        # payload build below (reading prep.out_w/out_h) sits outside the
+        # render try, so without this it would wedge the dock for good.
+        try:
+            return self._run_export()
+        except Exception as err:  # noqa: BLE001
+            if self.isCanceled():
+                return False
+            log_warning(f"Canvas export failed unexpectedly: {err}")
+            self._failure = self._unexpected_failure()
+            return False
+
+    def _run_export(self) -> bool:
         if self.isCanceled():
             return False
         try:
@@ -62,3 +84,7 @@ class ExportWorker(QgsTask):
             self.completed.emit(*self._success_payload)
         elif self._failure is not None:
             self.failed.emit(self._failure)
+        else:
+            # Neither slot filled: run() died somewhere sip could not report.
+            # Always answer the UI, which is waiting on one of these signals.
+            self.failed.emit(self._unexpected_failure())

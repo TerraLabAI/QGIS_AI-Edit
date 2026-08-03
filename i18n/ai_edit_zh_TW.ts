@@ -4,6 +4,106 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>This prompt is not allowed: its content goes against our rules.</source>
+        <translation>此提示詞不被允許：其內容違反了我們的規則。</translation>
+    </message>
+    <message>
+        <source>You have not been charged.</source>
+        <translation>未向您收費。</translation>
+    </message>
+    <message>
+        <source>Read our content rules</source>
+        <translation>查看我們的內容規則</translation>
+    </message>
+    <message>
+        <source>Very large zone (about {km2} km²): the AI keeps only broad shapes at this size. Select a smaller area for object-level edits.</source>
+        <translation>區域非常大（約 {km2} 平方公里）：此尺寸下 AI 只能保留大致輪廓。請選擇較小的區域以進行物件層級的編輯。</translation>
+    </message>
+    <message>
+        <source>Sessions</source>
+        <translation>工作階段</translation>
+    </message>
+    <message>
+        <source>Search your sessions</source>
+        <translation>搜尋您的工作階段</translation>
+    </message>
+    <message>
+        <source>No session matches.</source>
+        <translation>沒有相符的工作階段。</translation>
+    </message>
+    <message>
+        <source>Loading older sessions</source>
+        <translation>正在載入較早的工作階段</translation>
+    </message>
+    <message>
+        <source>Delete this session?</source>
+        <translation>刪除此工作階段？</translation>
+    </message>
+    <message>
+        <source>Deleting session</source>
+        <translation>正在刪除工作階段</translation>
+    </message>
+    <message>
+        <source>Session deleted.</source>
+        <translation>工作階段已刪除。</translation>
+    </message>
+    <message>
+        <source>Rename session</source>
+        <translation>重新命名工作階段</translation>
+    </message>
+    <message>
+        <source>Renaming session</source>
+        <translation>正在重新命名工作階段</translation>
+    </message>
+    <message>
+        <source>No internet connection. This version was made on another device or cleaned from this disk, so its image must be downloaded. Reconnect and click the version again.</source>
+        <translation>沒有網際網路連線。此版本是在其他裝置上建立的，或已從本磁碟中清除，因此需要下載其影像。請重新連線後再次點選該版本。</translation>
+    </message>
+    <message>
+        <source>{ref} and {markup} show the AI what you mean. The {library} holds ready-made prompts. New here? Open the tutorial with the {icon} button below.</source>
+        <translation>{ref}和{markup}讓 AI 明白你的意圖。{library}中有現成的提示詞。第一次使用？點擊下方的 {icon} 按鈕開啟教學。</translation>
+    </message>
+    <message>
+        <source>Click on the map to outline the area to edit.</source>
+        <translation>在地圖上點擊以勾勒要編輯的區域。</translation>
+    </message>
+    <message>
+        <source>Extract</source>
+        <translation>擷取</translation>
+    </message>
+    <message>
+        <source>Repair</source>
+        <translation>修復</translation>
+    </message>
+    <message>
+        <source>Show a project: renders, plans, simulations, before/after</source>
+        <translation>展示專案：渲染、規劃圖、模擬、前後對比</translation>
+    </message>
+    <message>
+        <source>Extract data: detect, segment, count, map</source>
+        <translation>擷取資料：偵測、分割、計數、製圖</translation>
+    </message>
+    <message>
+        <source>Repair imagery: sharpen, upscale, fix gaps and seams</source>
+        <translation>修復影像：銳化、放大、修補空缺與接縫</translation>
+    </message>
+    <message>
+        <source>Our hand-picked selection to get you started.</source>
+        <translation>我們精選，助你上手。</translation>
+    </message>
+    <message>
+        <source>Categories</source>
+        <translation>分類</translation>
+    </message>
+    <message>
+        <source>Guide the AI (optional)</source>
+        <translation>引導 AI（選填）</translation>
+    </message>
+    <message>
+        <source>Add a reference image, or draw on the map to show where to act. You get a more reliable, less random result.</source>
+        <translation>新增參考影像，或在地圖上繪製以標示要操作的位置，可獲得更可靠、隨機性更低的結果。</translation>
+    </message>
+    <message>
         <source>Analyze</source>
         <translation>分析</translation>
     </message>
@@ -32,12 +132,56 @@
         <translation>熱門</translation>
     </message>
     <message>
+        <source>Featured</source>
+        <translation>精選</translation>
+    </message>
+    <message>
+        <source>Starred first, then your latest generations</source>
+        <translation>收藏優先，然後是您最新的生成結果</translation>
+    </message>
+    <message>
+        <source>Your generations will live here. Run a Top pick to get started.</source>
+        <translation>您的生成結果將顯示在這裡。執行一個精選範本開始吧。</translation>
+    </message>
+    <message>
+        <source>Your work</source>
+        <translation>我的工作</translation>
+    </message>
+    <message>
+        <source>Pinned</source>
+        <translation>已釘選</translation>
+    </message>
+    <message>
+        <source>Explore a family</source>
+        <translation>探索一個家族</translation>
+    </message>
+    <message>
+        <source>Browse the library and find your use case.</source>
+        <translation>瀏覽提示詞庫，找到您的應用場景。</translation>
+    </message>
+    <message>
+        <source>The prompts our community runs most, ready to use.</source>
+        <translation>社群最常使用的提示詞，開箱即用。</translation>
+    </message>
+    <message>
+        <source>Top picks</source>
+        <translation>精選推薦</translation>
+    </message>
+    <message>
         <source>What the community runs most often</source>
         <translation>社群最常使用的內容</translation>
     </message>
     <message>
+        <source>What we recommend</source>
+        <translation>我們推薦的內容</translation>
+    </message>
+    <message>
         <source>Your latest prompts</source>
         <translation>你最近的提示詞</translation>
+    </message>
+    <message>
+        <source>Your latest generations</source>
+        <translation>你最近生成的內容</translation>
     </message>
     <message>
         <source>Your starred prompts</source>
@@ -66,14 +210,6 @@
     <message>
         <source>No prompts in this section yet.</source>
         <translation>此分區暫無提示詞。</translation>
-    </message>
-    <message>
-        <source>Share anonymous usage statistics</source>
-        <translation>分享匿名使用統計資料</translation>
-    </message>
-    <message>
-        <source>Anonymous metrics (durations, error codes, OS, QGIS version) help us fix issues.</source>
-        <translation>匿名的量測資料（執行時間、錯誤代碼、作業系統、QGIS 版本）能協助我們修正問題。</translation>
     </message>
     <message>
         <source>Cancelling sign-in</source>
@@ -140,16 +276,16 @@
         <translation>驗證失敗，請檢查您的啟用金鑰。</translation>
     </message>
     <message>
-        <source>AI Edit outputs an image, not a vector file. For polygons (SHP, GeoJSON), pick a Segment or Land cover template, then ‘Vectorize this result’.</source>
-        <translation>AI Edit 輸出的是影像，並非向量檔案。若需要多邊形（SHP、GeoJSON），請選擇「分割」或「土地覆蓋」範本，然後使用「向量化此結果」。</translation>
+        <source>AI Edit outputs an image, not a vector file. For polygons (SHP, GeoJSON), pick a Segment or Land cover template, then ‘Vectorize this result’. For precise object outlines, try our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin.</source>
+        <translation>AI Edit 輸出的是影像，並非向量檔案。若需要多邊形（SHP、GeoJSON），請選擇「分割」或「土地覆蓋」範本，然後使用「向量化此結果」。如需精確的物件輪廓，請試試我們的 &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; 外掛。</translation>
     </message>
     <message>
         <source>AI Edit edits the image, it doesn't answer questions or count. Describe a visual change, e.g. colour the buildings red.</source>
         <translation>AI Edit 是用來編輯影像的，它不會回答問題或計數。請描述您想要的視覺變化，例如將建築物塗成紅色。</translation>
     </message>
     <message>
-        <source>AI Edit can't measure or count. Pick a Segment template, then ‘Vectorize this result’: QGIS gives the area and count per polygon.</source>
-        <translation>AI Edit 無法量測或計數。請選擇「分割」範本，然後使用「向量化此結果」：QGIS 會提供每個多邊形的面積與數量。</translation>
+        <source>AI Edit can't measure or count. Our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin is built for that: it outlines objects as polygons QGIS can count and measure.</source>
+        <translation>AI Edit 無法量測或計數。我們的 &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; 外掛正是為此而設計：它會將物件描繪成多邊形，QGIS 可加以計數與量測。</translation>
     </message>
     <message>
         <source>Zoomed out: the AI won't see small features (buildings, cars, trees) at this scale. Zoom in for object-level detail.</source>
@@ -196,8 +332,8 @@
         <translation>&lt;b&gt;標記&lt;/b&gt;&lt;br&gt;在地圖上繪製箭頭、形狀或標籤，向 AI 說明要修改的內容與位置。您的草圖會與提示詞一起送出，作為視覺化指引。</translation>
     </message>
     <message>
-        <source>&lt;b&gt;Reference image&lt;/b&gt;&lt;br&gt;Click to pick an image or data file from disk. To use a QGIS layer already in your project, drag it from the Layers panel into the prompt box. Everything is cropped to your zone.</source>
-        <translation>&lt;b&gt;參考影像&lt;/b&gt;&lt;br&gt;點按以從磁碟選擇影像或資料檔案。若要使用專案中已有的 QGIS 圖層，請將它從「圖層」面板拖曳至提示詞方塊中。所有內容都會裁切至您的區域。</translation>
+        <source>&lt;b&gt;Reference&lt;/b&gt;&lt;br&gt;Add an image or data file from disk, or one of your project's layers, as guidance for the AI. You can also drag a layer from the Layers panel straight into the prompt box. Everything is cropped to your zone.</source>
+        <translation>&lt;b&gt;參考&lt;/b&gt;&lt;br&gt;從磁碟加入影像或資料檔案，或加入專案中的某個圖層，作為 AI 的參考。您也可以將圖層從「圖層」面板直接拖曳至提示詞方塊中。所有內容都會裁切至您的區域。</translation>
     </message>
     <message>
         <source>&lt;b&gt;Resolution&lt;/b&gt;&lt;br&gt;Higher means a sharper, more detailed result.</source>
@@ -326,10 +462,6 @@ We'd love to hear from you!</source>
     <message>
         <source>Cancel anytime</source>
         <translation>隨時可取消</translation>
-    </message>
-    <message>
-        <source>Cancel selection</source>
-        <translation>取消選取</translation>
     </message>
     <message>
         <source>Cancel the running generation first (close the dock)</source>
@@ -1156,8 +1288,8 @@ We'd love to hear from you!</source>
         <translation>減少外框上的微小變化（0 = 不變更）。</translation>
     </message>
     <message>
-        <source>Ref image</source>
-        <translation>參考圖</translation>
+        <source>Reference</source>
+        <translation>參考</translation>
     </message>
     <message>
         <source>Reference image</source>
@@ -1314,6 +1446,10 @@ We'd love to hear from you!</source>
     <message>
         <source>Service temporarily unavailable, please retry shortly.</source>
         <translation>服務暫時無法使用，請稍後再試。</translation>
+    </message>
+    <message>
+        <source>This feature is temporarily unavailable. Please try again later.</source>
+        <translation>此功能暫時無法使用，請稍後再試。</translation>
     </message>
     <message>
         <source>Settings</source>
@@ -1704,8 +1840,8 @@ We'd love to hear from you!</source>
         <translation>已選取</translation>
     </message>
     <message>
-        <source>type your prompt or pick from the library...</source>
-        <translation>輸入您的提示詞，或從資源庫中選擇...</translation>
+        <source>describe a change, or pick one from the library...</source>
+        <translation>描述你想要的修改，或從資源庫中選擇...</translation>
     </message>
     <message>
         <source>yesterday</source>
@@ -1792,8 +1928,8 @@ We'd love to hear from you!</source>
         <translation>生成失敗：此請求已被安全過濾機制擋下。您未被扣款，請嘗試改寫您的提示詞。</translation>
     </message>
     <message>
-        <source>Generation failed: the AI couldn't create an image for this request. You have not been charged. Try rephrasing your prompt, or pick a different zone.</source>
-        <translation>生成失敗：AI 無法針對此請求建立影像。您未被扣款，請嘗試改寫您的提示詞，或選擇不同的區域。</translation>
+        <source>Generation failed: the AI returned no image. You have not been charged. AI Edit draws on the map and cannot answer questions, so describe the change you want to see, then try again.</source>
+        <translation>生成失敗：AI 未回傳影像。您未被扣款。AI Edit 只在地圖上作圖，無法回答問題，請描述您想要的修改，然後重試。</translation>
     </message>
     <message>
         <source>Our image servers are busy right now. You have not been charged. Please wait a moment and try again.</source>
@@ -2100,6 +2236,10 @@ We'd love to hear from you!</source>
         <translation>無法讀取點陣圖的像素（檔案可能不完整）。</translation>
     </message>
     <message>
+        <source>Account created. Draw a zone on the example map to run your first edit.</source>
+        <translation>帳戶已建立。在範例地圖上繪製一個區域，執行您的首次編輯。</translation>
+    </message>
+    <message>
         <source>Couldn't load the example basemap. Check your internet connection, or add your own layer (GeoTIFF, WMS, XYZ).</source>
         <translation>無法載入範例底圖。請檢查網路連線，或加入您自己的圖層（GeoTIFF、WMS、XYZ）。</translation>
     </message>
@@ -2252,10 +2392,6 @@ We'd love to hear from you!</source>
         <translation>將此顏色描繪為多邊形。未勾選的顏色將視為背景。</translation>
     </message>
     <message>
-        <source>Try it on an example</source>
-        <translation>用範例試試看</translation>
-    </message>
-    <message>
         <source>Vector</source>
         <translation>向量</translation>
     </message>
@@ -2310,6 +2446,410 @@ We'd love to hear from you!</source>
     <message>
         <source>{n} versions</source>
         <translation>{n} 個版本</translation>
+    </message>
+    <message>
+        <source>Your marks won't be used</source>
+        <translation>您的標記將不會被使用</translation>
+    </message>
+    <message>
+        <source>The markup layer is hidden.</source>
+        <translation>標記圖層已隱藏。</translation>
+    </message>
+    <message>
+        <source>Show and generate</source>
+        <translation>顯示並生成</translation>
+    </message>
+    <message>
+        <source>Generate without</source>
+        <translation>不使用標記生成</translation>
+    </message>
+    <message>
+        <source>Line</source>
+        <translation>直線</translation>
+    </message>
+    <message>
+        <source>Straight lines. Click to add points.</source>
+        <translation>直線。點擊以新增點。</translation>
+    </message>
+    <message>
+        <source>Click to add points. Double-click to finish, click the first point to close.</source>
+        <translation>點擊以新增點，連按兩下完成，或點擊第一個點以封閉。</translation>
+    </message>
+    <message>
+        <source>Click the map to place points around your zone. Click the first point again, double-click, or press Enter to close it. Then describe the change you want.</source>
+        <translation>點擊地圖,在區域周圍放置點。再次點擊第一個點、連按兩下,或按 Enter 鍵封閉。然後描述您想要的變化。</translation>
+    </message>
+    <message>
+        <source>This shape is too thin, too small, or crosses itself. Draw it again.</source>
+        <translation>此形狀過細、過小,或與自身相交,請重新繪製。</translation>
+    </message>
+    <message>
+        <source>Crop</source>
+        <translation>裁切</translation>
+    </message>
+    <message>
+        <source>Crop: on</source>
+        <translation>裁切:開</translation>
+    </message>
+    <message>
+        <source>Crop: off</source>
+        <translation>裁切:關</translation>
+    </message>
+    <message>
+        <source>Showing your shape only. Toggle to see the full frame.</source>
+        <translation>僅顯示您的形狀,切換以查看完整邊框。</translation>
+    </message>
+    <message>
+        <source>Save this prompt to your favorites.</source>
+        <translation>將此提示詞儲存到收藏。</translation>
+    </message>
+    <message>
+        <source>Remove this prompt from your favorites.</source>
+        <translation>從收藏中移除此提示詞。</translation>
+    </message>
+    <message>
+        <source>No layers in the project</source>
+        <translation>專案中沒有圖層</translation>
+    </message>
+    <message>
+        <source>Need cleaner outlines? Try our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin.</source>
+        <translation>需要更精細的輪廓？試試我們的 &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; 外掛。</translation>
+    </message>
+    <message>
+        <source>Before and after comparison</source>
+        <translation>之前／之後比較</translation>
+    </message>
+    <message>
+        <source>Could not start the generation: {error}</source>
+        <translation>無法開始生成：{error}</translation>
+    </message>
+    <message>
+        <source>Could not write {name}. It may be open in QGIS or in another program. Close it, or pick a different name, and try again.</source>
+        <translation>無法寫入 {name}。該檔案可能已在 QGIS 或其他程式中開啟。請關閉它，或改用其他名稱，然後再試一次。</translation>
+    </message>
+    <message>
+        <source>Dismiss</source>
+        <translation>關閉</translation>
+    </message>
+    <message>
+        <source>Divider at {pct}%. Left and right arrows move it.</source>
+        <translation>分隔線位於 {pct}%。按左右方向鍵移動。</translation>
+    </message>
+    <message>
+        <source>Favorite</source>
+        <translation>收藏</translation>
+    </message>
+    <message>
+        <source>Jump to the first version</source>
+        <translation>跳至第一個版本</translation>
+    </message>
+    <message>
+        <source>Jump to the latest version</source>
+        <translation>跳至最新版本</translation>
+    </message>
+    <message>
+        <source>Paid</source>
+        <translation>付費</translation>
+    </message>
+    <message>
+        <source>Press Enter to preview it, Delete to remove it.</source>
+        <translation>按 Enter 鍵預覽，按 Delete 鍵移除。</translation>
+    </message>
+    <message>
+        <source>Remove reference image {n}</source>
+        <translation>移除參考影像 {n}</translation>
+    </message>
+    <message>
+        <source>Remove this reference image</source>
+        <translation>移除此參考影像</translation>
+    </message>
+    <message>
+        <source>Sign-in failed unexpectedly. Click Connect to try again.</source>
+        <translation>登入發生非預期的錯誤。請點按「連線」重試。</translation>
+    </message>
+    <message>
+        <source>The request failed unexpectedly.</source>
+        <translation>請求發生非預期的錯誤。</translation>
+    </message>
+    <message>
+        <source>Unexpected error while rendering the map.</source>
+        <translation>渲染地圖時發生非預期的錯誤。</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>返回</translation>
+    </message>
+    <message>
+        <source>Browse and search all your conversations</source>
+        <translation>瀏覽並搜尋您的所有對話</translation>
+    </message>
+    <message>
+        <source>Conversation actions</source>
+        <translation>對話操作</translation>
+    </message>
+    <message>
+        <source>Conversation deleted.</source>
+        <translation>對話已刪除。</translation>
+    </message>
+    <message>
+        <source>Conversations</source>
+        <translation>對話</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>刪除</translation>
+    </message>
+    <message>
+        <source>Delete this conversation?</source>
+        <translation>刪除此對話？</translation>
+    </message>
+    <message>
+        <source>Deleting conversation</source>
+        <translation>正在刪除對話</translation>
+    </message>
+    <message>
+        <source>In my view</source>
+        <translation>在目前檢視內</translation>
+    </message>
+    <message>
+        <source>Keep this result</source>
+        <translation>保留此結果</translation>
+    </message>
+    <message>
+        <source>Keep this version and finish. The layer stays in your project.</source>
+        <translation>保留此版本並完成。圖層將保留在您的專案中。</translation>
+    </message>
+    <message>
+        <source>Loading older conversations</source>
+        <translation>正在載入較早的對話</translation>
+    </message>
+    <message>
+        <source>Loading thumbnails</source>
+        <translation>正在載入縮圖</translation>
+    </message>
+    <message>
+        <source>No conversation matches.</source>
+        <translation>沒有相符的對話。</translation>
+    </message>
+    <message>
+        <source>Only conversations whose zone is inside the current map view</source>
+        <translation>僅顯示區域位於目前地圖檢視內的對話</translation>
+    </message>
+    <message>
+        <source>Privacy policy</source>
+        <translation>隱私權政策</translation>
+    </message>
+    <message>
+        <source>Refreshing history</source>
+        <translation>正在重新整理歷史</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>重新命名</translation>
+    </message>
+    <message>
+        <source>Rename conversation</source>
+        <translation>重新命名對話</translation>
+    </message>
+    <message>
+        <source>Renaming conversation</source>
+        <translation>正在重新命名對話</translation>
+    </message>
+    <message>
+        <source>Result kept. Find this conversation anytime on the home screen.</source>
+        <translation>結果已保留。您可以隨時在主畫面找到此對話。</translation>
+    </message>
+    <message>
+        <source>Search your conversations</source>
+        <translation>搜尋您的對話</translation>
+    </message>
+    <message>
+        <source>Show more</source>
+        <translation>顯示更多</translation>
+    </message>
+    <message>
+        <source>Stored on European servers while your account exists. Delete any conversation whenever you want.</source>
+        <translation>只要您的帳戶存在，就會儲存在歐洲伺服器上。您可以隨時刪除任何對話。</translation>
+    </message>
+    <message>
+        <source>This deletes its generations and their images from TerraLab servers. Layers already in your project stay. This cannot be undone.</source>
+        <translation>這將從 TerraLab 伺服器刪除其生成結果及影像。已在專案中的圖層將保留。此操作無法復原。</translation>
+    </message>
+    <message>
+        <source>Title</source>
+        <translation>標題</translation>
+    </message>
+    <message>
+        <source>Today</source>
+        <translation>今天</translation>
+    </message>
+    <message>
+        <source>This week</source>
+        <translation>本週</translation>
+    </message>
+    <message>
+        <source>Stored on European servers while your account exists.</source>
+        <translation>只要您的帳戶存在，就會儲存在歐洲伺服器上。</translation>
+    </message>
+    <message>
+        <source>Add a layer…</source>
+        <translation>新增圖層…</translation>
+    </message>
+    <message>
+        <source>Load a sample image</source>
+        <translation>載入範例影像</translation>
+    </message>
+    <message>
+        <source>Open QGIS's Data Source Manager to add imagery</source>
+        <translation>開啟 QGIS 資料來源管理員以新增影像</translation>
+    </message>
+    <message>
+        <source>Click to exit the comparison</source>
+        <translation>點選以結束比對</translation>
+    </message>
+    <message>
+        <source>Keep this version</source>
+        <translation>保留此版本</translation>
+    </message>
+    <message>
+        <source>Kept as the result of this session</source>
+        <translation>已保留為這次工作階段的結果</translation>
+    </message>
+    <message>
+        <source>kept</source>
+        <translation>已保留</translation>
+    </message>
+    <message>
+        <source>Finish this session and return to the start</source>
+        <translation>結束這次工作階段並回到起點</translation>
+    </message>
+    <message>
+        <source>Go back one step (comparison, drawing, zone)</source>
+        <translation>返回上一步（比對、繪製、區域）</translation>
+    </message>
+    <message>
+        <source>Earlier</source>
+        <translation>更早</translation>
+    </message>
+    <message>
+        <source>Your session stays in your history. Reopen it anytime from the Prompt Library.</source>
+        <translation>您的工作階段已保存在歷史記錄中。可隨時從提示詞庫重新開啟。</translation>
+    </message>
+    <message>
+        <source>Resume this session</source>
+        <translation>繼續這個工作階段</translation>
+    </message>
+    <message>
+        <source>Session</source>
+        <translation>工作階段</translation>
+    </message>
+    <message>
+        <source>GENERATIONS</source>
+        <translation>生成次數</translation>
+    </message>
+    <message>
+        <source>Reopen this session in AI Edit: its prompt, reference images, and the same map zone.</source>
+        <translation>在 AI Edit 中重新開啟這個工作階段：其提示詞、參考影像和相同的地圖區域。</translation>
+    </message>
+    <message>
+        <source>Your layers are hidden</source>
+        <translation>您的圖層已隱藏</translation>
+    </message>
+    <message>
+        <source>Nothing shows on the map until one is checked.</source>
+        <translation>在勾選圖層之前，地圖上不會顯示任何內容。</translation>
+    </message>
+    <message>
+        <source>Show my layers</source>
+        <translation>顯示我的圖層</translation>
+    </message>
+    <message>
+        <source>Re-check your topmost layer in the Layers panel</source>
+        <translation>在圖層面板中重新勾選最上方的圖層</translation>
+    </message>
+    <message>
+        <source>Past sessions</source>
+        <translation>過去的工作階段</translation>
+    </message>
+    <message>
+        <source>Reopen a past session from the Prompt Library</source>
+        <translation>從提示詞庫重新開啟過去的工作階段</translation>
+    </message>
+    <message>
+        <source>Name your marks in the prompt, e.g. "add a pond inside the circle". The marks guide the AI and won't appear in the result.</source>
+        <translation>在提示詞中提及您的標記，例如「在圓圈內加一個池塘」。標記用於引導 AI，不會出現在結果中。</translation>
+    </message>
+    <message>
+        <source>From your computer</source>
+        <translation>從您的電腦</translation>
+    </message>
+    <message>
+        <source>Pick images or data files. Data files (GeoTIFF, shapefile, GeoJSON...) are rendered at your zone.</source>
+        <translation>選擇影像或資料檔。資料檔（GeoTIFF、shapefile、GeoJSON 等）會依您的區域繪製。</translation>
+    </message>
+    <message>
+        <source>From a QGIS layer</source>
+        <translation>從 QGIS 圖層</translation>
+    </message>
+    <message>
+        <source>Snapshot one of this project's layers at your zone. The layer itself is not changed and stays where it is.</source>
+        <translation>在您的區域對本專案的某個圖層拍攝快照。圖層本身不會被更改，保持原樣。</translation>
+    </message>
+    <message>
+        <source>No references yet. Add one to guide the AI.</source>
+        <translation>還沒有參考圖。新增一張來引導 AI。</translation>
+    </message>
+    <message>
+        <source>What should the AI take from this image?</source>
+        <translation>AI 應從這張圖中擷取什麼？</translation>
+    </message>
+    <message>
+        <source>Instructions for reference image {n}</source>
+        <translation>參考圖 {n} 的說明</translation>
+    </message>
+    <message>
+        <source>File</source>
+        <translation>檔案</translation>
+    </message>
+    <message>
+        <source>Your marks guide the edit. No note is needed here.</source>
+        <translation>您的標記會引導編輯。此處無需備註。</translation>
+    </message>
+    <message>
+        <source>Keep these references to guide the edit, and close the panel</source>
+        <translation>保留這些參考圖以引導編輯，並關閉面板</translation>
+    </message>
+    <message>
+        <source>Each image is cropped to your zone and stays hidden from the map. Add a note to tell the AI what to take from it.</source>
+        <translation>每張影像都會依您的區域裁切，且不會顯示在地圖上。加入備註，告訴 AI 要從中擷取什麼。</translation>
+    </message>
+    <message>
+        <source>My work</source>
+        <translation>我的工作</translation>
+    </message>
+    <message>
+        <source>Starred</source>
+        <translation>已加星號</translation>
+    </message>
+    <message>
+        <source>Your work sessions, newest first.</source>
+        <translation>您的工作階段，最新的排在前面。</translation>
+    </message>
+    <message>
+        <source>The imagery this session was edited on is not in this project.</source>
+        <translation>這次工作階段編輯所依據的影像不在此專案中。</translation>
+    </message>
+    <message>
+        <source>Add source snapshot</source>
+        <translation>新增來源影像快照</translation>
+    </message>
+    <message>
+        <source>Session input</source>
+        <translation>工作階段輸入影像</translation>
+    </message>
+    <message>
+        <source>Adding session input to the map</source>
+        <translation>正在將工作階段輸入影像加入地圖</translation>
     </message>
 </context>
 </TS>

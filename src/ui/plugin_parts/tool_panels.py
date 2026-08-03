@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from qgis.core import Qgis, QgsRectangle
 from qgis.PyQt.QtCore import QEvent, QObject, QTimer
-from qgis.PyQt.QtGui import QAction, QColor, QKeySequence
+from qgis.PyQt.QtGui import QColor, QKeySequence
 
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.i18n import tr
 from ...core.logger import log_warning
+from ...core.qt_compat import QAction
+from ..tools.markup_line_tool import LineMapTool
 from ..tools.markup_tools import (
     ArrowMapTool,
     CircleMapTool,
@@ -40,6 +42,13 @@ class _MarkupUndoFilter(QObject):
 class ToolPanelsMixin:
     # --- Mark up / Vectorize tool panels -------------------------------
 
+    def _tool_feature_blocked(self, name: str) -> bool:
+        """Click-time server kill switch; the dock shows the shared notice."""
+        dock = getattr(self, "_dock_widget", None)
+        if dock is None:
+            return False
+        return dock._feature_blocked(name)
+
     def _on_markup_clicked(self):
         """User picked Tools → Mark up. Swap the dock view and arm the canvas.
 
@@ -54,6 +63,8 @@ class ToolPanelsMixin:
             # Closing via the footer toggle must match the in-panel Finish
             # button: capture the marks as a reference and drop the layer.
             self._on_markup_done_clicked()
+            return
+        if self._tool_feature_blocked("markup"):
             return
         if self._markup_manager is None:
             self._markup_manager = MarkupLayerManager(self._canvas, self._dock_widget)
@@ -70,7 +81,7 @@ class ToolPanelsMixin:
         self._in_tool_panel = "markup"
         self._dock_widget.set_markup_state()
         self._dock_widget.set_markup_zone_present(self._selected_extent is not None)
-        self._markup_manager.set_clip_zone(self._selected_extent)
+        self._markup_manager.set_clip_zone(self._selected_extent, self._selected_polygon)
         self._dock_widget.set_markup_annotation_count(
             self._markup_manager.annotation_count()
         )
@@ -80,16 +91,28 @@ class ToolPanelsMixin:
             self._markup_event_filter = _MarkupUndoFilter(self._on_markup_undo)
         self._iface.mainWindow().installEventFilter(self._markup_event_filter)
         self._suppress_qgis_undo()
+        # Line's two-stage Escape can call canvas.unsetMapTool(self) directly,
+        # deactivating from under the panel without going through
+        # _on_markup_tool_changed. Listen so the button un-checks in that
+        # case, mirroring SwipeController._on_maptool_set (swipe_panel.py).
+        if not self._markup_maptool_set_connected:
+            try:
+                self._canvas.mapToolSet.connect(self._on_markup_maptool_set)
+                self._markup_maptool_set_connected = True
+            except (TypeError, RuntimeError):
+                pass
         telemetry.track(te.MARKUP_OPENED)
 
     def _on_markup_tool_changed(self, tool_key: str):
-        """User picked Pencil / Arrow / Circle in the Mark up panel."""
+        """User picked Pencil / Line / Arrow / Circle in the Mark up panel."""
         if self._markup_manager is None:
             return
         existing = self._markup_tool_objs.get(tool_key)
         if existing is None:
             if tool_key == "pencil":
                 existing = PencilMapTool(self._canvas, self._markup_manager)
+            elif tool_key == "line":
+                existing = LineMapTool(self._canvas, self._markup_manager)
             elif tool_key == "arrow":
                 existing = ArrowMapTool(self._canvas, self._markup_manager)
             elif tool_key == "circle":
@@ -104,6 +127,24 @@ class ToolPanelsMixin:
         if self._map_tool is not None and self._canvas.mapTool() is self._map_tool:
             self._map_tool.preserve_state_on_next_deactivate()
         self._canvas.setMapTool(existing)
+
+    def _on_markup_maptool_set(self, new_tool, old_tool=None):
+        """Keep the Mark up tool buttons synced with the canvas.
+
+        Pencil/Arrow/Circle only ever leave the canvas via a normal tool
+        switch or Done, both already handled elsewhere. Line breaks that
+        assumption: its two-stage Escape calls canvas.unsetMapTool(self)
+        directly, so the panel button would stay visually checked with no
+        map tool actually armed unless we resync here.
+        """
+        if self._in_tool_panel != "markup":
+            return
+        if new_tool is not None and new_tool in self._markup_tool_objs.values():
+            return  # a normal tool switch; _on_markup_tool_changed already synced it
+        for key, tool in self._markup_tool_objs.items():
+            if tool is old_tool:
+                self._dock_widget.set_markup_tool_unchecked(key)
+                return
 
     def _on_markup_color_changed(self, color: QColor):
         """User changed the annotation color - propagate to the active tool."""
@@ -157,6 +198,26 @@ class ToolPanelsMixin:
         finally:
             self._markup_done_in_progress = False
 
+    def _on_reference_clicked(self):
+        """Reference chip clicked: open the Reference panel (import + notes).
+
+        Toggles like the other panels: a second click while it is open closes
+        it. No map tool to arm or restore, the panel is pure dock UI.
+        """
+        self._disarm_swipe()
+        if self._map_tool is not None:
+            self._map_tool.hide_action_badges()
+        if self._in_tool_panel == "reference":
+            self._exit_tool_panel()
+            return
+        self._in_tool_panel = "reference"
+        self._dock_widget.set_reference_state()
+
+    def _on_reference_done_clicked(self):
+        """Done in the Reference panel: back to the main flow."""
+        if self._in_tool_panel == "reference":
+            self._exit_tool_panel()
+
     def _on_vectorize_clicked(self):
         """User picked Tools → Vectorize.
 
@@ -168,6 +229,8 @@ class ToolPanelsMixin:
             self._map_tool.hide_action_badges()
         if self._in_tool_panel == "vectorize":
             self._exit_tool_panel()
+            return
+        if self._tool_feature_blocked("vectorize"):
             return
         current = self._canvas.mapTool()
         if current is not None and current not in self._markup_tool_objs.values():
@@ -185,6 +248,11 @@ class ToolPanelsMixin:
         Bypasses the toggle in `_on_vectorize_clicked` so a second click on
         the CTA never closes an already-open panel.
         """
+        if self._tool_feature_blocked("vectorize"):
+            return
+        # Vectorizing a browsed preview is a commitment: its layer is now the
+        # source of derived work, so it stops being replaceable (preview rule).
+        self._promote_version_for_layer(layer_id)
         if self._map_tool is not None:
             self._map_tool.hide_action_badges()
         if self._in_tool_panel != "vectorize":
@@ -219,11 +287,17 @@ class ToolPanelsMixin:
         if already comparing. Arming preserves the zone + pills so they survive
         the swipe taking the canvas, and passes the click-forwarding callback
         so the pills stay live underneath it.
+
+        The × badge next to the pill is hidden for the comparison's duration
+        (_on_swipe_armed → set_compare_active), so the pill and Escape are the
+        two ways out; the disarmed signal brings the × back.
         """
         if self._swipe_controller is None:
             return
         if self._swipe_controller.is_active():
             self._swipe_controller.stop()
+            return
+        if self._tool_feature_blocked("swipe"):
             return
         if self._map_tool is not None and self._canvas.mapTool() is self._map_tool:
             self._map_tool.preserve_state_on_next_deactivate()
@@ -255,6 +329,10 @@ class ToolPanelsMixin:
         elif which == "vectorize":
             self._on_canvas_vectorize()
         elif which == "delete":
+            # UNREACHABLE (2026-08-03): overlay_hit only runs while a
+            # comparison owns the canvas, and the × badge is hidden for that
+            # whole duration (hit_test gates on isVisible). Kept as the
+            # defensive tail of overlay_hit's return contract.
             self._on_zone_delete_requested()
 
     def _show_action_pills(self) -> None:
@@ -276,6 +354,7 @@ class ToolPanelsMixin:
             except Exception as err:  # nosec B110
                 log_warning(f"zone rect restore for pills failed: {err}")
         can_compare = self._swipe_controller is not None and self._swipe_controller.can_swipe_now()
+        layer = None
         if not can_compare and self._swipe_controller is not None:
             layer = self._selected_version_layer()
             if layer is not None:
@@ -285,7 +364,16 @@ class ToolPanelsMixin:
                 except Exception as err:  # nosec B110
                     log_warning(f"re-activate result for Compare failed: {err}")
         color = self._vectorize_suggestion[1] if self._vectorize_suggestion else None
-        self._map_tool.show_action_badges(compare=can_compare, vectorize=bool(color))
+        if layer is None:
+            layer = self._selected_version_layer()
+        # A pill for a feature the server switched off would only lead to a
+        # refusal, so it does not get drawn at all.
+        from ...core.auth.activation_manager import is_feature_enabled
+
+        self._map_tool.show_action_badges(
+            compare=can_compare and is_feature_enabled("swipe"),
+            vectorize=bool(color) and is_feature_enabled("vectorize"),
+        )
 
     def _on_canvas_vectorize(self) -> None:
         """Vectorize pill (canvas) clicked: open the Vectorize panel pre-filled
@@ -322,6 +410,10 @@ class ToolPanelsMixin:
         previous map tool. No dock panel is shown either way.
         """
         if checked:
+            if self._tool_feature_blocked("swipe"):
+                # Disarming stays allowed; only arming is gated.
+                self._dock_widget.set_swipe_button_checked(False)
+                return
             self._swipe_controller.start()
         else:
             self._swipe_controller.stop()
@@ -329,12 +421,22 @@ class ToolPanelsMixin:
     def _on_swipe_armed(self) -> None:
         self._dock_widget.set_swipe_button_checked(True)
         if self._map_tool is not None:
+            # Pressed look on the pill, and the × badge off the canvas until
+            # the comparison ends (every disarm route reaches the twin call in
+            # _on_swipe_disarmed).
             self._map_tool.set_compare_active(True)
-        telemetry.track(te.SWIPE_ARMED)
+        # has_true_before: the before side is the generation's own input, not
+        # just whatever sits beneath (measures the sidecar's real coverage).
+        telemetry.track(te.SWIPE_ARMED, {
+            "has_true_before": bool(self._swipe_controller.has_true_before()),
+        })
 
     def _on_swipe_disarmed(self) -> None:
         self._dock_widget.set_swipe_button_checked(False)
         if self._map_tool is not None:
+            # Single restore point for the × badge: the pill toggle, Escape,
+            # the footer button, _disarm_swipe from any other action and a
+            # programmatic stop all funnel through the disarmed signal.
             self._map_tool.set_compare_active(False)
         # After disarm, the active layer might have become non-eligible
         # while the swipe was on; re-evaluate the enable state so the
@@ -358,6 +460,12 @@ class ToolPanelsMixin:
                 self._iface.mainWindow().removeEventFilter(self._markup_event_filter)
             except RuntimeError:
                 pass
+        if self._markup_maptool_set_connected:
+            try:
+                self._canvas.mapToolSet.disconnect(self._on_markup_maptool_set)
+            except (TypeError, RuntimeError):
+                pass
+            self._markup_maptool_set_connected = False
         self._restore_qgis_undo()
         self._in_tool_panel = None
         self._dock_widget.exit_tool_panel()

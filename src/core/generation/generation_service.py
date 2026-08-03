@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
+from ..config_store import get_export_dial, get_export_dial_list, get_export_dial_pair
 from ..errors import NETWORK_ERROR_CODES, ErrorCode
 from ..i18n import tr
 from ..logger import log_debug, log_warning
@@ -21,6 +22,14 @@ _RETRYABLE_POLL_CODES = frozenset(
      "RATE_LIMITED"}
 )
 _MAX_CONSECUTIVE_POLL_ERRORS = 5
+# Ceiling for the exponential backoff between transient-poll retries.
+_POLL_BACKOFF_CAP_S = 12.0
+# Clamp applied to the server's adaptive retry_after hint.
+_RETRY_AFTER_CLAMP_S = (1.0, 15.0)
+# Poll budget when submit carries no max_wait: at least the floor, or the
+# server's estimate times the factor.
+_POLL_BUDGET_FLOOR_S = 360.0
+_POLL_BUDGET_ESTIMATE_FACTOR = 3.0
 
 # The inline submit body (main image + guidance + reference images that could
 # not be offloaded to presigned upload) is capped by the platform at ~4.5 MB,
@@ -35,6 +44,22 @@ _MAX_INLINE_BODY_BYTES = 4_200_000
 # over-wait. An iteration hard cap still guards against a misconfigured
 # tiny interval producing a multi-hour loop.
 _POLL_HARD_CAP = 1000
+
+
+def normalize_context_image_notes(
+    context_images: list[str] | None, notes: list[str] | None
+) -> list[str] | None:
+    """Per-image notes ready for submit, or None when there is nothing to say.
+
+    Aligned index-for-index with ``context_images`` (trimmed or padded with
+    ""), each entry whitespace-stripped. Returns None unless at least one note
+    is non-empty, so older backends never see the field for note-less
+    generations."""
+    if not context_images or not notes:
+        return None
+    aligned = [(note or "").strip() for note in notes[: len(context_images)]]
+    aligned += [""] * (len(context_images) - len(aligned))
+    return aligned if any(aligned) else None
 
 
 @dataclass
@@ -142,7 +167,11 @@ class GenerationService:
             log_warning(f"Upload URL request raised: {e}")
             return None
         if not isinstance(resp, dict) or "error" in resp:
-            log_warning(f"Upload URL request returned error: {resp}")
+            # Log code + error only, never the whole dict: a malformed success
+            # body would dump the signed upload URL into the QGIS log.
+            code = resp.get("code") if isinstance(resp, dict) else None
+            error = resp.get("error") if isinstance(resp, dict) else resp
+            log_warning(f"Upload URL request returned error: code={code} error={error}")
             return None
         upload_url = resp.get("upload_url")
         token = resp.get("upload_token")
@@ -207,6 +236,7 @@ class GenerationService:
         on_progress: Callable = None,
         ctx=None,
         context_images: list[str] | None = None,
+        context_image_notes: list[str] | None = None,
         guidance_image: str | None = None,
         guidance_format: str | None = None,
         is_cancelled: Callable[[], bool] | None = None,
@@ -220,16 +250,21 @@ class GenerationService:
                 error_code=ErrorCode.GENERATION_CANCELLED.value,
             )
 
+        notes = normalize_context_image_notes(context_images, context_image_notes)
+
         ctx_count = len(context_images) if context_images else 0
+        note_count = sum(1 for n in (notes or []) if n)
         log_debug(
             f"Submitting: resolution={suggested_resolution}, "
             f"aspect={aspect_ratio}, prompt_len={len(prompt)}, "
             f"image_b64_len={len(image_b64)}, context_images={ctx_count}, "
+            f"context_notes={note_count}, "
             f"guidance={'yes' if guidance_image else 'no'}"
         )
 
         prepared = self._prepare_uploads(
-            image_b64, auth, ctx, context_images, guidance_image, guidance_format
+            image_b64, auth, ctx, context_images, guidance_image, guidance_format,
+            extra_inline_bytes=sum(len(n) for n in (notes or [])),
         )
         if isinstance(prepared, GenerationResult):
             return prepared
@@ -243,6 +278,7 @@ class GenerationService:
             image_b64=image_b64,
             upload_token=upload_token,
             context_images=context_images,
+            context_image_notes=notes,
             guidance_inline=guidance_inline,
             guidance_upload_token=guidance_upload_token,
             geo_kwargs=self._build_geo_kwargs(ctx),
@@ -254,11 +290,11 @@ class GenerationService:
         plan = self._resolve_poll_plan(resp, request_id, suggested_resolution, aspect_ratio, ctx)
         if isinstance(plan, GenerationResult):
             return plan
-        poll_interval, estimated_time, budget_s, max_polls = plan
+        poll_interval, estimated_time, budget_s, max_polls, hard_cap = plan
 
         result, polls = self._poll_until_done(
             request_id, auth, ctx, on_progress, poll_interval,
-            estimated_time, budget_s, max_polls, submit_time,
+            estimated_time, budget_s, max_polls, submit_time, hard_cap,
         )
         if result is not None:
             return result
@@ -273,11 +309,14 @@ class GenerationService:
         context_images: list[str] | None,
         guidance_image: str | None,
         guidance_format: str | None,
+        extra_inline_bytes: int = 0,
     ) -> tuple[str | None, str | None, str | None] | GenerationResult:
         """Offload the main and guidance images to presigned upload when large.
 
         Returns (upload_token, guidance_upload_token, guidance_inline), or a
         failed GenerationResult when the inline body would overflow the cap.
+        ``extra_inline_bytes`` is other inline payload that always rides the
+        submit body (per-image notes), counted in every budget decision.
         """
         # Preferred path: upload the image straight to remote storage via a
         # short-lived presigned URL, then submit only a tiny token. Skips the
@@ -292,7 +331,7 @@ class GenerationService:
         # sub-threshold images (e.g. a 1K main + a markup overlay + one
         # reference) each look small alone yet together overflow the cap -> the
         # edge rejects the POST with HTTP 413 before it reaches our function.
-        ctx_inline_bytes = sum(len(c) for c in (context_images or []))
+        ctx_inline_bytes = sum(len(c) for c in (context_images or [])) + extra_inline_bytes
         guidance_bytes = len(guidance_image) if guidance_image else 0
         upload_token = self._try_upload_token_flow(
             image_b64, auth, ctx.input_format if ctx is not None else None,
@@ -329,7 +368,7 @@ class GenerationService:
         # Refuse early with a clear message rather than eat an opaque 413.
         guidance_inline_bytes = len(guidance_inline) if guidance_inline else 0
         total_inline_bytes = main_inline_bytes + guidance_inline_bytes + ctx_inline_bytes
-        if total_inline_bytes > _MAX_INLINE_BODY_BYTES:
+        if total_inline_bytes > get_export_dial("max_inline_body_bytes", _MAX_INLINE_BODY_BYTES):
             log_warning(
                 f"Inline submit body too large ({total_inline_bytes} bytes): "
                 f"main={main_inline_bytes}, guidance={guidance_inline_bytes}, "
@@ -394,6 +433,7 @@ class GenerationService:
         image_b64: str,
         upload_token: str | None,
         context_images: list[str] | None,
+        context_image_notes: list[str] | None,
         guidance_inline: str | None,
         guidance_upload_token: str | None,
         geo_kwargs: dict,
@@ -424,6 +464,7 @@ class GenerationService:
                 aspect_ratio=aspect_ratio,
                 auth=auth,
                 context_images=context_images,
+                context_image_notes=context_image_notes,
                 guidance_image=guidance_inline,
                 guidance_upload_token=guidance_upload_token,
                 idempotency_key=idempotency_key,
@@ -482,11 +523,11 @@ class GenerationService:
         suggested_resolution: str,
         aspect_ratio: str,
         ctx,
-    ) -> tuple[float, float | None, float, int] | GenerationResult:
+    ) -> tuple[float, float | None, float, int, int] | GenerationResult:
         """Derive the poll budget from the submit response and stamp ctx.
 
-        Returns (poll_interval, estimated_time, budget_s, max_polls), or a
-        completed GenerationResult when submit already carried the image.
+        Returns (poll_interval, estimated_time, budget_s, max_polls, hard_cap),
+        or a completed GenerationResult when submit already carried the image.
         """
         # Use server-suggested polling config if available
         poll_interval = resp.get("poll_interval", self._poll_interval)
@@ -494,12 +535,20 @@ class GenerationService:
         max_wait = resp.get("max_wait")  # Server-driven hard ceiling (seconds)
         if max_wait:
             budget_s = float(max_wait)
-        elif estimated_time:
-            budget_s = max(360.0, float(estimated_time) * 3)
         else:
-            budget_s = 360.0
+            floor_s = get_export_dial("poll.budget_floor_s", _POLL_BUDGET_FLOOR_S)
+            if estimated_time:
+                factor = get_export_dial(
+                    "poll.budget_estimate_factor", _POLL_BUDGET_ESTIMATE_FACTOR
+                )
+                budget_s = max(floor_s, float(estimated_time) * factor)
+            else:
+                budget_s = floor_s
+        # Read once and carried to the poll loop: a config refresh mid-run must
+        # not move the ceiling out from under a generation already counting.
+        hard_cap = get_export_dial("poll.hard_cap", _POLL_HARD_CAP)
         # Poll-count estimate kept for the progress callback signature.
-        max_polls = min(int(budget_s / poll_interval), _POLL_HARD_CAP)
+        max_polls = min(int(budget_s / poll_interval), hard_cap)
 
         if ctx is not None:
             ctx.submitted_resolution = resp.get("resolution", suggested_resolution)
@@ -522,7 +571,7 @@ class GenerationService:
                 image_url=resp["image_url"],
                 request_id=request_id,
             )
-        return poll_interval, estimated_time, budget_s, max_polls
+        return poll_interval, estimated_time, budget_s, max_polls, hard_cap
 
     def _poll_until_done(
         self,
@@ -535,18 +584,36 @@ class GenerationService:
         budget_s: float,
         max_polls: int,
         submit_time: float,
+        hard_cap: int | None = None,
     ) -> tuple[GenerationResult | None, int]:
         """Poll until a terminal state, cancellation, or budget exhaustion.
 
         Returns (result, polls); result is None when the budget ran out.
+        ``hard_cap`` comes from the plan so both uses see one value; None means
+        read it here.
         """
         # Poll. Pending responses from newer servers carry an adaptive
         # retry_after hint (slower early in the job, fast near completion);
         # without one we keep the fixed interval, so older servers work
         # unchanged.
+        max_poll_errors = get_export_dial(
+            "poll.max_consecutive_errors", _MAX_CONSECUTIVE_POLL_ERRORS
+        )
+        backoff_cap_s = get_export_dial("poll.backoff_cap_s", _POLL_BACKOFF_CAP_S)
+        retry_lo, retry_hi = get_export_dial_pair(
+            "poll.retry_after_clamp_s", _RETRY_AFTER_CLAMP_S
+        )
+        # Union-only: the server can ADD retryable codes (poll.retryable_extra,
+        # uppercased) but never remove a shipped one. Resolved once per call,
+        # not at import, so a config refresh applies to the next generation.
+        retryable_codes = get_export_dial_list(
+            "poll.retryable_extra", _RETRYABLE_POLL_CODES, normalize=str.upper
+        )
+        if hard_cap is None:
+            hard_cap = get_export_dial("poll.hard_cap", _POLL_HARD_CAP)
         consecutive_poll_errors = 0
         polls = 0
-        while polls < _POLL_HARD_CAP and (time.time() - submit_time) < budget_s:
+        while polls < hard_cap and (time.time() - submit_time) < budget_s:
             if self._is_cancelled():
                 return GenerationResult(
                     success=False,
@@ -565,15 +632,16 @@ class GenerationService:
                 # the server keeps working. Tolerate a few consecutive blips
                 # before giving up, backing off so a rate-limit spike or flaky
                 # link isn't answered with a retry storm.
-                if code in _RETRYABLE_POLL_CODES:
+                if code in retryable_codes:
                     consecutive_poll_errors += 1
-                    if consecutive_poll_errors <= _MAX_CONSECUTIVE_POLL_ERRORS:
+                    if consecutive_poll_errors <= max_poll_errors:
                         backoff = min(
-                            poll_interval * (2 ** (consecutive_poll_errors - 1)), 12.0
+                            poll_interval * (2 ** (consecutive_poll_errors - 1)),
+                            backoff_cap_s,
                         )
                         log_warning(
                             f"Transient poll error {code} "
-                            f"({consecutive_poll_errors}/{_MAX_CONSECUTIVE_POLL_ERRORS}), "
+                            f"({consecutive_poll_errors}/{max_poll_errors}), "
                             f"retrying in {backoff:.0f}s"
                         )
                         if self._sleep_or_cancelled(backoff):
@@ -632,7 +700,7 @@ class GenerationService:
             hint = status_resp.get("retry_after")
             if hint is not None:
                 try:
-                    sleep_s = min(max(float(hint), 1.0), 15.0)
+                    sleep_s = min(max(float(hint), retry_lo), retry_hi)
                 except (TypeError, ValueError):
                     pass
             if self._wait_with_progress(

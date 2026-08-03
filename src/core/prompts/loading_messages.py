@@ -13,9 +13,15 @@ Five phases pace the rotation across the full lifetime:
 
 CANVAS + UPLOAD are paced by a UI ticker (dock_widget). EARLY/MID/LATE
 are picked by the generation worker from elapsed/estimated ratio.
+
+Each pool is also servable (copy.loading.<phase>), already written in the
+user's language, so a line that lands badly can be pulled and a seasonal one
+added without a release. The shipped pool below is what plays whenever the
+server says nothing, which includes every offline run.
 """
 from __future__ import annotations
 
+from ..config_store import get_export_copy_pool
 from ..i18n import get_locale
 
 _MESSAGES: dict[str, dict[str, list[str]]] = {
@@ -294,10 +300,20 @@ def _resolve_lang() -> str:
     return "en"
 
 
+_PHASES = ("canvas", "upload", "early", "mid", "late")
+
+
 def get_phase_messages(phase: str) -> list[str]:
     """Return the message pool for `phase` in the user's locale.
 
     `phase` must be one of "canvas", "upload", "early", "mid", "late".
     Falls back to English when the locale is unsupported, and to an empty
-    list when the phase name is unknown (no crash on programmer error)."""
-    return list(_MESSAGES[_resolve_lang()].get(phase) or _MESSAGES["en"].get(phase) or [])
+    list when the phase name is unknown (no crash on programmer error).
+
+    A served pool for the phase replaces the shipped one whole. The phase name
+    is checked against the shipped list first, so a stray config key cannot
+    invent a phase the rest of the code does not know."""
+    if phase not in _PHASES:
+        return []
+    shipped = _MESSAGES[_resolve_lang()].get(phase) or _MESSAGES["en"].get(phase) or []
+    return list(get_export_copy_pool(f"loading.{phase}", tuple(shipped)))

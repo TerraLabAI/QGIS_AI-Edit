@@ -9,6 +9,8 @@ pans without leaving swipe mode.
 """
 from __future__ import annotations
 
+import os
+
 from qgis.core import (
     QgsMapLayer,
     QgsMapRendererParallelJob,
@@ -21,6 +23,7 @@ from qgis.PyQt.QtCore import QObject, QPoint, QRect, QRectF, Qt, QTimer, pyqtSig
 from qgis.PyQt.QtGui import QColor, QCursor, QImage, QPainter, QPen
 
 from ...core.i18n import tr
+from ...core.raster_writer import BEFORE_PATH_PROPERTY
 
 
 def _is_visible_raster(layer) -> bool:
@@ -29,10 +32,6 @@ def _is_visible_raster(layer) -> bool:
         return False
     node = QgsProject.instance().layerTreeRoot().findLayer(layer.id())
     return node is not None and node.isVisible()
-
-
-# Backwards-compat alias for callers still imported elsewhere.
-_is_visible_ai_edit_output = _is_visible_raster
 
 
 def _iter_ai_edit_rasters() -> list:
@@ -97,33 +96,82 @@ class _SwipeOverlay(QgsMapCanvasItem):
         self.setZValue(100)
         self._image: QImage | None = None
         self._top_layer: QgsMapLayer | None = None
+        # Private georeferenced copy of the imagery the swiped generation ran
+        # FROM (never added to the project); painted as the before side.
+        self._before_layer: QgsRasterLayer | None = None
         self._underlying_layers: list[QgsMapLayer] = []
         self._x_pos: int = -1  # -1 disables painting
         self._job = None
 
     def set_top_layer(self, layer: QgsMapLayer | None) -> None:
         self._top_layer = layer
+        self._load_before_layer()
         self._refresh_underlying()
 
+    def has_true_before(self) -> bool:
+        """True when the before side paints the generation's own input."""
+        return self._before_layer is not None
+
+    def _load_before_layer(self) -> None:
+        """Resolve the swiped layer's stored before GeoTIFF, if any. Kept as
+        an instance attribute so the render job's layer reference stays alive
+        (a non-project layer is owned by whoever holds it)."""
+        self._before_layer = None
+        if self._top_layer is None:
+            return
+        try:
+            path = str(self._top_layer.customProperty(BEFORE_PATH_PROPERTY, "") or "")
+        except (AttributeError, RuntimeError):
+            return
+        if not path or not os.path.exists(path):
+            return
+        candidate = QgsRasterLayer(path, "ai-edit-before")
+        if candidate.isValid():
+            self._before_layer = candidate
+
     def _refresh_underlying(self) -> None:
+        """Layer set of the before render: the canvas stack without ANY
+        AI-Edit result (not just the swiped one - with stacked generations
+        the older result is not the before, it is another after), topped by
+        the generation's own input image when it is on disk."""
         if self._top_layer is None:
             self._underlying_layers = []
             return
-        self._underlying_layers = [
-            lyr for lyr in self._canvas.layers() if lyr != self._top_layer
+        ai_edit_ids = {layer.id() for _node, layer in _iter_ai_edit_rasters()}
+        under = [
+            lyr for lyr in self._canvas.layers()
+            if lyr != self._top_layer and lyr.id() not in ai_edit_ids
         ]
+        if self._before_layer is not None:
+            under.insert(0, self._before_layer)
+        self._underlying_layers = under
+
+    def _safe_update_canvas(self) -> None:
+        """Request a repaint, tolerating an item that already left the scene.
+
+        Guarded HERE rather than at each caller: at QGIS shutdown the canvas
+        scene is torn down before the plugin unloads, and an unguarded repaint
+        request raised out of stop() before it could remove the item, delete
+        the map tool or emit deactivated - leaving Before/After lit while the
+        canvas was in another mode.
+        """
+        try:
+            self.updateCanvas()
+        except RuntimeError:  # nosec B110 - C++ half or scene already gone
+            pass
 
     def clear(self) -> None:
         self._image = None
         self._x_pos = -1
         self._top_layer = None
+        self._before_layer = None
         self._underlying_layers = []
-        self.updateCanvas()
+        self._safe_update_canvas()
 
     def set_divider(self, x: int) -> None:
         """Set the divider X (in widget coords) and request a repaint."""
         self._x_pos = max(0, int(x))
-        self.updateCanvas()
+        self._safe_update_canvas()
 
     def cancel_pending_render(self) -> None:
         """Cancel the in-flight render without dropping the cached image.
@@ -185,7 +233,7 @@ class _SwipeOverlay(QgsMapCanvasItem):
         if new_image is None or new_image.isNull():
             return
         self._image = new_image
-        self.updateCanvas()
+        self._safe_update_canvas()
 
     def _top_layer_corner_pixels(self) -> list[tuple[float, float]] | None:
         """Project the swiped raster's 4 corners into canvas pixel coords.
@@ -246,19 +294,6 @@ class _SwipeOverlay(QgsMapCanvasItem):
         if x_max <= x_min or y_max <= y_min:
             return None
         return QRect(x_min, y_min, x_max - x_min, y_max - y_min)
-
-    def _top_layer_clip_path(self):
-        """QPainterPath of the raster's actual footprint in canvas pixels."""
-        corners = self._top_layer_corner_pixels()
-        if not corners:
-            return None
-        from qgis.PyQt.QtCore import QPointF
-        from qgis.PyQt.QtGui import QPainterPath, QPolygonF
-        poly = QPolygonF([QPointF(x, y) for (x, y) in corners])
-        path = QPainterPath()
-        path.addPolygon(poly)
-        path.closeSubpath()
-        return path
 
     def paint(self, painter: QPainter, *args) -> None:  # noqa: ARG002
         # *args swallows the extra (option, widget) Qt6 passes; Qt5 omits them.
@@ -468,6 +503,11 @@ class SwipeController(QObject):
         target, _was_hidden = _resolve_swipe_target()
         return target is not None
 
+    def has_true_before(self) -> bool:
+        """True while an armed swipe paints the generation's own input as the
+        before side (False when off, or on the underlying-layers fallback)."""
+        return self._overlay is not None and self._overlay.has_true_before()
+
     def toggle(self) -> None:
         if self.is_active():
             self.stop()
@@ -566,6 +606,34 @@ class SwipeController(QObject):
         self._previous_tool = None
         self.stop()
 
+    def _destroy_debounce_timer(self) -> None:
+        """Stop, unhook and delete the render debounce timer.
+
+        QTimer(self) is a CHILD of this controller, so dropping the Python
+        reference leaves the C++ timer alive and still connected to the
+        previous overlay's render_image. A _SwipeOverlay is a QgsMapCanvasItem
+        (a QGraphicsItem, not a QObject), so PyQt keeps a strong reference to
+        it as the receiver: every start/stop cycle used to strand one timer
+        plus one overlay shell for the rest of the session.
+        """
+        timer = self._render_debounce_timer
+        self._render_debounce_timer = None
+        if timer is None:
+            return
+        # One try per step: a raise on the first must not skip the delete.
+        try:
+            timer.stop()
+        except RuntimeError:  # nosec B110 - C++ timer already gone
+            pass
+        try:
+            timer.timeout.disconnect()
+        except (RuntimeError, TypeError):  # nosec B110 - nothing connected
+            pass
+        try:
+            timer.deleteLater()
+        except (RuntimeError, AttributeError):  # nosec B110
+            pass
+
     def stop(self) -> None:
         if not self.is_active():
             return
@@ -573,7 +641,10 @@ class SwipeController(QObject):
             from qgis.utils import iface as _iface
         except ImportError:  # pragma: no cover - non-QGIS env
             _iface = None
-        canvas = _iface.mapCanvas() if _iface is not None else None
+        try:
+            canvas = _iface.mapCanvas() if _iface is not None else None
+        except RuntimeError:  # nosec B110 - main window already torn down
+            canvas = None
 
         self._disconnect_active_layer_tracker()
         self._disconnect_project_signals()
@@ -588,13 +659,19 @@ class SwipeController(QObject):
                 canvas.mapToolSet.disconnect(self._on_maptool_set)
             except (TypeError, RuntimeError):
                 pass
-        if self._render_debounce_timer is not None:
-            self._render_debounce_timer.stop()
-            self._render_debounce_timer = None
+        self._destroy_debounce_timer()
         self._extents_connected = False
         self._maptool_set_connected = False
 
         if self._overlay is not None:
+            # Cancel the in-flight render FIRST. Its finished slot calls
+            # updateCanvas() on this item, and a job landing after the item
+            # left the scene runs on a dead sip wrapper (Esc inside the 80 ms
+            # pan/zoom debounce is the reproducer).
+            try:
+                self._overlay.cancel_pending_render()
+            except RuntimeError:
+                pass
             self._overlay.clear()
             try:
                 scene = canvas.scene() if canvas is not None else None
@@ -602,16 +679,37 @@ class SwipeController(QObject):
                     scene.removeItem(self._overlay)
             except RuntimeError:
                 pass
+            # removeItem hands ownership back to Python; a QgsMapCanvasItem is
+            # a QGraphicsItem, not a QObject, so dropping the reference here is
+            # what destroys the C++ half (there is no deleteLater to call).
             self._overlay = None
 
-        if canvas is not None and self._tool is not None:
-            if self._previous_tool is not None:
-                try:
+        tool = self._tool
+        if canvas is not None and tool is not None:
+            # A canvas whose C++ half is gone raises on BOTH calls, and the old
+            # shape let the fallback raise straight out of stop(), skipping the
+            # tool delete and the deactivated signal below.
+            try:
+                if self._previous_tool is not None:
                     canvas.setMapTool(self._previous_tool)
-                except RuntimeError:
-                    canvas.unsetMapTool(self._tool)
-            else:
-                canvas.unsetMapTool(self._tool)
+                else:
+                    canvas.unsetMapTool(tool)
+            except RuntimeError:
+                try:
+                    canvas.unsetMapTool(tool)
+                except RuntimeError:  # nosec B110 - canvas already gone
+                    pass
+        if tool is not None:
+            # QgsMapTool parents itself to the canvas, so the C++ tool outlives
+            # this controller and pins the plugin graph unless it is deleted.
+            try:
+                tool.signals.escape_pressed.disconnect(self.stop)
+            except (RuntimeError, TypeError):
+                pass
+            try:
+                tool.deleteLater()
+            except (RuntimeError, AttributeError):
+                pass
         self._tool = None
         self._previous_tool = None
         self._top_layer_id = None
@@ -622,7 +720,7 @@ class SwipeController(QObject):
                 )
                 if node is not None:
                     node.setItemVisibilityChecked(False)
-            except RuntimeError:
+            except Exception:  # nosec B110 - re-hiding is cosmetic; the emit is not
                 pass
             self._revealed_layer_id = None
         self.deactivated.emit()
@@ -663,7 +761,7 @@ class SwipeController(QObject):
         """
         if not self.is_active():
             return
-        if not _is_visible_ai_edit_output(layer):
+        if not _is_visible_raster(layer):
             return
         if self._top_layer_id == layer.id():
             return
@@ -724,10 +822,16 @@ class SwipeController(QObject):
         self._connect_eligibility_root()
 
     def _connect_eligibility_root(self) -> None:
-        """Bind visibilityChanged on the current layerTreeRoot and remember it."""
+        """Bind tree-change signals on the current layerTreeRoot and remember
+        it. addedChildren matters because `layersAdded` fires while the layer
+        has no tree node yet (addMapLayer(layer, False), THEN insertLayer into
+        the AI-Edit group): recomputing only on layersAdded reads a tree the
+        result is not in yet and leaves the button stale-disabled."""
         try:
             root = QgsProject.instance().layerTreeRoot()
             root.visibilityChanged.connect(self._emit_eligibility)
+            root.addedChildren.connect(self._emit_eligibility)
+            root.removedChildren.connect(self._emit_eligibility)
             self._eligibility_root = root
         except (TypeError, RuntimeError):
             self._eligibility_root = None
@@ -736,12 +840,15 @@ class SwipeController(QObject):
         """Unbind from the root we actually connected to, not the current one."""
         if self._eligibility_root is None:
             return
-        try:
-            self._eligibility_root.visibilityChanged.disconnect(
-                self._emit_eligibility
-            )
-        except (TypeError, RuntimeError):
-            pass
+        for signal in (
+            self._eligibility_root.visibilityChanged,
+            self._eligibility_root.addedChildren,
+            self._eligibility_root.removedChildren,
+        ):
+            try:
+                signal.disconnect(self._emit_eligibility)
+            except (TypeError, RuntimeError):
+                pass
         self._eligibility_root = None
 
     def _on_project_loaded(self, *_args) -> None:
@@ -757,14 +864,23 @@ class SwipeController(QObject):
                 _iface.currentLayerChanged.disconnect(self._emit_eligibility)
         except (ImportError, TypeError, RuntimeError):
             pass
+        # One try per signal: batching them meant the first raise (a signal
+        # already disconnected) skipped every later one.
         try:
             project = QgsProject.instance()
-            project.layersAdded.disconnect(self._emit_eligibility)
-            project.layersRemoved.disconnect(self._emit_eligibility)
-            project.readProject.disconnect(self._on_project_loaded)
-            project.cleared.disconnect(self._on_project_loaded)
-        except (TypeError, RuntimeError):
-            pass
+        except RuntimeError:
+            project = None
+        if project is not None:
+            for signal, slot in (
+                (project.layersAdded, self._emit_eligibility),
+                (project.layersRemoved, self._emit_eligibility),
+                (project.readProject, self._on_project_loaded),
+                (project.cleared, self._on_project_loaded),
+            ):
+                try:
+                    signal.disconnect(slot)
+                except (TypeError, RuntimeError):
+                    pass
         self._disconnect_eligibility_root()
 
     def _emit_eligibility(self, *_args) -> None:
