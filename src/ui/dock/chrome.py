@@ -665,6 +665,15 @@ class DockChromeMixin:
         # stays True and silently blocks +/paste/drop on every subsequent
         # attempt.
         self._reference_widget.set_readonly(False)
+        # The Reference panel is a second view over the same store and is
+        # locked in step with the strip, so it has to be released in step too.
+        # It was only released in set_generating(False), which that same
+        # generation-done path never reaches: both its import buttons stayed
+        # greyed from the first successful generation to the end of the
+        # session, with no way back short of restarting QGIS.
+        panel = getattr(self, "_reference_panel", None)
+        if panel is not None:
+            panel.set_readonly(False)
         self._sync_attach_buttons()
 
     def _place_version_strip(self, target: str) -> None:
