@@ -1,14 +1,24 @@
 [general]
 name=AI Edit by TerraLab
 description=Edit aerial & satellite imagery with AI: land cover classification, building footprint extraction, super-resolution upscaling, object removal, cloud removal and flood simulation, all from a text prompt. Georeferenced output.
-qgisMinimumVersion=3.0
+qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
-version=1.6.9
+version=1.7.0
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.7.0
+    - Sessions: find, reopen and rename your past work from the Prompt Library, grouped by month, with search and before/after previews
+    - New Reference panel: import an image from a file or from your project, and write next to each one what the AI should take from it
+    - Mark up now draws lines, and reminds you to name your marks in the prompt so the AI uses them
+    - Draw a zone as a free shape, pan while drawing, and the zone outline stays visible once the result is on the map
+    - A heads-up when the selected zone is very large, where the AI can only keep broad shapes
+    - Calmer Prompt Library, with your starred prompts on their own page
+    - The panel is now usable with the keyboard and readable by a screen reader
+    - Vectorize is faster, and results are saved correctly on Windows accounts with accents in the user name
+
     1.6.8
     - The free plan now includes 10 AI edits every month (up from 5)
     - Compatibility fixes for QGIS 4
