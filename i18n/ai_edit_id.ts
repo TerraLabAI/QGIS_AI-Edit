@@ -2851,5 +2851,29 @@ Kami senang mendengar dari Anda!</translation>
         <source>Adding session input to the map</source>
         <translation>Menambahkan input sesi ke peta</translation>
     </message>
+    <message>
+        <source>Your {total} free generations return on {date}</source>
+        <translation>{total} generasi gratis Anda diperbarui pada {date}</translation>
+    </message>
+    <message>
+        <source>Your {total} free generations return next month</source>
+        <translation>{total} generasi gratis Anda diperbarui bulan depan</translation>
+    </message>
+    <message>
+        <source>Unlock your Pro month: €29</source>
+        <translation>Buka bulan Pro Anda: €29</translation>
+    </message>
+    <message>
+        <source>No commitment, cancel anytime</source>
+        <translation>Tanpa komitmen, batalkan kapan saja</translation>
+    </message>
+    <message>
+        <source>Last free generation of the month. Working on a project? Take a Pro month.</source>
+        <translation>Generasi gratis terakhir bulan ini. Sedang mengerjakan proyek? Ambil bulan Pro.</translation>
+    </message>
+    <message>
+        <source>Take a Pro month</source>
+        <translation>Ambil bulan Pro</translation>
+    </message>
 </context>
 </TS>

@@ -45,7 +45,6 @@ from .style import (
     _BTN_GREEN_OUTLINE,
     _FOOTER_ICON_BTN_STYLE,
     _FOOTER_MENU_STYLE,
-    BRAND_BLUE,
 )
 from .widgets import _FooterIconButton, _SubmitTextEdit
 
@@ -277,9 +276,48 @@ def _build_result_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     main_layout.addWidget(dock._result_section)
 
 
+def _build_prewall_banner(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> None:
+    # Pre-wall nudge - one free generation left this month, shown a step
+    # before the wall box. Same blue-tint card language (no new hue),
+    # lighter content: one line + one small outline CTA, no benefits list.
+    # Pinned bottom-right of the dock, above the footer icon row (sibling of
+    # the update notification), so it never competes with the result area.
+    # Visibility is entirely state-driven (DockAccountMixin.set_credits /
+    # show_prewall_info), never a dismiss-and-forget hint: it must come back
+    # every period the balance lands on exactly one generation.
+    dock._prewall_banner = QFrame()
+    dock._prewall_banner.setStyleSheet(
+        "QFrame { background: rgba(30,136,229,0.08); "
+        "border: 1px solid rgba(30,136,229,0.2); "
+        "border-radius: 4px; }"
+        "QLabel { background: transparent; border: none; }"
+    )
+    prewall_layout = QVBoxLayout(dock._prewall_banner)
+    prewall_layout.setContentsMargins(12, 10, 12, 10)
+    prewall_layout.setSpacing(6)
+    dock._prewall_text = QLabel("")
+    dock._prewall_text.setWordWrap(True)
+    dock._prewall_text.setStyleSheet("font-size: 12px; color: palette(text);")
+    prewall_layout.addWidget(dock._prewall_text)
+    dock._prewall_btn = QPushButton(tr("Take a Pro month"))
+    dock._prewall_btn.setCursor(QtC.PointingHandCursor)
+    dock._prewall_btn.setMinimumHeight(28)
+    dock._prewall_btn.setStyleSheet(_BTN_BLUE_OUTLINE)
+    dock._prewall_btn.clicked.connect(dock._on_prewall_cta_clicked)
+    prewall_layout.addWidget(dock._prewall_btn, 0, Qt.AlignmentFlag.AlignLeft)
+    dock._prewall_url = ""
+    dock._prewall_banner.setVisible(False)
+    # Capped width + right alignment: reads as a corner nudge, not a wall.
+    dock._prewall_banner.setMaximumWidth(380)
+    main_layout.addWidget(dock._prewall_banner, 0, Qt.AlignmentFlag.AlignRight)
+
+
 def _build_trial_info_box(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> None:
-    # Trial exhausted info box - conversion panel shown when a free-tier
-    # user runs out of credits. Title + 3 benefit bullets + primary button.
+    # Wall box - locked-out screen shown when a free-tier user runs out of
+    # credits. Locked wording (show_trial_exhausted_info builds the title:
+    # total free generations + when they return), one CTA, no benefits list
+    # (Task 7 of the 60-credit paywall: a single clear action beats a bullet
+    # list once the account is actually blocked).
     dock._trial_info_box = QFrame()
     dock._trial_info_box.setStyleSheet(
         "QFrame { background: rgba(30,136,229,0.08); "
@@ -296,25 +334,18 @@ def _build_trial_info_box(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
         "font-size: 12px; font-weight: bold; color: palette(text);"
     )
     trial_layout.addWidget(dock._trial_info_text)
-    benefits_html = "<br>".join((
-        tr("Subscribe to unlock:"),
-        "&nbsp;&nbsp;✓&nbsp; " + tr("3,000 credits per month"),
-        "&nbsp;&nbsp;✓&nbsp; " + tr("Detailed and Maximum output"),
-        "&nbsp;&nbsp;✓&nbsp; " + tr("Cancel anytime"),
-    ))
-    dock._trial_info_benefits = QLabel(benefits_html)
-    dock._trial_info_benefits.setWordWrap(True)
-    dock._trial_info_benefits.setTextFormat(QtC.RichText)
-    dock._trial_info_benefits.setStyleSheet(
-        "font-size: 11px; color: palette(text);"
-    )
-    trial_layout.addWidget(dock._trial_info_benefits)
-    dock._trial_info_btn = QPushButton(tr("Subscribe"))
+    dock._trial_info_btn = QPushButton(tr("Unlock your Pro month: €29"))
     dock._trial_info_btn.setCursor(QtC.PointingHandCursor)
     dock._trial_info_btn.setMinimumHeight(32)
     dock._trial_info_btn.setStyleSheet(_BTN_BLUE)
     dock._trial_info_btn.clicked.connect(dock._on_trial_info_subscribe_clicked)
     trial_layout.addWidget(dock._trial_info_btn)
+    dock._trial_info_subtext = QLabel(tr("No commitment, cancel anytime"))
+    dock._trial_info_subtext.setWordWrap(True)
+    dock._trial_info_subtext.setStyleSheet(
+        "font-size: 11px; color: palette(text);"
+    )
+    trial_layout.addWidget(dock._trial_info_subtext)
     dock._trial_info_url = ""
     # Kept for backwards compatibility with show_trial_exhausted_info callers
     # that still set a link; rendered inline as a fallback if the button is
@@ -409,26 +440,8 @@ def _build_footer(dock: AIEditDockWidget, layout: QVBoxLayout) -> None:
     dock._credits_label.setVisible(False)
     footer_row.addWidget(dock._credits_label)
 
-    # "&&" so Qt renders a literal ampersand instead of consuming "&" as
-    # a mnemonic accelerator (which would underline the next character).
-    # Text is (re)set by _apply_footer_responsive, which shortens it to
-    # "Upgrade" when the dock is too narrow for the full label.
-    dock._upgrade_cta = QPushButton(tr("Unlock more detail"))
-    dock._upgrade_cta.setToolTip(
-        tr("Subscribe to unlock Detailed and Maximum output, 3,000 credits per month, cancel anytime.")
-    )
-    dock._upgrade_cta.setCursor(QtC.PointingHandCursor)
-    dock._upgrade_cta.setStyleSheet(
-        f"QPushButton {{ border: 1px solid {BRAND_BLUE}; color: {BRAND_BLUE};"
-        f" border-radius: 8px; padding: 1px 8px; font-size: 11px;"
-        f" background: transparent; font-weight: normal; }}"
-        f"QPushButton:hover {{ background: rgba(30,136,229,0.12); }}"
-    )
-    dock._upgrade_cta.clicked.connect(dock._on_upgrade_clicked)
-    dock._upgrade_cta.setVisible(False)
-    footer_row.addWidget(dock._upgrade_cta)
-    # Tracks whether the upsell *should* be shown (subscribers shouldn't).
-    dock._upgrade_cta_wanted = False
+    # The old "Unlock more detail" upgrade pill lived here; removed 2026-08-07,
+    # the pre-wall banner and the wall screen carry the upsell now.
     # Tracks whether the credit ring + count have data; resizeEvent uses
     # this to keep them hidden on narrow docks.
     dock._credits_wanted = False

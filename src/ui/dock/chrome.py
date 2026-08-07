@@ -236,21 +236,9 @@ class DockChromeMixin:
 
         return widget
 
-    def _set_upgrade_cta_wanted(self, wanted: bool) -> None:
-        self._upgrade_cta_wanted = wanted
-        self._upgrade_cta.setVisible(wanted)
-        self._apply_footer_responsive()
-
     def _set_credits_wanted(self, wanted: bool) -> None:
         self._credits_wanted = wanted
         self._apply_footer_responsive()
-
-    def _set_upgrade_cta_text(self, full: bool) -> None:
-        """Full label vs the short "More detail" fallback. Guarded so
-        resizeEvent (which fires often) only relayouts when the text changes."""
-        text = tr("Unlock more detail") if full else tr("More detail")
-        if self._upgrade_cta.text() != text:
-            self._upgrade_cta.setText(text)
 
     def _apply_footer_responsive(self) -> None:
         """Collapse low-priority footer items, by priority, until the row fits
@@ -260,8 +248,7 @@ class DockChromeMixin:
         The right-side icons (vectorize / swipe / settings / help) are never
         touched - they always stay reachable. Kept longest -> dropped first:
           1. usage count label ("100 / 200")
-          2. upgrade pill text shortened to "Upgrade" (the CTA stays visible)
-          3. credit ring (last resort only)
+          2. credit ring (last resort only)
         """
         scroll = getattr(self, "_scroll_area", None)
         if scroll is None:
@@ -275,7 +262,6 @@ class DockChromeMixin:
         # Start from the fullest state the current data allows, then collapse.
         self._credits_label.setVisible(self._credits_wanted)
         self._credit_ring.setVisible(self._credits_wanted)
-        self._set_upgrade_cta_text(full=True)
 
         def fits() -> bool:
             # invalidate() drops the layout's cached hint so the measurement
@@ -285,8 +271,6 @@ class DockChromeMixin:
 
         if not fits() and self._credits_wanted:
             self._credits_label.setVisible(False)
-        if not fits() and self._upgrade_cta_wanted:
-            self._set_upgrade_cta_text(full=False)
         if not fits() and self._credits_wanted:
             self._credit_ring.setVisible(False)
 

@@ -4,7 +4,7 @@ import time
 
 from ...core import telemetry
 from ...core import telemetry_events as te
-from ...core.auth.activation_manager import get_dashboard_url, get_server_url
+from ...core.auth.activation_manager import get_wall_url
 from ...core.config_store import get_export_dial_list
 from ...core.errors import build_failure_props
 from ...core.i18n import tr
@@ -97,11 +97,11 @@ class GenerationResultsMixin:
             telemetry.track(te.GENERATION_FAILED, self._enrich_generation_props(extra_props))
             telemetry.flush()
         if normalized_code == "TRIAL_EXHAUSTED":
-            # Cache-only (no client): pre-warmed off-thread at startup, so this
-            # never blocks the UI thread. Falls back to the default upgrade URL.
-            upgrade = get_server_url("upgrade_url", get_dashboard_url())
-            self._dock_widget.show_trial_exhausted_info(message, upgrade)
-            telemetry.track(te.TRIAL_EXHAUSTED_VIEWED, {"is_free_tier": True})
+            # show_trial_exhausted_info fires TRIAL_EXHAUSTED_VIEWED itself
+            # (once per continuous wall state), so a proactive credits
+            # refresh showing the same wall later in the session can never
+            # double-count it here.
+            self._dock_widget.show_trial_exhausted_info(message, get_wall_url())
             # The user typically heads to the browser to subscribe next; ship
             # now so the batch is not lost with the session.
             telemetry.flush()

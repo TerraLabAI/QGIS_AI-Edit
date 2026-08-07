@@ -37,6 +37,7 @@ from ..reference_images_widget import ReferenceImagesWidget
 from .build_result import (
     _build_first_steps_hint,
     _build_footer,
+    _build_prewall_banner,
     _build_result_section,
     _build_side_panels,
     _build_trial_info_box,
@@ -106,6 +107,7 @@ def build_ui(dock: AIEditDockWidget) -> None:
     dock._setup_update_notification(layout)
 
     _build_first_steps_hint(dock, layout)
+    _build_prewall_banner(dock, layout)
     _build_footer(dock, layout)
     _wrap_in_scroll_area(dock, main_widget)
 

@@ -371,6 +371,10 @@ class ActivationMixin:
             used = usage.get("images_used")
             limit = usage.get("images_limit")
             is_free = usage.get("is_free_tier", False)
+            # "reset_date" and "period_end" are the same instant under two
+            # names the server has served since the monthly free-tier renewal
+            # shipped (see buildPluginUsagePayload); either may be present.
+            reset_date = usage.get("reset_date") or usage.get("period_end")
             # Prime the subscribe URL BEFORE set_credits so the dock's
             # auto-surface logic can show the upsell banner inline.
             if is_free:
@@ -384,6 +388,7 @@ class ActivationMixin:
                 used=used,
                 limit=limit,
                 is_free_tier=is_free,
+                reset_date=reset_date if isinstance(reset_date, str) else None,
             )
             # Paid-tier monthly limit still needs the dedicated CTA (different
             # message + different URL than the free-tier upsell).

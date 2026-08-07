@@ -38,6 +38,9 @@ FIRST_GENERATION_MILESTONE = "first_generation_milestone"
 # Monetization
 TRIAL_EXHAUSTED_VIEWED = "trial_exhausted_viewed"
 SUBSCRIBE_LINK_CLICKED = "subscribe_link_clicked"
+# Pre-wall banner: last free generation of the month, shown ahead of the
+# wall (trial_exhausted_viewed covers the wall itself, reused as-is).
+PAYWALL_PREWALL_SHOWN = "paywall_prewall_shown"
 
 # Onboarding / guidance
 # tutorial_source is the touchpoint id (footer_tutorial, post_signin, ...).
@@ -116,6 +119,7 @@ ALL_EVENTS = frozenset({
     FIRST_GENERATION_MILESTONE,
     TRIAL_EXHAUSTED_VIEWED,
     SUBSCRIBE_LINK_CLICKED,
+    PAYWALL_PREWALL_SHOWN,
     TUTORIAL_OPENED,
     GUIDANCE_TIP_SHOWN,
     GUIDANCE_TIP_DISMISSED,
@@ -167,6 +171,7 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     FIRST_GENERATION_MILESTONE: (),
     TRIAL_EXHAUSTED_VIEWED: ("is_free_tier",),
     SUBSCRIBE_LINK_CLICKED: (),
+    PAYWALL_PREWALL_SHOWN: (),
     TUTORIAL_OPENED: ("tutorial_source",),
     GUIDANCE_TIP_SHOWN: (),
     GUIDANCE_TIP_DISMISSED: (),

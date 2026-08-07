@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 from ...core import qt_compat as QtC
-from ...core.auth.activation_manager import get_subscribe_url, is_feature_enabled
-from ...core.config_store import get_export_copy
+from ...core.auth.activation_manager import (
+    get_prewall_url,
+    get_subscribe_url,
+    get_wall_url,
+    is_feature_enabled,
+)
+from ...core.date_format import format_reset_date
 from ...core.entitlements import paid_tier_default
 from ...core.i18n import tr
+from ...core.paywall_state import total_free_generations
+from ...core.resolution_labels import DEFAULT_RESOLUTION_CREDIT_COSTS
 from ..external_url import open_external
 from .style import ERROR_TEXT, SUCCESS_TEXT
 
@@ -43,7 +50,6 @@ class DockAccountMixin:
         if activated:
             self.hide_trial_info()
             self._update_layer_warning()
-            self._set_upgrade_cta_wanted(self._is_free_tier)
             self.set_launch_state()
             # A stale pairing spinner must never survive a successful activation.
             self._stop_pairing_wait()
@@ -52,10 +58,9 @@ class DockAccountMixin:
             self._connect_section.setVisible(True)
             self._stop_pairing_wait()
             self._activation_message.setVisible(False)
-            # The credits ring + count and the upsell pill belong to a signed-in
-            # session only; clear them so they never linger after sign-out.
+            # The credits ring + count belong to a signed-in session only;
+            # clear them so they never linger after sign-out.
             self._set_credits_wanted(False)
-            self._set_upgrade_cta_wanted(False)
             self.hide_trial_info()
         # Reconcile the first-steps guide banner: shown on the idle screen for a
         # signed-in user (set_launch_state above), hidden here after sign-out.
@@ -107,13 +112,20 @@ class DockAccountMixin:
         used: int | None = None,
         limit: int | None = None,
         is_free_tier: bool = False,
+        reset_date: str | None = None,
     ):
         """Update the credits ring + compact count in the footer.
 
-        Also drives the trial-exhausted upsell banner so it survives stray
-        ``set_status`` calls that otherwise hide it.
+        Also drives the free-tier wall screen and the pre-wall banner one
+        generation before it, so both survive stray ``set_status`` calls
+        that would otherwise hide them (see _is_free_tier_exhausted /
+        _is_free_tier_prewall in generation_state.py, the re-surfacing
+        hooks there). ``reset_date`` is the server's ISO renewal instant
+        (reset_date / period_end on the usage payload); may be None on an
+        older cached response or for a product with no monthly renewal.
         """
         self._is_free_tier = is_free_tier
+        self._reset_date = reset_date
         # Keep the reference-image gate in sync with the confirmed tier.
         if self._reference_widget is not None:
             self._reference_widget.set_free_tier(is_free_tier)
@@ -133,57 +145,123 @@ class DockAccountMixin:
             self._credit_ring.setToolTip(tooltip)
             self._credits_label.setToolTip(tooltip)
             self._set_credits_wanted(True)
-            # Cache + auto-surface the upsell banner when free tier hits 0.
+            # Cache before the paywall check below reads it back.
             self._cached_used = used
             self._cached_limit = limit
-            exhausted = is_free_tier and limit > 0 and used >= limit
-            if exhausted and self._trial_info_url:
-                # The renewal date is the server's rule, not the plugin's. A
-                # served sentence keeps this honest if the cadence ever moves,
-                # instead of every old client repeating "the 1st".
-                self.show_trial_exhausted_info(
-                    get_export_copy(
-                        "trial.exhausted",
-                        tr(
-                            "You've used this month's {limit} free credits."
-                            " They renew on the 1st."
-                        ).format(limit=limit),
-                    ).replace("{limit}", str(limit)),
-                    self._trial_info_url,
-                )
-            elif not exhausted:
+            if self._is_free_tier_exhausted():
+                self.show_trial_exhausted_info("", get_wall_url())
+                self.hide_prewall_info()
+            elif self._is_free_tier_prewall():
+                self.show_prewall_info(get_prewall_url())
                 self._trial_info_box.setVisible(False)
+                self._wall_telemetry_shown = False
+            else:
+                self._trial_info_box.setVisible(False)
+                self.hide_prewall_info()
+                self._wall_telemetry_shown = False
+                self._prewall_telemetry_shown = False
         else:
             self._set_credits_wanted(False)
-        self._set_upgrade_cta_wanted(is_free_tier and self._activated)
         self._refresh_resolution_triggers()
         self._update_generate_button_text()
+
+    def _wall_title(self) -> str:
+        """The wall's headline: total free generations and when they return.
+
+        Built from the last confirmed credits + reset date, so every path
+        that shows the wall (a proactive credits refresh, or a rejected
+        generation attempt) reads the same sentence. Empty when the credit
+        state needed to build it is not cached yet.
+        """
+        if not self._cached_limit:
+            return ""
+        unit_cost = self._resolution_credit_costs.get(
+            "1K", DEFAULT_RESOLUTION_CREDIT_COSTS["1K"]
+        )
+        total = total_free_generations(self._cached_limit, unit_cost)
+        if not total:
+            return ""
+        date_str = format_reset_date(self._reset_date) if self._reset_date else ""
+        if date_str:
+            return tr("Your {total} free generations return on {date}").format(
+                total=total, date=date_str
+            )
+        # The server has no renewal date for this account (older cached
+        # response, or a product outside the monthly free renewal). Same
+        # sentence minus the specific day rather than a raw/missing value.
+        return tr("Your {total} free generations return next month").format(total=total)
 
     def set_subscribe_url(self, url: str) -> None:
         """Prime the subscribe URL so set_credits can show the upsell on its own."""
         if url:
             self._trial_info_url = url
 
-    def show_trial_exhausted_info(self, message: str, subscribe_url: str):
+    def show_trial_exhausted_info(self, fallback_message: str, subscribe_url: str):
+        """Wall screen: locked wording, one CTA, the renewal date secondary.
+
+        ``fallback_message`` is used only when the credit state needed to
+        build the real sentence (total generations + reset date) is not
+        cached yet; both paths that reach here (account.py's own credit
+        refresh, and a rejected generation in generation_results.py) usually
+        arrive with fresh state, so it is rarely the one actually shown.
+        """
         self._hide_limit_cta()
-        # The CTA tail is suppressed server-side now (the dedicated primary
-        # button below carries that action). The previous English substring
-        # strip broke fr/es/pt_BR translations and is gone for that reason.
-        title = (message or "").strip()
+        title = self._wall_title()
         if not title:
-            title = tr("You've used this month's free credits")
+            title = (fallback_message or "").strip() or tr(
+                "You've used this month's free credits"
+            )
         self._trial_info_text.setText(title)
         self._trial_info_url = subscribe_url
         self._trial_info_btn.setVisible(True)
         self._trial_info_link.setVisible(False)
         self._trial_info_box.setVisible(True)
         self._hide_status_box()
+        if not self._wall_telemetry_shown:
+            from ...core import telemetry
+            from ...core import telemetry_events as te
+            telemetry.track(te.TRIAL_EXHAUSTED_VIEWED, {"is_free_tier": True})
+            self._wall_telemetry_shown = True
 
     def show_usage_limit_info(self, message: str, subscribe_url: str):
         self._show_status_box(message, "error")
         self._trial_info_box.setVisible(False)
         self._limit_cta_url = subscribe_url
         self._limit_cta_btn.setVisible(True)
+
+    def show_prewall_info(self, cta_url: str):
+        """Pre-wall banner: one generation left this month, shown ahead of
+        the wall. Visibility is state-driven (set_credits), never a
+        dismiss-and-forget hint, so it comes back every period the balance
+        lands back on exactly one generation."""
+        self._prewall_text.setText(tr(
+            "Last free generation of the month. Working on a project? "
+            "Take a Pro month."
+        ))
+        self._prewall_url = cta_url
+        self._prewall_banner.setVisible(True)
+        if not self._prewall_telemetry_shown:
+            from ...core import telemetry
+            from ...core import telemetry_events as te
+            telemetry.track(te.PAYWALL_PREWALL_SHOWN, {})
+            self._prewall_telemetry_shown = True
+
+    def hide_prewall_info(self):
+        self._prewall_banner.setVisible(False)
+
+    def _on_prewall_cta_clicked(self):
+        if not self._prewall_url:
+            return
+        from ...core import telemetry
+        from ...core import telemetry_events as te
+        # No "source" value for this CTA yet in the shared enum (the website
+        # registry is the source of truth for it); omitted rather than
+        # guessed, since source is optional on this event.
+        telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {})
+        # The user typically leaves QGIS for the browser right after; ship
+        # now so the batch is not lost with the session.
+        telemetry.flush()
+        open_external(self._prewall_url)
 
     def set_checking_credits(self, checking: bool):
         # Silent: the credit refresh is fast enough that a flashed status box
@@ -192,20 +270,14 @@ class DockAccountMixin:
 
     def hide_trial_info(self):
         self._trial_info_box.setVisible(False)
+        self.hide_prewall_info()
         self._hide_status_box()
         self._hide_limit_cta()
+        self._wall_telemetry_shown = False
+        self._prewall_telemetry_shown = False
 
     def _on_settings_btn_clicked(self):
         self.settings_clicked.emit()
-
-    def _on_upgrade_clicked(self):
-        from ...core import telemetry
-        from ...core import telemetry_events as te
-        telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {"source": "upgrade_cta"})
-        # The user leaves QGIS for the browser right after; ship now or the
-        # batch dies with the session.
-        telemetry.flush()
-        open_external(get_subscribe_url())
 
     def _on_trial_info_subscribe_clicked(self):
         from ...core import telemetry

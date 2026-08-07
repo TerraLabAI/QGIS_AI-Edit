@@ -63,6 +63,23 @@ def format_smart_date(iso_ts: str) -> str:
     return QLocale().toString(qdate, fmt)
 
 
+def format_reset_date(iso_ts: str) -> str:
+    """Full absolute date for the paywall wall ("15 September 2026").
+
+    QLocale-localized like format_smart_date. Empty string when unparsable
+    or blank, so callers fall back to a date-free sentence instead of
+    showing a raw/garbled ISO string.
+    """
+    parsed = _parse_iso(iso_ts)
+    if parsed is None:
+        return ""
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    local = parsed.astimezone()
+    qdate = QDate(local.year, local.month, local.day)
+    return QLocale().toString(qdate, "d MMMM yyyy")
+
+
 def format_group_label(iso_ts: str) -> str:
     """Time bucket for history lists: Today, This week, else the month
     (plus the year once it is not the current one). Month names come from

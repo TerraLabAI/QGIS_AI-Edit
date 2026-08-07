@@ -2851,5 +2851,29 @@ Adoraríamos receber seu retorno!</translation>
         <source>Adding session input to the map</source>
         <translation>Adicionando a entrada da sessão ao mapa</translation>
     </message>
+    <message>
+        <source>Your {total} free generations return on {date}</source>
+        <translation>Suas {total} gerações gratuitas voltam em {date}</translation>
+    </message>
+    <message>
+        <source>Your {total} free generations return next month</source>
+        <translation>Suas {total} gerações gratuitas voltam no próximo mês</translation>
+    </message>
+    <message>
+        <source>Unlock your Pro month: €29</source>
+        <translation>Desbloqueie seu mês Pro: € 29</translation>
+    </message>
+    <message>
+        <source>No commitment, cancel anytime</source>
+        <translation>Sem compromisso, cancele quando quiser</translation>
+    </message>
+    <message>
+        <source>Last free generation of the month. Working on a project? Take a Pro month.</source>
+        <translation>Última geração gratuita do mês. Está com um projeto em andamento? Assine um mês Pro.</translation>
+    </message>
+    <message>
+        <source>Take a Pro month</source>
+        <translation>Assine um mês Pro</translation>
+    </message>
 </context>
 </TS>

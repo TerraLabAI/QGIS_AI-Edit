@@ -2851,5 +2851,29 @@ We'd love to hear from you!</source>
         <source>Adding session input to the map</source>
         <translation>正在將工作階段輸入影像加入地圖</translation>
     </message>
+    <message>
+        <source>Your {total} free generations return on {date}</source>
+        <translation>您的{total}次免費生成將於{date}恢復</translation>
+    </message>
+    <message>
+        <source>Your {total} free generations return next month</source>
+        <translation>您的{total}次免費生成將於下個月恢復</translation>
+    </message>
+    <message>
+        <source>Unlock your Pro month: €29</source>
+        <translation>解鎖您的 Pro 月方案：€29</translation>
+    </message>
+    <message>
+        <source>No commitment, cancel anytime</source>
+        <translation>無需承諾，隨時可取消</translation>
+    </message>
+    <message>
+        <source>Last free generation of the month. Working on a project? Take a Pro month.</source>
+        <translation>本月最後一次免費生成。專案還沒做完？開通 Pro 月方案。</translation>
+    </message>
+    <message>
+        <source>Take a Pro month</source>
+        <translation>開通 Pro 月方案</translation>
+    </message>
 </context>
 </TS>

@@ -183,6 +183,16 @@ class AIEditDockWidget(
         self._is_free_tier = True  # default hidden until confirmed Pro
         self._cached_used: int | None = None
         self._cached_limit: int | None = None
+        # ISO renewal date served alongside used/limit (reset_date /
+        # period_end), read by the wall's secondary "returns on {date}" line.
+        # None until a real credits payload lands, or when the server has
+        # nothing to say (see core.date_format.format_reset_date fallback).
+        self._reset_date: str | None = None
+        # Fire trial_exhausted_viewed / paywall_prewall_shown once per
+        # continuous wall/pre-wall state, not on every credits refresh.
+        # Reset whenever set_credits sees a balance outside that state.
+        self._wall_telemetry_shown = False
+        self._prewall_telemetry_shown = False
         # Pre-confirmation seed. Paid accounts are bumped to the "2K"
         # (Detailed) default once set_credits confirms the tier; free tier
         # keeps getting coerced to "1K". A manual pick always wins

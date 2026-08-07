@@ -2851,5 +2851,29 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <source>Adding session input to the map</source>
         <translation>Sitzungs-Eingabe wird zur Karte hinzugefügt</translation>
     </message>
+    <message>
+        <source>Your {total} free generations return on {date}</source>
+        <translation>Ihre {total} kostenlosen Generierungen werden am {date} erneuert</translation>
+    </message>
+    <message>
+        <source>Your {total} free generations return next month</source>
+        <translation>Ihre {total} kostenlosen Generierungen werden nächsten Monat erneuert</translation>
+    </message>
+    <message>
+        <source>Unlock your Pro month: €29</source>
+        <translation>Pro-Monat freischalten: 29 €</translation>
+    </message>
+    <message>
+        <source>No commitment, cancel anytime</source>
+        <translation>Keine Verpflichtung, jederzeit kündbar</translation>
+    </message>
+    <message>
+        <source>Last free generation of the month. Working on a project? Take a Pro month.</source>
+        <translation>Letzte kostenlose Generierung des Monats. Ein Projekt in Arbeit? Holen Sie sich einen Pro-Monat.</translation>
+    </message>
+    <message>
+        <source>Take a Pro month</source>
+        <translation>Pro-Monat holen</translation>
+    </message>
 </context>
 </TS>

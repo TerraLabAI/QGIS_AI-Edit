@@ -2851,5 +2851,29 @@ We horen graag van u!</translation>
         <source>Adding session input to the map</source>
         <translation>Sessie-invoer wordt aan de kaart toegevoegd</translation>
     </message>
+    <message>
+        <source>Your {total} free generations return on {date}</source>
+        <translation>Je {total} gratis generaties worden op {date} vernieuwd</translation>
+    </message>
+    <message>
+        <source>Your {total} free generations return next month</source>
+        <translation>Je {total} gratis generaties worden volgende maand vernieuwd</translation>
+    </message>
+    <message>
+        <source>Unlock your Pro month: €29</source>
+        <translation>Ontgrendel je Pro-maand: € 29</translation>
+    </message>
+    <message>
+        <source>No commitment, cancel anytime</source>
+        <translation>Geen verplichtingen, altijd opzegbaar</translation>
+    </message>
+    <message>
+        <source>Last free generation of the month. Working on a project? Take a Pro month.</source>
+        <translation>Laatste gratis generatie van de maand. Bezig met een project? Neem een Pro-maand.</translation>
+    </message>
+    <message>
+        <source>Take a Pro month</source>
+        <translation>Neem een Pro-maand</translation>
+    </message>
 </context>
 </TS>

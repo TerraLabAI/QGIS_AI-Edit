@@ -2851,5 +2851,29 @@ Chcielibyśmy to od Ciebie usłyszeć!</translation>
         <source>Adding session input to the map</source>
         <translation>Dodawanie danych wejściowych sesji do mapy</translation>
     </message>
+    <message>
+        <source>Your {total} free generations return on {date}</source>
+        <translation>Twoje {total} darmowych generacji odnawia się {date}</translation>
+    </message>
+    <message>
+        <source>Your {total} free generations return next month</source>
+        <translation>Twoje {total} darmowych generacji odnawia się w przyszłym miesiącu</translation>
+    </message>
+    <message>
+        <source>Unlock your Pro month: €29</source>
+        <translation>Odblokuj miesiąc Pro: 29 €</translation>
+    </message>
+    <message>
+        <source>No commitment, cancel anytime</source>
+        <translation>Bez zobowiązań, anuluj w dowolnym momencie</translation>
+    </message>
+    <message>
+        <source>Last free generation of the month. Working on a project? Take a Pro month.</source>
+        <translation>Ostatnia darmowa generacja w tym miesiącu. Pracujesz nad projektem? Wykup miesiąc Pro.</translation>
+    </message>
+    <message>
+        <source>Take a Pro month</source>
+        <translation>Wykup miesiąc Pro</translation>
+    </message>
 </context>
 </TS>

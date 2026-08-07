@@ -12,8 +12,10 @@ from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.auth.activation_manager import has_consent
 from ...core.i18n import tr
+from ...core.paywall_state import classify_paywall_state
 from ...core.prompts.loading_messages import get_phase_messages
 from ...core.prompts.prompt_presets import format_template_prompt
+from ...core.resolution_labels import DEFAULT_RESOLUTION_CREDIT_COSTS
 from ..onboarding_hint import (
     HINT_FIRST_STEPS,
     HINT_GUIDE_AI,
@@ -208,10 +210,13 @@ class DockGenerationStateMixin:
         # _refresh_resolution_triggers when free tier is confirmed.
         self._refresh_resolution_triggers()
         self._update_layer_warning()
-        # Re-surface the upsell banner on free-tier-exhausted accounts:
-        # state transitions otherwise hide it via set_status() side effects.
+        # Re-surface the upsell banner on free-tier-exhausted accounts (or the
+        # lighter pre-wall nudge one step before that): state transitions
+        # otherwise hide both via set_status() side effects.
         if self._is_free_tier_exhausted() and self._trial_info_url:
             self._trial_info_box.setVisible(True)
+        elif self._is_free_tier_prewall() and self._prewall_url:
+            self._prewall_banner.setVisible(True)
 
     def set_selecting_zone_state(self):
         """SELECTING_ZONE: invite the user to draw a zone on the canvas.
@@ -256,7 +261,6 @@ class DockGenerationStateMixin:
             self._progress_widget.setVisible(generating)
             self._result_section.setVisible(False)
             self._warning_widget.setVisible(False)
-            self._set_upgrade_cta_wanted(False)
 
             if generating:
                 self._progress_bar.setRange(0, 100)
@@ -430,15 +434,33 @@ class DockGenerationStateMixin:
             self._hide_status_box()
         else:
             self._show_status_box(message, "error")
-        # Only hide the trial-exhausted upsell if it's no longer applicable;
-        # otherwise transient status updates would clobber it.
+        # Only hide the trial-exhausted upsell (or the pre-wall banner) if it's
+        # no longer applicable; otherwise transient status updates would
+        # clobber it.
         if not self._is_free_tier_exhausted():
             self._trial_info_box.setVisible(False)
+        if not self._is_free_tier_prewall():
+            self._prewall_banner.setVisible(False)
+
+    def _paywall_state(self) -> str:
+        """"wall" | "prewall" | "normal" for the last confirmed free-tier
+        balance. See core.paywall_state.classify_paywall_state for the
+        threshold semantics (wall wins on overlap)."""
+        if self._cached_used is None or self._cached_limit is None:
+            return "normal"
+        if not self._is_free_tier or self._cached_limit <= 0:
+            return "normal"
+        remaining = max(0, self._cached_limit - self._cached_used)
+        unit_cost = self._resolution_credit_costs.get(
+            "1K", DEFAULT_RESOLUTION_CREDIT_COSTS["1K"]
+        )
+        return classify_paywall_state(remaining, unit_cost)
 
     def _is_free_tier_exhausted(self) -> bool:
-        if self._cached_used is None or self._cached_limit is None:
-            return False
-        return self._is_free_tier and self._cached_limit > 0 and self._cached_used >= self._cached_limit
+        return self._paywall_state() == "wall"
+
+    def _is_free_tier_prewall(self) -> bool:
+        return self._paywall_state() == "prewall"
 
     def set_generation_complete(self, layer_name: str, layer_id: str | None = None):
         """Show RESULT state with iteration options (retry / done)."""
@@ -497,7 +519,6 @@ class DockGenerationStateMixin:
         self._layer_saved_label.setText(tr("Saved as {name}").format(name=link_html))
         self._layer_saved_label.setVisible(True)
 
-        self._set_upgrade_cta_wanted(self._is_free_tier and self._activated)
         # Result screen (not idle): keep the first-steps guide banner hidden.
         self._update_first_steps_visibility()
 
@@ -531,9 +552,6 @@ class DockGenerationStateMixin:
         # Nothing was just saved on restore: keep the success line hidden.
         self._layer_saved_label.setVisible(False)
         self._refresh_resolution_triggers()
-        # Reconcile the upgrade CTA like set_generation_complete, so the two
-        # RESULT-entry paths can't leave a stale CTA on the iterate screen.
-        self._set_upgrade_cta_wanted(self._is_free_tier and self._activated)
         # Restore can jump straight here from the idle screen: hide the banner.
         self._update_first_steps_visibility()
 

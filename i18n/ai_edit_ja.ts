@@ -2851,5 +2851,29 @@ We'd love to hear from you!</source>
         <source>Adding session input to the map</source>
         <translation>セッション入力を地図に追加しています</translation>
     </message>
+    <message>
+        <source>Your {total} free generations return on {date}</source>
+        <translation>{total}回分の無料生成は{date}に更新されます</translation>
+    </message>
+    <message>
+        <source>Your {total} free generations return next month</source>
+        <translation>{total}回分の無料生成は来月更新されます</translation>
+    </message>
+    <message>
+        <source>Unlock your Pro month: €29</source>
+        <translation>Proプランをアンロック：€29</translation>
+    </message>
+    <message>
+        <source>No commitment, cancel anytime</source>
+        <translation>契約不要、いつでも解約可能</translation>
+    </message>
+    <message>
+        <source>Last free generation of the month. Working on a project? Take a Pro month.</source>
+        <translation>今月最後の無料生成です。進行中のプロジェクトがありますか？Proプランを利用しましょう。</translation>
+    </message>
+    <message>
+        <source>Take a Pro month</source>
+        <translation>Proプランを利用する</translation>
+    </message>
 </context>
 </TS>

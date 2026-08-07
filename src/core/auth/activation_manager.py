@@ -24,6 +24,11 @@ def build_utm_url(path: str, utm_content: str) -> str:
 
 SUBSCRIBE_URL = build_utm_url("/dashboard/ai-edit", "subscribe")
 DASHBOARD_URL = build_utm_url("/dashboard/ai-edit", "dashboard")
+# Free-tier paywall CTAs (wall screen / pre-wall banner): same dashboard
+# path as every other subscribe CTA, only utm_content differs, so the
+# funnel can tell which surface converted.
+WALL_URL = build_utm_url("/dashboard/ai-edit", "wall")
+PREWALL_URL = build_utm_url("/dashboard/ai-edit", "prewall")
 TERMS_URL = build_utm_url("/terms-of-sale", "settings_terms")
 PRIVACY_URL = build_utm_url("/privacy-policy", "settings_privacy")
 CONTACT_CALL_URL = "https://calendly.com/barbot-yvann/30min"
@@ -344,6 +349,14 @@ def get_subscribe_url() -> str:
 
 def get_dashboard_url() -> str:
     return _server_url("dashboard_url", DASHBOARD_URL)
+
+
+def get_wall_url() -> str:
+    return _server_url("wall_url", WALL_URL)
+
+
+def get_prewall_url() -> str:
+    return _server_url("prewall_url", PREWALL_URL)
 
 
 def get_tutorial_url(client=None) -> str:
