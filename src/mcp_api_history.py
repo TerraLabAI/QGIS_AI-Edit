@@ -1,0 +1,465 @@
+
+
+
+
+
+
+
+
+
+
+
+from __future__ import annotations
+
+from typing import Any
+
+from .mcp_api_support import _jsonable, _never_raises, _response_error, _whole_number, not_found_error
+
+
+
+
+_JOB_FIELDS = (
+    "request_id",
+    "session_id",
+    "session_title",
+    "created_at",
+    "prompt",
+    "template_id",
+    "template_name",
+    "resolution",
+    "output_w",
+    "output_h",
+    "aspect_ratio",
+    "duration_ms",
+    "is_favorite",
+    "crs_authid",
+    "bbox",
+    "bbox_wgs84",
+    "input_url",
+    "output_url",
+    "input_thumb_url",
+    "output_thumb_url",
+    "reference_image_urls",
+)
+
+
+def _job_summary(job: dict) -> dict:
+
+    return {field: _jsonable(job.get(field)) for field in _JOB_FIELDS}
+
+
+class HistoryMixin:
+
+
+
+
+    def _cached_jobs(self) -> list[dict]:
+
+        dock = self._dock()
+        getter = getattr(dock, "get_cached_recent_jobs", None) if dock is not None else None
+        if callable(getter):
+            jobs = getter()
+            if jobs:
+                return list(jobs)
+        from .core.prompts import history_cache
+        return list(history_cache.get_recent_jobs() or [])
+
+    def _auth_header(self):
+
+        auth = getattr(self._plugin, "_auth_manager", None)
+        if auth is None:
+            return None
+        try:
+            header = auth.get_auth_header()
+        except Exception:
+            return None
+        return header or None
+
+    def _job_by_request_id(self, request_id: str) -> dict | None:
+        for job in self._cached_jobs():
+            if str(job.get("request_id") or "") == request_id:
+                return job
+        return None
+
+    def _newest_job_of_session(self, session_id: str) -> dict | None:
+        members = [
+            job for job in self._cached_jobs()
+            if str(job.get("session_id") or "") == session_id
+        ]
+        if not members:
+            return None
+        return max(members, key=lambda job: str(job.get("created_at") or ""))
+
+    def _known_request_ids(self) -> list[str]:
+
+        return [str(job.get("request_id") or "") for job in self._cached_jobs()]
+
+    def _known_session_ids(self) -> list[str]:
+
+        seen: list[str] = []
+        for job in self._cached_jobs():
+            session_id = str(job.get("session_id") or "")
+            if session_id and session_id not in seen:
+                seen.append(session_id)
+        return seen
+
+    def _session_entries(self) -> list[dict]:
+        from .core.prompts.conversation_summary import conversation_entries
+        return conversation_entries(self._cached_jobs())
+
+
+
+    @_never_raises
+    def list_sessions(self, query: str = "", limit: int = 25) -> dict:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        from .core.prompts.conversation_summary import filter_entries
+
+        try:
+            limit = max(1, _whole_number(limit))
+        except (TypeError, ValueError, OverflowError):
+            return {"_error": "limit must be a whole number."}
+        entries = self._session_entries()
+        text = str(query or "").strip()
+        if text:
+            entries = filter_entries(entries, text)
+        sessions = [
+            {
+                "session_id": entry.get("session_id"),
+                "title": entry.get("title"),
+                "count": entry.get("count"),
+                "created_at": entry.get("created_at"),
+                "bbox_wgs84": _jsonable(entry.get("bbox_wgs84")),
+            }
+            for entry in entries[:limit]
+        ]
+        out = {"count": len(sessions), "sessions": sessions, "query": query}
+        if not sessions:
+            out["hint"] = (
+                "Nothing matched: widen query or leave it out, then call "
+                "list_generations(refresh=True) to bring in work done elsewhere."
+            )
+        return out
+
+    @_never_raises
+    def get_session(self, session_id: str) -> dict:
+
+
+
+
+
+
+        session_id = str(session_id or "").strip()
+        if not session_id:
+            return {"_error": "session_id is required. Read one from list_sessions()."}
+        entry = next(
+            (e for e in self._session_entries() if str(e.get("session_id") or "") == session_id),
+            None,
+        )
+        if entry is None:
+            miss = not_found_error(
+                "session", session_id, self._known_session_ids(),
+                means="session_id comes from list_sessions(), and it reads this machine only.",
+            )
+            return {
+                "found": False,
+                "session_id": session_id,
+                "note": miss["_error"],
+                "_suggestions": miss.get("_suggestions") or [],
+                "hint": "Call list_generations(refresh=True) to bring in work done elsewhere.",
+            }
+        members = list(entry.get("members") or [])
+        members.sort(key=lambda job: str(job.get("created_at") or ""))
+        return {
+            "found": True,
+            "session_id": session_id,
+            "title": entry.get("title"),
+            "count": entry.get("count"),
+            "bbox_wgs84": _jsonable(entry.get("bbox_wgs84")),
+            "generations": [_job_summary(job) for job in members],
+        }
+
+    @_never_raises
+    def list_generations(
+        self,
+        limit: int = 25,
+        favorites_only: bool = False,
+        refresh: bool = False,
+    ) -> dict:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        try:
+            limit = max(1, _whole_number(limit))
+        except (TypeError, ValueError, OverflowError):
+            return {"_error": "limit must be a whole number."}
+
+        if refresh:
+            client = getattr(self._plugin, "_client", None)
+            header = self._auth_header()
+            if client is None or header is None:
+                return {
+                    "_error": (
+                        "Reading from the account needs the user signed in. "
+                        "Call get_status() and follow action_required, or call "
+                        "list_generations() without refresh to read this machine."
+                    ),
+                }
+            payload = client.get_generation_history(
+                header, limit=limit, favorites_only=bool(favorites_only)
+            )
+            error = _response_error(payload, "Reading history")
+            if error:
+                return error
+            jobs = payload.get("jobs")
+            if not isinstance(jobs, list) or any(not isinstance(job, dict) for job in jobs):
+                return {"_error": "Reading history returned invalid generation records."}
+            return {
+                "count": len(jobs),
+                "generations": [_job_summary(job) for job in jobs],
+                "from_server": True,
+                "has_more": bool(payload.get("has_more")),
+            }
+
+        jobs = self._cached_jobs()
+        if favorites_only:
+            jobs = [job for job in jobs if job.get("is_favorite")]
+        has_more = len(jobs) > limit
+        jobs = jobs[:limit]
+        return {
+            "count": len(jobs),
+            "generations": [_job_summary(job) for job in jobs],
+            "from_server": False,
+            "has_more": has_more,
+        }
+
+    @_never_raises
+    def get_generation(self, request_id: str) -> dict:
+
+
+
+
+
+
+
+        request_id = str(request_id or "").strip()
+        if not request_id:
+            return {"_error": "request_id is required. Read one from list_generations()."}
+        job = self._job_by_request_id(request_id)
+        if job is None:
+            miss = not_found_error(
+                "past edit", request_id, self._known_request_ids(),
+                means="request_id comes from list_generations(), and it reads this machine only.",
+            )
+            return {
+                "found": False,
+                "request_id": request_id,
+                "note": miss["_error"],
+                "_suggestions": miss.get("_suggestions") or [],
+                "hint": "Call list_generations(refresh=True) to bring in work done elsewhere.",
+            }
+        from .core.prompts import history_cache
+        out: dict[str, Any] = _job_summary(job)
+        out["found"] = True
+        out["raw"] = _jsonable(job)
+        out["zone_polygon"] = _jsonable(history_cache.get_zone_polygon(request_id))
+        out["output_paths"] = _jsonable(history_cache.get_output_paths(request_id))
+        return out
+
+    @_never_raises
+    def open_session(self, session_id: str = "", request_id: str = "") -> dict:
+
+
+
+
+
+
+
+
+
+
+
+        session_id = str(session_id or "").strip()
+        request_id = str(request_id or "").strip()
+        if bool(session_id) == bool(request_id):
+            return {"_error": "Pass session_id or request_id, exactly one of the two."}
+        job = (
+            self._job_by_request_id(request_id) if request_id
+            else self._newest_job_of_session(session_id)
+        )
+        if job is None:
+            return not_found_error(
+                "session" if session_id else "past edit",
+                session_id or request_id,
+                self._known_session_ids() if session_id else self._known_request_ids(),
+                means=(
+                    "This reads the copy held on this machine: call "
+                    "list_generations(refresh=True) first to bring in work done elsewhere."
+                ),
+            )
+        if getattr(self, "_busy", lambda: False)():
+            return {"_error": "Wait for the current generation before reopening a session.", "busy": True}
+        handler = getattr(self._plugin, "_on_history_restore", None)
+        if not callable(handler):
+            return {"_error": "Reopening past work is not available in this build."}
+        self._open_dock()
+        handler(dict(job))
+        return {
+            "ok": True,
+            "session_id": job.get("session_id"),
+            "request_id": job.get("request_id"),
+            "note": "The panel fills in over a few seconds. Read get_zone() and list_versions().",
+            "hint": (
+                "Once list_versions() reports the restored versions, call generate(prompt) "
+                "to carry this session on."
+            ),
+        }
+
+    @_never_raises
+    def add_generation_to_map(self, request_id: str) -> dict:
+
+
+
+
+
+
+
+        request_id = str(request_id or "").strip()
+        if not request_id:
+            return {"_error": "request_id is required. Read one from list_generations()."}
+        job = self._job_by_request_id(request_id)
+        if job is None:
+            return not_found_error(
+                "past edit", request_id, self._known_request_ids(),
+                means=(
+                    "This reads the copy held on this machine: call "
+                    "list_generations(refresh=True) first to bring in work done elsewhere."
+                ),
+            )
+        handler = getattr(self._plugin, "_on_history_add_to_map", None)
+        if not callable(handler):
+            return {"_error": "Adding past work to the map is not available in this build."}
+        handler(dict(job))
+        return {
+            "ok": True,
+            "request_id": request_id,
+            "note": "The layer is being fetched and appears in the project shortly.",
+            "hint": (
+                "Once the layer is in the project, vectorize(target_rgb, layer_name=...) "
+                "traces one colour of it into polygons."
+            ),
+        }
+
+    @_never_raises
+    def rename_session(self, session_id: str, title: str) -> dict:
+
+
+
+
+
+
+
+
+        session_id = str(session_id or "").strip()
+        title = str(title or "").strip()
+        if not session_id:
+            return {"_error": "session_id is required. Read one from list_sessions()."}
+        if not title:
+            return {"_error": "title is required."}
+        client = getattr(self._plugin, "_client", None)
+        header = self._auth_header()
+        if client is None or header is None:
+            return {
+                "_error": (
+                    "Renaming needs the user signed in. Call get_status() and "
+                    "follow action_required."
+                ),
+            }
+        payload = client.rename_generation_session(header, session_id, title) or {}
+        error = _response_error(payload, "Renaming the session")
+        if error:
+            return error
+        stored = payload.get("title") or title
+        handler = getattr(self._plugin, "_apply_conversation_rename", None)
+        if callable(handler):
+            try:
+                handler(session_id, payload)
+            except Exception:  # nosec B110
+                pass
+        return {"ok": True, "session_id": session_id, "title": stored}
+
+    @_never_raises
+    def delete_session(self, session_id: str) -> dict:
+
+
+
+
+
+
+
+
+
+
+
+
+
+        session_id = str(session_id or "").strip()
+        if not session_id:
+            return {"_error": "session_id is required. Read one from list_sessions()."}
+        client = getattr(self._plugin, "_client", None)
+        header = self._auth_header()
+        if client is None or header is None:
+            return {
+                "_error": (
+                    "Deleting needs the user signed in. Call get_status() and "
+                    "follow action_required."
+                ),
+            }
+        payload = client.delete_generation_session(header, session_id=session_id)
+        error = _response_error(payload, "Deleting the session")
+        if error:
+            return error
+
+
+
+        entry = next(
+            (e for e in self._session_entries() if str(e.get("session_id") or "") == session_id),
+            None,
+        )
+        dropped = False
+        applier = getattr(self._plugin, "_apply_conversation_delete", None)
+        if entry is not None and callable(applier):
+            try:
+                applier(entry)
+                dropped = True
+            except Exception:  # nosec B110
+                dropped = False
+        return {
+            "ok": True,
+            "session_id": session_id,
+            "cache_cleared": dropped,
+            "note": "Deleted for good. Layers already in the project are untouched.",
+        }
