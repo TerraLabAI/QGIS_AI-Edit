@@ -10,7 +10,7 @@ from qgis.PyQt.QtWidgets import QStyle
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
-from ...core.auth.activation_manager import has_consent
+from ...core.auth.activation_manager import has_seen_privacy_notice
 from ...core.i18n import tr
 from ...core.paywall_state import classify_paywall_state
 from ...core.prompts.loading_messages import get_phase_messages
@@ -47,7 +47,7 @@ class DockGenerationStateMixin:
         self._prompt_section.setVisible(True)
         self._prompt_container.set_readonly(False)
         self._place_reference_widget("prompt")
-        self._consent_widget.setVisible(not has_consent())
+        self._generate_note_box.setVisible(not has_seen_privacy_notice())
         self._generate_btn.setVisible(True)
         self._exit_btn.setVisible(True)
         self._refresh_resolution_triggers()
@@ -70,6 +70,11 @@ class DockGenerationStateMixin:
         cursor = self._prompt_input.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
         self._prompt_input.setTextCursor(cursor)
+
+    def hide_privacy_notice(self):
+        """Retire the disclosure line once a generation has completed. The box
+        holds only that line, so the whole box goes and leaves no empty frame."""
+        self._generate_note_box.setVisible(False)
 
     def set_zone_cleared(self):
         """Zone removed: return to the SELECTING_ZONE state.
@@ -177,7 +182,7 @@ class DockGenerationStateMixin:
         self._progress_widget.setVisible(False)
         self._result_section.setVisible(False)
         self._layer_saved_label.setVisible(False)
-        self._consent_widget.setVisible(False)
+        self._generate_note_box.setVisible(False)
         self._generate_btn.setVisible(False)
         self._exit_btn.setVisible(False)
 
@@ -240,7 +245,7 @@ class DockGenerationStateMixin:
         self._progress_widget.setVisible(False)
         self._result_section.setVisible(False)
         self._layer_saved_label.setVisible(False)
-        self._consent_widget.setVisible(False)
+        self._generate_note_box.setVisible(False)
         self._generate_btn.setVisible(False)
         # No Exit in this state - the screen is just the draw invitation.
         self._exit_btn.setVisible(False)
@@ -288,7 +293,7 @@ class DockGenerationStateMixin:
                 # the next edit renders, but locked (no base switch mid-run).
                 self._place_version_strip("generating")
                 self._version_strip.set_readonly(True)
-                self._consent_widget.setVisible(False)
+                self._generate_note_box.setVisible(False)
                 self._generate_btn.setVisible(False)
                 # Hide Exit during generation: the user shouldn't be tempted to
                 # cancel mid-run from this row. The title-bar X still works as
@@ -302,7 +307,7 @@ class DockGenerationStateMixin:
                     self._reference_widget.set_readonly(False)
                 if getattr(self, "_reference_panel", None) is not None:
                     self._reference_panel.set_readonly(False)
-                self._consent_widget.setVisible(not has_consent() and self._zone_selected)
+                self._generate_note_box.setVisible(not has_seen_privacy_notice())
                 self._generate_btn.setVisible(True)
                 self._exit_btn.setVisible(True)
                 self._refresh_resolution_triggers()
@@ -482,7 +487,7 @@ class DockGenerationStateMixin:
         # The result section has its own Exit button, so suppress the prompt
         # row's Exit to avoid duplication.
         self._exit_btn.setVisible(False)
-        self._consent_widget.setVisible(False)
+        self._generate_note_box.setVisible(False)
 
         # Start the next iteration from a blank prompt instead of replaying the
         # one that produced this result. An empty field nudges the user to
@@ -541,7 +546,7 @@ class DockGenerationStateMixin:
         self._prompt_section.setVisible(False)
         self._generate_btn.setVisible(False)
         self._exit_btn.setVisible(False)
-        self._consent_widget.setVisible(False)
+        self._generate_note_box.setVisible(False)
         self._prompt_container.set_readonly(False)
         self._result_section.setVisible(True)
         self._result_prompt_widget.setVisible(True)

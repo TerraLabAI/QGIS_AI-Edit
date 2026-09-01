@@ -63,6 +63,12 @@ MARKUP_OPENED = "markup_opened"
 # layer), so the submit was intercepted and a recovery bar shown instead.
 MARKUP_HIDDEN_WARNED = "ai_edit_markup_hidden_warned"
 MARKUP_HIDDEN_RESOLVED = "ai_edit_markup_hidden_resolved"
+# Reliability guard: the result landed under opaque imagery (the AI-Edit group
+# sits below it in the tree), so the canvas did not change and the plugin said
+# so instead of leaving the user to conclude nothing happened. covering_count
+# is how many layers are on top; choice is what they did about it.
+RESULT_HIDDEN_WARNED = "ai_edit_result_hidden_warned"
+RESULT_HIDDEN_RESOLVED = "ai_edit_result_hidden_resolved"
 VECTORIZE_PANEL_OPENED = "vectorize_panel_opened"
 # CTA funnel: hint_shown fires when the result panel surfaces the Vectorize
 # suggestion (trigger: template | freeform_verb | flat_output).
@@ -127,6 +133,8 @@ ALL_EVENTS = frozenset({
     MARKUP_OPENED,
     MARKUP_HIDDEN_WARNED,
     MARKUP_HIDDEN_RESOLVED,
+    RESULT_HIDDEN_WARNED,
+    RESULT_HIDDEN_RESOLVED,
     VECTORIZE_PANEL_OPENED,
     VECTORIZE_HINT_SHOWN,
     VECTORIZE_SUGGESTION_CLICKED,
@@ -179,6 +187,8 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     MARKUP_OPENED: (),
     MARKUP_HIDDEN_WARNED: (),
     MARKUP_HIDDEN_RESOLVED: ("choice",),
+    RESULT_HIDDEN_WARNED: ("covering_count",),
+    RESULT_HIDDEN_RESOLVED: ("choice",),
     VECTORIZE_PANEL_OPENED: (),
     VECTORIZE_HINT_SHOWN: (),
     VECTORIZE_SUGGESTION_CLICKED: (),

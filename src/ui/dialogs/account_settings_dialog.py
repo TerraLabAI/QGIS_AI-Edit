@@ -7,6 +7,7 @@ from datetime import datetime
 from qgis.PyQt.QtCore import QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import (
+    QCheckBox,
     QDialog,
     QFileDialog,
     QFrame,
@@ -285,6 +286,7 @@ class AccountSettingsDialog(QDialog):
             self._content_layout.addWidget(self._build_subscription_card(sub))
 
         self._content_layout.addWidget(self._build_preferences_card())
+        self._content_layout.addWidget(self._build_privacy_card())
 
         # Discreet footer: thin top separator, small muted Terms / Privacy links.
         footer = QFrame()
@@ -394,6 +396,55 @@ class AccountSettingsDialog(QDialog):
         row.addWidget(self._guidance_btn)
 
         return w
+
+    def _build_privacy_card(self) -> QFrame:
+        """Usage telemetry with an ON-by-default opt-out, mirroring AI
+        Segmentation's Privacy card.
+
+        Flips the shared TerraLab/telemetry_enabled flag (core/telemetry.py), so
+        turning it off here also silences the sibling AI Segmentation plugin.
+
+        It exists because the published privacy policy had to tell AI Edit users
+        to email us to object, the plugin carrying no control of its own.
+        """
+        from ...core.telemetry import is_telemetry_enabled
+
+        card = QFrame()
+        card.setStyleSheet(_CARD_STYLE)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(6)
+
+        title = QLabel(f"<b>{tr('Privacy')}</b>")
+        title.setStyleSheet("font-size: 13px; color: palette(text);")
+        layout.addWidget(title)
+
+        self._telemetry_checkbox = QCheckBox(
+            tr("Share usage statistics with TerraLab"))
+        self._telemetry_checkbox.setToolTip(tr("Helps us fix bugs faster."))
+        self._telemetry_checkbox.setChecked(is_telemetry_enabled())
+        self._telemetry_checkbox.setCursor(QtC.PointingHandCursor)
+        self._telemetry_checkbox.setStyleSheet(
+            "font-size: 12px; color: palette(text);")
+        self._telemetry_checkbox.toggled.connect(self._on_telemetry_toggled)
+        layout.addWidget(self._telemetry_checkbox)
+
+        caption = QLabel(
+            tr(
+                "Errors, versions and which features you use, linked to your "
+                "account. Never your imagery, layers or coordinates."
+            )
+        )
+        caption.setWordWrap(True)
+        caption.setStyleSheet("font-size: 11px; color: rgba(128,128,128,0.9);")
+        layout.addWidget(caption)
+
+        return card
+
+    def _on_telemetry_toggled(self, enabled: bool) -> None:
+        from ...core.telemetry import set_telemetry_enabled
+
+        set_telemetry_enabled(enabled)
 
     def _on_reset_guidance(self) -> None:
         reset_hints()
@@ -539,6 +590,17 @@ class AccountSettingsDialog(QDialog):
         grid.addWidget(credits_label, row, 1)
 
         card_layout.addLayout(grid)
+
+        # Free is for trying the plugin out, not for billable work. The pricing
+        # page and the Terms of Use carry the same rule; a free user does their
+        # work in here, so the line has to exist in here too.
+        if is_free:
+            free_use_note = QLabel(
+                tr("Personal, non-commercial use. A paid plan adds commercial "
+                   "use for one person."))
+            free_use_note.setWordWrap(True)
+            free_use_note.setStyleSheet("font-size: 11px; color: palette(mid);")
+            card_layout.addWidget(free_use_note)
 
         progress = QProgressBar()
         progress.setRange(0, max(limit, 1))

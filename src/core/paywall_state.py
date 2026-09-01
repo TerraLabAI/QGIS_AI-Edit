@@ -49,3 +49,26 @@ def total_free_generations(limit: int, unit_cost: int) -> int:
     if unit_cost <= 0 or limit <= 0:
         return 0
     return max(0, limit // unit_cost)
+
+
+# Shipped floor for the pre-login card, used only when the served config has
+# not arrived yet. Keep it equal to what the server actually grants today.
+SHIPPED_FREE_GENERATIONS = 3
+
+
+def advertised_free_generations() -> int:
+    """Free generations to promise on the pre-login screen.
+
+    The sign-in card is painted BEFORE any account exists, so it cannot use
+    total_free_generations, which needs the account's own credit limit. It
+    reads the served entitlement instead, which the config route derives from
+    the same quota constant the backend enforces. A hardcoded 10 sat here while
+    the real grant was 3, so the very first promise a new user read was wrong
+    by more than three times.
+    """
+    from .config_store import get_export_dial
+
+    served = get_export_dial(
+        "entitlements.free_tier_generations", SHIPPED_FREE_GENERATIONS
+    )
+    return served if served > 0 else SHIPPED_FREE_GENERATIONS

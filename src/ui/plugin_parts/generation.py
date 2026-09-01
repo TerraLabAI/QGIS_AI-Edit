@@ -197,10 +197,11 @@ class GenerationMixin:
         # browsed preview, it stops being replaceable (preview rule).
         self._promote_selected_version()
 
-        # Save consent on first generation and hide checkbox
+        # Clicking Generate is the affirmative act, and it is what the telemetry
+        # content gate reads (core/telemetry.flush). The pre-ticked checkbox that
+        # used to sit next to this is gone; the record it stood for is this call.
         if not has_consent():
             save_consent()
-            self._dock_widget.hide_consent()
 
         # Ensure server config is loaded before generation
         if not has_server_config():
@@ -281,6 +282,14 @@ class GenerationMixin:
         # that and was silently dropped whenever an earlier attempt had already
         # opened the dialog.
         self._error_report_dialog_shown = False
+        # Whoever starts this run owns the failure surface for it. The public
+        # API hands the run over with _api_run_requested set, and a headless
+        # run never opens a modal nothing on the other side can dismiss.
+        self._headless_run = bool(getattr(self, "_api_run_requested", False))
+        # A fresh attempt clears the last failure, so generation_status() never
+        # reports the previous run's error against this one.
+        self._last_generation_error = ""
+        self._last_generation_error_code = ""
 
         # Pick the base by excluding every AI-Edit result from the EXPORT except
         # the selected version, so the model sees exactly that base. Original

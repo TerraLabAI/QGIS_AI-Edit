@@ -308,7 +308,7 @@ class _ResolutionMenuItem(QWidget):
         self.setCursor(QtC.PointingHandCursor)
         self.setMinimumHeight(26)
         if locked:
-            self.setToolTip(tr("Subscribe for more detail"))
+            self.setToolTip(tr("Pro gives you 2K and 4K, for printing and zooming in"))
 
         row = QHBoxLayout(self)
         row.setContentsMargins(8, 4, 16, 4)

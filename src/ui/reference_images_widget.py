@@ -49,7 +49,11 @@ _REMOVE_BTN_PX = 24
 # limit: the store keeps enforcing MAX_REFERENCES as the hard ceiling, and the
 # backend rejects free-tier generations carrying more than this many context
 # images. Adding past this on free tier surfaces an upsell, not an error.
-FREE_TIER_MAX_REFERENCES = 3
+#
+# MUST equal the server gate (403 REFERENCE_LIMIT above 1 for a free account).
+# It shipped as 3 while the backend refused above 1, so a free user could add
+# three references and only learn on Generate that two were never allowed.
+FREE_TIER_MAX_REFERENCES = 1
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
 

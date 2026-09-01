@@ -66,6 +66,26 @@ class StartupMixin:
                 telemetry.flush()
             log_debug("Dock shown")
 
+    def _ensure_dock_widget(self):
+        """Return the dock, opening it first when it is closed.
+
+        The entry point for anything that drives the plugin without a user
+        (see src/mcp_api.py): every generation path dereferences the dock, so
+        it has to be on screen before they run. An already open dock is left
+        untouched, so this never closes what _toggle_dock would have toggled.
+        Showing it fires visibilityChanged, which runs the same first-open
+        bootstrap a manual open does. Returns None only when the dock is gone,
+        which happens before initGui and after unload.
+        """
+        dock = self._dock_widget
+        if dock is None:
+            return None
+        if not dock.isVisible():
+            dock.setVisible(True)
+            self._ensure_dock_height()
+            dock.raise_()
+        return dock
+
     def _ensure_dock_height(self):
         """Open AI Edit tall enough to actually work in. QGIS can dock it as a
         short box; grow it to most of the window height. Never shrinks a dock

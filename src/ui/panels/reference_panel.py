@@ -34,7 +34,7 @@ from ...core.config_store import get_export_dial
 from ...core.i18n import tr
 from ...core.reference_image_store import ReferenceImage, ReferenceImageStore
 from ..dock.style import _BTN_GHOST, BRAND_RED, FOCUS_RING
-from ..onboarding_hint import HINT_REFERENCE, DismissibleHint
+from ..onboarding_hint import HINT_REFERENCE, DismissibleHint, open_guide
 from ..panel_helpers import build_panel_header, make_hidpi_pixmap
 from ..reference_images_widget import (
     ReferenceImagesWidget,
@@ -331,6 +331,10 @@ class ReferencePanel(QWidget):
             "",
             tr("Each image is cropped to your zone and stays hidden from "
                "the map. Add a note to tell the AI what to take from it."),
+            link_text=tr("See an example"),
+        )
+        self._reference_hint.link_activated.connect(
+            lambda: open_guide("panel_reference")
         )
         layout.addWidget(self._reference_hint)
 

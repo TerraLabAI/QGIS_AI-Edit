@@ -4,6 +4,26 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>Your result is behind other layers</source>
+        <translation>Hasil Anda berada di belakang layer lain</translation>
+    </message>
+    <message>
+        <source>It was created, but something opaque is drawn on top of it.</source>
+        <translation>Hasilnya sudah dibuat, tetapi ada sesuatu yang buram digambar di atasnya.</translation>
+    </message>
+    <message>
+        <source>Bring it to the front</source>
+        <translation>Bawa ke depan</translation>
+    </message>
+    <message>
+        <source>See an example</source>
+        <translation>Lihat contoh</translation>
+    </message>
+    <message>
+        <source>Your selection and prompt may be processed outside the EU {dot} {privacy}</source>
+        <translation>Pilihan dan prompt Anda dapat diproses di luar Uni Eropa {dot} {privacy}</translation>
+    </message>
+    <message>
         <source>This prompt is not allowed: its content goes against our rules.</source>
         <translation>Perintah ini tidak diizinkan: isinya melanggar aturan kami.</translation>
     </message>
@@ -2132,8 +2152,8 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Maksimum</translation>
     </message>
     <message>
-        <source>Subscribe for more detail</source>
-        <translation>Berlangganan untuk detail lebih tinggi</translation>
+        <source>Pro gives you 2K and 4K, for printing and zooming in</source>
+        <translation>Pro memberi Anda 2K dan 4K, untuk mencetak dan memperbesar</translation>
     </message>
     <message>
         <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Higher means a sharper, more detailed result.</source>
@@ -2280,8 +2300,8 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Isi lubang di bagian dalam setiap bentuk</translation>
     </message>
     <message>
-        <source>Free plan - 10 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
-        <translation>Paket gratis - 10 edit AI per bulan. Pendaftaran hanya 15 detik di browser Anda.</translation>
+        <source>Free plan, {n} AI edits every month. Signing up takes 15 seconds in your browser.</source>
+        <translation>Paket Free, {n} pengeditan AI per bulan. Pendaftaran butuh 15 detik di browser Anda.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>
@@ -2860,20 +2880,400 @@ Kami senang mendengar dari Anda!</translation>
         <translation>{total} generasi gratis Anda diperbarui bulan depan</translation>
     </message>
     <message>
-        <source>Unlock your Pro month: €29</source>
-        <translation>Buka bulan Pro Anda: €29</translation>
+        <source>Get 150 more edits: 29 EUR</source>
+        <translation>150 pengeditan lagi: 29 EUR</translation>
     </message>
     <message>
-        <source>No commitment, cancel anytime</source>
-        <translation>Tanpa komitmen, batalkan kapan saja</translation>
+        <source>3,000 credits a month, about 150 edits at Standard. Cancel anytime.</source>
+        <translation>3.000 kredit per bulan, sekitar 150 pengeditan di Standard. Batalkan kapan saja.</translation>
     </message>
     <message>
-        <source>Last free generation of the month. Working on a project? Take a Pro month.</source>
-        <translation>Generasi gratis terakhir bulan ini. Sedang mengerjakan proyek? Ambil bulan Pro.</translation>
+        <source>Last free generation of the month. Pro gives you about 150 more, for 29 EUR.</source>
+        <translation>Generasi gratis terakhir bulan ini. Pro memberi Anda sekitar 150 lagi, seharga 29 EUR.</translation>
     </message>
     <message>
-        <source>Take a Pro month</source>
-        <translation>Ambil bulan Pro</translation>
+        <source>Get 150 more edits</source>
+        <translation>150 pengeditan lagi</translation>
+    </message>
+    <message>
+        <source>Share usage statistics with TerraLab</source>
+        <translation>Bagikan statistik penggunaan dengan TerraLab</translation>
+    </message>
+    <message>
+        <source>Helps us fix bugs faster.</source>
+        <translation>Membantu kami memperbaiki bug lebih cepat.</translation>
+    </message>
+    <message>
+        <source>Errors, versions and which features you use, linked to your account. Never your imagery, layers or coordinates.</source>
+        <translation>Error, versi, dan fitur yang Anda gunakan dikaitkan dengan akun Anda. Citra, layer, atau koordinat Anda tidak pernah dikirim.</translation>
+    </message>
+    <message>
+        <source>A bridge that calls this over a network usually gives up waiting after about a minute. The generation is NOT lost when that happens: it keeps running in QGIS and finishes on its own. Poll '{status_label}' until BUSY is false, then read the new layer in the project. Do not submit the run again, that is a second charge.</source>
+        <translation>Bridge yang memanggil ini melalui jaringan biasanya berhenti menunggu setelah sekitar satu menit. Generasi TIDAK hilang saat itu terjadi: prosesnya tetap berjalan di QGIS dan selesai sendiri. Polling '{status_label}' hingga BUSY bernilai false, lalu baca layer baru di proyek. Jangan kirim proses ini lagi karena akan dikenai biaya kedua.</translation>
+    </message>
+    <message>
+        <source>A generation is already running</source>
+        <translation>Generasi sedang berjalan</translation>
+    </message>
+    <message>
+        <source>AI Edit did not take the run.</source>
+        <translation>AI Edit tidak menerima proses tersebut.</translation>
+    </message>
+    <message>
+        <source>AI Edit is not ready. Open the AI Edit panel and finish the setup.</source>
+        <translation>AI Edit belum siap. Buka panel AI Edit dan selesaikan penyiapannya.</translation>
+    </message>
+    <message>
+        <source>AI Edit rewrites aerial and satellite imagery from a text prompt and gives the result back as a georeferenced image on the map. Land cover classification, building footprints, cloud removal, object removal, super resolution upscaling, flood simulation, coloring an old map. One prompt, one picture back.</source>
+        <translation>AI Edit menulis ulang citra udara dan satelit berdasarkan perintah teks, lalu mengembalikan hasilnya sebagai citra bergeoreferensi pada peta. Klasifikasi tutupan lahan, jejak bangunan, penghapusan awan, penghapusan objek, peningkatan resolusi super, simulasi banjir, dan pewarnaan peta lama. Satu perintah, satu gambar hasil.</translation>
+    </message>
+    <message>
+        <source>Added to the project: {layers}.</source>
+        <translation>Ditambahkan ke proyek: {layers}.</translation>
+    </message>
+    <message>
+        <source>Algorithms that do the work</source>
+        <translation>Algoritma yang melakukan pekerjaan</translation>
+    </message>
+    <message>
+        <source>Cancelled. You asked for it to stop, so the run was not finished.</source>
+        <translation>Dibatalkan. Anda meminta proses dihentikan, sehingga proses tidak selesai.</translation>
+    </message>
+    <message>
+        <source>Cancelling the run.</source>
+        <translation>Membatalkan proses.</translation>
+    </message>
+    <message>
+        <source>Check AI Edit status, credits and plan before you generate or edit satellite imagery</source>
+        <translation>Periksa status, kredit, dan paket AI Edit sebelum membuat atau mengedit citra satelit</translation>
+    </message>
+    <message>
+        <source>Class name written on every polygon (optional)</source>
+        <translation>Nama kelas yang ditulis pada setiap poligon (opsional)</translation>
+    </message>
+    <message>
+        <source>Class name: written on every polygon, so several runs over the same image stay apart once they are merged.</source>
+        <translation>Nama kelas: ditulis pada setiap poligon agar beberapa proses pada citra yang sama tetap terpisah setelah digabungkan.</translation>
+    </message>
+    <message>
+        <source>Color to trace</source>
+        <translation>Warna yang akan ditelusuri</translation>
+    </message>
+    <message>
+        <source>Color to trace: the exact color of the class in the picture. Widen the tolerance when the color is not perfectly flat; narrow it when two classes bleed into each other. The tracer uses {tolerance} when you leave it empty.</source>
+        <translation>Warna yang akan ditelusuri: warna persis kelas pada gambar. Perlebar toleransi jika warnanya tidak benar-benar seragam; perkecil jika dua kelas saling bercampur. Penelusur menggunakan {tolerance} jika Anda membiarkannya kosong.</translation>
+    </message>
+    <message>
+        <source>Color tolerance 0 to 255 (leave empty for {tolerance})</source>
+        <translation>Toleransi warna 0 hingga 255 (biarkan kosong untuk {tolerance})</translation>
+    </message>
+    <message>
+        <source>Credits left on the plan</source>
+        <translation>Kredit yang tersisa pada paket</translation>
+    </message>
+    <message>
+        <source>Credits left: {count}.</source>
+        <translation>Kredit tersisa: {count}.</translation>
+    </message>
+    <message>
+        <source>Every generation is billed to the signed-in account, and a free account may only ask for the smallest output size. Run '{status_id}' to read the balance and the plan before anything is spent. Plan limits: {pricing_url}</source>
+        <translation>Setiap generasi dibebankan ke akun yang sedang masuk, dan akun gratis hanya dapat meminta ukuran keluaran terkecil. Jalankan '{status_id}' untuk membaca saldo dan paket sebelum kredit digunakan. Batas paket: {pricing_url}</translation>
+    </message>
+    <message>
+        <source>Generate and edit satellite or aerial imagery with AI: classify land cover, remove clouds and objects, upscale to super resolution, simulate floods</source>
+        <translation>Buat dan edit citra satelit atau udara dengan AI: klasifikasikan tutupan lahan, hapus awan dan objek, tingkatkan ke resolusi super, dan simulasikan banjir</translation>
+    </message>
+    <message>
+        <source>Map area to edit</source>
+        <translation>Emprise peta yang akan diedit</translation>
+    </message>
+    <message>
+        <source>Name of the layer added to the project</source>
+        <translation>Nama layer yang ditambahkan ke proyek</translation>
+    </message>
+    <message>
+        <source>Names of the image layers added to the project</source>
+        <translation>Nama layer citra yang ditambahkan ke proyek</translation>
+    </message>
+    <message>
+        <source>No account is needed for this one. The AI Edit plugin has to be loaded, and nothing else: the tracing reads the picture on this computer and sends nothing.</source>
+        <translation>Untuk proses ini tidak diperlukan akun. Plugin AI Edit harus dimuat, dan tidak ada persyaratan lain: penelusuran membaca gambar di komputer ini dan tidak mengirimkan apa pun.</translation>
+    </message>
+    <message>
+        <source>Number of polygons traced</source>
+        <translation>Jumlah poligon yang ditelusuri</translation>
+    </message>
+    <message>
+        <source>Output size, leave empty for the one selected in the panel</source>
+        <translation>Ukuran keluaran, biarkan kosong untuk menggunakan ukuran yang dipilih di panel</translation>
+    </message>
+    <message>
+        <source>Output size: {size}.</source>
+        <translation>Ukuran keluaran: {size}.</translation>
+    </message>
+    <message>
+        <source>Output sizes this build offers, smallest first: {sizes}.</source>
+        <translation>Ukuran keluaran yang ditawarkan build ini, dari yang terkecil: {sizes}.</translation>
+    </message>
+    <message>
+        <source>Pick the color to trace, as a color or as '#rrggbb'.</source>
+        <translation>Pilih warna yang akan ditelusuri, sebagai warna atau sebagai '#rrggbb'.</translation>
+    </message>
+    <message>
+        <source>Plan on the signed-in account</source>
+        <translation>Paket pada akun yang sedang masuk</translation>
+    </message>
+    <message>
+        <source>Plugin installed</source>
+        <translation>Plugin terpasang</translation>
+    </message>
+    <message>
+        <source>Prompt (what the picture should look like)</source>
+        <translation>Prompt (tampilan gambar yang diinginkan)</translation>
+    </message>
+    <message>
+        <source>Prompt preset id (optional)</source>
+        <translation>Id preset prompt (opsional)</translation>
+    </message>
+    <message>
+        <source>Ready to run</source>
+        <translation>Siap dijalankan</translation>
+    </message>
+    <message>
+        <source>Result image to trace (leave empty for the newest one)</source>
+        <translation>Citra hasil yang akan ditelusuri (biarkan kosong untuk menggunakan citra terbaru)</translation>
+    </message>
+    <message>
+        <source>Rewrites the imagery over a map area from a text prompt and puts the result on the map as a georeferenced image layer, lined up with the area you gave it.</source>
+        <translation>Menulis ulang citra pada emprise peta berdasarkan prompt teks dan menempatkan hasilnya pada peta sebagai layer citra bergeoreferensi yang sejajar dengan emprise yang diberikan.</translation>
+    </message>
+    <message>
+        <source>Run '{status_label}' ('{status_id}') first. It answers in a moment, spends nothing, and tells you whether this one can run at all.</source>
+        <translation>Jalankan '{status_label}' ('{status_id}') terlebih dahulu. Proses ini memberikan jawaban dalam waktu singkat, tidak menggunakan kredit, dan memberi tahu apakah proses ini dapat dijalankan.</translation>
+    </message>
+    <message>
+        <source>Run started</source>
+        <translation>Proses dimulai</translation>
+    </message>
+    <message>
+        <source>Run this first. It says whether AI Edit can work right now, it spends nothing, and it answers in a moment.</source>
+        <translation>Jalankan ini terlebih dahulu. Proses ini menunjukkan apakah AI Edit dapat bekerja saat ini, tidak menggunakan kredit, dan memberikan jawaban dalam waktu singkat.</translation>
+    </message>
+    <message>
+        <source>Sending the area to the AI service. Prompt: {prompt}</source>
+        <translation>Mengirim emprise ke layanan AI. Prompt: {prompt}</translation>
+    </message>
+    <message>
+        <source>Source image: leave it empty to use the newest AI Edit result in the project, or name a raster layer to trace a different one. The layer has to be in the project, not a file picked from disk.</source>
+        <translation>Citra sumber: biarkan kosong untuk menggunakan hasil AI Edit terbaru dalam proyek, atau masukkan nama layer raster untuk menelusuri citra lain. Layer harus berada dalam proyek, bukan file yang dipilih dari disk.</translation>
+    </message>
+    <message>
+        <source>State</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <source>State: {state}. Ready: {ready}. Busy: {busy}.</source>
+        <translation>Status: {state}. Siap: {ready}. Sibuk: {busy}.</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <source>Still running after {seconds} seconds. The run was NOT cancelled and is still going. Poll '{status_id}' until BUSY is false, then read the new layer in the project. Do not submit it again.</source>
+        <translation>Masih berjalan setelah {seconds} detik. Proses TIDAK dibatalkan dan masih berlangsung. Polling '{status_id}' hingga BUSY bernilai false, lalu baca layer baru dalam proyek. Jangan kirim proses tersebut lagi.</translation>
+    </message>
+    <message>
+        <source>Still running after {seconds}s. {panel_line}</source>
+        <translation>Masih berjalan setelah {seconds} detik. {panel_line}</translation>
+    </message>
+    <message>
+        <source>That image is not in the project, so there is nothing to trace beside. Add the layer to the project first, then run this again.</source>
+        <translation>Citra tersebut tidak ada dalam proyek, sehingga tidak ada citra yang dapat ditelusuri. Tambahkan layer ke proyek terlebih dahulu, lalu jalankan kembali.</translation>
+    </message>
+    <message>
+        <source>The AI Edit plugin is not loaded. Enable it in Plugins &gt; Manage and Install Plugins, then reopen this algorithm. (Looked for: {keys})</source>
+        <translation>Plugin AI Edit belum dimuat. Aktifkan melalui Plugins &gt; Manage and Install Plugins, lalu buka kembali algoritma ini. (Yang dicari: {keys})</translation>
+    </message>
+    <message>
+        <source>The AI Edit status call returned nothing usable.</source>
+        <translation>Pemanggilan status AI Edit tidak mengembalikan informasi yang dapat digunakan.</translation>
+    </message>
+    <message>
+        <source>The area is empty. Draw a rectangle over the imagery.</source>
+        <translation>Emprise kosong. Gambar persegi panjang di atas citra.</translation>
+    </message>
+    <message>
+        <source>The area is read from the map canvas view, so the imagery under it is what the AI sees. Zoom in far enough that the detail you are asking about is visible, and hide any layer you do not want sent.</source>
+        <translation>Emprise dibaca dari tampilan kanvas peta, sehingga citra di bawahnya adalah yang dilihat AI. Perbesar secukupnya agar detail yang diminta terlihat, dan sembunyikan layer yang tidak ingin dikirim.</translation>
+    </message>
+    <message>
+        <source>The balance could not be read, so CREDITS_REMAINING is -1 rather than a count. Reason: {reason}.</source>
+        <translation>Saldo tidak dapat dibaca, sehingga CREDITS_REMAINING bernilai -1, bukan jumlah kredit. Alasan: {reason}.</translation>
+    </message>
+    <message>
+        <source>The imagery is never sent anywhere for this: the tracing is local, and it is not billed to any plan.</source>
+        <translation>Citra tidak pernah dikirim ke mana pun untuk proses ini: penelusuran dilakukan secara lokal dan tidak dibebankan ke paket apa pun.</translation>
+    </message>
+    <message>
+        <source>The run ended without adding a layer. Read the AI Edit panel for the reason.</source>
+        <translation>Proses berakhir tanpa menambahkan layer. Baca panel AI Edit untuk mengetahui alasannya.</translation>
+    </message>
+    <message>
+        <source>The status call returned nothing usable.</source>
+        <translation>Pemanggilan status tidak mengembalikan informasi yang dapat digunakan.</translation>
+    </message>
+    <message>
+        <source>The tracing finished but its layer is not in the project.</source>
+        <translation>Penelusuran selesai, tetapi layernya tidak ada dalam proyek.</translation>
+    </message>
+    <message>
+        <source>This QGIS build exposes no way to keep the run on the main thread. These algorithms drive the AI Edit panel, and driving it from a background thread would take QGIS down, so the run is refused. Update QGIS, or use the panel itself.</source>
+        <translation>Build QGIS ini tidak menyediakan cara untuk menjaga proses tetap berjalan pada thread utama. Algoritma ini mengendalikan panel AI Edit, dan mengendalikannya dari thread latar belakang akan membuat QGIS berhenti, sehingga proses ditolak. Perbarui QGIS atau gunakan panelnya langsung.</translation>
+    </message>
+    <message>
+        <source>This run takes 30 to 120 seconds, and QGIS stays busy for the caller until it ends. Never start it again while it is running: a second run costs the user money.</source>
+        <translation>Proses ini memerlukan waktu 30 hingga 120 detik, dan QGIS tetap sibuk bagi pemanggil hingga proses selesai. Jangan pernah memulainya lagi saat masih berjalan karena proses kedua akan membebani pengguna.</translation>
+    </message>
+    <message>
+        <source>This runs on the AI service, so it needs an internet connection and a signed-in TerraLab account. Open the AI Edit panel once to sign in.</source>
+        <translation>Proses ini berjalan pada layanan AI, sehingga memerlukan koneksi internet dan akun TerraLab yang sedang masuk. Buka panel AI Edit sekali untuk masuk.</translation>
+    </message>
+    <message>
+        <source>This takes 30 to 120 seconds and QGIS stays busy until it ends. Do not start it again: a second run costs money.</source>
+        <translation>Proses ini memerlukan waktu 30 hingga 120 detik dan QGIS tetap sibuk hingga proses selesai. Jangan memulainya lagi karena proses kedua akan dikenai biaya.</translation>
+    </message>
+    <message>
+        <source>To turn one flat color of the result into polygons afterwards, run '{vectorize_id}' ('{vectorize_label}').</source>
+        <translation>Untuk mengubah satu warna seragam dari hasil menjadi poligon setelahnya, jalankan '{vectorize_id}' ('{vectorize_label}').</translation>
+    </message>
+    <message>
+        <source>Traced {count} polygon(s) from {image}.</source>
+        <translation>Menelusuri {count} poligon dari {image}.</translation>
+    </message>
+    <message>
+        <source>Tracing color {color} on {image}.</source>
+        <translation>Menelusuri warna {color} pada {image}.</translation>
+    </message>
+    <message>
+        <source>Turns one flat color of an AI Edit result image into polygons you can edit, measure and export. It runs on your machine, spends nothing, and usually takes a few seconds.</source>
+        <translation>Mengubah satu warna seragam dari citra hasil AI Edit menjadi poligon yang dapat diedit, diukur, dan diekspor. Proses ini berjalan di komputer Anda, tidak menggunakan kredit, dan biasanya memerlukan waktu beberapa detik.</translation>
+    </message>
+    <message>
+        <source>Two algorithms do the work, and you can run either by id:
+  {generate_id} - '{generate_label}'. Give it a map area and a prompt. It returns a new image layer over that area. It runs on the AI service, takes 30 to 120 seconds, and QGIS stays busy until it ends. Never start it twice: a second run costs the user money.
+  {vectorize_id} - '{vectorize_label}'. Give it one flat color of a result image and it traces that color into a polygon layer. Free, local, needs no account, and usually a few seconds.</source>
+        <translation>Dua algoritma melakukan pekerjaan ini, dan Anda dapat menjalankan salah satunya berdasarkan id:
+  {generate_id} - '{generate_label}'. Berikan emprise peta dan prompt. Algoritma ini mengembalikan layer citra baru di atas emprise tersebut. Proses berjalan pada layanan AI, memerlukan waktu 30 hingga 120 detik, dan QGIS tetap sibuk hingga selesai. Jangan pernah memulainya dua kali karena proses kedua akan membebani pengguna.
+  {vectorize_id} - '{vectorize_label}'. Berikan satu warna seragam dari citra hasil dan algoritma ini menelusuri warna tersebut menjadi layer poligon. Gratis, lokal, tidak memerlukan akun, dan biasanya selesai dalam beberapa detik.</translation>
+    </message>
+    <message>
+        <source>Type a prompt, for example 'remove the clouds'.</source>
+        <translation>Ketik prompt, misalnya 'remove the clouds'.</translation>
+    </message>
+    <message>
+        <source>Use it after '{generate_id}' has painted a class in one color, for example 'color every building red and everything else grey'. Point this algorithm at red and you get one polygon per building.</source>
+        <translation>Gunakan setelah '{generate_id}' mewarnai suatu kelas dengan satu warna, misalnya 'color every building red and everything else grey'. Arahkan algoritma ini ke warna merah untuk mendapatkan satu poligon per bangunan.</translation>
+    </message>
+    <message>
+        <source>Vectorize a color of an AI result into polygons (land cover classes, raster to vector)</source>
+        <translation>Vektorkan satu warna dari hasil AI menjadi poligon (kelas tutupan lahan, raster ke vektor)</translation>
+    </message>
+    <message>
+        <source>What it is for: classify land cover, extract building footprints as a colored picture, remove clouds, remove cars or buildings, upscale to super resolution, simulate a flood, color an old scanned map, restore a damaged photo.</source>
+        <translation>Kegunaannya: mengklasifikasikan tutupan lahan, mengekstrak jejak bangunan sebagai gambar berwarna, menghapus awan, menghapus mobil atau bangunan, meningkatkan ke resolusi super, mensimulasikan banjir, mewarnai peta lama hasil pemindaian, dan memulihkan foto yang rusak.</translation>
+    </message>
+    <message>
+        <source>What it returns: SUBMITTED (whether the run started), STATE ('done', 'generating', 'cancelled' or 'idle'), RESULT_LAYERS (the names of the image layers this run added to the project) and STATUS. There is no file output: the plugin adds the georeferenced result to the project itself, under its own layer group.</source>
+        <translation>Hasil yang dikembalikan: SUBMITTED (apakah proses dimulai), STATE ('done', 'generating', 'cancelled' atau 'idle'), RESULT_LAYERS (nama layer citra yang ditambahkan proses ini ke proyek), dan STATUS. Tidak ada keluaran file: plugin menambahkan hasil bergeoreferensi langsung ke proyek, di bawah grup layernya sendiri.</translation>
+    </message>
+    <message>
+        <source>What it returns: no file output. The plugin adds one styled polygon layer to the project beside the image it came from, and this algorithm reports LAYER_NAME, FEATURE_COUNT and STATUS. That layer lives in memory until you save it, so use 'Make permanent' on it, or export it, before closing the project.</source>
+        <translation>Hasil yang dikembalikan: tidak ada keluaran file. Plugin menambahkan satu layer poligon bergaya ke proyek di sebelah citra asalnya, dan algoritma ini melaporkan LAYER_NAME, FEATURE_COUNT, dan STATUS. Layer tersebut berada di memori hingga Anda menyimpannya, jadi gunakan 'Make permanent' atau ekspor layer tersebut sebelum menutup proyek.</translation>
+    </message>
+    <message>
+        <source>What the user has to do</source>
+        <translation>Yang harus dilakukan pengguna</translation>
+    </message>
+    <message>
+        <source>What this one returns: INSTALLED and READY (true or false), STATE (READY, NEEDS_ACTIVATION or NO_PANEL), ACTION_REQUIRED (what a person has to do when READY is false), PLAN ('free', 'pro' or empty when unknown), CREDITS_REMAINING, BUSY (true while a generation is already running) and NEXT_ALGORITHMS. CREDITS_REMAINING is -1 when the account did not report a number, which usually means nobody is signed in yet.</source>
+        <translation>Hasil yang dikembalikan: INSTALLED dan READY (true atau false), STATE (READY, NEEDS_ACTIVATION atau NO_PANEL), ACTION_REQUIRED (yang harus dilakukan seseorang ketika READY bernilai false), PLAN ('free', 'pro' atau kosong jika tidak diketahui), CREDITS_REMAINING, BUSY (true saat generasi sedang berjalan), dan NEXT_ALGORITHMS. CREDITS_REMAINING bernilai -1 ketika akun tidak melaporkan jumlah, yang biasanya berarti belum ada pengguna yang masuk.</translation>
+    </message>
+    <message>
+        <source>What to type in 'Prompt': plain words describing the picture you want back, for example 'color every building red and everything else grey' or 'remove the clouds' or 'upscale and sharpen'.</source>
+        <translation>Yang harus diketik di 'Prompt': kata-kata biasa yang menjelaskan gambar yang ingin Anda dapatkan, misalnya 'color every building red and everything else grey', 'remove the clouds', atau 'upscale and sharpen'.</translation>
+    </message>
+    <message>
+        <source>When BUSY is true, a generation is already running. Wait for it and poll this algorithm again rather than starting another one.</source>
+        <translation>Saat BUSY bernilai true, generasi sedang berjalan. Tunggu hingga selesai dan polling algoritma ini kembali, bukan memulai proses lain.</translation>
+    </message>
+    <message>
+        <source>When READY is false, read ACTION_REQUIRED out to the user and stop. Signing in happens in the AI Edit panel in QGIS, not from here, and no algorithm can do it for the user.</source>
+        <translation>Saat READY bernilai false, tampilkan ACTION_REQUIRED kepada pengguna lalu berhenti. Proses masuk dilakukan melalui panel AI Edit di QGIS, bukan dari sini, dan tidak ada algoritma yang dapat melakukannya untuk pengguna.</translation>
+    </message>
+    <message>
+        <source>completed, {count} layer(s) added</source>
+        <translation>selesai, {count} layer ditambahkan</translation>
+    </message>
+    <message>
+        <source>completed, {count} polygon(s) in one layer</source>
+        <translation>selesai, {count} poligon dalam satu layer</translation>
+    </message>
+    <message>
+        <source>failed: {reason}</source>
+        <translation>gagal: {reason}</translation>
+    </message>
+    <message>
+        <source>finished with no new layer</source>
+        <translation>selesai tanpa layer baru</translation>
+    </message>
+    <message>
+        <source>the account call returned nothing usable</source>
+        <translation>pemanggilan akun tidak mengembalikan informasi yang dapat digunakan</translation>
+    </message>
+    <message>
+        <source>the account reported no usage counts</source>
+        <translation>akun tidak melaporkan jumlah penggunaan</translation>
+    </message>
+    <message>
+        <source>the account returned no number</source>
+        <translation>akun tidak mengembalikan jumlah</translation>
+    </message>
+    <message>
+        <source>the newest result</source>
+        <translation>hasil terbaru</translation>
+    </message>
+    <message>
+        <source>unknown</source>
+        <translation>tidak diketahui</translation>
+    </message>
+    <message>
+        <source>{action} failed: {error}</source>
+        <translation>{action} gagal: {error}</translation>
+    </message>
+    <message>
+        <source>{action} returned nothing usable.</source>
+        <translation>{action} tidak mengembalikan informasi yang dapat digunakan.</translation>
+    </message>
+    <message>
+        <source>{message} (state: {state})</source>
+        <translation>{message} (status: {state})</translation>
+    </message>
+    <message>
+        <source>{outcome} (code: {code})</source>
+        <translation>{outcome} (kode: {code})</translation>
+    </message>
+    <message>
+        <source>{outcome}: {panel_line}</source>
+        <translation>{outcome}: {panel_line}</translation>
+    </message>
+    <message>
+        <source>{product} is available to AI agents. Run 'import terralab; print(terralab.capabilities())' from any code-execution tool, or look for the TerraLab algorithms in the Processing registry.</source>
+        <translation>{product} tersedia untuk agen AI. Jalankan 'import terralab; print(terralab.capabilities())' dari alat eksekusi kode mana pun, atau cari algoritma TerraLab dalam registri Processing.</translation>
+    </message>
+    <message>
+        <source>Personal, non-commercial use. A paid plan adds commercial use for one person.</source>
+        <translation>Penggunaan pribadi dan nonkomersial. Paket berbayar mencakup penggunaan komersial untuk satu orang.</translation>
     </message>
 </context>
 </TS>

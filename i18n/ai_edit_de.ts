@@ -4,6 +4,26 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>Your result is behind other layers</source>
+        <translation>Ihr Ergebnis liegt hinter anderen Layern</translation>
+    </message>
+    <message>
+        <source>It was created, but something opaque is drawn on top of it.</source>
+        <translation>Es wurde erstellt, aber etwas Undurchsichtiges wird darüber gezeichnet.</translation>
+    </message>
+    <message>
+        <source>Bring it to the front</source>
+        <translation>Nach vorne holen</translation>
+    </message>
+    <message>
+        <source>See an example</source>
+        <translation>Beispiel ansehen</translation>
+    </message>
+    <message>
+        <source>Your selection and prompt may be processed outside the EU {dot} {privacy}</source>
+        <translation>Ihre Auswahl und Ihr Prompt können außerhalb der EU verarbeitet werden {dot} {privacy}</translation>
+    </message>
+    <message>
         <source>This prompt is not allowed: its content goes against our rules.</source>
         <translation>Diese Eingabe ist nicht zulässig: Ihr Inhalt verstößt gegen unsere Regeln.</translation>
     </message>
@@ -2132,8 +2152,8 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>Maximum</translation>
     </message>
     <message>
-        <source>Subscribe for more detail</source>
-        <translation>Abonnieren für mehr Detail</translation>
+        <source>Pro gives you 2K and 4K, for printing and zooming in</source>
+        <translation>Pro gibt Ihnen 2K und 4K, zum Drucken und Heranzoomen</translation>
     </message>
     <message>
         <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Higher means a sharper, more detailed result.</source>
@@ -2280,8 +2300,8 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>Innenliegende Löcher in jeder Form füllen</translation>
     </message>
     <message>
-        <source>Free plan - 10 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
-        <translation>Kostenloser Plan - 10 KI-Bearbeitungen pro Monat. Die Anmeldung dauert 15 Sekunden in Ihrem Browser.</translation>
+        <source>Free plan, {n} AI edits every month. Signing up takes 15 seconds in your browser.</source>
+        <translation>Free-Tarif, {n} AI-Bearbeitungen pro Monat. Die Anmeldung dauert 15 Sekunden im Browser.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>
@@ -2860,20 +2880,400 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>Ihre {total} kostenlosen Generierungen werden nächsten Monat erneuert</translation>
     </message>
     <message>
-        <source>Unlock your Pro month: €29</source>
-        <translation>Pro-Monat freischalten: 29 €</translation>
+        <source>Get 150 more edits: 29 EUR</source>
+        <translation>150 weitere Bearbeitungen: 29 EUR</translation>
     </message>
     <message>
-        <source>No commitment, cancel anytime</source>
-        <translation>Keine Verpflichtung, jederzeit kündbar</translation>
+        <source>3,000 credits a month, about 150 edits at Standard. Cancel anytime.</source>
+        <translation>3.000 Credits pro Monat, rund 150 Bearbeitungen bei Standard. Jederzeit kündbar.</translation>
     </message>
     <message>
-        <source>Last free generation of the month. Working on a project? Take a Pro month.</source>
-        <translation>Letzte kostenlose Generierung des Monats. Ein Projekt in Arbeit? Holen Sie sich einen Pro-Monat.</translation>
+        <source>Last free generation of the month. Pro gives you about 150 more, for 29 EUR.</source>
+        <translation>Letzte kostenlose Generierung des Monats. Pro gibt Ihnen rund 150 weitere, für 29 EUR.</translation>
     </message>
     <message>
-        <source>Take a Pro month</source>
-        <translation>Pro-Monat holen</translation>
+        <source>Get 150 more edits</source>
+        <translation>150 weitere Bearbeitungen</translation>
+    </message>
+    <message>
+        <source>Share usage statistics with TerraLab</source>
+        <translation>Nutzungsstatistiken mit TerraLab teilen</translation>
+    </message>
+    <message>
+        <source>Helps us fix bugs faster.</source>
+        <translation>Hilft uns, Fehler schneller zu beheben.</translation>
+    </message>
+    <message>
+        <source>Errors, versions and which features you use, linked to your account. Never your imagery, layers or coordinates.</source>
+        <translation>Fehler, Versionen und die von Ihnen verwendeten Funktionen werden mit Ihrem Konto verknüpft. Ihre Bilder, Layer oder Koordinaten werden niemals erfasst.</translation>
+    </message>
+    <message>
+        <source>A bridge that calls this over a network usually gives up waiting after about a minute. The generation is NOT lost when that happens: it keeps running in QGIS and finishes on its own. Poll '{status_label}' until BUSY is false, then read the new layer in the project. Do not submit the run again, that is a second charge.</source>
+        <translation>Eine Bridge, die dies über ein Netzwerk aufruft, gibt das Warten normalerweise nach etwa einer Minute auf. Die Generierung geht dadurch NICHT verloren: Sie läuft in QGIS weiter und wird selbstständig abgeschlossen. Fragen Sie '{status_label}' ab, bis BUSY false ist, und lesen Sie dann den neuen Layer im Projekt ein. Senden Sie die Ausführung nicht erneut, da dadurch eine zweite Abbuchung entsteht.</translation>
+    </message>
+    <message>
+        <source>A generation is already running</source>
+        <translation>Eine Generierung läuft bereits</translation>
+    </message>
+    <message>
+        <source>AI Edit did not take the run.</source>
+        <translation>AI Edit hat die Ausführung nicht übernommen.</translation>
+    </message>
+    <message>
+        <source>AI Edit is not ready. Open the AI Edit panel and finish the setup.</source>
+        <translation>AI Edit ist nicht bereit. Öffnen Sie das AI Edit-Bedienfeld und schließen Sie die Einrichtung ab.</translation>
+    </message>
+    <message>
+        <source>AI Edit rewrites aerial and satellite imagery from a text prompt and gives the result back as a georeferenced image on the map. Land cover classification, building footprints, cloud removal, object removal, super resolution upscaling, flood simulation, coloring an old map. One prompt, one picture back.</source>
+        <translation>AI Edit bearbeitet Luft- und Satellitenbilder anhand einer Texteingabe neu und gibt das Ergebnis als georeferenziertes Bild auf der Karte zurück. Landbedeckungsklassifizierung, Gebäudegrundrisse, Wolkenentfernung, Objektentfernung, Hochskalierung auf Superauflösung, Hochwassersimulation, Kolorierung einer alten Karte. Eine Eingabe, ein Bild als Ergebnis.</translation>
+    </message>
+    <message>
+        <source>Added to the project: {layers}.</source>
+        <translation>Zum Projekt hinzugefügt: {layers}.</translation>
+    </message>
+    <message>
+        <source>Algorithms that do the work</source>
+        <translation>Algorithmen, die die Arbeit ausführen</translation>
+    </message>
+    <message>
+        <source>Cancelled. You asked for it to stop, so the run was not finished.</source>
+        <translation>Abgebrochen. Sie haben den Abbruch angefordert, daher wurde die Ausführung nicht abgeschlossen.</translation>
+    </message>
+    <message>
+        <source>Cancelling the run.</source>
+        <translation>Ausführung wird abgebrochen.</translation>
+    </message>
+    <message>
+        <source>Check AI Edit status, credits and plan before you generate or edit satellite imagery</source>
+        <translation>Prüfen Sie Status, Credits und Tarif von AI Edit, bevor Sie Satellitenbilder generieren oder bearbeiten</translation>
+    </message>
+    <message>
+        <source>Class name written on every polygon (optional)</source>
+        <translation>Klassenname, der auf jedes Polygon geschrieben wird (optional)</translation>
+    </message>
+    <message>
+        <source>Class name: written on every polygon, so several runs over the same image stay apart once they are merged.</source>
+        <translation>Klassenname: wird auf jedes Polygon geschrieben, damit mehrere Ausführungen über dasselbe Bild nach dem Zusammenführen getrennt bleiben.</translation>
+    </message>
+    <message>
+        <source>Color to trace</source>
+        <translation>Zu verfolgende Farbe</translation>
+    </message>
+    <message>
+        <source>Color to trace: the exact color of the class in the picture. Widen the tolerance when the color is not perfectly flat; narrow it when two classes bleed into each other. The tracer uses {tolerance} when you leave it empty.</source>
+        <translation>Zu verfolgende Farbe: die exakte Farbe der Klasse im Bild. Erhöhen Sie die Toleranz, wenn die Farbe nicht vollständig einheitlich ist, und verringern Sie sie, wenn zwei Klassen ineinander übergehen. Der Tracer verwendet {tolerance}, wenn Sie das Feld leer lassen.</translation>
+    </message>
+    <message>
+        <source>Color tolerance 0 to 255 (leave empty for {tolerance})</source>
+        <translation>Farbtoleranz von 0 bis 255 (leer lassen für {tolerance})</translation>
+    </message>
+    <message>
+        <source>Credits left on the plan</source>
+        <translation>Verbleibende Credits im Tarif</translation>
+    </message>
+    <message>
+        <source>Credits left: {count}.</source>
+        <translation>Verbleibende Credits: {count}.</translation>
+    </message>
+    <message>
+        <source>Every generation is billed to the signed-in account, and a free account may only ask for the smallest output size. Run '{status_id}' to read the balance and the plan before anything is spent. Plan limits: {pricing_url}</source>
+        <translation>Jede Generierung wird dem angemeldeten Konto berechnet, und ein kostenloses Konto kann nur die kleinste Ausgabegröße anfordern. Führen Sie '{status_id}' aus, um Kontostand und Tarif zu prüfen, bevor Kosten entstehen. Tariflimits: {pricing_url}</translation>
+    </message>
+    <message>
+        <source>Generate and edit satellite or aerial imagery with AI: classify land cover, remove clouds and objects, upscale to super resolution, simulate floods</source>
+        <translation>Satelliten- oder Luftbilder mit KI generieren und bearbeiten: Landbedeckung klassifizieren, Wolken und Objekte entfernen, auf Superauflösung hochskalieren, Überschwemmungen simulieren</translation>
+    </message>
+    <message>
+        <source>Map area to edit</source>
+        <translation>Zu bearbeitende Kartenausdehnung</translation>
+    </message>
+    <message>
+        <source>Name of the layer added to the project</source>
+        <translation>Name des zum Projekt hinzugefügten Layers</translation>
+    </message>
+    <message>
+        <source>Names of the image layers added to the project</source>
+        <translation>Namen der zum Projekt hinzugefügten Bildlayer</translation>
+    </message>
+    <message>
+        <source>No account is needed for this one. The AI Edit plugin has to be loaded, and nothing else: the tracing reads the picture on this computer and sends nothing.</source>
+        <translation>Dafür ist kein Konto erforderlich. Das AI Edit-Plugin muss geladen sein, mehr nicht: Die Nachverfolgung liest das Bild auf diesem Computer ein und sendet nichts.</translation>
+    </message>
+    <message>
+        <source>Number of polygons traced</source>
+        <translation>Anzahl der nachverfolgten Polygone</translation>
+    </message>
+    <message>
+        <source>Output size, leave empty for the one selected in the panel</source>
+        <translation>Ausgabegröße, leer lassen für die im Bedienfeld ausgewählte Größe</translation>
+    </message>
+    <message>
+        <source>Output size: {size}.</source>
+        <translation>Ausgabegröße: {size}.</translation>
+    </message>
+    <message>
+        <source>Output sizes this build offers, smallest first: {sizes}.</source>
+        <translation>Diese Version bietet folgende Ausgabegrößen, beginnend mit der kleinsten: {sizes}.</translation>
+    </message>
+    <message>
+        <source>Pick the color to trace, as a color or as '#rrggbb'.</source>
+        <translation>Wählen Sie die zu verfolgende Farbe als Farbe oder als '#rrggbb' aus.</translation>
+    </message>
+    <message>
+        <source>Plan on the signed-in account</source>
+        <translation>Tarif des angemeldeten Kontos</translation>
+    </message>
+    <message>
+        <source>Plugin installed</source>
+        <translation>Plugin installiert</translation>
+    </message>
+    <message>
+        <source>Prompt (what the picture should look like)</source>
+        <translation>Prompt (wie das Bild aussehen soll)</translation>
+    </message>
+    <message>
+        <source>Prompt preset id (optional)</source>
+        <translation>ID der Prompt-Voreinstellung (optional)</translation>
+    </message>
+    <message>
+        <source>Ready to run</source>
+        <translation>Bereit zur Ausführung</translation>
+    </message>
+    <message>
+        <source>Result image to trace (leave empty for the newest one)</source>
+        <translation>Zu verfolgendes Ergebnisbild (leer lassen für das neueste)</translation>
+    </message>
+    <message>
+        <source>Rewrites the imagery over a map area from a text prompt and puts the result on the map as a georeferenced image layer, lined up with the area you gave it.</source>
+        <translation>Bearbeitet die Bilder über einer Kartenausdehnung anhand einer Texteingabe neu und fügt das Ergebnis als georeferenzierten Bildlayer passgenau über der angegebenen Ausdehnung zur Karte hinzu.</translation>
+    </message>
+    <message>
+        <source>Run '{status_label}' ('{status_id}') first. It answers in a moment, spends nothing, and tells you whether this one can run at all.</source>
+        <translation>Führen Sie zuerst '{status_label}' ('{status_id}') aus. Das Ergebnis liegt nach kurzer Zeit vor, verursacht keine Kosten und zeigt, ob diese Ausführung überhaupt möglich ist.</translation>
+    </message>
+    <message>
+        <source>Run started</source>
+        <translation>Ausführung gestartet</translation>
+    </message>
+    <message>
+        <source>Run this first. It says whether AI Edit can work right now, it spends nothing, and it answers in a moment.</source>
+        <translation>Führen Sie dies zuerst aus. Es zeigt, ob AI Edit derzeit ausgeführt werden kann, verursacht keine Kosten und liefert nach kurzer Zeit ein Ergebnis.</translation>
+    </message>
+    <message>
+        <source>Sending the area to the AI service. Prompt: {prompt}</source>
+        <translation>Kartenausdehnung wird an den KI-Dienst gesendet. Prompt: {prompt}</translation>
+    </message>
+    <message>
+        <source>Source image: leave it empty to use the newest AI Edit result in the project, or name a raster layer to trace a different one. The layer has to be in the project, not a file picked from disk.</source>
+        <translation>Quellbild: leer lassen, um das neueste AI Edit-Ergebnis im Projekt zu verwenden, oder einen Rasterlayer angeben, um ein anderes Bild zu verfolgen. Der Layer muss sich im Projekt befinden, nicht als von der Festplatte ausgewählte Datei.</translation>
+    </message>
+    <message>
+        <source>State</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <source>State: {state}. Ready: {ready}. Busy: {busy}.</source>
+        <translation>Status: {state}. Bereit: {ready}. Beschäftigt: {busy}.</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <source>Still running after {seconds} seconds. The run was NOT cancelled and is still going. Poll '{status_id}' until BUSY is false, then read the new layer in the project. Do not submit it again.</source>
+        <translation>Nach {seconds} Sekunden weiterhin aktiv. Die Ausführung wurde NICHT abgebrochen und läuft weiter. Fragen Sie '{status_id}' ab, bis BUSY false ist, und lesen Sie dann den neuen Layer im Projekt ein. Senden Sie sie nicht erneut.</translation>
+    </message>
+    <message>
+        <source>Still running after {seconds}s. {panel_line}</source>
+        <translation>Nach {seconds}s weiterhin aktiv. {panel_line}</translation>
+    </message>
+    <message>
+        <source>That image is not in the project, so there is nothing to trace beside. Add the layer to the project first, then run this again.</source>
+        <translation>Dieses Bild befindet sich nicht im Projekt, daher gibt es keinen Layer, neben dem die Nachverfolgung erfolgen kann. Fügen Sie den Layer zuerst zum Projekt hinzu und führen Sie dies dann erneut aus.</translation>
+    </message>
+    <message>
+        <source>The AI Edit plugin is not loaded. Enable it in Plugins &gt; Manage and Install Plugins, then reopen this algorithm. (Looked for: {keys})</source>
+        <translation>Das AI Edit-Plugin ist nicht geladen. Aktivieren Sie es unter Plugins &gt; Manage and Install Plugins und öffnen Sie diesen Algorithmus anschließend erneut. (Gesucht wurde nach: {keys})</translation>
+    </message>
+    <message>
+        <source>The AI Edit status call returned nothing usable.</source>
+        <translation>Der Statusaufruf von AI Edit hat keine verwertbaren Daten zurückgegeben.</translation>
+    </message>
+    <message>
+        <source>The area is empty. Draw a rectangle over the imagery.</source>
+        <translation>Die Kartenausdehnung ist leer. Zeichnen Sie ein Rechteck über den Bildern.</translation>
+    </message>
+    <message>
+        <source>The area is read from the map canvas view, so the imagery under it is what the AI sees. Zoom in far enough that the detail you are asking about is visible, and hide any layer you do not want sent.</source>
+        <translation>Die Kartenausdehnung wird aus der Ansicht des Kartenfensters gelesen, daher sieht die KI die darunterliegenden Bilder. Zoomen Sie so weit hinein, dass das gewünschte Detail sichtbar ist, und blenden Sie alle Layer aus, die nicht gesendet werden sollen.</translation>
+    </message>
+    <message>
+        <source>The balance could not be read, so CREDITS_REMAINING is -1 rather than a count. Reason: {reason}.</source>
+        <translation>Der Kontostand konnte nicht gelesen werden, daher ist CREDITS_REMAINING -1 statt einer Anzahl. Grund: {reason}.</translation>
+    </message>
+    <message>
+        <source>The imagery is never sent anywhere for this: the tracing is local, and it is not billed to any plan.</source>
+        <translation>Die Bilder werden dafür niemals übertragen: Die Nachverfolgung erfolgt lokal und wird keinem Tarif berechnet.</translation>
+    </message>
+    <message>
+        <source>The run ended without adding a layer. Read the AI Edit panel for the reason.</source>
+        <translation>Die Ausführung wurde beendet, ohne einen Layer hinzuzufügen. Lesen Sie im AI Edit-Bedienfeld den Grund nach.</translation>
+    </message>
+    <message>
+        <source>The status call returned nothing usable.</source>
+        <translation>Der Statusaufruf hat keine verwertbaren Daten zurückgegeben.</translation>
+    </message>
+    <message>
+        <source>The tracing finished but its layer is not in the project.</source>
+        <translation>Die Nachverfolgung wurde abgeschlossen, aber ihr Layer befindet sich nicht im Projekt.</translation>
+    </message>
+    <message>
+        <source>This QGIS build exposes no way to keep the run on the main thread. These algorithms drive the AI Edit panel, and driving it from a background thread would take QGIS down, so the run is refused. Update QGIS, or use the panel itself.</source>
+        <translation>Diese QGIS-Version bietet keine Möglichkeit, die Ausführung im Hauptthread zu halten. Diese Algorithmen steuern das AI Edit-Bedienfeld, und eine Steuerung aus einem Hintergrundthread würde QGIS zum Absturz bringen, daher wird die Ausführung verweigert. Aktualisieren Sie QGIS oder verwenden Sie das Bedienfeld selbst.</translation>
+    </message>
+    <message>
+        <source>This run takes 30 to 120 seconds, and QGIS stays busy for the caller until it ends. Never start it again while it is running: a second run costs the user money.</source>
+        <translation>Diese Ausführung dauert 30 bis 120 Sekunden, und QGIS bleibt für den Aufrufer bis zu ihrem Ende beschäftigt. Starten Sie sie während der Ausführung niemals erneut: Eine zweite Ausführung kostet den Benutzer Geld.</translation>
+    </message>
+    <message>
+        <source>This runs on the AI service, so it needs an internet connection and a signed-in TerraLab account. Open the AI Edit panel once to sign in.</source>
+        <translation>Dies wird auf dem KI-Dienst ausgeführt und benötigt daher eine Internetverbindung sowie ein angemeldetes TerraLab-Konto. Öffnen Sie das AI Edit-Bedienfeld einmal, um sich anzumelden.</translation>
+    </message>
+    <message>
+        <source>This takes 30 to 120 seconds and QGIS stays busy until it ends. Do not start it again: a second run costs money.</source>
+        <translation>Dies dauert 30 bis 120 Sekunden, und QGIS bleibt bis zum Ende beschäftigt. Starten Sie es nicht erneut: Eine zweite Ausführung kostet Geld.</translation>
+    </message>
+    <message>
+        <source>To turn one flat color of the result into polygons afterwards, run '{vectorize_id}' ('{vectorize_label}').</source>
+        <translation>Um eine einheitliche Farbe des Ergebnisses anschließend in Polygone umzuwandeln, führen Sie '{vectorize_id}' ('{vectorize_label}') aus.</translation>
+    </message>
+    <message>
+        <source>Traced {count} polygon(s) from {image}.</source>
+        <translation>{count} Polygon(e) aus {image} nachverfolgt.</translation>
+    </message>
+    <message>
+        <source>Tracing color {color} on {image}.</source>
+        <translation>Farbe {color} wird auf {image} nachverfolgt.</translation>
+    </message>
+    <message>
+        <source>Turns one flat color of an AI Edit result image into polygons you can edit, measure and export. It runs on your machine, spends nothing, and usually takes a few seconds.</source>
+        <translation>Wandelt eine einheitliche Farbe eines AI Edit-Ergebnisbildes in Polygone um, die Sie bearbeiten, messen und exportieren können. Der Vorgang läuft auf Ihrem Computer, verursacht keine Kosten und dauert normalerweise einige Sekunden.</translation>
+    </message>
+    <message>
+        <source>Two algorithms do the work, and you can run either by id:
+  {generate_id} - '{generate_label}'. Give it a map area and a prompt. It returns a new image layer over that area. It runs on the AI service, takes 30 to 120 seconds, and QGIS stays busy until it ends. Never start it twice: a second run costs the user money.
+  {vectorize_id} - '{vectorize_label}'. Give it one flat color of a result image and it traces that color into a polygon layer. Free, local, needs no account, and usually a few seconds.</source>
+        <translation>Zwei Algorithmen führen die Arbeit aus, und Sie können jeden anhand seiner ID starten:
+  {generate_id} - '{generate_label}'. Geben Sie eine Kartenausdehnung und einen Prompt an. Der Algorithmus gibt einen neuen Bildlayer über dieser Ausdehnung zurück. Er läuft auf dem KI-Dienst, dauert 30 bis 120 Sekunden, und QGIS bleibt bis zum Ende beschäftigt. Starten Sie ihn niemals zweimal: Eine zweite Ausführung kostet den Benutzer Geld.
+  {vectorize_id} - '{vectorize_label}'. Geben Sie eine einheitliche Farbe eines Ergebnisbildes an, und der Algorithmus verfolgt diese Farbe in einen Polygonlayer nach. Kostenlos, lokal, ohne Konto und normalerweise in wenigen Sekunden abgeschlossen.</translation>
+    </message>
+    <message>
+        <source>Type a prompt, for example 'remove the clouds'.</source>
+        <translation>Geben Sie einen Prompt ein, zum Beispiel 'remove the clouds'.</translation>
+    </message>
+    <message>
+        <source>Use it after '{generate_id}' has painted a class in one color, for example 'color every building red and everything else grey'. Point this algorithm at red and you get one polygon per building.</source>
+        <translation>Verwenden Sie den Algorithmus, nachdem '{generate_id}' eine Klasse in einer Farbe dargestellt hat, zum Beispiel 'color every building red and everything else grey'. Wählen Sie Rot aus, und Sie erhalten ein Polygon pro Gebäude.</translation>
+    </message>
+    <message>
+        <source>Vectorize a color of an AI result into polygons (land cover classes, raster to vector)</source>
+        <translation>Eine Farbe eines KI-Ergebnisses in Polygone umwandeln (Landbedeckungsklassen, Raster zu Vektor)</translation>
+    </message>
+    <message>
+        <source>What it is for: classify land cover, extract building footprints as a colored picture, remove clouds, remove cars or buildings, upscale to super resolution, simulate a flood, color an old scanned map, restore a damaged photo.</source>
+        <translation>Verwendungszweck: Landbedeckung klassifizieren, Gebäudegrundrisse als farbiges Bild extrahieren, Wolken entfernen, Autos oder Gebäude entfernen, auf Superauflösung hochskalieren, eine Überschwemmung simulieren, eine alte gescannte Karte kolorieren, ein beschädigtes Foto wiederherstellen.</translation>
+    </message>
+    <message>
+        <source>What it returns: SUBMITTED (whether the run started), STATE ('done', 'generating', 'cancelled' or 'idle'), RESULT_LAYERS (the names of the image layers this run added to the project) and STATUS. There is no file output: the plugin adds the georeferenced result to the project itself, under its own layer group.</source>
+        <translation>Rückgabe: SUBMITTED (ob die Ausführung gestartet wurde), STATE ('done', 'generating', 'cancelled' oder 'idle'), RESULT_LAYERS (die Namen der Bildlayer, die diese Ausführung zum Projekt hinzugefügt hat) und STATUS. Es gibt keine Dateiausgabe: Das Plugin fügt das georeferenzierte Ergebnis selbst unter seiner eigenen Layergruppe zum Projekt hinzu.</translation>
+    </message>
+    <message>
+        <source>What it returns: no file output. The plugin adds one styled polygon layer to the project beside the image it came from, and this algorithm reports LAYER_NAME, FEATURE_COUNT and STATUS. That layer lives in memory until you save it, so use 'Make permanent' on it, or export it, before closing the project.</source>
+        <translation>Rückgabe: keine Dateiausgabe. Das Plugin fügt neben dem Ursprungsbild einen gestalteten Polygonlayer zum Projekt hinzu, und dieser Algorithmus meldet LAYER_NAME, FEATURE_COUNT und STATUS. Der Layer bleibt im Speicher, bis Sie ihn speichern. Verwenden Sie daher vor dem Schließen des Projekts 'Make permanent' oder exportieren Sie ihn.</translation>
+    </message>
+    <message>
+        <source>What the user has to do</source>
+        <translation>Was der Benutzer tun muss</translation>
+    </message>
+    <message>
+        <source>What this one returns: INSTALLED and READY (true or false), STATE (READY, NEEDS_ACTIVATION or NO_PANEL), ACTION_REQUIRED (what a person has to do when READY is false), PLAN ('free', 'pro' or empty when unknown), CREDITS_REMAINING, BUSY (true while a generation is already running) and NEXT_ALGORITHMS. CREDITS_REMAINING is -1 when the account did not report a number, which usually means nobody is signed in yet.</source>
+        <translation>Rückgabe: INSTALLED und READY (true oder false), STATE (READY, NEEDS_ACTIVATION oder NO_PANEL), ACTION_REQUIRED (was eine Person tun muss, wenn READY false ist), PLAN ('free', 'pro' oder leer, wenn unbekannt), CREDITS_REMAINING, BUSY (true, während bereits eine Generierung läuft) und NEXT_ALGORITHMS. CREDITS_REMAINING ist -1, wenn das Konto keine Zahl gemeldet hat, was normalerweise bedeutet, dass noch niemand angemeldet ist.</translation>
+    </message>
+    <message>
+        <source>What to type in 'Prompt': plain words describing the picture you want back, for example 'color every building red and everything else grey' or 'remove the clouds' or 'upscale and sharpen'.</source>
+        <translation>Was Sie in 'Prompt' eingeben: einfache Worte, die das gewünschte Bild beschreiben, zum Beispiel 'color every building red and everything else grey', 'remove the clouds' oder 'upscale and sharpen'.</translation>
+    </message>
+    <message>
+        <source>When BUSY is true, a generation is already running. Wait for it and poll this algorithm again rather than starting another one.</source>
+        <translation>Wenn BUSY true ist, läuft bereits eine Generierung. Warten Sie, und fragen Sie diesen Algorithmus erneut ab, statt eine weitere Ausführung zu starten.</translation>
+    </message>
+    <message>
+        <source>When READY is false, read ACTION_REQUIRED out to the user and stop. Signing in happens in the AI Edit panel in QGIS, not from here, and no algorithm can do it for the user.</source>
+        <translation>Wenn READY false ist, geben Sie ACTION_REQUIRED an den Benutzer aus und beenden Sie den Vorgang. Die Anmeldung erfolgt im AI Edit-Bedienfeld in QGIS, nicht hier, und kein Algorithmus kann sie für den Benutzer durchführen.</translation>
+    </message>
+    <message>
+        <source>completed, {count} layer(s) added</source>
+        <translation>abgeschlossen, {count} Layer hinzugefügt</translation>
+    </message>
+    <message>
+        <source>completed, {count} polygon(s) in one layer</source>
+        <translation>abgeschlossen, {count} Polygone in einem Layer</translation>
+    </message>
+    <message>
+        <source>failed: {reason}</source>
+        <translation>fehlgeschlagen: {reason}</translation>
+    </message>
+    <message>
+        <source>finished with no new layer</source>
+        <translation>ohne neuen Layer abgeschlossen</translation>
+    </message>
+    <message>
+        <source>the account call returned nothing usable</source>
+        <translation>Der Kontoaufruf hat keine verwertbaren Daten zurückgegeben</translation>
+    </message>
+    <message>
+        <source>the account reported no usage counts</source>
+        <translation>Das Konto hat keine Nutzungszahlen gemeldet</translation>
+    </message>
+    <message>
+        <source>the account returned no number</source>
+        <translation>Das Konto hat keine Zahl zurückgegeben</translation>
+    </message>
+    <message>
+        <source>the newest result</source>
+        <translation>das neueste Ergebnis</translation>
+    </message>
+    <message>
+        <source>unknown</source>
+        <translation>unbekannt</translation>
+    </message>
+    <message>
+        <source>{action} failed: {error}</source>
+        <translation>{action} fehlgeschlagen: {error}</translation>
+    </message>
+    <message>
+        <source>{action} returned nothing usable.</source>
+        <translation>{action} hat keine verwertbaren Daten zurückgegeben.</translation>
+    </message>
+    <message>
+        <source>{message} (state: {state})</source>
+        <translation>{message} (Status: {state})</translation>
+    </message>
+    <message>
+        <source>{outcome} (code: {code})</source>
+        <translation>{outcome} (Code: {code})</translation>
+    </message>
+    <message>
+        <source>{outcome}: {panel_line}</source>
+        <translation>{outcome}: {panel_line}</translation>
+    </message>
+    <message>
+        <source>{product} is available to AI agents. Run 'import terralab; print(terralab.capabilities())' from any code-execution tool, or look for the TerraLab algorithms in the Processing registry.</source>
+        <translation>{product} steht KI-Agenten zur Verfügung. Führen Sie 'import terralab; print(terralab.capabilities())' in einem beliebigen Tool zur Codeausführung aus oder suchen Sie im Processing-Register nach den TerraLab-Algorithmen.</translation>
+    </message>
+    <message>
+        <source>Personal, non-commercial use. A paid plan adds commercial use for one person.</source>
+        <translation>Persönliche, nicht gewerbliche Nutzung. Ein kostenpflichtiger Tarif umfasst die gewerbliche Nutzung für eine Person.</translation>
     </message>
 </context>
 </TS>

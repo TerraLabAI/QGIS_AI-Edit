@@ -175,10 +175,14 @@ def is_update_recommended(installed_version: str) -> bool:
 
 
 # Hardcoded fallback config (used when server is unreachable).
-# free_credits mirrors the server's monthly free allowance in CREDITS
-# (200 credits = 10 generations per month, renewed on the 1st).
+# free_credits mirrors the server's monthly free allowance in CREDITS for a NEW
+# key (60 credits = 3 generations at 1K). Keys created before 2026-08-07 keep
+# their own higher snapshot, and the server sends the real number as soon as it
+# answers, so this value only ever shows on a first run with no network. The
+# allowance renews on the account's SIGNUP ANNIVERSARY, not on the 1st of the
+# month: never write a calendar date into copy built on this.
 DEFAULT_CONFIG = {
-    "free_credits": 200,
+    "free_credits": 60,
     "free_tier_active": True,
     "upgrade_url": build_utm_url("/dashboard/ai-edit", "upgrade"),
 }
@@ -244,6 +248,25 @@ def save_consent(settings=None):
     from qgis.core import QgsSettings
     QgsSettings().setValue(f"{SETTINGS_PREFIX}consent_accepted", True)
     _consent_memo = True
+
+
+# Whether the Generate panel's data-disclosure line has done its job. This is
+# NOT consent and shares nothing with the key above: it drives one QLabel's
+# visibility and nothing else reads it, so a value stuck either way can only
+# show or hide one sentence, never gate a run or a route. The policy stays
+# reachable afterwards through the Terms and Privacy links in Account Settings.
+PRIVACY_NOTICE_SEEN_KEY = f"{SETTINGS_PREFIX}privacy_notice_seen"
+
+
+def has_seen_privacy_notice() -> bool:
+    from qgis.core import QgsSettings
+    return bool(QgsSettings().value(PRIVACY_NOTICE_SEEN_KEY, False, type=bool))
+
+
+def mark_privacy_notice_seen() -> None:
+    """Called once a generation has actually completed, never on display."""
+    from qgis.core import QgsSettings
+    QgsSettings().setValue(PRIVACY_NOTICE_SEEN_KEY, True)
 
 
 def save_activation(key: str, settings=None):

@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import time
 
+from qgis.core import Qgis
+from qgis.PyQt.QtWidgets import QPushButton
+
 from ...core import telemetry
 from ...core import telemetry_events as te
-from ...core.auth.activation_manager import get_wall_url
+from ...core.auth.activation_manager import get_wall_url, mark_privacy_notice_seen
 from ...core.config_store import get_export_dial_list
 from ...core.errors import build_failure_props
 from ...core.i18n import tr
@@ -12,6 +15,8 @@ from ...core.log_scrub import scrub_user_paths as _scrub_paths
 from ...core.logger import log, log_warning
 from ...core.prompts import history_cache, prompt_history
 from ..dialogs.error_report_dialog import REPORT_PROBLEM_HREF
+from ..layer_groups import bring_ai_edit_group_to_front
+from ..layer_occlusion import layers_hiding_layer
 from ..raster_writer import add_geotiff_to_project, get_output_dir
 from .errors import (
     _CREDIT_REASSURE_CODES,
@@ -183,6 +188,11 @@ class GenerationResultsMixin:
                 # User-fixable (network, key, zone, plan): plain inline message.
                 self._dock_widget.set_status(enriched, is_error=True)
         log_warning(f"Generation failed: {message} (code={code})")
+        # The only machine-readable trace of the failure. generation_status()
+        # reports it, so a caller that never sees the panel can tell a run that
+        # failed from one that produced nothing.
+        self._last_generation_error = message or ""
+        self._last_generation_error_code = effective_code
 
     def _show_error_report(self, error_message: str, request_id: str = "") -> None:
         """Open the copy-logs/email report dialog. A failure here must never
@@ -195,6 +205,11 @@ class GenerationResultsMixin:
         for the same attempt never stacks a second modal on the first.
         """
         if getattr(self, "_error_report_dialog_shown", False):
+            return
+        # A run started through the public API has no one to press OK: the
+        # caller is a script or an agent, and a modal there hangs QGIS.
+        if getattr(self, "_headless_run", False):
+            log_warning("Error report dialog suppressed: this run came from the API.")
             return
         self._error_report_dialog_shown = True
         try:
@@ -270,7 +285,13 @@ class GenerationResultsMixin:
             telemetry.flush()
             completed_emitted = True
             self._maybe_emit_first_generation_milestone()
+            # The disclosure line has been read by someone who then ran a
+            # generation, so it retires here rather than on mere display.
+            mark_privacy_notice_seen()
+            if self._dock_widget is not None:
+                self._dock_widget.hide_privacy_notice()
             self._dock_widget.set_generation_complete(layer.name(), layer.id())
+            self._warn_if_result_hidden(layer)
             # Append this result to the lineage and let the strip show + select
             # it. The Original tile was seeded at export time, so by now the
             # strip already holds at least the Original.
@@ -411,6 +432,44 @@ class GenerationResultsMixin:
             self._dock_widget.set_status(msg, is_error=True)
             self._show_error_report(msg, result_info.get("request_id") or "")
             log_warning(f"Failed to add layer: {e}")
+
+    def _warn_if_result_hidden(self, layer) -> None:
+        """The result is on the map but under opaque imagery: say so.
+
+        Happens when the AI-Edit group has been filed below the user's own
+        basemap group, which the plugin allows. The generation then succeeds
+        with no visible change at all - the reports for it read "I launch it
+        and nothing happens" - and the layout is the user's, so the repair is
+        offered rather than applied.
+        """
+        try:
+            if not self._selected_extent:
+                return
+            covering = layers_hiding_layer(layer, self._selected_extent)
+            if not covering:
+                return
+            telemetry.track(te.RESULT_HIDDEN_WARNED, {"covering_count": len(covering)})
+            bar = self._iface.messageBar()
+            widget = bar.createMessage(
+                tr("Your result is behind other layers"),
+                tr("It was created, but something opaque is drawn on top of it."),
+            )
+            front_button = QPushButton(tr("Bring it to the front"))
+            widget.layout().addWidget(front_button)
+
+            def _resolve():
+                telemetry.track(te.RESULT_HIDDEN_RESOLVED, {"choice": "bring_to_front"})
+                bar.popWidget(widget)
+                bring_ai_edit_group_to_front()
+                try:
+                    self._iface.mapCanvas().refresh()
+                except Exception as err:  # noqa: BLE001 - cosmetic refresh
+                    log_warning(f"canvas refresh after reorder failed: {err}")
+
+            front_button.clicked.connect(_resolve)
+            bar.pushWidget(widget, Qgis.MessageLevel.Warning)
+        except Exception as err:  # noqa: BLE001 - a notice must not sink a result
+            log_warning(f"hidden-result notice skipped: {err}")
 
     # Plugin-declared signals only: an argument-less worker.disconnect() would
     # also sever the QgsTaskManager hookups made by addTask().

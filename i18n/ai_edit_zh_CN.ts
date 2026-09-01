@@ -4,6 +4,26 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>Your result is behind other layers</source>
+        <translation>结果被其他图层遮挡了</translation>
+    </message>
+    <message>
+        <source>It was created, but something opaque is drawn on top of it.</source>
+        <translation>它已经生成，但上方有不透明的图层覆盖。</translation>
+    </message>
+    <message>
+        <source>Bring it to the front</source>
+        <translation>移到最前</translation>
+    </message>
+    <message>
+        <source>See an example</source>
+        <translation>查看示例</translation>
+    </message>
+    <message>
+        <source>Your selection and prompt may be processed outside the EU {dot} {privacy}</source>
+        <translation>您选择的内容和提示词可能在欧盟以外进行处理 {dot} {privacy}</translation>
+    </message>
+    <message>
         <source>This prompt is not allowed: its content goes against our rules.</source>
         <translation>此提示词不被允许：其内容违反了我们的规则。</translation>
     </message>
@@ -2132,8 +2152,8 @@ We'd love to hear from you!</source>
         <translation>最高</translation>
     </message>
     <message>
-        <source>Subscribe for more detail</source>
-        <translation>订阅以获取更高质量</translation>
+        <source>Pro gives you 2K and 4K, for printing and zooming in</source>
+        <translation>Pro 提供 2K 和 4K，适合打印和放大查看</translation>
     </message>
     <message>
         <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Higher means a sharper, more detailed result.</source>
@@ -2280,8 +2300,8 @@ We'd love to hear from you!</source>
         <translation>填充每个形状内部的孔洞</translation>
     </message>
     <message>
-        <source>Free plan - 10 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
-        <translation>免费套餐 - 每月 10 次 AI 编辑。在浏览器中注册仅需 15 秒。</translation>
+        <source>Free plan, {n} AI edits every month. Signing up takes 15 seconds in your browser.</source>
+        <translation>Free 方案，每月 {n} 次 AI 编辑。在浏览器中注册只需 15 秒。</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>
@@ -2860,20 +2880,400 @@ We'd love to hear from you!</source>
         <translation>您的{total}次免费生成将于下月恢复</translation>
     </message>
     <message>
-        <source>Unlock your Pro month: €29</source>
-        <translation>解锁您的 Pro 月度套餐：€29</translation>
+        <source>Get 150 more edits: 29 EUR</source>
+        <translation>再获得 150 次编辑：29 EUR</translation>
     </message>
     <message>
-        <source>No commitment, cancel anytime</source>
-        <translation>无需承诺，随时可取消</translation>
+        <source>3,000 credits a month, about 150 edits at Standard. Cancel anytime.</source>
+        <translation>每月 3,000 积分，在 Standard 下约 150 次编辑。随时可取消。</translation>
     </message>
     <message>
-        <source>Last free generation of the month. Working on a project? Take a Pro month.</source>
-        <translation>本月最后一次免费生成。项目还没做完？开通 Pro 月度套餐。</translation>
+        <source>Last free generation of the month. Pro gives you about 150 more, for 29 EUR.</source>
+        <translation>本月最后一次免费生成。Pro 每月 29 EUR，多给你约 150 次。</translation>
     </message>
     <message>
-        <source>Take a Pro month</source>
-        <translation>开通 Pro 月度套餐</translation>
+        <source>Get 150 more edits</source>
+        <translation>再获得 150 次编辑</translation>
+    </message>
+    <message>
+        <source>Share usage statistics with TerraLab</source>
+        <translation>与 TerraLab 分享使用统计信息</translation>
+    </message>
+    <message>
+        <source>Helps us fix bugs faster.</source>
+        <translation>帮助我们更快地修复问题。</translation>
+    </message>
+    <message>
+        <source>Errors, versions and which features you use, linked to your account. Never your imagery, layers or coordinates.</source>
+        <translation>错误信息、版本信息和您使用的功能会与您的账户关联。绝不会收集您的影像、图层或坐标。</translation>
+    </message>
+    <message>
+        <source>A bridge that calls this over a network usually gives up waiting after about a minute. The generation is NOT lost when that happens: it keeps running in QGIS and finishes on its own. Poll '{status_label}' until BUSY is false, then read the new layer in the project. Do not submit the run again, that is a second charge.</source>
+        <translation>通过网络调用此算法的桥接程序通常会在约一分钟后停止等待。发生这种情况时，生成任务并不会丢失：它会继续在 QGIS 中运行并自行完成。轮询 '{status_label}'，直到 BUSY 为 false，然后读取项目中的新图层。不要再次提交该运行任务，否则会产生第二次扣费。</translation>
+    </message>
+    <message>
+        <source>A generation is already running</source>
+        <translation>已有生成任务正在运行</translation>
+    </message>
+    <message>
+        <source>AI Edit did not take the run.</source>
+        <translation>AI Edit 未接受此次运行任务。</translation>
+    </message>
+    <message>
+        <source>AI Edit is not ready. Open the AI Edit panel and finish the setup.</source>
+        <translation>AI Edit 尚未准备就绪。打开 AI Edit 面板并完成设置。</translation>
+    </message>
+    <message>
+        <source>AI Edit rewrites aerial and satellite imagery from a text prompt and gives the result back as a georeferenced image on the map. Land cover classification, building footprints, cloud removal, object removal, super resolution upscaling, flood simulation, coloring an old map. One prompt, one picture back.</source>
+        <translation>AI Edit 根据文本提示词重绘航空影像和卫星影像，并将结果作为地图上的地理配准图像返回。可用于土地覆盖分类、建筑物轮廓提取、去云、对象移除、超分辨率放大、洪水模拟以及旧地图着色。输入一个提示词，返回一张图像。</translation>
+    </message>
+    <message>
+        <source>Added to the project: {layers}.</source>
+        <translation>已添加到项目：{layers}。</translation>
+    </message>
+    <message>
+        <source>Algorithms that do the work</source>
+        <translation>执行工作的算法</translation>
+    </message>
+    <message>
+        <source>Cancelled. You asked for it to stop, so the run was not finished.</source>
+        <translation>已取消。您要求停止，因此该运行任务未完成。</translation>
+    </message>
+    <message>
+        <source>Cancelling the run.</source>
+        <translation>正在取消运行任务。</translation>
+    </message>
+    <message>
+        <source>Check AI Edit status, credits and plan before you generate or edit satellite imagery</source>
+        <translation>在生成或编辑卫星影像之前检查 AI Edit 状态、额度和套餐</translation>
+    </message>
+    <message>
+        <source>Class name written on every polygon (optional)</source>
+        <translation>写入每个多边形的类别名称（可选）</translation>
+    </message>
+    <message>
+        <source>Class name: written on every polygon, so several runs over the same image stay apart once they are merged.</source>
+        <translation>类别名称：写入每个多边形，以便合并同一图像上的多次运行结果后仍能区分它们。</translation>
+    </message>
+    <message>
+        <source>Color to trace</source>
+        <translation>要追踪的颜色</translation>
+    </message>
+    <message>
+        <source>Color to trace: the exact color of the class in the picture. Widen the tolerance when the color is not perfectly flat; narrow it when two classes bleed into each other. The tracer uses {tolerance} when you leave it empty.</source>
+        <translation>要追踪的颜色：图像中类别的精确颜色。当颜色并不完全均匀时增大容差；当两个类别相互渗色时减小容差。留空时，追踪器使用 {tolerance}。</translation>
+    </message>
+    <message>
+        <source>Color tolerance 0 to 255 (leave empty for {tolerance})</source>
+        <translation>颜色容差 0 到 255（留空则使用 {tolerance}）</translation>
+    </message>
+    <message>
+        <source>Credits left on the plan</source>
+        <translation>套餐剩余额度</translation>
+    </message>
+    <message>
+        <source>Credits left: {count}.</source>
+        <translation>剩余额度：{count}。</translation>
+    </message>
+    <message>
+        <source>Every generation is billed to the signed-in account, and a free account may only ask for the smallest output size. Run '{status_id}' to read the balance and the plan before anything is spent. Plan limits: {pricing_url}</source>
+        <translation>每次生成都会计入当前登录账户的费用，免费账户只能请求最小输出尺寸。在产生任何费用之前运行 '{status_id}'，读取余额和套餐。套餐限制：{pricing_url}</translation>
+    </message>
+    <message>
+        <source>Generate and edit satellite or aerial imagery with AI: classify land cover, remove clouds and objects, upscale to super resolution, simulate floods</source>
+        <translation>使用 AI 生成和编辑卫星影像或航空影像：分类土地覆盖、移除云和对象、放大到超分辨率、模拟洪水</translation>
+    </message>
+    <message>
+        <source>Map area to edit</source>
+        <translation>要编辑的地图范围</translation>
+    </message>
+    <message>
+        <source>Name of the layer added to the project</source>
+        <translation>添加到项目的图层名称</translation>
+    </message>
+    <message>
+        <source>Names of the image layers added to the project</source>
+        <translation>添加到项目的图像图层名称</translation>
+    </message>
+    <message>
+        <source>No account is needed for this one. The AI Edit plugin has to be loaded, and nothing else: the tracing reads the picture on this computer and sends nothing.</source>
+        <translation>此功能不需要账户。只需加载 AI Edit 插件：追踪过程读取此计算机上的图像，不会发送任何数据。</translation>
+    </message>
+    <message>
+        <source>Number of polygons traced</source>
+        <translation>追踪的多边形数量</translation>
+    </message>
+    <message>
+        <source>Output size, leave empty for the one selected in the panel</source>
+        <translation>输出尺寸，留空则使用面板中选择的尺寸</translation>
+    </message>
+    <message>
+        <source>Output size: {size}.</source>
+        <translation>输出尺寸：{size}。</translation>
+    </message>
+    <message>
+        <source>Output sizes this build offers, smallest first: {sizes}.</source>
+        <translation>此版本提供的输出尺寸，按从小到大排列：{sizes}。</translation>
+    </message>
+    <message>
+        <source>Pick the color to trace, as a color or as '#rrggbb'.</source>
+        <translation>选择要追踪的颜色，可以使用颜色值或 '#rrggbb'。</translation>
+    </message>
+    <message>
+        <source>Plan on the signed-in account</source>
+        <translation>当前登录账户的套餐</translation>
+    </message>
+    <message>
+        <source>Plugin installed</source>
+        <translation>插件已安装</translation>
+    </message>
+    <message>
+        <source>Prompt (what the picture should look like)</source>
+        <translation>提示词（图像应呈现的内容）</translation>
+    </message>
+    <message>
+        <source>Prompt preset id (optional)</source>
+        <translation>提示词预设 id（可选）</translation>
+    </message>
+    <message>
+        <source>Ready to run</source>
+        <translation>已准备运行</translation>
+    </message>
+    <message>
+        <source>Result image to trace (leave empty for the newest one)</source>
+        <translation>要追踪的结果图像（留空则使用最新图像）</translation>
+    </message>
+    <message>
+        <source>Rewrites the imagery over a map area from a text prompt and puts the result on the map as a georeferenced image layer, lined up with the area you gave it.</source>
+        <translation>根据文本提示词重绘地图范围内的影像，并将结果作为地理配准图像图层放置在地图上，与您提供的范围对齐。</translation>
+    </message>
+    <message>
+        <source>Run '{status_label}' ('{status_id}') first. It answers in a moment, spends nothing, and tells you whether this one can run at all.</source>
+        <translation>请先运行 '{status_label}'（'{status_id}'）。它会立即返回结果，不产生费用，并告知此功能是否可以运行。</translation>
+    </message>
+    <message>
+        <source>Run started</source>
+        <translation>运行已开始</translation>
+    </message>
+    <message>
+        <source>Run this first. It says whether AI Edit can work right now, it spends nothing, and it answers in a moment.</source>
+        <translation>请先运行此算法。它会告知 AI Edit 当前是否可以工作，不产生费用，并立即返回结果。</translation>
+    </message>
+    <message>
+        <source>Sending the area to the AI service. Prompt: {prompt}</source>
+        <translation>正在将范围发送到 AI 服务。提示词：{prompt}</translation>
+    </message>
+    <message>
+        <source>Source image: leave it empty to use the newest AI Edit result in the project, or name a raster layer to trace a different one. The layer has to be in the project, not a file picked from disk.</source>
+        <translation>源图像：留空则使用项目中最新的 AI Edit 结果，或者指定一个栅格图层以追踪其他图像。该图层必须位于项目中，不能是从磁盘选择的文件。</translation>
+    </message>
+    <message>
+        <source>State</source>
+        <translation>状态</translation>
+    </message>
+    <message>
+        <source>State: {state}. Ready: {ready}. Busy: {busy}.</source>
+        <translation>状态：{state}。就绪：{ready}。忙碌：{busy}。</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>状态</translation>
+    </message>
+    <message>
+        <source>Still running after {seconds} seconds. The run was NOT cancelled and is still going. Poll '{status_id}' until BUSY is false, then read the new layer in the project. Do not submit it again.</source>
+        <translation>{seconds} 秒后仍在运行。该运行任务未被取消，仍在继续。轮询 '{status_id}'，直到 BUSY 为 false，然后读取项目中的新图层。不要再次提交。</translation>
+    </message>
+    <message>
+        <source>Still running after {seconds}s. {panel_line}</source>
+        <translation>{seconds} 秒后仍在运行。{panel_line}</translation>
+    </message>
+    <message>
+        <source>That image is not in the project, so there is nothing to trace beside. Add the layer to the project first, then run this again.</source>
+        <translation>该图像不在项目中，因此没有可供追踪的图像。请先将图层添加到项目中，然后再次运行此算法。</translation>
+    </message>
+    <message>
+        <source>The AI Edit plugin is not loaded. Enable it in Plugins &gt; Manage and Install Plugins, then reopen this algorithm. (Looked for: {keys})</source>
+        <translation>AI Edit 插件未加载。请在 Plugins &gt; Manage and Install Plugins 中启用它，然后重新打开此算法。（查找内容：{keys}）</translation>
+    </message>
+    <message>
+        <source>The AI Edit status call returned nothing usable.</source>
+        <translation>AI Edit 状态调用未返回可用内容。</translation>
+    </message>
+    <message>
+        <source>The area is empty. Draw a rectangle over the imagery.</source>
+        <translation>地图范围为空。请在影像上绘制一个矩形。</translation>
+    </message>
+    <message>
+        <source>The area is read from the map canvas view, so the imagery under it is what the AI sees. Zoom in far enough that the detail you are asking about is visible, and hide any layer you do not want sent.</source>
+        <translation>地图范围读取自地图画布视图，因此 AI 看到的是该范围下的影像。请充分放大，使您关注的细节清晰可见，并隐藏不希望发送的图层。</translation>
+    </message>
+    <message>
+        <source>The balance could not be read, so CREDITS_REMAINING is -1 rather than a count. Reason: {reason}.</source>
+        <translation>无法读取余额，因此 CREDITS_REMAINING 为 -1，而不是具体数量。原因：{reason}。</translation>
+    </message>
+    <message>
+        <source>The imagery is never sent anywhere for this: the tracing is local, and it is not billed to any plan.</source>
+        <translation>此功能不会将影像发送到任何地方：追踪过程在本地执行，也不会计入任何套餐费用。</translation>
+    </message>
+    <message>
+        <source>The run ended without adding a layer. Read the AI Edit panel for the reason.</source>
+        <translation>运行结束，但未添加图层。请查看 AI Edit 面板中的原因。</translation>
+    </message>
+    <message>
+        <source>The status call returned nothing usable.</source>
+        <translation>状态调用未返回可用内容。</translation>
+    </message>
+    <message>
+        <source>The tracing finished but its layer is not in the project.</source>
+        <translation>追踪已完成，但其图层不在项目中。</translation>
+    </message>
+    <message>
+        <source>This QGIS build exposes no way to keep the run on the main thread. These algorithms drive the AI Edit panel, and driving it from a background thread would take QGIS down, so the run is refused. Update QGIS, or use the panel itself.</source>
+        <translation>此 QGIS 版本没有提供让运行任务保持在主线程上的方式。这些算法会驱动 AI Edit 面板，而从后台线程驱动面板会导致 QGIS 崩溃，因此拒绝运行。请更新 QGIS，或直接使用该面板。</translation>
+    </message>
+    <message>
+        <source>This run takes 30 to 120 seconds, and QGIS stays busy for the caller until it ends. Never start it again while it is running: a second run costs the user money.</source>
+        <translation>此运行任务需要 30 到 120 秒，在结束之前，QGIS 对调用方一直处于忙碌状态。运行期间不要再次启动：第二次运行会产生费用。</translation>
+    </message>
+    <message>
+        <source>This runs on the AI service, so it needs an internet connection and a signed-in TerraLab account. Open the AI Edit panel once to sign in.</source>
+        <translation>此功能在 AI 服务上运行，因此需要互联网连接和已登录的 TerraLab 账户。请打开一次 AI Edit 面板以登录。</translation>
+    </message>
+    <message>
+        <source>This takes 30 to 120 seconds and QGIS stays busy until it ends. Do not start it again: a second run costs money.</source>
+        <translation>此功能需要 30 到 120 秒，在结束之前 QGIS 一直处于忙碌状态。不要再次启动：第二次运行会产生费用。</translation>
+    </message>
+    <message>
+        <source>To turn one flat color of the result into polygons afterwards, run '{vectorize_id}' ('{vectorize_label}').</source>
+        <translation>之后如需将结果中的一种均匀颜色转换为多边形，请运行 '{vectorize_id}'（'{vectorize_label}'）。</translation>
+    </message>
+    <message>
+        <source>Traced {count} polygon(s) from {image}.</source>
+        <translation>已从 {image} 追踪 {count} 个多边形。</translation>
+    </message>
+    <message>
+        <source>Tracing color {color} on {image}.</source>
+        <translation>正在追踪 {image} 中的颜色 {color}。</translation>
+    </message>
+    <message>
+        <source>Turns one flat color of an AI Edit result image into polygons you can edit, measure and export. It runs on your machine, spends nothing, and usually takes a few seconds.</source>
+        <translation>将 AI Edit 结果图像中的一种均匀颜色转换为可编辑、测量和导出的多边形。此功能在您的计算机上运行，不产生费用，通常只需几秒钟。</translation>
+    </message>
+    <message>
+        <source>Two algorithms do the work, and you can run either by id:
+  {generate_id} - '{generate_label}'. Give it a map area and a prompt. It returns a new image layer over that area. It runs on the AI service, takes 30 to 120 seconds, and QGIS stays busy until it ends. Never start it twice: a second run costs the user money.
+  {vectorize_id} - '{vectorize_label}'. Give it one flat color of a result image and it traces that color into a polygon layer. Free, local, needs no account, and usually a few seconds.</source>
+        <translation>两个算法负责执行这些工作，您可以通过 id 运行任意一个：
+  {generate_id} - '{generate_label}'。为其提供一个地图范围和提示词。它会返回覆盖该范围的新图像图层。此功能在 AI 服务上运行，需要 30 到 120 秒，在结束之前 QGIS 一直处于忙碌状态。不要启动两次：第二次运行会产生费用。
+  {vectorize_id} - '{vectorize_label}'。为其提供结果图像中的一种均匀颜色，它会将该颜色追踪为多边形图层。免费、本地运行、无需账户，通常只需几秒钟。</translation>
+    </message>
+    <message>
+        <source>Type a prompt, for example 'remove the clouds'.</source>
+        <translation>输入提示词，例如 'remove the clouds'。</translation>
+    </message>
+    <message>
+        <source>Use it after '{generate_id}' has painted a class in one color, for example 'color every building red and everything else grey'. Point this algorithm at red and you get one polygon per building.</source>
+        <translation>在 '{generate_id}' 将某个类别绘制为一种颜色后使用此算法，例如 'color every building red and everything else grey'。将此算法指向红色后，每栋建筑都会得到一个多边形。</translation>
+    </message>
+    <message>
+        <source>Vectorize a color of an AI result into polygons (land cover classes, raster to vector)</source>
+        <translation>将 AI 结果中的一种颜色矢量化为多边形（土地覆盖类别，栅格转矢量）</translation>
+    </message>
+    <message>
+        <source>What it is for: classify land cover, extract building footprints as a colored picture, remove clouds, remove cars or buildings, upscale to super resolution, simulate a flood, color an old scanned map, restore a damaged photo.</source>
+        <translation>用途：分类土地覆盖，将建筑物轮廓提取为彩色图像，移除云、汽车或建筑物，放大到超分辨率，模拟洪水，为旧扫描地图着色，修复受损照片。</translation>
+    </message>
+    <message>
+        <source>What it returns: SUBMITTED (whether the run started), STATE ('done', 'generating', 'cancelled' or 'idle'), RESULT_LAYERS (the names of the image layers this run added to the project) and STATUS. There is no file output: the plugin adds the georeferenced result to the project itself, under its own layer group.</source>
+        <translation>返回内容：SUBMITTED（运行任务是否已开始）、STATE（'done'、'generating'、'cancelled' 或 'idle'）、RESULT_LAYERS（此次运行添加到项目中的图像图层名称）和 STATUS。没有文件输出：插件会将地理配准结果直接添加到项目中，置于其自身的图层组下。</translation>
+    </message>
+    <message>
+        <source>What it returns: no file output. The plugin adds one styled polygon layer to the project beside the image it came from, and this algorithm reports LAYER_NAME, FEATURE_COUNT and STATUS. That layer lives in memory until you save it, so use 'Make permanent' on it, or export it, before closing the project.</source>
+        <translation>返回内容：没有文件输出。插件会在源图像旁边向项目添加一个经过样式设置的多边形图层，此算法报告 LAYER_NAME、FEATURE_COUNT 和 STATUS。该图层在保存前仅存在于内存中，因此请在关闭项目之前对其使用 'Make permanent'，或将其导出。</translation>
+    </message>
+    <message>
+        <source>What the user has to do</source>
+        <translation>用户需要执行的操作</translation>
+    </message>
+    <message>
+        <source>What this one returns: INSTALLED and READY (true or false), STATE (READY, NEEDS_ACTIVATION or NO_PANEL), ACTION_REQUIRED (what a person has to do when READY is false), PLAN ('free', 'pro' or empty when unknown), CREDITS_REMAINING, BUSY (true while a generation is already running) and NEXT_ALGORITHMS. CREDITS_REMAINING is -1 when the account did not report a number, which usually means nobody is signed in yet.</source>
+        <translation>返回内容：INSTALLED 和 READY（true 或 false）、STATE（READY、NEEDS_ACTIVATION 或 NO_PANEL）、ACTION_REQUIRED（READY 为 false 时用户需要执行的操作）、PLAN（'free'、'pro'，或未知时为空）、CREDITS_REMAINING、BUSY（已有生成任务运行时为 true）以及 NEXT_ALGORITHMS。当账户未报告具体数量时，CREDITS_REMAINING 为 -1，这通常表示尚未有人登录。</translation>
+    </message>
+    <message>
+        <source>What to type in 'Prompt': plain words describing the picture you want back, for example 'color every building red and everything else grey' or 'remove the clouds' or 'upscale and sharpen'.</source>
+        <translation>在 'Prompt' 中输入的内容：用简单文字描述您希望返回的图像，例如 'color every building red and everything else grey'、'remove the clouds' 或 'upscale and sharpen'。</translation>
+    </message>
+    <message>
+        <source>When BUSY is true, a generation is already running. Wait for it and poll this algorithm again rather than starting another one.</source>
+        <translation>当 BUSY 为 true 时，已有生成任务正在运行。请等待其完成，然后再次轮询此算法，不要启动另一个任务。</translation>
+    </message>
+    <message>
+        <source>When READY is false, read ACTION_REQUIRED out to the user and stop. Signing in happens in the AI Edit panel in QGIS, not from here, and no algorithm can do it for the user.</source>
+        <translation>当 READY 为 false 时，将 ACTION_REQUIRED 的内容告知用户并停止。登录操作需在 QGIS 的 AI Edit 面板中完成，不能从此处进行，也没有任何算法可以代替用户登录。</translation>
+    </message>
+    <message>
+        <source>completed, {count} layer(s) added</source>
+        <translation>已完成，添加了 {count} 个图层</translation>
+    </message>
+    <message>
+        <source>completed, {count} polygon(s) in one layer</source>
+        <translation>已完成，一个图层中有 {count} 个多边形</translation>
+    </message>
+    <message>
+        <source>failed: {reason}</source>
+        <translation>失败：{reason}</translation>
+    </message>
+    <message>
+        <source>finished with no new layer</source>
+        <translation>已完成，但没有新图层</translation>
+    </message>
+    <message>
+        <source>the account call returned nothing usable</source>
+        <translation>账户调用未返回可用内容</translation>
+    </message>
+    <message>
+        <source>the account reported no usage counts</source>
+        <translation>账户未报告使用量</translation>
+    </message>
+    <message>
+        <source>the account returned no number</source>
+        <translation>账户未返回具体数量</translation>
+    </message>
+    <message>
+        <source>the newest result</source>
+        <translation>最新结果</translation>
+    </message>
+    <message>
+        <source>unknown</source>
+        <translation>未知</translation>
+    </message>
+    <message>
+        <source>{action} failed: {error}</source>
+        <translation>{action} 失败：{error}</translation>
+    </message>
+    <message>
+        <source>{action} returned nothing usable.</source>
+        <translation>{action} 未返回可用内容。</translation>
+    </message>
+    <message>
+        <source>{message} (state: {state})</source>
+        <translation>{message}（状态：{state}）</translation>
+    </message>
+    <message>
+        <source>{outcome} (code: {code})</source>
+        <translation>{outcome}（代码：{code}）</translation>
+    </message>
+    <message>
+        <source>{outcome}: {panel_line}</source>
+        <translation>{outcome}：{panel_line}</translation>
+    </message>
+    <message>
+        <source>{product} is available to AI agents. Run 'import terralab; print(terralab.capabilities())' from any code-execution tool, or look for the TerraLab algorithms in the Processing registry.</source>
+        <translation>{product} 可供 AI 代理使用。请在任意代码执行工具中运行 'import terralab; print(terralab.capabilities())'，或在 Processing 注册表中查找 TerraLab 算法。</translation>
+    </message>
+    <message>
+        <source>Personal, non-commercial use. A paid plan adds commercial use for one person.</source>
+        <translation>个人非商业用途。付费方案支持一人的商业用途。</translation>
     </message>
 </context>
 </TS>

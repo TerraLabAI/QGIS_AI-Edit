@@ -23,6 +23,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ...core import qt_compat as QtC
+from ...core.config_store import get_export_copy
 from ...core.i18n import tr
 from ...core.qt_compat import QShortcut
 from ..credit_ring import CreditRing
@@ -299,7 +300,8 @@ def _build_prewall_banner(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     dock._prewall_text.setWordWrap(True)
     dock._prewall_text.setStyleSheet("font-size: 12px; color: palette(text);")
     prewall_layout.addWidget(dock._prewall_text)
-    dock._prewall_btn = QPushButton(tr("Take a Pro month"))
+    dock._prewall_btn = QPushButton(
+        get_export_copy("prewall.cta", tr("Get 150 more edits")))
     dock._prewall_btn.setCursor(QtC.PointingHandCursor)
     dock._prewall_btn.setMinimumHeight(28)
     dock._prewall_btn.setStyleSheet(_BTN_BLUE_OUTLINE)
@@ -334,13 +336,26 @@ def _build_trial_info_box(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
         "font-size: 12px; font-weight: bold; color: palette(text);"
     )
     trial_layout.addWidget(dock._trial_info_text)
-    dock._trial_info_btn = QPushButton(tr("Unlock your Pro month: €29"))
+    # The single highest-intent string in the product, so it names what the
+    # money buys in the unit the user has just run out of. "Unlock your Pro
+    # month" sold a duration and said nothing about what arrives. Served, so
+    # the count and the price can be retuned without a release.
+    dock._trial_info_btn = QPushButton(
+        get_export_copy("wall.cta", tr("Get 150 more edits: 29 EUR")))
     dock._trial_info_btn.setCursor(QtC.PointingHandCursor)
     dock._trial_info_btn.setMinimumHeight(32)
     dock._trial_info_btn.setStyleSheet(_BTN_BLUE)
     dock._trial_info_btn.clicked.connect(dock._on_trial_info_subscribe_clicked)
     trial_layout.addWidget(dock._trial_info_btn)
-    dock._trial_info_subtext = QLabel(tr("No commitment, cancel anytime"))
+    # Carries the honesty the button cannot fit: 150 is the Standard figure,
+    # and a 4K edit costs twice as much. "No commitment, cancel anytime" is a
+    # line any competitor could paste unchanged, and it ate the one slot under
+    # the CTA where a real number fits.
+    dock._trial_info_subtext = QLabel(get_export_copy(
+        "wall.subtext",
+        tr("3,000 credits a month, about 150 edits at Standard. "
+           "Cancel anytime."),
+    ))
     dock._trial_info_subtext.setWordWrap(True)
     dock._trial_info_subtext.setStyleSheet(
         "font-size: 11px; color: palette(text);"

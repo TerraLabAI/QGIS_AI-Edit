@@ -125,8 +125,9 @@ class DockChromeMixin:
         # the two docks read as one family. An illustrative image and a
         # standalone free-AI-Edits hint were tried here and rejected:
         # text only. Since the 2026-07 monthly free plan, the first bullet
-        # states the allowance ("10 AI edits every month"): the monthly
-        # renewal is the plan's pitch and must be explicit.
+        # states the allowance: the monthly renewal is the plan's pitch and
+        # must be explicit. The number is SERVED, never written here, so the
+        # first promise a new user reads cannot drift from the real grant.
         hint_card = QFrame()
         hint_card.setObjectName("signinHintCard")
         hint_card.setStyleSheet(
@@ -137,9 +138,12 @@ class DockChromeMixin:
         hint_card_layout = QVBoxLayout(hint_card)
         hint_card_layout.setContentsMargins(10, 8, 10, 8)
         hint_card_layout.setSpacing(5)
+        from ...core.paywall_state import advertised_free_generations
+
         for line in (
-            tr("Free plan - 10 AI edits every month. Sign-up takes 15 seconds "
-               "in your browser."),
+            tr("Free plan, {n} AI edits every month. Signing up takes 15 "
+               "seconds in your browser.").replace(
+                   "{n}", str(advertised_free_generations())),
             tr("Then type what to change on your imagery, and get the result "
                "back as a georeferenced layer."),
         ):

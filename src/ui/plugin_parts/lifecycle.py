@@ -119,6 +119,20 @@ def step_error_code(label: str, stage: str) -> str:
     return f"{stage}_{slug.strip('_') or 'step'}"[:60]
 
 
+def is_deleted_qt_object_error(err: BaseException) -> bool:
+    """True when PyQt raised because the C++ half of a widget is already gone.
+
+    QGIS deletes its own widgets before it calls unload() on shutdown, so a
+    teardown step touching the toolbar or the canvas raises RuntimeError
+    ("wrapped C/C++ object of type QToolBar has been deleted"). Expected, not
+    actionable, and nothing is left dangling: the object the step wanted to
+    clean up no longer exists.
+    """
+    if not isinstance(err, RuntimeError):
+        return False
+    return "has been deleted" in safe_error_text(err)
+
+
 def report_teardown_failure(label: str, err: BaseException, stage: str = "unload") -> None:
     """Log a failed step and ship it as plugin_error. Never raises, never blocks.
 
@@ -127,6 +141,10 @@ def report_teardown_failure(label: str, err: BaseException, stage: str = "unload
     through build_failure_props, which scrubs user paths and caps at 200 chars.
     track() only queues; the batch leaves on the telemetry step's own flush, so
     a step failing AFTER telemetry shut down is logged but no longer sent.
+
+    One exception never reaches telemetry: a widget whose C++ half QGIS already
+    deleted. It fires on normal shutdown, on every machine, and in 1.7.2 it made
+    up 16 of the 18 errors that tripped the release-regression alert.
     """
     detail = safe_error_text(err)
     try:
@@ -134,6 +152,8 @@ def report_teardown_failure(label: str, err: BaseException, stage: str = "unload
     except Exception:  # nosec B110 - logging must never break teardown
         pass
     try:
+        if is_deleted_qt_object_error(err):
+            return
         telemetry.track(
             te.PLUGIN_ERROR,
             build_failure_props(stage, step_error_code(label, stage), detail),
@@ -167,6 +187,38 @@ class PluginLifecycleMixin:
             migrate_legacy_key()
         except Exception as err:  # nosec B110
             log_warning(f"Auth migration raised: {err}")
+
+        # The stable public API other tools drive the plugin with. Built first
+        # so it answers even if a later step of initGui fails. Never fatal: the
+        # facade is a bonus surface and the panel is the product, so a broken
+        # import here must not stop AI Edit from loading. Everything that reads
+        # it (the Processing algorithms through edit_facade(), the agent bridge)
+        # treats a missing one as "not available" rather than an error.
+        self.mcp_api = None
+        try:
+            from ...mcp_api import EditMCPAPI
+            self.mcp_api = EditMCPAPI(self)
+        except Exception as err:  # nosec B110
+            log_warning(f"Public API not built: {err}")
+
+        # Publish a "terralab" module an outside agent can import, so a QGIS MCP
+        # server that only offers code execution can still find this plugin.
+        # Never fatal: the panel loads with or without it.
+        if self.mcp_api is not None:
+            try:
+                from ...agent_bridge import register_product
+                register_product("edit", self.mcp_api)
+            except Exception as err:  # nosec B110
+                log_warning(f"Agent bridge not published: {err}")
+
+        # Publish the algorithms to the Processing registry, which is the one
+        # place a generic QGIS MCP server can discover a capability it does not
+        # already know about. Never fatal: the panel loads with or without it.
+        self._processing_provider = None
+        try:
+            self._register_processing_provider()
+        except Exception as err:  # nosec B110
+            log_warning(f"Processing provider not registered: {err}")
 
         plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         icon_path = os.path.join(plugin_dir, "resources", "icons", "icon.png")
@@ -436,8 +488,13 @@ class PluginLifecycleMixin:
         # Make any pending plugin-update-check timer a no-op (belt-and-suspenders
         # alongside parenting it to the dock).
         self._update_check_done = True
-        # Tear down any in-flight onboarding tile-warm-up watcher (disconnects
-        # the canvas signal so it can't fire against a torn-down dock).
+        # First, so a reload can never leave two providers in the registry.
+        with teardown_step("processing provider"):
+            self._unregister_processing_provider()
+        # Stop advertising this plugin to outside agents once it is disabled.
+        with teardown_step("agent bridge"):
+            from ...agent_bridge import unregister_product
+            unregister_product("edit")
         with teardown_step("imagery gate"):
             self._finish_imagery_gate()
         # Stop generation task. QgsTaskManager owns the task lifecycle, so we
@@ -678,3 +735,56 @@ class PluginLifecycleMixin:
                 self._config_store.clear()
             set_store(None)
         log("AI Edit plugin unloaded")
+
+    def _register_processing_provider(self):
+        """Add the AI Edit provider to the Processing registry.
+
+        Imported here rather than at module level so plugin load stays light,
+        and so a QGIS build without the Processing plugin enabled fails on this
+        one call instead of on the import of the whole controller.
+        """
+        from ...processing.edit_provider import TerraEditProcessingProvider
+
+        provider = TerraEditProcessingProvider()
+        provider_id = provider.id()
+        # addProvider returns False AND deletes the provider it was given when
+        # the id is already taken, which leaves a Python wrapper around a dead
+        # C++ object. Holding that would make the matching removeProvider raise
+        # on unload, so drop the reference instead of keeping a corpse.
+        registry = QgsApplication.processingRegistry()
+        if not registry.addProvider(provider):
+            # Reloading the plugin can leave the previous provider behind with
+            # its Python half collected: it answers to no id and lists no
+            # algorithm, and it holds the name against us. Whoever reloaded
+            # would have no algorithms until they restart QGIS, so take the id
+            # back rather than stopping here. By id, never by object: the
+            # object overload calls provider->id(), the pure virtual whose
+            # Python override is exactly what a half-collected provider has
+            # lost. A fresh instance is needed because the one above is
+            # already deleted.
+            registry.removeProvider(provider_id)
+            provider = TerraEditProcessingProvider()
+            if not registry.addProvider(provider):
+                self._processing_provider = None
+                log_warning(
+                    f"Processing provider '{provider_id}' was not registered: "
+                    "the id is already taken."
+                )
+                return
+        self._processing_provider = provider
+
+    def _unregister_processing_provider(self):
+        """Remove the provider, so a reload does not leave two of them registered."""
+        provider = getattr(self, "_processing_provider", None)
+        # Dropped before the call, never after: a raise on an already-deleted
+        # provider would otherwise leave the attribute set and the next unload
+        # would retry the same dead object.
+        self._processing_provider = None
+        if provider is None:
+            return
+        from ...processing.edit_provider import TERRAEDIT_PROVIDER_ID
+
+        # By id, never by object: the object overload calls provider->id() in
+        # C++, and that override is gone the moment the Python half is
+        # collected. The id is a constant, so it survives.
+        QgsApplication.processingRegistry().removeProvider(TERRAEDIT_PROVIDER_ID)

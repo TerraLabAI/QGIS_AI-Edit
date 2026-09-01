@@ -1,14 +1,22 @@
 [general]
 name=AI Edit by TerraLab
-description=Edit aerial & satellite imagery with AI: land cover classification, building footprint extraction, super-resolution upscaling, object removal, cloud removal and flood simulation, all from a text prompt. Georeferenced output.
+description=Show a project on real aerial imagery, from a text prompt: a redevelopment before it is built, a street planted with trees, a flood, or an orthophoto redrawn as a clean site plan. Land cover maps, cloud and object removal too. Georeferenced output.
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
-version=1.7.2
+version=1.8.1
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.8.1
+    - AI Edit now works from the Processing Toolbox, the model designer and batch mode: generate, check your plan, and vectorize a color
+    - Scripts and AI assistants can drive the plugin directly, and read what it can do before they spend anything
+    - The plugin reads its imagery and pacing settings from the server, so improvements reach you without an update
+    - Fixed: a result that lands behind your own imagery now says so, and one click brings it back to the front
+    - Fixed: layers filed inside a group set to render as one group are no longer invisible to the plugin
+    - Fixed: reloading the plugin no longer loses its algorithms, and unloading it no longer logs an error
+
     1.7.1
     - Fixed: adding a reference image stopped working after your first generation, until QGIS was restarted
 
@@ -95,7 +103,11 @@ changelog=
     - Better download retries when a connection is blocked
 
 about=
-    Select an area, write what you want -> get the result back as a georeferenced layer
+    Show a project before it exists, on the aerial imagery you already have open
+
+    • Select an area, write what you want -> get the result back as a georeferenced layer, aligned on your source imagery and tagged as AI-generated
+
+    • The most used case: turn an orthophoto into a clean architectural site plan. Then redevelopments, planted streets, parks, solar farms, floods and sea level rise
 
     • Works on any data on your map: rasters (GeoTIFF, JPG, PNG), vector layers, OpenStreetMap, and online basemaps (WMS, XYZ tiles)
 
@@ -113,7 +125,7 @@ tracker=https://github.com/TerraLabAI/QGIS_AI-Edit/issues
 repository=https://github.com/TerraLabAI/QGIS_AI-Edit
 homepage=https://terra-lab.ai/ai-edit
 
-hasProcessingProvider=no
+hasProcessingProvider=yes
 
 tags=ai, artificial intelligence, machine learning, deep learning, neural network, computer vision, generative ai, image generation, image editing, image processing, image classification, classification, raster, satellite, satellite imagery, satellite images, remote sensing, remote-sensing, aerial, orthophoto, orthomosaic, ortofoto, drone, uav, sentinel, sentinel-2, landsat, copernicus, geotiff, multispectral, land cover, landcover, land use, lulc, building detection, buildings, feature extraction, vegetation, cloud removal, cloud masking, super resolution, upscaling, enhancement, inpainting, colorization, restoration, flood, flooding, inundation, simulation, climate change, terrain, urban planning, urbanisme, urban, agriculture, precision agriculture, archaeology, solar, energy, cartography, vectorization, vector, vetor, digitizing, georeferencing, georreferenciamento, geojson, shapefile, gpkg, nano banana, ia
 

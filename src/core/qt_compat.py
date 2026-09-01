@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from qgis.core import QgsBlockingNetworkRequest, QgsRaster, QgsTask
 from qgis.PyQt.QtCore import QIODevice, QObject, QStandardPaths, Qt, QTimer
-from qgis.PyQt.QtGui import QImage, QPalette, QTextCursor, QTextOption
+from qgis.PyQt.QtGui import QImage, QPainter, QPalette, QTextCursor, QTextOption
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 from qgis.PyQt.QtWidgets import QFrame, QSizePolicy, QTextEdit
 
@@ -91,6 +91,9 @@ RightArrow = _resolve(Qt, "ArrowType", "RightArrow")
 RichText = _resolve(Qt, "TextFormat", "RichText")
 PlainText = _resolve(Qt, "TextFormat", "PlainText")
 
+# Qt.TextInteractionFlag
+LinksAccessibleByMouse = _resolve(Qt, "TextInteractionFlag", "LinksAccessibleByMouse")
+
 # Qt.WidgetAttribute
 WA_TransparentForMouseEvents = _resolve(Qt, "WidgetAttribute", "WA_TransparentForMouseEvents")
 WA_StyledBackground = _resolve(Qt, "WidgetAttribute", "WA_StyledBackground")
@@ -129,6 +132,12 @@ CacheLocation = _resolve(QStandardPaths, "StandardLocation", "CacheLocation")
 
 # QImage.Format
 FormatARGB32 = _resolve(QImage, "Format", "Format_ARGB32")
+
+# QPainter.CompositionMode - what QgsMapLayer.blendMode() returns. SourceOver is
+# the default, i.e. "paints over whatever is underneath".
+CompositionModeSourceOver = _resolve(
+    QPainter, "CompositionMode", "CompositionMode_SourceOver"
+)
 
 # QTextCursor.MoveOperation
 CursorEnd = _resolve(QTextCursor, "MoveOperation", "End")

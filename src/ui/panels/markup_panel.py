@@ -34,7 +34,12 @@ from ...core.i18n import tr
 from ...core.qt_compat import QShortcut
 from ..dock.style import _BTN_GHOST as _BTN_GHOST_QSS
 from ..dock.style import _BTN_LABEL_WEIGHT, BRAND_BLUE, BRAND_RED, FOCUS_RING
-from ..onboarding_hint import HINT_MARKUP, DismissibleHint, is_hint_dismissed
+from ..onboarding_hint import (
+    HINT_MARKUP,
+    DismissibleHint,
+    is_hint_dismissed,
+    open_guide,
+)
 from ..panel_helpers import (
     GROUP_BOX_QSS,
     build_panel_header,
@@ -165,11 +170,18 @@ class MarkupPanel(QWidget):
         # Dismissible tip at the top (same pattern as the prompt library):
         # a concise, closeable note on what Mark up is for. Restorable from
         # Account Settings; activate() re-checks its state.
+        # The link is the only in-context way to the tutorial from here, and
+        # it says "example" rather than "how it works" on purpose: what sells
+        # Mark up is the pink outline turning into trees, not a procedure.
         self._markup_hint = DismissibleHint(
             HINT_MARKUP,
             "",
             tr("Draw on your zone to point the AI where to act. Your marks "
                "guide the edit and are removed from the result."),
+            link_text=tr("See an example"),
+        )
+        self._markup_hint.link_activated.connect(
+            lambda: open_guide("panel_markup")
         )
         layout.addWidget(self._markup_hint)
 

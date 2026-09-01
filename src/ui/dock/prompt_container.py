@@ -611,7 +611,7 @@ class _PromptContainer(QFrame):
                 lambda _checked=False, r=res: self._on_menu_item_clicked(r)
             )
             if locked:
-                action.setToolTip(tr("Subscribe for more detail"))
+                action.setToolTip(tr("Pro gives you 2K and 4K, for printing and zooming in"))
             self._resolution_menu.addAction(action)
 
     def _on_menu_item_clicked(self, label: str) -> None:

@@ -4,6 +4,26 @@
 <context>
     <name>AIEdit</name>
     <message>
+        <source>Your result is behind other layers</source>
+        <translation>結果が他のレイヤの背後にあります</translation>
+    </message>
+    <message>
+        <source>It was created, but something opaque is drawn on top of it.</source>
+        <translation>作成されましたが、不透明なものが上に描画されています。</translation>
+    </message>
+    <message>
+        <source>Bring it to the front</source>
+        <translation>前面に移動</translation>
+    </message>
+    <message>
+        <source>See an example</source>
+        <translation>例を見る</translation>
+    </message>
+    <message>
+        <source>Your selection and prompt may be processed outside the EU {dot} {privacy}</source>
+        <translation>選択内容とプロンプトはEU域外で処理される場合があります {dot} {privacy}</translation>
+    </message>
+    <message>
         <source>This prompt is not allowed: its content goes against our rules.</source>
         <translation>このプロンプトは許可されていません。内容が当社のルールに違反しています。</translation>
     </message>
@@ -2132,8 +2152,8 @@ We'd love to hear from you!</source>
         <translation>最大</translation>
     </message>
     <message>
-        <source>Subscribe for more detail</source>
-        <translation>詳細度を上げるには登録してください</translation>
+        <source>Pro gives you 2K and 4K, for printing and zooming in</source>
+        <translation>Pro では 2K と 4K が使えます。印刷や拡大に向いています。</translation>
     </message>
     <message>
         <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Higher means a sharper, more detailed result.</source>
@@ -2280,8 +2300,8 @@ We'd love to hear from you!</source>
         <translation>各図形の内側の穴を埋める</translation>
     </message>
     <message>
-        <source>Free plan - 10 AI edits every month. Sign-up takes 15 seconds in your browser.</source>
-        <translation>無料プラン - 毎月10回のAI編集。登録はブラウザで15秒で完了します。</translation>
+        <source>Free plan, {n} AI edits every month. Signing up takes 15 seconds in your browser.</source>
+        <translation>Free プラン、毎月 {n} 回の AI 編集。登録はブラウザで 15 秒です。</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>
@@ -2860,20 +2880,400 @@ We'd love to hear from you!</source>
         <translation>{total}回分の無料生成は来月更新されます</translation>
     </message>
     <message>
-        <source>Unlock your Pro month: €29</source>
-        <translation>Proプランをアンロック：€29</translation>
+        <source>Get 150 more edits: 29 EUR</source>
+        <translation>編集を 150 回追加：29 EUR</translation>
     </message>
     <message>
-        <source>No commitment, cancel anytime</source>
-        <translation>契約不要、いつでも解約可能</translation>
+        <source>3,000 credits a month, about 150 edits at Standard. Cancel anytime.</source>
+        <translation>毎月 3,000 クレジット、Standard で約 150 回の編集。いつでも解約できます。</translation>
     </message>
     <message>
-        <source>Last free generation of the month. Working on a project? Take a Pro month.</source>
-        <translation>今月最後の無料生成です。進行中のプロジェクトがありますか？Proプランを利用しましょう。</translation>
+        <source>Last free generation of the month. Pro gives you about 150 more, for 29 EUR.</source>
+        <translation>今月の無料生成はこれが最後です。Pro なら 29 EUR で約 150 回追加できます。</translation>
     </message>
     <message>
-        <source>Take a Pro month</source>
-        <translation>Proプランを利用する</translation>
+        <source>Get 150 more edits</source>
+        <translation>編集を 150 回追加</translation>
+    </message>
+    <message>
+        <source>Share usage statistics with TerraLab</source>
+        <translation>TerraLabと利用統計を共有</translation>
+    </message>
+    <message>
+        <source>Helps us fix bugs faster.</source>
+        <translation>バグ修正の高速化に役立ちます。</translation>
+    </message>
+    <message>
+        <source>Errors, versions and which features you use, linked to your account. Never your imagery, layers or coordinates.</source>
+        <translation>エラー、バージョン、利用した機能がアカウントに関連付けられます。画像、レイヤー、座標は一切収集しません。</translation>
+    </message>
+    <message>
+        <source>A bridge that calls this over a network usually gives up waiting after about a minute. The generation is NOT lost when that happens: it keeps running in QGIS and finishes on its own. Poll '{status_label}' until BUSY is false, then read the new layer in the project. Do not submit the run again, that is a second charge.</source>
+        <translation>ネットワーク経由でこれを呼び出すブリッジは、通常約1分で待機を諦めます。その場合も生成は失われません。QGISで処理は実行され続け、自動的に完了します。BUSY が false になるまで '{status_label}' をポーリングし、その後プロジェクト内の新しいレイヤーを読み取ってください。処理を再送信しないでください。再送信すると二重に課金されます。</translation>
+    </message>
+    <message>
+        <source>A generation is already running</source>
+        <translation>生成処理はすでに実行中です</translation>
+    </message>
+    <message>
+        <source>AI Edit did not take the run.</source>
+        <translation>AI Edit は処理を受け付けませんでした。</translation>
+    </message>
+    <message>
+        <source>AI Edit is not ready. Open the AI Edit panel and finish the setup.</source>
+        <translation>AI Edit は準備できていません。AI Edit パネルを開いてセットアップを完了してください。</translation>
+    </message>
+    <message>
+        <source>AI Edit rewrites aerial and satellite imagery from a text prompt and gives the result back as a georeferenced image on the map. Land cover classification, building footprints, cloud removal, object removal, super resolution upscaling, flood simulation, coloring an old map. One prompt, one picture back.</source>
+        <translation>AI Edit はテキストプロンプトに基づいて航空画像や衛星画像を書き換え、ジオリファレンスされた画像として地図上に返します。土地被覆分類、建物フットプリントの抽出、雲の除去、物体の除去、超解像アップスケーリング、洪水シミュレーション、古地図のカラー化に対応します。1つのプロンプトから1枚の画像が返されます。</translation>
+    </message>
+    <message>
+        <source>Added to the project: {layers}.</source>
+        <translation>プロジェクトに追加されました: {layers}。</translation>
+    </message>
+    <message>
+        <source>Algorithms that do the work</source>
+        <translation>処理を実行するアルゴリズム</translation>
+    </message>
+    <message>
+        <source>Cancelled. You asked for it to stop, so the run was not finished.</source>
+        <translation>キャンセルされました。停止が要求されたため、処理は完了していません。</translation>
+    </message>
+    <message>
+        <source>Cancelling the run.</source>
+        <translation>処理をキャンセルしています。</translation>
+    </message>
+    <message>
+        <source>Check AI Edit status, credits and plan before you generate or edit satellite imagery</source>
+        <translation>衛星画像を生成または編集する前に、AI Edit のステータス、クレジット、プランを確認します</translation>
+    </message>
+    <message>
+        <source>Class name written on every polygon (optional)</source>
+        <translation>すべてのポリゴンに書き込むクラス名（任意）</translation>
+    </message>
+    <message>
+        <source>Class name: written on every polygon, so several runs over the same image stay apart once they are merged.</source>
+        <translation>クラス名: すべてのポリゴンに書き込まれるため、同じ画像に対する複数回の処理を統合した後も区別できます。</translation>
+    </message>
+    <message>
+        <source>Color to trace</source>
+        <translation>トレースする色</translation>
+    </message>
+    <message>
+        <source>Color to trace: the exact color of the class in the picture. Widen the tolerance when the color is not perfectly flat; narrow it when two classes bleed into each other. The tracer uses {tolerance} when you leave it empty.</source>
+        <translation>トレースする色: 画像内のクラスの正確な色です。色が完全に均一でない場合は許容差を広げ、2つのクラスが互いに混ざる場合は狭めてください。空欄にすると、トレーサーは {tolerance} を使用します。</translation>
+    </message>
+    <message>
+        <source>Color tolerance 0 to 255 (leave empty for {tolerance})</source>
+        <translation>色の許容差 0～255（{tolerance} の場合は空欄）</translation>
+    </message>
+    <message>
+        <source>Credits left on the plan</source>
+        <translation>プランに残っているクレジット</translation>
+    </message>
+    <message>
+        <source>Credits left: {count}.</source>
+        <translation>残りのクレジット: {count}。</translation>
+    </message>
+    <message>
+        <source>Every generation is billed to the signed-in account, and a free account may only ask for the smallest output size. Run '{status_id}' to read the balance and the plan before anything is spent. Plan limits: {pricing_url}</source>
+        <translation>生成処理はすべてサインイン中のアカウントに課金され、無料アカウントでは最小の出力サイズのみ指定できます。クレジットが消費される前に '{status_id}' を実行して、残高とプランを確認してください。プランの制限: {pricing_url}</translation>
+    </message>
+    <message>
+        <source>Generate and edit satellite or aerial imagery with AI: classify land cover, remove clouds and objects, upscale to super resolution, simulate floods</source>
+        <translation>AI で衛星画像や航空画像を生成・編集します: 土地被覆の分類、雲や物体の除去、超解像へのアップスケーリング、洪水のシミュレーション</translation>
+    </message>
+    <message>
+        <source>Map area to edit</source>
+        <translation>編集する地図範囲</translation>
+    </message>
+    <message>
+        <source>Name of the layer added to the project</source>
+        <translation>プロジェクトに追加されたレイヤーの名前</translation>
+    </message>
+    <message>
+        <source>Names of the image layers added to the project</source>
+        <translation>プロジェクトに追加された画像レイヤーの名前</translation>
+    </message>
+    <message>
+        <source>No account is needed for this one. The AI Edit plugin has to be loaded, and nothing else: the tracing reads the picture on this computer and sends nothing.</source>
+        <translation>これはアカウントを必要としません。AI Edit プラグインが読み込まれていれば、それ以外は不要です。トレース処理はこのコンピューター上の画像を読み取り、何も送信しません。</translation>
+    </message>
+    <message>
+        <source>Number of polygons traced</source>
+        <translation>トレースされたポリゴン数</translation>
+    </message>
+    <message>
+        <source>Output size, leave empty for the one selected in the panel</source>
+        <translation>出力サイズ。パネルで選択したサイズを使用する場合は空欄にします</translation>
+    </message>
+    <message>
+        <source>Output size: {size}.</source>
+        <translation>出力サイズ: {size}。</translation>
+    </message>
+    <message>
+        <source>Output sizes this build offers, smallest first: {sizes}.</source>
+        <translation>このビルドで提供される出力サイズ（小さい順）: {sizes}。</translation>
+    </message>
+    <message>
+        <source>Pick the color to trace, as a color or as '#rrggbb'.</source>
+        <translation>トレースする色を色指定または '#rrggbb' 形式で選択します。</translation>
+    </message>
+    <message>
+        <source>Plan on the signed-in account</source>
+        <translation>サインイン中のアカウントのプラン</translation>
+    </message>
+    <message>
+        <source>Plugin installed</source>
+        <translation>プラグインがインストールされています</translation>
+    </message>
+    <message>
+        <source>Prompt (what the picture should look like)</source>
+        <translation>プロンプト（画像の内容）</translation>
+    </message>
+    <message>
+        <source>Prompt preset id (optional)</source>
+        <translation>プロンプトプリセット ID（任意）</translation>
+    </message>
+    <message>
+        <source>Ready to run</source>
+        <translation>実行する準備ができています</translation>
+    </message>
+    <message>
+        <source>Result image to trace (leave empty for the newest one)</source>
+        <translation>トレースする結果画像（最新の画像を使用する場合は空欄）</translation>
+    </message>
+    <message>
+        <source>Rewrites the imagery over a map area from a text prompt and puts the result on the map as a georeferenced image layer, lined up with the area you gave it.</source>
+        <translation>地図範囲内の画像をテキストプロンプトに基づいて書き換え、指定した範囲に合わせてジオリファレンスされた画像レイヤーとして地図上に配置します。</translation>
+    </message>
+    <message>
+        <source>Run '{status_label}' ('{status_id}') first. It answers in a moment, spends nothing, and tells you whether this one can run at all.</source>
+        <translation>まず '{status_label}' ('{status_id}') を実行してください。すぐに結果が返り、クレジットを消費せず、この処理を実行できるかどうかを知らせます。</translation>
+    </message>
+    <message>
+        <source>Run started</source>
+        <translation>処理を開始しました</translation>
+    </message>
+    <message>
+        <source>Run this first. It says whether AI Edit can work right now, it spends nothing, and it answers in a moment.</source>
+        <translation>まずこれを実行してください。AI Edit を現在使用できるかどうかを確認でき、クレジットを消費せず、すぐに結果が返ります。</translation>
+    </message>
+    <message>
+        <source>Sending the area to the AI service. Prompt: {prompt}</source>
+        <translation>範囲を AI サービスに送信しています。プロンプト: {prompt}</translation>
+    </message>
+    <message>
+        <source>Source image: leave it empty to use the newest AI Edit result in the project, or name a raster layer to trace a different one. The layer has to be in the project, not a file picked from disk.</source>
+        <translation>ソース画像: プロジェクト内の最新の AI Edit 結果を使用する場合は空欄にします。別の画像をトレースする場合は、ラスター レイヤーを指定してください。レイヤーはプロジェクト内に存在する必要があり、ディスクから選択したファイルは使用できません。</translation>
+    </message>
+    <message>
+        <source>State</source>
+        <translation>状態</translation>
+    </message>
+    <message>
+        <source>State: {state}. Ready: {ready}. Busy: {busy}.</source>
+        <translation>状態: {state}。準備完了: {ready}。実行中: {busy}。</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>ステータス</translation>
+    </message>
+    <message>
+        <source>Still running after {seconds} seconds. The run was NOT cancelled and is still going. Poll '{status_id}' until BUSY is false, then read the new layer in the project. Do not submit it again.</source>
+        <translation>{seconds} 秒経過しましたが、まだ実行中です。処理はキャンセルされておらず、継続しています。BUSY が false になるまで '{status_id}' をポーリングし、その後プロジェクト内の新しいレイヤーを読み取ってください。再送信しないでください。</translation>
+    </message>
+    <message>
+        <source>Still running after {seconds}s. {panel_line}</source>
+        <translation>{seconds} 秒経過しましたが、まだ実行中です。{panel_line}</translation>
+    </message>
+    <message>
+        <source>That image is not in the project, so there is nothing to trace beside. Add the layer to the project first, then run this again.</source>
+        <translation>その画像はプロジェクト内にないため、トレース対象がありません。まずレイヤーをプロジェクトに追加してから、もう一度実行してください。</translation>
+    </message>
+    <message>
+        <source>The AI Edit plugin is not loaded. Enable it in Plugins &gt; Manage and Install Plugins, then reopen this algorithm. (Looked for: {keys})</source>
+        <translation>AI Edit プラグインが読み込まれていません。Plugins &gt; Manage and Install Plugins で有効化してから、このアルゴリズムを再度開いてください。（検索対象: {keys}）</translation>
+    </message>
+    <message>
+        <source>The AI Edit status call returned nothing usable.</source>
+        <translation>AI Edit のステータス呼び出しから使用可能な結果が返されませんでした。</translation>
+    </message>
+    <message>
+        <source>The area is empty. Draw a rectangle over the imagery.</source>
+        <translation>範囲が空です。画像上に長方形を描いてください。</translation>
+    </message>
+    <message>
+        <source>The area is read from the map canvas view, so the imagery under it is what the AI sees. Zoom in far enough that the detail you are asking about is visible, and hide any layer you do not want sent.</source>
+        <translation>範囲はマップキャンバスの表示から読み取られるため、その下にある画像が AI に渡されます。対象の詳細が見えるまで十分にズームインし、送信したくないレイヤーは非表示にしてください。</translation>
+    </message>
+    <message>
+        <source>The balance could not be read, so CREDITS_REMAINING is -1 rather than a count. Reason: {reason}.</source>
+        <translation>残高を読み取れなかったため、CREDITS_REMAINING は件数ではなく -1 です。理由: {reason}。</translation>
+    </message>
+    <message>
+        <source>The imagery is never sent anywhere for this: the tracing is local, and it is not billed to any plan.</source>
+        <translation>この処理で画像が外部に送信されることはありません。トレースはローカルで実行され、どのプランにも課金されません。</translation>
+    </message>
+    <message>
+        <source>The run ended without adding a layer. Read the AI Edit panel for the reason.</source>
+        <translation>レイヤーが追加されないまま処理が終了しました。理由は AI Edit パネルで確認してください。</translation>
+    </message>
+    <message>
+        <source>The status call returned nothing usable.</source>
+        <translation>ステータス呼び出しから使用可能な結果が返されませんでした。</translation>
+    </message>
+    <message>
+        <source>The tracing finished but its layer is not in the project.</source>
+        <translation>トレースは完了しましたが、そのレイヤーがプロジェクト内にありません。</translation>
+    </message>
+    <message>
+        <source>This QGIS build exposes no way to keep the run on the main thread. These algorithms drive the AI Edit panel, and driving it from a background thread would take QGIS down, so the run is refused. Update QGIS, or use the panel itself.</source>
+        <translation>この QGIS ビルドには、処理をメインスレッドで維持する方法がありません。これらのアルゴリズムは AI Edit パネルを操作するため、バックグラウンドスレッドから操作すると QGIS がクラッシュします。そのため処理は拒否されます。QGIS を更新するか、パネル自体を使用してください。</translation>
+    </message>
+    <message>
+        <source>This run takes 30 to 120 seconds, and QGIS stays busy for the caller until it ends. Never start it again while it is running: a second run costs the user money.</source>
+        <translation>この処理には30～120秒かかり、終了するまで呼び出し元の QGIS はビジー状態になります。実行中に再度開始しないでください。2回目の処理はユーザーに課金されます。</translation>
+    </message>
+    <message>
+        <source>This runs on the AI service, so it needs an internet connection and a signed-in TerraLab account. Open the AI Edit panel once to sign in.</source>
+        <translation>これは AI サービス上で実行されるため、インターネット接続とサインイン済みの TerraLab アカウントが必要です。サインインするには AI Edit パネルを一度開いてください。</translation>
+    </message>
+    <message>
+        <source>This takes 30 to 120 seconds and QGIS stays busy until it ends. Do not start it again: a second run costs money.</source>
+        <translation>これには30～120秒かかり、終了するまで QGIS はビジー状態になります。再度開始しないでください。2回目の処理には費用が発生します。</translation>
+    </message>
+    <message>
+        <source>To turn one flat color of the result into polygons afterwards, run '{vectorize_id}' ('{vectorize_label}').</source>
+        <translation>結果画像の均一な1色を後からポリゴンに変換するには、'{vectorize_id}' ('{vectorize_label}') を実行してください。</translation>
+    </message>
+    <message>
+        <source>Traced {count} polygon(s) from {image}.</source>
+        <translation>{image} から {count} 個のポリゴンをトレースしました。</translation>
+    </message>
+    <message>
+        <source>Tracing color {color} on {image}.</source>
+        <translation>{image} 上で色 {color} をトレースしています。</translation>
+    </message>
+    <message>
+        <source>Turns one flat color of an AI Edit result image into polygons you can edit, measure and export. It runs on your machine, spends nothing, and usually takes a few seconds.</source>
+        <translation>AI Edit の結果画像に含まれる均一な1色を、編集、計測、エクスポートできるポリゴンに変換します。コンピューター上で実行され、クレジットを消費せず、通常は数秒で完了します。</translation>
+    </message>
+    <message>
+        <source>Two algorithms do the work, and you can run either by id:
+  {generate_id} - '{generate_label}'. Give it a map area and a prompt. It returns a new image layer over that area. It runs on the AI service, takes 30 to 120 seconds, and QGIS stays busy until it ends. Never start it twice: a second run costs the user money.
+  {vectorize_id} - '{vectorize_label}'. Give it one flat color of a result image and it traces that color into a polygon layer. Free, local, needs no account, and usually a few seconds.</source>
+        <translation>2つのアルゴリズムが処理を実行し、どちらも ID で実行できます:
+  {generate_id} - '{generate_label}'。地図範囲とプロンプトを指定します。その範囲上に新しい画像レイヤーを返します。AI サービス上で実行され、30～120秒かかり、終了するまで QGIS はビジー状態になります。2回続けて開始しないでください。2回目の処理はユーザーに課金されます。
+  {vectorize_id} - '{vectorize_label}'。結果画像の均一な1色を指定すると、その色をポリゴンレイヤーにトレースします。無料でローカルに実行でき、アカウントは不要で、通常は数秒で完了します。</translation>
+    </message>
+    <message>
+        <source>Type a prompt, for example 'remove the clouds'.</source>
+        <translation>プロンプトを入力します。例: 'remove the clouds'。</translation>
+    </message>
+    <message>
+        <source>Use it after '{generate_id}' has painted a class in one color, for example 'color every building red and everything else grey'. Point this algorithm at red and you get one polygon per building.</source>
+        <translation>'{generate_id}' でクラスを1色に着色した後に使用します。例: 'color every building red and everything else grey'。このアルゴリズムで赤を指定すると、建物ごとに1つのポリゴンが得られます。</translation>
+    </message>
+    <message>
+        <source>Vectorize a color of an AI result into polygons (land cover classes, raster to vector)</source>
+        <translation>AI の結果画像の色をポリゴンにベクトル化します（土地被覆クラス、ラスターからベクター）</translation>
+    </message>
+    <message>
+        <source>What it is for: classify land cover, extract building footprints as a colored picture, remove clouds, remove cars or buildings, upscale to super resolution, simulate a flood, color an old scanned map, restore a damaged photo.</source>
+        <translation>用途: 土地被覆の分類、着色画像としての建物フットプリント抽出、雲の除去、車や建物の除去、超解像へのアップスケーリング、洪水のシミュレーション、古いスキャン地図のカラー化、破損した写真の復元。</translation>
+    </message>
+    <message>
+        <source>What it returns: SUBMITTED (whether the run started), STATE ('done', 'generating', 'cancelled' or 'idle'), RESULT_LAYERS (the names of the image layers this run added to the project) and STATUS. There is no file output: the plugin adds the georeferenced result to the project itself, under its own layer group.</source>
+        <translation>返される値: SUBMITTED（処理が開始されたかどうか）、STATE（'done'、'generating'、'cancelled' または 'idle'）、RESULT_LAYERS（この処理がプロジェクトに追加した画像レイヤーの名前）、STATUS。ファイル出力はありません。プラグインがジオリファレンスされた結果を独自のレイヤーグループの下にプロジェクト自体へ追加します。</translation>
+    </message>
+    <message>
+        <source>What it returns: no file output. The plugin adds one styled polygon layer to the project beside the image it came from, and this algorithm reports LAYER_NAME, FEATURE_COUNT and STATUS. That layer lives in memory until you save it, so use 'Make permanent' on it, or export it, before closing the project.</source>
+        <translation>返される値: ファイル出力はありません。プラグインは元画像の隣にスタイル設定された1つのポリゴンレイヤーをプロジェクトに追加し、このアルゴリズムは LAYER_NAME、FEATURE_COUNT、STATUS を返します。このレイヤーは保存するまでメモリ上に存在するため、プロジェクトを閉じる前に 'Make permanent' を使用するか、エクスポートしてください。</translation>
+    </message>
+    <message>
+        <source>What the user has to do</source>
+        <translation>ユーザーが行う操作</translation>
+    </message>
+    <message>
+        <source>What this one returns: INSTALLED and READY (true or false), STATE (READY, NEEDS_ACTIVATION or NO_PANEL), ACTION_REQUIRED (what a person has to do when READY is false), PLAN ('free', 'pro' or empty when unknown), CREDITS_REMAINING, BUSY (true while a generation is already running) and NEXT_ALGORITHMS. CREDITS_REMAINING is -1 when the account did not report a number, which usually means nobody is signed in yet.</source>
+        <translation>返される値: INSTALLED と READY（true または false）、STATE（READY、NEEDS_ACTIVATION または NO_PANEL）、ACTION_REQUIRED（READY が false の場合に必要な操作）、PLAN（'free'、'pro' または不明時は空）、CREDITS_REMAINING、BUSY（生成処理がすでに実行中の場合は true）、NEXT_ALGORITHMS。アカウントが数値を返さなかった場合、CREDITS_REMAINING は -1 になります。通常は、まだ誰もサインインしていないことを意味します。</translation>
+    </message>
+    <message>
+        <source>What to type in 'Prompt': plain words describing the picture you want back, for example 'color every building red and everything else grey' or 'remove the clouds' or 'upscale and sharpen'.</source>
+        <translation>'Prompt' に入力する内容: 必要な画像を説明する普通の言葉。例: 'color every building red and everything else grey'、'remove the clouds'、'upscale and sharpen'。</translation>
+    </message>
+    <message>
+        <source>When BUSY is true, a generation is already running. Wait for it and poll this algorithm again rather than starting another one.</source>
+        <translation>BUSY が true の場合、生成処理はすでに実行中です。別の処理を開始せず、完了するまで待ってからこのアルゴリズムを再度ポーリングしてください。</translation>
+    </message>
+    <message>
+        <source>When READY is false, read ACTION_REQUIRED out to the user and stop. Signing in happens in the AI Edit panel in QGIS, not from here, and no algorithm can do it for the user.</source>
+        <translation>READY が false の場合は、ACTION_REQUIRED の内容をユーザーに伝えて停止してください。サインインはここからではなく QGIS の AI Edit パネルで行います。ユーザーの代わりにサインインできるアルゴリズムはありません。</translation>
+    </message>
+    <message>
+        <source>completed, {count} layer(s) added</source>
+        <translation>完了、{count} 個のレイヤーを追加</translation>
+    </message>
+    <message>
+        <source>completed, {count} polygon(s) in one layer</source>
+        <translation>完了、1つのレイヤーに {count} 個のポリゴン</translation>
+    </message>
+    <message>
+        <source>failed: {reason}</source>
+        <translation>失敗: {reason}</translation>
+    </message>
+    <message>
+        <source>finished with no new layer</source>
+        <translation>新しいレイヤーなしで終了</translation>
+    </message>
+    <message>
+        <source>the account call returned nothing usable</source>
+        <translation>アカウント呼び出しから使用可能な結果が返されませんでした</translation>
+    </message>
+    <message>
+        <source>the account reported no usage counts</source>
+        <translation>アカウントから使用量が報告されませんでした</translation>
+    </message>
+    <message>
+        <source>the account returned no number</source>
+        <translation>アカウントから数値が返されませんでした</translation>
+    </message>
+    <message>
+        <source>the newest result</source>
+        <translation>最新の結果</translation>
+    </message>
+    <message>
+        <source>unknown</source>
+        <translation>不明</translation>
+    </message>
+    <message>
+        <source>{action} failed: {error}</source>
+        <translation>{action} が失敗しました: {error}</translation>
+    </message>
+    <message>
+        <source>{action} returned nothing usable.</source>
+        <translation>{action} から使用可能な結果が返されませんでした。</translation>
+    </message>
+    <message>
+        <source>{message} (state: {state})</source>
+        <translation>{message}（状態: {state}）</translation>
+    </message>
+    <message>
+        <source>{outcome} (code: {code})</source>
+        <translation>{outcome}（コード: {code}）</translation>
+    </message>
+    <message>
+        <source>{outcome}: {panel_line}</source>
+        <translation>{outcome}: {panel_line}</translation>
+    </message>
+    <message>
+        <source>{product} is available to AI agents. Run 'import terralab; print(terralab.capabilities())' from any code-execution tool, or look for the TerraLab algorithms in the Processing registry.</source>
+        <translation>{product} は AI エージェントから利用できます。任意のコード実行ツールで 'import terralab; print(terralab.capabilities())' を実行するか、Processing レジストリで TerraLab アルゴリズムを探してください。</translation>
+    </message>
+    <message>
+        <source>Personal, non-commercial use. A paid plan adds commercial use for one person.</source>
+        <translation>個人・非商用利用。有料プランでは1人の商用利用が可能です。</translation>
     </message>
 </context>
 </TS>

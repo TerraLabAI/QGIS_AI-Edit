@@ -46,6 +46,7 @@ from qgis.PyQt.QtCore import QObject, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QKeySequence
 
 from ...core import qt_compat as QtC
+from ...core.canvas_export.render_set import expand_render_set
 from ...core.config_store import get_export_dial, get_export_dial_str
 from ...core.logger import log_debug
 from ..layer_groups import MARKUP_LAYER_PROPERTY, drop_from_snapping
@@ -249,7 +250,13 @@ class MarkupLayerManager(QObject):
         except RuntimeError:
             self._layer = None
             return False
-        render_ids = {lyr.id() for lyr in self._canvas.mapSettings().layers()}
+        # Expand first: a group rendered "as a group" hands the canvas ONE
+        # QgsGroupLayer proxy and hides its members' ids, so a markup layer
+        # inside such a group would read as "will not render" and abort the
+        # generation with no message.
+        render_ids = {
+            lyr.id() for lyr in expand_render_set(self._canvas.mapSettings().layers())
+        }
         return layer_id in render_ids
 
     def show_layer(self) -> bool:

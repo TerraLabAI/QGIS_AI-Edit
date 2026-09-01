@@ -16,6 +16,7 @@ from .. import qt_compat as QtC
 from ..logger import log_debug, log_warning
 from .export_config import _get_align, _get_max_dimension, chosen_input_format
 from .native_resolution import _best_native_longest_px
+from .render_set import drop_layers, expand_render_set
 from .sizing import (
     _RESOLUTION_TARGET_PX,
     _adjust_extent_to_aspect,
@@ -98,9 +99,10 @@ def prepare_export(
     # visibility) are never touched - only the exported base image changes.
     if exclude_layer_ids:
         map_settings = _clone_map_settings(map_settings)
-        map_settings.setLayers(
-            [lyr for lyr in map_settings.layers() if lyr.id() not in exclude_layer_ids]
-        )
+        # drop_layers, not a plain id filter: a layer inside a group rendered
+        # "as a group" is hidden behind a QgsGroupLayer proxy whose id matches
+        # nothing, so the filter would leave the AI result in the base image.
+        map_settings.setLayers(drop_layers(map_settings.layers(), exclude_layer_ids))
 
     max_dim = _get_max_dimension()
     align = _get_align()
@@ -124,7 +126,7 @@ def prepare_export(
         out_w, out_h = _budget_dims(extent, ref, align, max_dim)
     else:
         longest = _best_native_longest_px(
-            map_settings.layers(), extent, map_crs, max_dim
+            expand_render_set(map_settings.layers()), extent, map_crs, max_dim
         )
         out_w, out_h = _aspect_dims(extent, longest, align, max_dim)
     adjusted_extent = _adjust_extent_to_aspect(extent, out_w, out_h)

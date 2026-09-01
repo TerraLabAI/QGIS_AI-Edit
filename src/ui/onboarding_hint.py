@@ -14,6 +14,7 @@ Pattern (how mature apps do onboarding without burdening the UI):
 
 from __future__ import annotations
 
+import html
 import os
 import weakref
 
@@ -31,7 +32,15 @@ from qgis.PyQt.QtWidgets import (
 from ..core import qt_compat as QtC
 from ..core.config_store import get_export_dial_list
 from ..core.i18n import tr
-from .dock.style import ICONS_DIR
+
+# Computed here rather than imported from .dock.style: importing that module
+# runs the dock package, whose widget reaches back into this one for BLUE_TINT
+# before this file has defined it, and the whole cycle fails on unload.
+ICONS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "resources",
+    "icons",
+)
 
 _SETTINGS_PREFIX = "AIEdit/hints/"
 
@@ -70,7 +79,13 @@ ALL_HINTS = [
 # back on the first zone of every session (Yvann 2026-07-31). Nothing is
 # written to QSettings for these: the set below IS the memory, and it dies
 # with the process.
-SESSION_ONLY_HINTS = frozenset({HINT_GUIDE_AI, HINT_MARKUP_PROMPT})
+# The two panel hints joined them once they started carrying the link to the
+# guide (Yvann 2026-08-08): a hint closed for good takes the only in-context
+# way to reach the tutorial down with it, and these are the two panels people
+# open then leave without using (435 open Mark up, ~2% mark anything).
+SESSION_ONLY_HINTS = frozenset({
+    HINT_GUIDE_AI, HINT_MARKUP_PROMPT, HINT_MARKUP, HINT_REFERENCE,
+})
 _SESSION_DISMISSED: set[str] = set()
 
 
@@ -90,6 +105,31 @@ NEUTRAL_TINT = (128, 132, 138)
 # Live hint widgets, so "Show guidance tips again" can re-show them without a
 # dock rebuild. Weak refs: closing/destroying a hint drops out on its own.
 _LIVE_HINTS: list[weakref.ref[DismissibleHint]] = []
+
+# Sentinel href for a hint's inline guide link. Not a URL: the widget only
+# needs to know that ITS link was clicked, and each panel maps that to its own
+# touchpoint id.
+GUIDE_LINK_HREF = "terralab:guide"
+
+
+def build_guide_link_html(text: str) -> str:
+    """The inline "learn more" anchor for a hint body.
+
+    Brand blue, no underline: the footer-links pattern of the design system.
+    The href is a sentinel, never a URL - the widget answers ``linkActivated``
+    and the real address is resolved at click time by ``open_guide``, so the
+    server can move the target without a plugin release. The arrow glyph is
+    concatenated OUTSIDE ``tr()`` so translators only ever see words.
+
+    ``BRAND_BLUE`` is imported here, not at module scope: importing
+    ``.dock.style`` at import time closes the cycle described above ICONS_DIR.
+    """
+    from .dock.style import BRAND_BLUE
+
+    return (
+        f'<a href="{GUIDE_LINK_HREF}" style="color: {BRAND_BLUE};'
+        f' text-decoration: none;">{html.escape(text)} ↗</a>'
+    )
 
 
 def guide_url(content: str) -> str:
@@ -210,7 +250,10 @@ class DismissibleHint(QWidget):
 
     ``steps`` is a list of ``(glyph, title, subtitle)`` tuples rendered as a
     1-2-3 row. ``action_text`` (optional) renders a small link-style button
-    whose click emits ``action``. ``rich_body`` renders the body as HTML,
+    whose click emits ``action``. ``link_text`` (optional) appends a quiet
+    anchor on its own line under the body, emitting ``link_activated`` - the
+    low-key sibling of ``action_text`` for "read more about this feature".
+    ``rich_body`` renders the body as HTML,
     for a sentence that shows a UI icon inline. ``visibility_gate`` (optional callable ->
     bool) constrains ``reshow()`` so a guidance reset never flashes a pinned
     banner into a state where it does not belong. Closing the card stores the
@@ -219,6 +262,7 @@ class DismissibleHint(QWidget):
 
     dismissed = pyqtSignal()
     action = pyqtSignal()
+    link_activated = pyqtSignal()
 
     def __init__(
         self,
@@ -231,6 +275,7 @@ class DismissibleHint(QWidget):
         visibility_gate=None,
         tint: tuple[int, int, int] | None = None,
         action_color: tuple[int, int, int] | None = None,
+        link_text: str | None = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -268,7 +313,18 @@ class DismissibleHint(QWidget):
         # Explicit, never auto-detected: a body that carries an <img> pointing
         # at a UI button must render, and a plain body must keep showing any
         # bracket or ampersand a translation puts in it.
-        body_lbl.setTextFormat(QtC.RichText if rich_body else QtC.PlainText)
+        as_html = rich_body or bool(link_text)
+        body_lbl.setTextFormat(QtC.RichText if as_html else QtC.PlainText)
+        if link_text:
+            # The body turns into HTML here, so a plain translation has to be
+            # escaped first or a stray & or < would eat part of the sentence.
+            head_html = body if rich_body else html.escape(body)
+            body_lbl.setText(f"{head_html}<br>{build_guide_link_html(link_text)}")
+            # The plugin resolves and opens the address itself (telemetry rides
+            # along), so Qt must not follow the sentinel href on its own.
+            body_lbl.setOpenExternalLinks(False)
+            body_lbl.setTextInteractionFlags(QtC.LinksAccessibleByMouse)
+            body_lbl.linkActivated.connect(self._on_link_activated)
 
         act_btn = None
         if action_text:
@@ -375,6 +431,15 @@ class DismissibleHint(QWidget):
         dismiss_hint(self._hint_id)
         self.hide()
         self.dismissed.emit()
+
+    def _on_link_activated(self, href: str) -> None:
+        """Relay a click on the body's guide anchor, ignoring anything else.
+
+        The href is checked so a translation that smuggles in its own link
+        cannot make the card open an address the plugin never chose.
+        """
+        if href == GUIDE_LINK_HREF:
+            self.link_activated.emit()
 
 
 def search_icon() -> QIcon:

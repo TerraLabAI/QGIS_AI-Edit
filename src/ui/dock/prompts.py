@@ -7,7 +7,6 @@ from qgis.PyQt.QtWidgets import QTextEdit
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
-from ...core.auth.activation_manager import has_consent
 from ...core.config_store import get_export_copy, get_export_dial
 from ...core.i18n import tr
 from ...core.prompts.prompt_presets import detect_prompt_guidance
@@ -413,16 +412,11 @@ class DockPromptMixin:
             return
         self._on_generate_clicked()
 
-    def _on_consent_changed(self):
-        """Re-evaluate Generate button when consent checkbox changes."""
-        self._update_generate_enabled()
-
     def _update_generate_enabled(self, prompt: str | None = None):
         has_prompt = bool(self.get_prompt() if prompt is None else prompt)
-        consent_ok = has_consent() or self._consent_check.isChecked()
         # Held while an onboarding basemap's online tiles are still warming, so
         # the guided first generation can't export a blank input.
-        enabled = self._zone_selected and has_prompt and consent_ok and not self._imagery_loading
+        enabled = self._zone_selected and has_prompt and not self._imagery_loading
         self._generate_btn.setEnabled(enabled)
         self._update_generate_style()
         self._update_generate_button_text()

@@ -40,6 +40,25 @@ def _walk_groups(node):
             yield from _walk_groups(child)
 
 
+def find_ai_edit_group() -> QgsLayerTreeGroup | None:
+    """The AI-Edit group anywhere in the tree, or None. Never creates it.
+
+    Marker first, name second, mirroring ``get_or_create_ai_edit_group``'s
+    resolution order minus the creating step - custom properties on tree nodes
+    do not always survive a project save/reload in QGIS 3.x, so the name is the
+    fallback. The walk is recursive because the user may have dragged the group
+    into a folder of their own.
+    """
+    root = QgsProject.instance().layerTreeRoot()
+    for child in _walk_groups(root):
+        if child.customProperty(_OWNERSHIP_PROPERTY):
+            return child
+    for child in _walk_groups(root):
+        if child.name() == AI_EDIT_GROUP_NAME:
+            return child
+    return None
+
+
 def get_or_create_ai_edit_group() -> QgsLayerTreeGroup:
     """Return the AI-Edit group, creating it at the top of the tree if absent.
 
@@ -82,12 +101,7 @@ def collect_ai_edit_layer_ids() -> set[str]:
     render the "original" (pre-AI-edit) base for a retry - the caller drops
     these layers from the export so the model sees the clean map.
     """
-    root = QgsProject.instance().layerTreeRoot()
-    group = None
-    for child in _walk_groups(root):
-        if child.customProperty(_OWNERSHIP_PROPERTY) or child.name() == AI_EDIT_GROUP_NAME:
-            group = child
-            break
+    group = find_ai_edit_group()
     if group is None:
         return set()
 
@@ -116,12 +130,7 @@ def set_ai_edit_layers_checked(checked: bool, except_ids: set[str] | None = None
     active Mark up layer is user guidance, not an AI edit, so the caller passes
     it here. No-op when the group is absent.
     """
-    root = QgsProject.instance().layerTreeRoot()
-    group = None
-    for child in _walk_groups(root):
-        if child.customProperty(_OWNERSHIP_PROPERTY) or child.name() == AI_EDIT_GROUP_NAME:
-            group = child
-            break
+    group = find_ai_edit_group()
     if group is None:
         return
     skip = except_ids or set()
@@ -213,6 +222,36 @@ def add_layer_to_ai_edit_top(layer: QgsMapLayer) -> QgsLayerTreeLayer:
     return group.insertLayer(0, layer)
 
 
+def bring_ai_edit_group_to_front() -> bool:
+    """Move the AI-Edit group back to the top of the tree root.
+
+    The group is allowed to live anywhere (``find_ai_edit_group`` looks
+    everywhere, so the user can file it in a folder of their own). The cost is
+    that a group parked under an opaque basemap draws every generation BEHIND
+    the imagery it edited: the raster is written, the credit is spent, and the
+    canvas does not change. This is the one-click repair offered when that is
+    detected; it is never applied on its own, since the layout is the user's.
+
+    Returns whether the group ends up at the front. Idempotent.
+    """
+    root = QgsProject.instance().layerTreeRoot()
+    group = find_ai_edit_group()
+    if group is None:
+        return False
+    parent = group.parent()
+    if parent is root and root.children() and root.children()[0] is group:
+        return True
+    # Clone-then-remove keeps a tree reference alive throughout, otherwise
+    # QgsLayerTreeRegistryBridge drops the member layers from the project
+    # (same gotcha as pin_markup_to_top and promote_layer_to_own_subgroup).
+    clone = group.clone()
+    root.insertChildNode(0, clone)
+    if parent is not None:
+        parent.removeChildNode(group)
+    pin_markup_to_top()
+    return True
+
+
 def pin_markup_to_top() -> None:
     """Keep the Mark up layer at the very top of the tree, above the AI-Edit
     group, so its annotations always render over everything else.
@@ -249,14 +288,7 @@ def most_recent_ai_edit_output(
     most recent. Walks per-generation sub-groups one level deep so vector
     outputs nested under their source raster are reachable too.
     """
-    root = QgsProject.instance().layerTreeRoot()
-    # Find the AI-Edit group anywhere in the tree (the user may have dragged it
-    # into a folder), not only among root's direct children.
-    group = next(
-        (g for g in _walk_groups(root)
-         if g.customProperty(_OWNERSHIP_PROPERTY) or g.name() == AI_EDIT_GROUP_NAME),
-        None,
-    )
+    group = find_ai_edit_group()
     if group is None:
         return None
     for sub in group.children():

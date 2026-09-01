@@ -7,6 +7,7 @@ from ...core.auth.activation_manager import (
     get_wall_url,
     is_feature_enabled,
 )
+from ...core.config_store import get_export_copy
 from ...core.date_format import format_reset_date
 from ...core.entitlements import paid_tier_default
 from ...core.i18n import tr
@@ -95,10 +96,6 @@ class DockAccountMixin:
             self._sync_attach_buttons()
         except Exception:  # nosec B110 - a late refresh must never break the dock
             pass
-
-    def hide_consent(self):
-        """Hide the consent checkbox after first generation."""
-        self._consent_widget.setVisible(False)
 
     def set_activation_message(self, text: str, is_error: bool = False):
         # Use brighter variants for dark theme readability
@@ -234,9 +231,13 @@ class DockAccountMixin:
         the wall. Visibility is state-driven (set_credits), never a
         dismiss-and-forget hint, so it comes back every period the balance
         lands back on exactly one generation."""
-        self._prewall_text.setText(tr(
-            "Last free generation of the month. Working on a project? "
-            "Take a Pro month."
+        # Served, so the number and the price follow the website without a
+        # release. "Working on a project?" was a rhetorical question carrying
+        # no claim: every user of a GIS plugin is working on a project.
+        self._prewall_text.setText(get_export_copy(
+            "prewall.text",
+            tr("Last free generation of the month. Pro gives you about 150 "
+               "more, for 29 EUR."),
         ))
         self._prewall_url = cta_url
         self._prewall_banner.setVisible(True)

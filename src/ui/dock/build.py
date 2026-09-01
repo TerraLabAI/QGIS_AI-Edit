@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import (
-    QCheckBox,
     QHBoxLayout,
     QLabel,
     QProgressBar,
@@ -26,6 +25,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ...core import qt_compat as QtC
+from ...core.config_store import get_export_copy
 from ...core.i18n import tr
 from ..onboarding_hint import (
     BLUE_TINT,
@@ -58,6 +58,13 @@ from .widgets import _SubmitTextEdit, _ZoneGestureGlyph
 if TYPE_CHECKING:
     from .widget import AIEditDockWidget
 
+# Splits the note into what leaves the machine and where to read more. A middle
+# dot rather than a full stop, so the two halves read as one line at a glance.
+# Glyph, so it stays outside tr().
+_DOT = "·"
+_NOTE_STRIP_MARGINS = (10, 8, 10, 8)
+_NOTE_STRIP_INK = "rgba(128, 128, 128, 0.85)"
+
 
 def build_ui(dock: AIEditDockWidget) -> None:
     """Build the whole dock widget tree in the original construction order."""
@@ -76,8 +83,8 @@ def build_ui(dock: AIEditDockWidget) -> None:
     _build_select_zone_section(dock, main_layout)
     _build_prompt_section(dock, main_layout)
     _build_reference_widget(dock)
-    _build_consent_section(dock, main_layout)
     _build_generate_row(dock, main_layout)
+    _build_generate_note_strip(dock, main_layout)
     _build_progress_section(dock, main_layout)
     _build_status_section(dock)
     _build_result_section(dock, main_layout)
@@ -412,71 +419,6 @@ def _build_reference_widget(dock: AIEditDockWidget) -> None:
         dock._reference_widget = None
 
 
-def _build_consent_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> None:
-    # Consent checkbox (shown only until first generation). Use native
-    # QGIS style so the checkmark glyph renders correctly.
-    dock._consent_check = QCheckBox()
-    # Pre-ticked to cut first-run friction: the box shows checked, Generate
-    # is enabled, and the affirmative act (clicking Generate with the terms
-    # right there) is what records consent. Unticking re-adds the gate.
-    dock._consent_check.setChecked(True)
-    dock._consent_check.setText("")  # text set via label below
-    # Bigger, easier-to-hit indicator (the default is tiny and hard to click).
-    # Size only, no border/background, so the native checkmark still renders.
-    dock._consent_check.setStyleSheet(
-        "QCheckBox::indicator { width: 18px; height: 18px; }"
-    )
-    dock._consent_check.setCursor(QtC.PointingHandCursor)
-    consent_layout = QHBoxLayout()
-    consent_layout.setContentsMargins(0, 0, 0, 0)
-    consent_layout.setSpacing(8)
-    consent_layout.addWidget(dock._consent_check, 0, QtC.AlignTop)
-    from ...core.auth.activation_manager import get_privacy_url, get_terms_url
-
-    # Server override wins; the consent-specific UTM variants stay the fallback.
-    _terms_url = get_terms_url(
-        "https://terra-lab.ai/terms-of-sale"
-        "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=consent_terms"
-    )
-    _privacy_url = get_privacy_url(
-        "https://terra-lab.ai/privacy-policy"
-        "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=consent_privacy"
-    )
-    # Short consent line with clickable Terms + Privacy links. The full
-    # disclosure (upload, EU storage, retention) lives behind those links
-    # so the panel stays calm. {terms} and {privacy} are placeholders so
-    # the linked words can be reordered in translations.
-    _consent_template = tr(
-        "I agree to the {terms} and {privacy}"
-    )
-    _terms_link = (
-        f'<a href="{_terms_url}" style="color: {BRAND_BLUE};">{tr("Terms")}</a>'
-    )
-    _privacy_link = (
-        f'<a href="{_privacy_url}" style="color: {BRAND_BLUE};">{tr("Privacy")}</a>'
-    )
-    # The box carries no text of its own, so a screen reader would announce a
-    # bare "checked, checkbox". Name it from the same sentence the label shows,
-    # links flattened to their words, so both stay in one translation.
-    _consent_spoken = _consent_template.format(
-        terms=tr("Terms"), privacy=tr("Privacy")
-    )
-    dock._consent_check.setAccessibleName(_consent_spoken)
-    dock._consent_check.setToolTip(_consent_spoken)
-    consent_text = QLabel(
-        _consent_template.format(terms=_terms_link, privacy=_privacy_link)
-    )
-    consent_text.setOpenExternalLinks(True)
-    consent_text.setWordWrap(True)
-    consent_text.setStyleSheet("font-size: 11px; color: palette(text);")
-    consent_layout.addWidget(consent_text, 1)
-    dock._consent_widget = QWidget()
-    dock._consent_widget.setLayout(consent_layout)
-    dock._consent_widget.setVisible(False)
-    dock._consent_check.stateChanged.connect(dock._on_consent_changed)
-    main_layout.addWidget(dock._consent_widget)
-
-
 def _build_generate_row(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> None:
     # Generate + Exit row. Exit is shown in the PROMPT state (zone
     # selected) so the user always has a one-click way back to LAUNCH,
@@ -509,6 +451,55 @@ def _build_generate_row(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> Non
     generate_row.addWidget(dock._exit_btn, 0)
 
     main_layout.addLayout(generate_row)
+
+
+def _build_generate_note_strip(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> None:
+    # Where the imagery goes, said on the panel instead of only in the website
+    # policy: Generate sends the zone and the prompt to a provider that may sit
+    # outside the EU. Its own container because loose text on the dock is
+    # banned, but no border and no tint, so it reads as a footnote to the
+    # button above rather than a second card competing with it.
+    note_box = QWidget()
+    note_layout = QVBoxLayout(note_box)
+    note_layout.setContentsMargins(*_NOTE_STRIP_MARGINS)
+    note_layout.setSpacing(4)
+
+    from ...core.auth.activation_manager import get_privacy_url
+
+    privacy_url = get_privacy_url(
+        "https://terra-lab.ai/privacy-policy"
+        "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit"
+        "&utm_content=generate_privacy"
+    )
+    privacy_link = (
+        f'<a href="{privacy_url}" style="color: {_NOTE_STRIP_INK};">'
+        f'{tr("Privacy")}</a>'
+    )
+    # Served, so the wording can be retuned without a plugin release. Tokens are
+    # substituted with replace() rather than format(), so a served line carrying
+    # a stray brace cannot raise while the dock is being built.
+    body = get_export_copy(
+        "privacy_line",
+        tr("Your selection and prompt may be processed outside the EU "
+           "{dot} {privacy}"),
+        escape=True,
+    )
+    for token, value in (("{dot}", _DOT), ("{privacy}", privacy_link)):
+        body = body.replace(token, value)
+    dock._generate_privacy_line = QLabel(body)
+    dock._generate_privacy_line.setWordWrap(True)
+    dock._generate_privacy_line.setTextFormat(Qt.TextFormat.RichText)
+    dock._generate_privacy_line.setOpenExternalLinks(True)
+    dock._generate_privacy_line.setStyleSheet(
+        f"font-size: 10px; color: {_NOTE_STRIP_INK}; background: transparent;"
+    )
+    note_layout.addWidget(dock._generate_privacy_line)
+
+    dock._generate_note_box = note_box
+    # Shown with the Generate button until the first generation completes, then
+    # retired for good (has_seen_privacy_notice). The state machine owns that.
+    note_box.setVisible(False)
+    main_layout.addWidget(note_box)
 
 
 def _build_progress_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> None:
