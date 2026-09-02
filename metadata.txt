@@ -3,13 +3,13 @@ name=AI Edit by TerraLab
 description=Show a project on real aerial imagery, from a text prompt: a redevelopment before it is built, a street planted with trees, a flood, or an orthophoto redrawn as a clean site plan. Land cover maps, cloud and object removal too. Georeferenced output.
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
-version=1.9.0
+version=1.7.4
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
-    1.9.0
+    1.7.4
     - Pick the raster layer to edit first, then draw your zone in it: the AI now works from that one layer, whatever else is drawn on the map
     - The layer list follows your map view and picks the imagery you are looking at, never a world basemap over a local orthophoto
     - A zone drawn outside the chosen layer is refused, and a zone partly outside it gets a heads-up
@@ -118,7 +118,7 @@ about=
 
     • The most used case: turn an orthophoto into a clean architectural site plan. Then redevelopments, planted streets, parks, solar farms, floods and sea level rise
 
-    • Works on any data on your map: rasters (GeoTIFF, JPG, PNG), vector layers, OpenStreetMap, and online basemaps (WMS, XYZ tiles)
+    • Works on any raster on your map: GeoTIFF, JPG, PNG, and online basemaps (WMS, XYZ tiles). Vector layers, OpenStreetMap and other rasters can guide the result as references
 
     • Guide the result: add reference images or layers, sketch directly on the map, and compare before/after with a slider
 
