@@ -80,6 +80,7 @@ def build_ui(dock: AIEditDockWidget) -> None:
 
     main_layout = _build_main_section(dock)
     _build_launch_section(dock, main_layout)
+    _build_layer_header(dock, main_layout)
     _build_select_zone_section(dock, main_layout)
     _build_prompt_section(dock, main_layout)
     _build_reference_widget(dock)
@@ -177,6 +178,45 @@ def _build_launch_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
 
     dock._launch_section.setVisible(False)
     main_layout.addWidget(dock._launch_section)
+
+
+def _build_layer_header(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> None:
+    """The raster the edit starts from, above every step after Launch.
+
+    The input image is this ONE layer rendered at the zone, never the visible
+    canvas, so the user always sees what goes to the model. Editable while the
+    zone is being drawn, frozen (greyed) from the zone commit to the result,
+    hidden on the idle screen. The combo follows the map view until the user
+    picks by hand, and never widens the dock on a long layer name.
+    """
+    from ..layer_tree_combobox import LayerTreeComboBox
+
+    dock._layer_header = QWidget()
+    header_layout = QVBoxLayout(dock._layer_header)
+    header_layout.setContentsMargins(0, 0, 0, 0)
+    header_layout.setSpacing(6)
+
+    dock._layer_label = QLabel(tr("Select a raster layer to edit:"))
+    dock._layer_label.setStyleSheet(
+        "QLabel { font-weight: bold; color: palette(text);"
+        " background: transparent; border: none; }"
+    )
+    header_layout.addWidget(dock._layer_label)
+
+    dock._layer_combo = LayerTreeComboBox()
+    dock._layer_combo.setToolTip(tr(
+        "Pick the raster layer the edit starts from. Everything else on the "
+        "map stays out of the input."
+    ))
+    dock._layer_combo.setStyleSheet("QComboBox { color: palette(text); }")
+    dock._layer_combo.setSizePolicy(
+        QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
+    )
+    dock._layer_combo.setMinimumWidth(0)
+    header_layout.addWidget(dock._layer_combo)
+
+    dock._layer_header.setVisible(False)
+    main_layout.addWidget(dock._layer_header)
 
 
 def _build_select_zone_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> None:

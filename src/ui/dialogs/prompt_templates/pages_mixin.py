@@ -32,6 +32,7 @@ from .common import (
     _TABS_WITH_COUNT,
     _is_alive,
 )
+from .handoff_card import build_segmentation_handoff_card
 
 
 class PagesMixin:
@@ -241,6 +242,11 @@ class PagesMixin:
         hall = QVBoxLayout(content)
         hall.setContentsMargins(0, 2, 0, 8)
         hall.setSpacing(20)
+
+        # Object outlines are AI Segmentation's job now: the card sits where
+        # the Segment cards used to be, at the top of the Analyze family.
+        if need_key == "classify":
+            hall.addWidget(build_segmentation_handoff_card(content))
 
         sections: list[tuple[str, QWidget]] = []
         for cat in categories:

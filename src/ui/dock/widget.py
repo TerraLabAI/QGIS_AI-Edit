@@ -60,6 +60,7 @@ class AIEditDockWidget(
     # panel. Done in that panel routes back through reference_done_clicked.
     reference_panel_requested = pyqtSignal()
     reference_done_clicked = pyqtSignal()
+    reference_capture_requested = pyqtSignal()  # "Map" chip: drag a rectangle on the canvas
     # (layer_id, color_hex, class_label, trigger) from the "Vectorize this
     # result" CTA in the result panel. class_label seeds the class_name
     # attribute on every produced polygon (empty for mono-class templates
@@ -402,9 +403,12 @@ class AIEditDockWidget(
         except (TypeError, RuntimeError):
             pass
         # LayerTreeComboBox hooks its own QgsProject signals; nothing else cleans it.
-        try:
-            combo = getattr(self._vectorize_panel, "_layer_combo", None)
-            if combo is not None and hasattr(combo, "cleanup"):
-                combo.cleanup()
-        except Exception:  # nosec B110
-            pass
+        for combo in (
+            getattr(self._vectorize_panel, "_layer_combo", None),
+            getattr(self, "_layer_combo", None),
+        ):
+            try:
+                if combo is not None and hasattr(combo, "cleanup"):
+                    combo.cleanup()
+            except Exception:  # nosec B110
+                pass

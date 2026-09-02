@@ -105,3 +105,68 @@ def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> N
                     "AI Edit cannot estimate ground resolution there."
                 ).format(limit=int(polar_limit)),
             )
+
+
+# Under this share of the zone inside the chosen raster, the part that hangs
+# outside comes back blank and is worth a warning. Server dial
+# ``zone.layer_overlap_min_share``, one fallback.
+_LAYER_OVERLAP_MIN_SHARE = 0.5
+
+OVERLAP_OK = "ok"
+OVERLAP_PARTIAL = "partial"
+OVERLAP_OUTSIDE = "outside"
+
+
+def _geometry_op_ok(result) -> bool:
+    """QgsGeometry.transform() returns 0 / Success on QGIS 3 and a scoped
+    Qgis.GeometryOperationResult on QGIS 4. Both read as zero when it worked."""
+    try:
+        return int(result) == 0
+    except (TypeError, ValueError):
+        return "Success" in str(result)
+
+
+def zone_layer_overlap(zone, zone_crs, layer_extent: QgsRectangle, layer_crs) -> str:
+    """How a freshly drawn zone sits on the chosen raster's data extent.
+
+    ``zone`` is a QgsGeometry or a QgsRectangle in ``zone_crs``. Returns
+    OVERLAP_OUTSIDE when the two do not touch at all (refuse the zone: the
+    export would be blank and billed), OVERLAP_PARTIAL when less than the dial
+    share of the zone lies inside (warn, the rest comes back blank), else
+    OVERLAP_OK. Online providers report a world-sized extent, so the guard
+    never fires for them, which is intended: the footgun is a local raster.
+    Any transform or geometry failure reads as OVERLAP_OK, never as a refusal
+    built on coordinates in the wrong frame.
+    """
+    from qgis.core import QgsGeometry
+
+    try:
+        if layer_extent is None or layer_extent.isEmpty():
+            return OVERLAP_OK
+        if layer_extent.width() <= 0 or layer_extent.height() <= 0:
+            return OVERLAP_OK
+        if isinstance(zone, QgsRectangle):
+            geom = QgsGeometry.fromRect(zone)
+        else:
+            geom = QgsGeometry(zone)  # copy: transform() mutates
+        if geom.isEmpty():
+            return OVERLAP_OK
+        if zone_crs != layer_crs:
+            if not zone_crs.isValid() or not layer_crs.isValid():
+                return OVERLAP_OK
+            xform = QgsCoordinateTransform(zone_crs, layer_crs, QgsProject.instance())
+            if not _geometry_op_ok(geom.transform(xform)) or geom.isEmpty():
+                return OVERLAP_OK
+        extent_geom = QgsGeometry.fromRect(layer_extent)
+        if not geom.intersects(extent_geom):
+            return OVERLAP_OUTSIDE
+        zone_area = geom.area()
+        if zone_area <= 0:
+            return OVERLAP_OK
+        inside = geom.intersection(extent_geom).area() / zone_area
+        min_share = get_export_dial("zone.layer_overlap_min_share", _LAYER_OVERLAP_MIN_SHARE)
+        if inside < min_share:
+            return OVERLAP_PARTIAL
+    except Exception:  # nosec B110 - guard rail only, never block on failure
+        return OVERLAP_OK
+    return OVERLAP_OK

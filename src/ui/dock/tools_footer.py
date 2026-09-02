@@ -69,10 +69,15 @@ class DockToolsFooterMixin:
         # set_generating; never reset the flow out from under a running edit.
         if self._progress_widget.isVisible():
             return
+        # A visible RASTER, not any visible layer: the edit starts from one
+        # raster picked in the layer header, and a project showing only
+        # vectors has nothing that header could offer.
+        from qgis.core import QgsRasterLayer
+
         root = QgsProject.instance().layerTreeRoot()
         has_visible = any(
             node.isVisible() for node in root.findLayers()
-            if node.layer() is not None
+            if isinstance(node.layer(), QgsRasterLayer)
         )
         if not has_visible:
             # Reset first, then reveal the hero. One info per state (Yvann
@@ -330,9 +335,17 @@ class DockToolsFooterMixin:
         self._swipe_panel_lock = True
         self._refresh_swipe_enabled()
 
+    def set_reference_capture_armed(self, armed: bool) -> None:
+        """Mirror the map-capture tool's state on the panel's "Map" chip. The
+        plugin owns the tool; the dock only shows whether it is armed."""
+        panel = getattr(self, "_reference_panel", None)
+        if panel is not None:
+            panel.set_capture_armed(armed)
+
     def set_reference_state(self) -> None:
         """Swap the dock view to the Reference panel (import + per-image
-        notes). No map tool involved, so nothing canvas-side to arm."""
+        notes). The panel's "Map" chip asks the plugin to arm a canvas tool,
+        nothing here touches the canvas."""
         if getattr(self, "_reference_panel", None) is None:
             return
         self._stop_progress_animation()

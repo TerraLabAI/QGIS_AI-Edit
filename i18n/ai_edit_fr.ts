@@ -3275,5 +3275,93 @@ Nous serions ravis d'avoir votre retour !</translation>
         <source>Personal, non-commercial use. A paid plan adds commercial use for one person.</source>
         <translation>Usage personnel et non commercial. Un forfait payant inclut l’usage commercial pour une personne.</translation>
     </message>
+    <message>
+        <source>Check for Updates</source>
+        <translation>Rechercher des mises à jour</translation>
+    </message>
+    <message>
+        <source>More from TerraLab...</source>
+        <translation>Plus de TerraLab...</translation>
+    </message>
+    <message>
+        <source>Select a raster layer to edit:</source>
+        <translation>Sélectionnez une couche raster à modifier :</translation>
+    </message>
+    <message>
+        <source>Pick the raster layer the edit starts from. Everything else on the map stays out of the input.</source>
+        <translation>Choisissez la couche raster de départ. Tout le reste de la carte reste hors de l'image envoyée.</translation>
+    </message>
+    <message>
+        <source>Exit to pick another raster.</source>
+        <translation>Quittez pour choisir un autre raster.</translation>
+    </message>
+    <message>
+        <source>Pick a raster layer to edit first.</source>
+        <translation>Choisissez d'abord une couche raster à modifier.</translation>
+    </message>
+    <message>
+        <source>Your zone is outside "{layer}". Pick the right raster or draw inside it.</source>
+        <translation>Votre zone est en dehors de « {layer} ». Choisissez le bon raster ou dessinez dedans.</translation>
+    </message>
+    <message>
+        <source>Part of your zone is outside "{layer}". That part will come back blank.</source>
+        <translation>Une partie de votre zone est en dehors de « {layer} ». Cette partie reviendra vide.</translation>
+    </message>
+    <message>
+        <source>Looking for building, tree or road outlines? AI Segmentation traces them as real geometry.</source>
+        <translation>Vous cherchez les contours de bâtiments, d'arbres ou de routes ? AI Segmentation les trace en vraie géométrie.</translation>
+    </message>
+    <message>
+        <source>Open AI Segmentation</source>
+        <translation>Ouvrir AI Segmentation</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>Ordinateur</translation>
+    </message>
+    <message>
+        <source>QGIS layer</source>
+        <translation>Couche QGIS</translation>
+    </message>
+    <message>
+        <source>Map</source>
+        <translation>Carte</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle anywhere on the map to capture what you see as a reference. Esc cancels.</source>
+        <translation>Tracez un rectangle n'importe où sur la carte pour capturer ce que vous voyez comme référence. Échap annule.</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle on the map to capture it as a reference. Esc cancels.</source>
+        <translation>Tracez un rectangle sur la carte pour le capturer comme référence. Échap annule.</translation>
+    </message>
+    <message>
+        <source>Map capture</source>
+        <translation>Capture de carte</translation>
+    </message>
+    <message>
+        <source>Whole layer</source>
+        <translation>Couche entière</translation>
+    </message>
+    <message>
+        <source>This layer does not cover your zone, so it is sent whole, not aligned to it.</source>
+        <translation>Cette couche ne couvre pas votre zone, elle est donc envoyée entière, sans alignement.</translation>
+    </message>
+    <message>
+        <source>"{layer}" does not cover your zone. It is sent as a whole image.</source>
+        <translation>« {layer} » ne couvre pas votre zone. Elle est envoyée comme image entière.</translation>
+    </message>
+    <message>
+        <source>Could not capture the map. Zoom in and try again.</source>
+        <translation>Impossible de capturer la carte. Zoomez et réessayez.</translation>
+    </message>
+    <message>
+        <source>A layer is cropped to your zone, a map capture is what you see. Say in the prompt what the AI should take from each.</source>
+        <translation>Une couche est découpée à votre zone, une capture de carte est ce que vous voyez. Dites dans le prompt ce que l'IA doit prendre de chaque image.</translation>
+    </message>
+    <message>
+        <source>Your marks guide the edit.</source>
+        <translation>Vos marques guident la modification.</translation>
+    </message>
 </context>
 </TS>

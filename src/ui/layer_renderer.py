@@ -134,6 +134,68 @@ def is_remote_layer(layer) -> bool:
     return False
 
 
+def render_layers_at_extent(layers: list, extent: QgsRectangle, crs, settle: bool = True) -> QImage | None:
+    """Render ``layers`` at EXACTLY ``extent`` (in ``crs``), no fallback.
+
+    ``render_layers_to_qimage`` is built for a layer reference: when the
+    layers miss the zone it renders them whole at their own extent, so the
+    reference is still usable. A map capture is the opposite contract: the
+    user dragged a rectangle over what they see, and only that rectangle may
+    come back. On a tile basemap the only local layers are the plugin's own
+    outputs, so the fallback would hand back a past result instead of the
+    map, which is what the first live test of the Map chip did.
+    """
+    layers = [lyr for lyr in layers if lyr is not None]
+    if not layers or extent is None or not _usable(extent):
+        return None
+    if crs is None or not crs.isValid():
+        crs = _resolve_crs(layers[0])
+    max_px = get_export_dial("render.max_px", MAX_RENDER_PX)
+    return _render_at_extent(layers, QgsRectangle(extent), crs, max_px, settle=settle)
+
+
+def layer_misses_zone(layers: list, zone_extent, zone_crs) -> bool:
+    """Whether a layer reference will be sent WHOLE instead of aligned.
+
+    True when the combined extent of the local layers does not touch the zone
+    (in the zone's CRS): ``render_layers_to_qimage`` then renders them at
+    their own extent and the widget must say so. False for online layers
+    (world extent, always aligned), with no zone, or when nothing can be
+    compared. Same rule as the renderer's forced-extent path, exposed so the
+    UI can badge the thumbnail without touching the renderer's contract.
+    """
+    layers = [lyr for lyr in layers if lyr is not None]
+    if not layers or zone_extent is None or not _usable(zone_extent):
+        return False
+    dest_crs = zone_crs if (zone_crs is not None and zone_crs.isValid()) else _resolve_crs(layers[0])
+    zone = _reproject_extent(QgsRectangle(zone_extent), zone_crs, dest_crs)
+    if zone is None or not _usable(zone):
+        return False
+    own = _combined_layer_extent(layers, dest_crs)
+    return own is not None and not own.intersects(zone)
+
+
+def input_layer_kind(layer) -> str:
+    """Provider family of the raster an edit starts from, for telemetry only:
+    "local" (a file on disk), "xyz" (tile basemap), "wms" (WMS/WMTS/other
+    network raster) or "other". Never the source, never the name."""
+    if layer is None:
+        return "other"
+    try:
+        provider = layer.dataProvider()
+        name = ((provider.name() if provider is not None else "") or "").lower()
+        source = (layer.source() or "").lower()
+    except Exception:  # nosec B110 - an unreadable provider is just "other".
+        return "other"
+    if name == "gdal" and not is_remote_layer(layer):
+        return "local"
+    if name == "wms":
+        return "xyz" if "type=xyz" in source else "wms"
+    if is_remote_layer(layer):
+        return "wms"
+    return "local" if name == "gdal" else "other"
+
+
 def load_transient_layers(path: str) -> list:
     """Load a file as one or more QGIS layers WITHOUT adding them to the project.
 

@@ -17,6 +17,7 @@ from .plugin_parts.generation_results import GenerationResultsMixin
 from .plugin_parts.history import HistoryMixin
 from .plugin_parts.lifecycle import PluginLifecycleMixin
 from .plugin_parts.onboarding import OnboardingMixin
+from .plugin_parts.reference_capture import ReferenceCaptureMixin
 from .plugin_parts.startup import StartupMixin
 from .plugin_parts.tool_panels import ToolPanelsMixin, _MarkupUndoFilter
 from .plugin_parts.zone_versions import ZoneVersionsMixin
@@ -31,6 +32,7 @@ class AIEditPlugin(
     HistoryMixin,
     ConversationsMixin,
     ToolPanelsMixin,
+    ReferenceCaptureMixin,
     GenerationMixin,
     GenerationResultsMixin,
     OnboardingMixin,

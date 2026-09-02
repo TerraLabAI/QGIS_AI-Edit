@@ -3275,5 +3275,93 @@ We'd love to hear from you!</source>
         <source>Personal, non-commercial use. A paid plan adds commercial use for one person.</source>
         <translation>個人・非商用利用。有料プランでは1人の商用利用が可能です。</translation>
     </message>
+    <message>
+        <source>Check for Updates</source>
+        <translation>アップデートを確認</translation>
+    </message>
+    <message>
+        <source>More from TerraLab...</source>
+        <translation>TerraLabの詳細...</translation>
+    </message>
+    <message>
+        <source>Select a raster layer to edit:</source>
+        <translation>編集するラスターレイヤーを選択:</translation>
+    </message>
+    <message>
+        <source>Pick the raster layer the edit starts from. Everything else on the map stays out of the input.</source>
+        <translation>編集の元になるラスターレイヤーを選びます。地図上の他のレイヤーは入力に含まれません。</translation>
+    </message>
+    <message>
+        <source>Exit to pick another raster.</source>
+        <translation>別のラスターを選ぶには終了してください。</translation>
+    </message>
+    <message>
+        <source>Pick a raster layer to edit first.</source>
+        <translation>先に編集するラスターレイヤーを選んでください。</translation>
+    </message>
+    <message>
+        <source>Your zone is outside "{layer}". Pick the right raster or draw inside it.</source>
+        <translation>ゾーンが「{layer}」の外にあります。正しいラスターを選ぶか、その中に描いてください。</translation>
+    </message>
+    <message>
+        <source>Part of your zone is outside "{layer}". That part will come back blank.</source>
+        <translation>ゾーンの一部が「{layer}」の外にあります。その部分は空白で返されます。</translation>
+    </message>
+    <message>
+        <source>Looking for building, tree or road outlines? AI Segmentation traces them as real geometry.</source>
+        <translation>建物・樹木・道路の輪郭をお探しですか？AI Segmentation なら実際のジオメトリとして抽出できます。</translation>
+    </message>
+    <message>
+        <source>Open AI Segmentation</source>
+        <translation>AI Segmentation を開く</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>コンピューター</translation>
+    </message>
+    <message>
+        <source>QGIS layer</source>
+        <translation>QGIS レイヤー</translation>
+    </message>
+    <message>
+        <source>Map</source>
+        <translation>地図</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle anywhere on the map to capture what you see as a reference. Esc cancels.</source>
+        <translation>地図上の任意の場所で矩形をドラッグすると、見えているものを参照画像として取り込みます。Esc でキャンセル。</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle on the map to capture it as a reference. Esc cancels.</source>
+        <translation>地図上で矩形をドラッグして参照画像として取り込みます。Esc でキャンセル。</translation>
+    </message>
+    <message>
+        <source>Map capture</source>
+        <translation>地図キャプチャ</translation>
+    </message>
+    <message>
+        <source>Whole layer</source>
+        <translation>レイヤー全体</translation>
+    </message>
+    <message>
+        <source>This layer does not cover your zone, so it is sent whole, not aligned to it.</source>
+        <translation>このレイヤーはゾーンを覆っていないため、位置合わせせずに全体を送信します。</translation>
+    </message>
+    <message>
+        <source>"{layer}" does not cover your zone. It is sent as a whole image.</source>
+        <translation>「{layer}」はゾーンを覆っていません。画像全体として送信します。</translation>
+    </message>
+    <message>
+        <source>Could not capture the map. Zoom in and try again.</source>
+        <translation>地図を取り込めませんでした。ズームインしてやり直してください。</translation>
+    </message>
+    <message>
+        <source>A layer is cropped to your zone, a map capture is what you see. Say in the prompt what the AI should take from each.</source>
+        <translation>レイヤーはゾーンに合わせて切り抜かれ、地図キャプチャは見えているままです。各画像から AI に何を取り込ませるかはプロンプトに書いてください。</translation>
+    </message>
+    <message>
+        <source>Your marks guide the edit.</source>
+        <translation>描いたマークが編集を導きます。</translation>
+    </message>
 </context>
 </TS>

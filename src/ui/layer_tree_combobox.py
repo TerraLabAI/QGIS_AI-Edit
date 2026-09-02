@@ -1,19 +1,21 @@
 """Raster layer combo box that mirrors the QGIS Layer panel tree.
 
-SHARED: keep in sync with the copy in the sibling TerraLab plugin
-(QGIS_AI-Segmentation-Team/src/ui/layer_tree_combobox.py). Any fix here
-should be mirrored there.
+Forked from the sibling TerraLab plugin on 2026-09-02 and maintained HERE
+only: fixes land in this file, nothing is pushed back.
 
 Reusable widget: shows visible raster layers grouped by their layer tree
-structure.  Non-selectable group headers provide visual hierarchy.
-Auto-refreshes on layer add/remove, visibility, and reorder.
+structure. Non-selectable group headers provide visual hierarchy.
+Auto-refreshes on layer add/remove, visibility, and reorder, and follows the
+map view until the user picks a raster by hand.
 """
 
 from __future__ import annotations
 
-from qgis.core import QgsLayerTree, QgsProject
+from qgis.core import QgsLayerTree, QgsProject, QgsRasterLayer
 from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem
+
+from ..core.qt_compat import safe_disconnect
 
 
 class _IndentDelegate(QStyledItemDelegate):
@@ -39,6 +41,19 @@ class _IndentDelegate(QStyledItemDelegate):
         return hint
 
 
+# Layer-tree group names whose rasters never win the DEFAULT pick: the plugin
+# parks its generated rasters in an "AI-Edit" group at the top of the tree,
+# right over the map view, so the "topmost raster in view" heuristic always
+# grabbed one of them, and a past output is rarely the imagery the user wants
+# to edit next. They stay listed and selectable; they just lose the automatic
+# pick unless they are the only rasters in the project.
+_DEPRIORITIZED_GROUP_NAMES = {"ai-edit", "ai edit"}
+
+
+def _is_deprioritized_group(name: str) -> bool:
+    return (name or "").strip().lower() in _DEPRIORITIZED_GROUP_NAMES
+
+
 class LayerTreeComboBox(QComboBox):
     """Drop-down that mirrors the QGIS Layer panel order with group headers.
 
@@ -53,7 +68,13 @@ class LayerTreeComboBox(QComboBox):
         super().__init__(parent)
         self._current_layer_id = None  # track selection across refreshes
         self._layer_ids = []  # ordered list of selectable layer IDs
+        self._deprioritized_ids = set()  # rasters under an AI Edit group
         self._refreshing = False
+        self._frozen = False  # when True, ignore layer-tree changes (locked flow)
+        # No deliberate choice yet, so the pick stays free to follow the map view.
+        # Any user pick, or any setLayer() from the code, ends that for good.
+        self._pick_is_automatic = True
+        self._view_tracking = True  # suspended while an edit session runs
         # Optional callable(layer) -> bool. When set, layers returning False
         # are skipped during _traverse. Used by Vectorize to restrict the
         # picker to AI-Edit-generated outputs.
@@ -85,6 +106,18 @@ class LayerTreeComboBox(QComboBox):
         self._refresh_timer.setSingleShot(True)
         self._refresh_timer.timeout.connect(self._refresh)
 
+        # Follow the map view: panning off one orthophoto and onto another is a
+        # layer change the user should not have to make by hand. Long debounce,
+        # since extentsChanged fires on every step of a pan.
+        self._view_timer = QTimer(self)
+        self._view_timer.setSingleShot(True)
+        self._view_timer.timeout.connect(self._repick_for_view)
+        try:
+            from qgis.utils import iface
+            iface.mapCanvas().extentsChanged.connect(self._schedule_view_repick)
+        except Exception:  # nosec B110
+            pass  # headless (tests): no canvas to follow
+
         # Initial population
         self._refresh()
 
@@ -101,12 +134,14 @@ class LayerTreeComboBox(QComboBox):
         return QgsProject.instance().mapLayer(layer_id)
 
     def setLayer(self, layer):
-        """Programmatically select a layer."""
+        """Programmatically select a layer. Counts as a deliberate choice, so
+        the combo stops following the map view from here on."""
         if layer is None:
             return
         target_id = layer.id()
         for i in range(self.count()):
             if self.itemData(i) == target_id:
+                self._pick_is_automatic = False
                 self.setCurrentIndex(i)
                 return
 
@@ -127,35 +162,62 @@ class LayerTreeComboBox(QComboBox):
         self._layer_filter = predicate
         self._refresh()
 
+    def set_frozen(self, frozen: bool) -> None:
+        """Freeze/unfreeze auto-refresh. While frozen, layer-tree changes (add,
+        remove, visibility, reorder) are ignored so the current list + selection
+        stay put; used from the zone commit to the result, where hiding a layer
+        to peek underneath must not drop the chosen raster or re-pick another.
+        Unfreezing resyncs once (the tree may have changed)."""
+        if frozen == self._frozen:
+            return
+        self._frozen = frozen
+        if not frozen:
+            self._refresh()
+            # _refresh() restores the chosen raster before it ever looks at the
+            # map, so a view that moved during the run needs its own pass.
+            if self._pick_is_automatic:
+                self._schedule_view_repick()
+
+    def set_view_tracking(self, enabled: bool) -> None:
+        """Stop or resume following the map view.
+
+        A live edit session owns its raster: re-picking under it on a simple
+        pan would throw away the zone drawn in it. Ending the session resumes
+        tracking, unless the user has meanwhile picked a raster by hand.
+        """
+        self._view_tracking = enabled
+        # The view may have moved a long way during the session, and nothing
+        # else re-reads it: without this pass the next run would open on the
+        # raster the last one used, wherever the user has since gone.
+        if enabled and self._pick_is_automatic:
+            self._schedule_view_repick()
+
     def cleanup(self):
-        """Disconnect project signals. One try per signal: batching the six
-        meant the first raise skipped the other five."""
-        signals = []
+        """Disconnect the project signals this combo hooked in __init__.
+
+        One guard per signal, never one around the batch: a slot that was
+        never connected (a second cleanup() call, a project reload that
+        swapped the layer tree root) must not skip the disconnects after it.
+        """
+        proj = QgsProject.instance()
+        safe_disconnect(proj, "layersAdded", self._schedule_refresh)
+        safe_disconnect(proj, "layersRemoved", self._schedule_refresh)
+        root = proj.layerTreeRoot()
+        for signal_name in (
+            "visibilityChanged", "addedChildren", "removedChildren", "nameChanged"
+        ):
+            safe_disconnect(root, signal_name, self._schedule_refresh)
+        safe_disconnect(self, "currentIndexChanged", self._on_index_changed)
         try:
-            proj = QgsProject.instance()
-            signals += [proj.layersAdded, proj.layersRemoved]
-            root = proj.layerTreeRoot()
-            signals += [
-                root.visibilityChanged,
-                root.addedChildren,
-                root.removedChildren,
-                root.nameChanged,
-            ]
-        except (TypeError, RuntimeError):
-            pass
-        for signal in signals:
+            from qgis.utils import iface
+            safe_disconnect(iface.mapCanvas(), "extentsChanged", self._schedule_view_repick)
+        except Exception:  # nosec B110
+            pass  # headless (tests): nothing was connected
+        for timer in (self._refresh_timer, self._view_timer):
             try:
-                signal.disconnect(self._schedule_refresh)
-            except (TypeError, RuntimeError):
+                timer.stop()
+            except RuntimeError:
                 pass
-        try:
-            self.currentIndexChanged.disconnect(self._on_index_changed)
-        except (TypeError, RuntimeError):
-            pass
-        try:
-            self._refresh_timer.stop()
-        except RuntimeError:
-            pass
 
     # -- internals --
 
@@ -165,60 +227,38 @@ class LayerTreeComboBox(QComboBox):
 
     def _refresh(self):
         """Rebuild the combo items from the layer tree."""
+        # Frozen from the zone commit to the result: a layer-tree change
+        # (add/remove/visibility/reorder) must NOT rebuild the list or re-pick
+        # the selection, so hiding a layer keeps the chosen raster intact.
+        if self._frozen:
+            return
         self._refreshing = True
         prev_id = self._current_layer_id
-        self.clear()
-        self._layer_ids = []
+        try:
+            self.clear()
+            self._layer_ids = []
+            self._deprioritized_ids = set()
 
-        root = QgsProject.instance().layerTreeRoot()
-        self._traverse(root)
+            root = QgsProject.instance().layerTreeRoot()
+            self._traverse(root)
 
-        # Restore previous selection
-        restored = False
-        if prev_id:
-            for i in range(self.count()):
-                if self.itemData(i) == prev_id:
-                    self.setCurrentIndex(i)
-                    restored = True
-                    break
-
-        # If not restored, pick best raster: prefer one visible in current map view
-        if not restored:
-            best_idx = None
-            try:
-                from qgis.utils import iface
-                canvas_extent = iface.mapCanvas().extent()
-                canvas_crs = iface.mapCanvas().mapSettings().destinationCrs()
-                from qgis.core import QgsCoordinateTransform
+            # Restore previous selection
+            restored = False
+            if prev_id:
                 for i in range(self.count()):
-                    layer_id = self.itemData(i)
-                    if layer_id is None:
-                        continue
-                    if best_idx is None:
-                        best_idx = i  # fallback: first selectable
-                    layer = QgsProject.instance().mapLayer(layer_id)
-                    if layer and layer.extent().isEmpty():
-                        continue
-                    # Transform layer extent to canvas CRS for comparison
-                    try:
-                        xform = QgsCoordinateTransform(
-                            layer.crs(), canvas_crs, QgsProject.instance())
-                        layer_extent = xform.transformBoundingBox(layer.extent())
-                    except Exception:
-                        layer_extent = layer.extent()
-                    if layer_extent.intersects(canvas_extent):
-                        best_idx = i
-                        break  # topmost visible raster in current view
-            except Exception:
-                # Fallback: just pick first selectable
-                for i in range(self.count()):
-                    if self.itemData(i) is not None:
-                        best_idx = i
+                    if self.itemData(i) == prev_id:
+                        self.setCurrentIndex(i)
+                        restored = True
                         break
-            if best_idx is not None:
-                self.setCurrentIndex(best_idx)
 
-        self._refreshing = False
+            if not restored:
+                best_idx = self._best_index_for_view()
+                if best_idx is not None:
+                    self.setCurrentIndex(best_idx)
+        finally:
+            # Never leave the flag stuck: a raise inside _traverse would leave
+            # the combo permanently deaf to the user's own picks.
+            self._refreshing = False
 
         # Emit if selection actually changed
         new_layer = self.currentLayer()
@@ -227,15 +267,87 @@ class LayerTreeComboBox(QComboBox):
             self._current_layer_id = new_id
             self.layerChanged.emit(new_layer)
 
+    def _best_index_for_view(self):
+        """Index of the raster that best matches the current map view, or None.
+
+        Candidates are the NON-deprioritized rasters first, so a past AI Edit
+        output only ever wins when it is the only raster around. Ranking is in
+        ``raster_view_pick``; on a headless run, with no canvas to read, the
+        topmost raster stands.
+        """
+        selectable = [i for i in range(self.count()) if self.itemData(i) is not None]
+        preferred = [i for i in selectable if self.itemData(i) not in self._deprioritized_ids]
+        pool = preferred or selectable
+        if not pool:
+            return None
+        try:
+            from qgis.utils import iface
+
+            from .raster_view_pick import rank_raster_for_view
+            canvas = iface.mapCanvas()
+            view_extent = canvas.extent()
+            view_crs = canvas.mapSettings().destinationCrs()
+            active_layer = iface.activeLayer()
+            active_id = active_layer.id() if active_layer is not None else None
+        except Exception:  # nosec B110
+            return pool[0]
+
+        project = QgsProject.instance()
+        best_idx = None
+        best_key = None
+        for tree_order, i in enumerate(pool):
+            layer = project.mapLayer(self.itemData(i))
+            if layer is None:
+                continue
+            try:
+                key = rank_raster_for_view(
+                    layer, view_extent, view_crs, tree_order, active_id)
+            except Exception:
+                key = None
+            if key is None:
+                continue
+            if best_key is None or key > best_key:
+                best_key, best_idx = key, i
+        return best_idx if best_idx is not None else pool[0]
+
+    def _schedule_view_repick(self, *_args):
+        """Debounced re-pick after a pan or zoom (600 ms)."""
+        self._view_timer.start(600)
+
+    def _repick_for_view(self):
+        """Move the selection to the raster the new map view is showing.
+
+        Only while the pick is still the plugin's own guess: once the user has
+        chosen a raster, or a session has claimed one, the view stops deciding.
+        """
+        if self._frozen or not self._pick_is_automatic or not self._view_tracking:
+            return
+        best_idx = self._best_index_for_view()
+        if best_idx is None or best_idx == self.currentIndex():
+            return
+        self._refreshing = True
+        try:
+            self.setCurrentIndex(best_idx)
+        finally:
+            self._refreshing = False
+        layer = self.currentLayer()
+        new_id = layer.id() if layer else None
+        if new_id != self._current_layer_id:
+            self._current_layer_id = new_id
+            self.layerChanged.emit(layer)
+
+    def _is_listed_layer(self, child) -> bool:
+        """Whether a layer-tree layer node belongs in the drop-down."""
+        layer = child.layer()
+        ok = isinstance(layer, QgsRasterLayer) and layer.isValid()
+        ok = ok and (child.isVisible() or self._include_hidden)
+        return bool(ok and self._passes_filter(layer))
+
     def _has_visible_rasters(self, node):
-        """Check if a tree node has any visible raster layer descendants."""
+        """Check if a tree node has any listed raster layer descendants."""
         for child in node.children():
             if QgsLayerTree.isLayer(child):
-                layer = child.layer()
-                ok = layer and layer.type() == layer.RasterLayer
-                ok = ok and (child.isVisible() or self._include_hidden)
-                ok = ok and self._passes_filter(layer)
-                if ok:
+                if self._is_listed_layer(child):
                     return True
             elif QgsLayerTree.isGroup(child):
                 if (child.isVisible() or self._include_hidden) and self._has_visible_rasters(child):
@@ -250,9 +362,11 @@ class LayerTreeComboBox(QComboBox):
         except Exception:
             return False
 
-    def _traverse(self, node, depth=0):
-        """Recursively walk the layer tree and add items."""
-        from qgis.core import QgsApplication, QgsIconUtils
+    def _traverse(self, node, depth=0, deprioritized=False):
+        """Recursively walk the layer tree and add items. ``deprioritized``
+        marks the whole subtree of an AI Edit output group: its rasters are
+        listed as usual but recorded so the default pick skips them."""
+        from qgis.core import QgsApplication
 
         visible_children = []
         for child in node.children():
@@ -260,11 +374,7 @@ class LayerTreeComboBox(QComboBox):
                 if (child.isVisible() or self._include_hidden) and self._has_visible_rasters(child):
                     visible_children.append(child)
             elif QgsLayerTree.isLayer(child):
-                layer = child.layer()
-                ok = layer and layer.type() == layer.RasterLayer
-                ok = ok and (child.isVisible() or self._include_hidden)
-                ok = ok and self._passes_filter(layer)
-                if ok:
+                if self._is_listed_layer(child):
                     visible_children.append(child)
 
         depth_role = _IndentDelegate.DEPTH_ROLE
@@ -281,22 +391,30 @@ class LayerTreeComboBox(QComboBox):
                     item.setEnabled(False)
                     item.setSelectable(False)
                     item.setData(depth, depth_role)
-                self._traverse(child, depth + 1)
+                self._traverse(
+                    child, depth + 1,
+                    deprioritized or _is_deprioritized_group(child.name()))
 
             elif QgsLayerTree.isLayer(child):
                 layer = child.layer()
-                layer_icon = QgsIconUtils.iconRaster()
+                # getThemeIcon works on every supported QGIS, unlike
+                # QgsIconUtils.iconRaster() which only exists since 3.20.
+                layer_icon = QgsApplication.getThemeIcon("/mIconRaster.svg")
                 self.addItem(layer_icon, layer.name(), layer.id())
                 idx = self.count() - 1
                 item = self.model().item(idx)
                 if item:
                     item.setData(depth, depth_role)
                 self._layer_ids.append(layer.id())
+                if deprioritized:
+                    self._deprioritized_ids.add(layer.id())
 
     def _on_index_changed(self, index):
         """Handle user selection change."""
         if self._refreshing:
             return
+        # The user opened the drop-down and chose: the map view no longer decides.
+        self._pick_is_automatic = False
         layer = self.currentLayer()
         layer_id = layer.id() if layer else None
         if layer_id != self._current_layer_id:

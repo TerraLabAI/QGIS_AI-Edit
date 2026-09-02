@@ -3275,5 +3275,93 @@ We'd love to hear from you!</source>
         <source>Personal, non-commercial use. A paid plan adds commercial use for one person.</source>
         <translation>Uso personal y no comercial. Un plan de pago incluye el uso comercial para una persona.</translation>
     </message>
+    <message>
+        <source>Check for Updates</source>
+        <translation>Buscar actualizaciones</translation>
+    </message>
+    <message>
+        <source>More from TerraLab...</source>
+        <translation>Más de TerraLab...</translation>
+    </message>
+    <message>
+        <source>Select a raster layer to edit:</source>
+        <translation>Selecciona una capa ráster para editar:</translation>
+    </message>
+    <message>
+        <source>Pick the raster layer the edit starts from. Everything else on the map stays out of the input.</source>
+        <translation>Elige la capa ráster de la que parte la edición. Todo lo demás en el mapa queda fuera de la entrada.</translation>
+    </message>
+    <message>
+        <source>Exit to pick another raster.</source>
+        <translation>Sal para elegir otro ráster.</translation>
+    </message>
+    <message>
+        <source>Pick a raster layer to edit first.</source>
+        <translation>Primero elige una capa ráster para editar.</translation>
+    </message>
+    <message>
+        <source>Your zone is outside "{layer}". Pick the right raster or draw inside it.</source>
+        <translation>Tu zona está fuera de "{layer}". Elige el ráster correcto o dibuja dentro de él.</translation>
+    </message>
+    <message>
+        <source>Part of your zone is outside "{layer}". That part will come back blank.</source>
+        <translation>Parte de tu zona está fuera de "{layer}". Esa parte volverá en blanco.</translation>
+    </message>
+    <message>
+        <source>Looking for building, tree or road outlines? AI Segmentation traces them as real geometry.</source>
+        <translation>¿Buscas contornos de edificios, árboles o carreteras? AI Segmentation los traza como geometría real.</translation>
+    </message>
+    <message>
+        <source>Open AI Segmentation</source>
+        <translation>Abrir AI Segmentation</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>Ordenador</translation>
+    </message>
+    <message>
+        <source>QGIS layer</source>
+        <translation>Capa QGIS</translation>
+    </message>
+    <message>
+        <source>Map</source>
+        <translation>Mapa</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle anywhere on the map to capture what you see as a reference. Esc cancels.</source>
+        <translation>Arrastra un rectángulo en cualquier parte del mapa para capturar lo que ves como referencia. Esc cancela.</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle on the map to capture it as a reference. Esc cancels.</source>
+        <translation>Arrastra un rectángulo en el mapa para capturarlo como referencia. Esc cancela.</translation>
+    </message>
+    <message>
+        <source>Map capture</source>
+        <translation>Captura del mapa</translation>
+    </message>
+    <message>
+        <source>Whole layer</source>
+        <translation>Capa entera</translation>
+    </message>
+    <message>
+        <source>This layer does not cover your zone, so it is sent whole, not aligned to it.</source>
+        <translation>Esta capa no cubre tu zona, así que se envía entera, sin alinear.</translation>
+    </message>
+    <message>
+        <source>"{layer}" does not cover your zone. It is sent as a whole image.</source>
+        <translation>"{layer}" no cubre tu zona. Se envía como imagen entera.</translation>
+    </message>
+    <message>
+        <source>Could not capture the map. Zoom in and try again.</source>
+        <translation>No se pudo capturar el mapa. Acerca el zoom e inténtalo de nuevo.</translation>
+    </message>
+    <message>
+        <source>A layer is cropped to your zone, a map capture is what you see. Say in the prompt what the AI should take from each.</source>
+        <translation>Una capa se recorta a tu zona, una captura del mapa es lo que ves. Di en el prompt qué debe tomar la IA de cada imagen.</translation>
+    </message>
+    <message>
+        <source>Your marks guide the edit.</source>
+        <translation>Tus marcas guían la edición.</translation>
+    </message>
 </context>
 </TS>

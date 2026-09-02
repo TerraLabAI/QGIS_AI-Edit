@@ -3275,5 +3275,93 @@ We horen graag van u!</translation>
         <source>Personal, non-commercial use. A paid plan adds commercial use for one person.</source>
         <translation>Persoonlijk, niet-commercieel gebruik. Een betaald abonnement omvat commercieel gebruik voor één persoon.</translation>
     </message>
+    <message>
+        <source>Check for Updates</source>
+        <translation>Controleren op updates</translation>
+    </message>
+    <message>
+        <source>More from TerraLab...</source>
+        <translation>Meer van TerraLab...</translation>
+    </message>
+    <message>
+        <source>Select a raster layer to edit:</source>
+        <translation>Selecteer een rasterlaag om te bewerken:</translation>
+    </message>
+    <message>
+        <source>Pick the raster layer the edit starts from. Everything else on the map stays out of the input.</source>
+        <translation>Kies de rasterlaag waar de bewerking van uitgaat. Al het andere op de kaart blijft buiten de invoer.</translation>
+    </message>
+    <message>
+        <source>Exit to pick another raster.</source>
+        <translation>Sluit af om een ander raster te kiezen.</translation>
+    </message>
+    <message>
+        <source>Pick a raster layer to edit first.</source>
+        <translation>Kies eerst een rasterlaag om te bewerken.</translation>
+    </message>
+    <message>
+        <source>Your zone is outside "{layer}". Pick the right raster or draw inside it.</source>
+        <translation>Je zone ligt buiten "{layer}". Kies het juiste raster of teken erbinnen.</translation>
+    </message>
+    <message>
+        <source>Part of your zone is outside "{layer}". That part will come back blank.</source>
+        <translation>Een deel van je zone ligt buiten "{layer}". Dat deel komt leeg terug.</translation>
+    </message>
+    <message>
+        <source>Looking for building, tree or road outlines? AI Segmentation traces them as real geometry.</source>
+        <translation>Op zoek naar omtrekken van gebouwen, bomen of wegen? AI Segmentation tekent ze als echte geometrie.</translation>
+    </message>
+    <message>
+        <source>Open AI Segmentation</source>
+        <translation>AI Segmentation openen</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>Computer</translation>
+    </message>
+    <message>
+        <source>QGIS layer</source>
+        <translation>QGIS-laag</translation>
+    </message>
+    <message>
+        <source>Map</source>
+        <translation>Kaart</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle anywhere on the map to capture what you see as a reference. Esc cancels.</source>
+        <translation>Sleep een rechthoek ergens op de kaart om wat je ziet als referentie vast te leggen. Esc annuleert.</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle on the map to capture it as a reference. Esc cancels.</source>
+        <translation>Sleep een rechthoek op de kaart om die als referentie vast te leggen. Esc annuleert.</translation>
+    </message>
+    <message>
+        <source>Map capture</source>
+        <translation>Kaartopname</translation>
+    </message>
+    <message>
+        <source>Whole layer</source>
+        <translation>Hele laag</translation>
+    </message>
+    <message>
+        <source>This layer does not cover your zone, so it is sent whole, not aligned to it.</source>
+        <translation>Deze laag dekt je zone niet, dus wordt ze in haar geheel verzonden, niet uitgelijnd.</translation>
+    </message>
+    <message>
+        <source>"{layer}" does not cover your zone. It is sent as a whole image.</source>
+        <translation>"{layer}" dekt je zone niet. Ze wordt als hele afbeelding verzonden.</translation>
+    </message>
+    <message>
+        <source>Could not capture the map. Zoom in and try again.</source>
+        <translation>Kon de kaart niet vastleggen. Zoom in en probeer opnieuw.</translation>
+    </message>
+    <message>
+        <source>A layer is cropped to your zone, a map capture is what you see. Say in the prompt what the AI should take from each.</source>
+        <translation>Een laag wordt bijgesneden op je zone, een kaartopname is wat je ziet. Zeg in de prompt wat de AI uit elke afbeelding moet halen.</translation>
+    </message>
+    <message>
+        <source>Your marks guide the edit.</source>
+        <translation>Je markeringen sturen de bewerking.</translation>
+    </message>
 </context>
 </TS>

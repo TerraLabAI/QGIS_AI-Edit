@@ -3,12 +3,21 @@ name=AI Edit by TerraLab
 description=Show a project on real aerial imagery, from a text prompt: a redevelopment before it is built, a street planted with trees, a flood, or an orthophoto redrawn as a clean site plan. Land cover maps, cloud and object removal too. Georeferenced output.
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
-version=1.8.1
+version=1.9.0
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.9.0
+    - Pick the raster layer to edit first, then draw your zone in it: the AI now works from that one layer, whatever else is drawn on the map
+    - The layer list follows your map view and picks the imagery you are looking at, never a world basemap over a local orthophoto
+    - A zone drawn outside the chosen layer is refused, and a zone partly outside it gets a heads-up
+    - Reference images: a new Map button captures any rectangle you drag on the map, and a layer that does not cover your zone is marked as sent whole
+    - The per-image note field is gone: say in the prompt what the AI should take from each reference
+    - Prompt Library: Top picks now follow what people actually use, and the Analyze family drops the cards the AI could only guess at
+    - Looking for building, tree or road outlines? The library now points you to AI Segmentation
+
     1.8.1
     - AI Edit now works from the Processing Toolbox, the model designer and batch mode: generate, check your plan, and vectorize a color
     - Scripts and AI assistants can drive the plugin directly, and read what it can do before they spend anything

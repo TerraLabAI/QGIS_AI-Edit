@@ -360,6 +360,9 @@ class PluginLifecycleMixin:
         self._dock_widget.vectorize_done_clicked.connect(self._on_vectorize_done_clicked)
         self._dock_widget.reference_panel_requested.connect(self._on_reference_clicked)
         self._dock_widget.reference_done_clicked.connect(self._on_reference_done_clicked)
+        self._dock_widget.reference_capture_requested.connect(
+            self._on_reference_capture_requested
+        )
         self._dock_widget.vectorize_suggestion_clicked.connect(
             self._on_vectorize_suggestion_clicked
         )
@@ -548,6 +551,9 @@ class PluginLifecycleMixin:
         # point re-fires mapToolSet into handlers that are mid-teardown, and the
         # map-tool section below already returns the canvas to QGIS's default.
         self._previous_map_tool = None
+
+        with teardown_step("reference capture tool"):
+            self._teardown_reference_capture()
 
         with teardown_step("selection rectangle"):
             self._clear_selection_rectangle()

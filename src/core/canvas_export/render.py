@@ -78,8 +78,16 @@ def prepare_export(
     target_resolution: str | None = None,
     markup_layer: QgsMapLayer | None = None,
     exclude_layer_ids: set[str] | None = None,
+    layers: list | None = None,
 ) -> ExportPrep:
     """Pick output size and clone settings. Cheap, main-thread.
+
+    ``layers`` is the render set the model sees, top first, and it replaces
+    the canvas render set entirely: the edit starts from ONE chosen raster
+    (plus the markup layer riding on top of it), never from whatever happens
+    to be drawn on screen. ``exclude_layer_ids`` is the older contract, kept
+    for callers that still filter the canvas set, and is ignored when
+    ``layers`` is given.
 
     When ``markup_layer`` is given (the user drew guidance annotations), the
     marks are rasterized on THIS (main) thread into ``markup_overlay`` and the
@@ -94,10 +102,13 @@ def prepare_export(
     if extent.width() <= 0 or extent.height() <= 0:
         raise ValueError("Invalid extent: width and height must be positive")
 
-    # "Original" base: render without the AI-Edit result layers. Filter a
-    # CLONE so the live canvas's own settings (and on-screen layer
-    # visibility) are never touched - only the exported base image changes.
-    if exclude_layer_ids:
+    # Work on a CLONE so the live canvas's own settings (and on-screen layer
+    # visibility) are never touched - only the exported render set changes.
+    if layers is not None:
+        map_settings = _clone_map_settings(map_settings)
+        map_settings.setLayers([lyr for lyr in layers if lyr is not None])
+    elif exclude_layer_ids:
+        # "Original" base: render without the AI-Edit result layers.
         map_settings = _clone_map_settings(map_settings)
         # drop_layers, not a plain id filter: a layer inside a group rendered
         # "as a group" is hidden behind a QgsGroupLayer proxy whose id matches

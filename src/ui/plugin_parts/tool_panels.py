@@ -448,6 +448,9 @@ class ToolPanelsMixin:
 
     def _exit_tool_panel(self):
         """Common path for Done from either tool panel."""
+        # A map capture still armed from the Reference panel goes first, so
+        # the tool restore below never lands on the capture tool itself.
+        self._cancel_reference_capture()
         # Restore the canvas tool that was active before opening the panel.
         if self._pre_markup_map_tool is not None:
             try:

@@ -56,6 +56,10 @@ GUIDANCE_TIP_DISMISSED = "ai_edit_guidance_tip_dismissed"
 # The measure / vector_file guidance hint names the AI Segmentation plugin;
 # fires when its inline link is clicked (cross-promo funnel).
 SEG_REDIRECT_CLICKED = "ai_edit_seg_redirect_clicked"
+# A reference image joined the store. source_kind: file (from disk), layer
+# (a project layer rendered at the zone), map (a rectangle captured on the
+# canvas). whole_layer: a layer that missed the zone and was sent unaligned.
+REFERENCE_ADDED = "ai_edit_reference_added"
 
 # Tools
 MARKUP_OPENED = "markup_opened"
@@ -130,6 +134,7 @@ ALL_EVENTS = frozenset({
     GUIDANCE_TIP_SHOWN,
     GUIDANCE_TIP_DISMISSED,
     SEG_REDIRECT_CLICKED,
+    REFERENCE_ADDED,
     MARKUP_OPENED,
     MARKUP_HIDDEN_WARNED,
     MARKUP_HIDDEN_RESOLVED,
@@ -183,6 +188,7 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     TUTORIAL_OPENED: ("tutorial_source",),
     GUIDANCE_TIP_SHOWN: (),
     GUIDANCE_TIP_DISMISSED: (),
+    REFERENCE_ADDED: ("source_kind",),
     SEG_REDIRECT_CLICKED: ("guidance_kind", "installed"),
     MARKUP_OPENED: (),
     MARKUP_HIDDEN_WARNED: (),

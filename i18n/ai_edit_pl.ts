@@ -3275,5 +3275,93 @@ Chcielibyśmy to od Ciebie usłyszeć!</translation>
         <source>Personal, non-commercial use. A paid plan adds commercial use for one person.</source>
         <translation>Użytek osobisty i niekomercyjny. Płatny plan obejmuje użytek komercyjny dla jednej osoby.</translation>
     </message>
+    <message>
+        <source>Check for Updates</source>
+        <translation>Sprawdź aktualizacje</translation>
+    </message>
+    <message>
+        <source>More from TerraLab...</source>
+        <translation>Więcej od TerraLab...</translation>
+    </message>
+    <message>
+        <source>Select a raster layer to edit:</source>
+        <translation>Wybierz warstwę rastrową do edycji:</translation>
+    </message>
+    <message>
+        <source>Pick the raster layer the edit starts from. Everything else on the map stays out of the input.</source>
+        <translation>Wybierz warstwę rastrową, od której zaczyna się edycja. Wszystko inne na mapie nie trafia do wejścia.</translation>
+    </message>
+    <message>
+        <source>Exit to pick another raster.</source>
+        <translation>Wyjdź, aby wybrać inny raster.</translation>
+    </message>
+    <message>
+        <source>Pick a raster layer to edit first.</source>
+        <translation>Najpierw wybierz warstwę rastrową do edycji.</translation>
+    </message>
+    <message>
+        <source>Your zone is outside "{layer}". Pick the right raster or draw inside it.</source>
+        <translation>Twoja strefa leży poza „{layer}”. Wybierz właściwy raster lub narysuj ją wewnątrz.</translation>
+    </message>
+    <message>
+        <source>Part of your zone is outside "{layer}". That part will come back blank.</source>
+        <translation>Część Twojej strefy leży poza „{layer}”. Ta część wróci pusta.</translation>
+    </message>
+    <message>
+        <source>Looking for building, tree or road outlines? AI Segmentation traces them as real geometry.</source>
+        <translation>Szukasz obrysów budynków, drzew lub dróg? AI Segmentation wyznacza je jako prawdziwą geometrię.</translation>
+    </message>
+    <message>
+        <source>Open AI Segmentation</source>
+        <translation>Otwórz AI Segmentation</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>Komputer</translation>
+    </message>
+    <message>
+        <source>QGIS layer</source>
+        <translation>Warstwa QGIS</translation>
+    </message>
+    <message>
+        <source>Map</source>
+        <translation>Mapa</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle anywhere on the map to capture what you see as a reference. Esc cancels.</source>
+        <translation>Przeciągnij prostokąt w dowolnym miejscu mapy, aby uchwycić widoczny obraz jako odniesienie. Esc anuluje.</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle on the map to capture it as a reference. Esc cancels.</source>
+        <translation>Przeciągnij prostokąt na mapie, aby uchwycić go jako odniesienie. Esc anuluje.</translation>
+    </message>
+    <message>
+        <source>Map capture</source>
+        <translation>Zrzut mapy</translation>
+    </message>
+    <message>
+        <source>Whole layer</source>
+        <translation>Cała warstwa</translation>
+    </message>
+    <message>
+        <source>This layer does not cover your zone, so it is sent whole, not aligned to it.</source>
+        <translation>Ta warstwa nie pokrywa Twojej strefy, więc jest wysyłana w całości, bez dopasowania.</translation>
+    </message>
+    <message>
+        <source>"{layer}" does not cover your zone. It is sent as a whole image.</source>
+        <translation>„{layer}” nie pokrywa Twojej strefy. Jest wysyłana jako cały obraz.</translation>
+    </message>
+    <message>
+        <source>Could not capture the map. Zoom in and try again.</source>
+        <translation>Nie udało się uchwycić mapy. Przybliż i spróbuj ponownie.</translation>
+    </message>
+    <message>
+        <source>A layer is cropped to your zone, a map capture is what you see. Say in the prompt what the AI should take from each.</source>
+        <translation>Warstwa jest przycinana do Twojej strefy, zrzut mapy to to, co widzisz. Napisz w prompcie, co AI ma wziąć z każdego obrazu.</translation>
+    </message>
+    <message>
+        <source>Your marks guide the edit.</source>
+        <translation>Twoje oznaczenia kierują edycją.</translation>
+    </message>
 </context>
 </TS>

@@ -92,6 +92,8 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
         # the user must still be able to re-vectorize that very result.
         self._layer_combo.set_include_hidden(True)
         self._layer_combo.set_layer_filter(_is_ai_edit_output)
+        # A pan must not swap the output being traced under the user.
+        self._layer_combo.set_view_tracking(False)
         self._layer_combo.layerChanged.connect(self._refresh_panel_state)
         layer_box.addWidget(self._layer_combo)
         self._empty_state_label = QLabel(

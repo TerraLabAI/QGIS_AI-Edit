@@ -13,6 +13,7 @@ from .common import (
     _preset_matches,
     _sidebar_icon_html,
 )
+from .handoff_card import build_segmentation_handoff_card, query_asks_for_segmentation
 
 
 class SearchMixin:
@@ -80,6 +81,10 @@ class SearchMixin:
             empty.setAlignment(QtC.AlignCenter)
             empty.setWordWrap(True)
             self._search_layout.addWidget(empty)
+            # "buildings", "segment roads": the cards that answered this left
+            # for AI Segmentation, so the empty result says where they went.
+            if query_asks_for_segmentation(query):
+                self._search_layout.addWidget(build_segmentation_handoff_card())
 
         self._search_layout.addStretch()
 

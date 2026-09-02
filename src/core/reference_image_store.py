@@ -158,9 +158,13 @@ class ReferenceImage:
     path: str
     source_filename: str
     size_bytes: int
-    # "file" (imported from disk) or "layer" (rendered from a QGIS layer).
+    # "file" (imported from disk), "layer" (rendered from a QGIS layer) or
+    # "map" (a rectangle captured on the canvas).
     # Default keeps older constructions valid; only the store builds records.
     source_kind: str = "file"
+    # A layer that does not touch the zone is rendered at its own extent and
+    # sent whole, not aligned; the strip badges it so the user knows.
+    whole_layer: bool = False
 
 
 class ReferenceImageStoreError(Exception):
@@ -251,7 +255,11 @@ class ReferenceImageStore:
         return record
 
     def add_from_qimage(
-        self, image: QImage, source_name: str, source_kind: str = "layer"
+        self,
+        image: QImage,
+        source_name: str,
+        source_kind: str = "layer",
+        whole_layer: bool = False,
     ) -> ReferenceImage:
         """Store a pre-rendered QImage as a high-quality webp reference.
 
@@ -294,6 +302,7 @@ class ReferenceImageStore:
             source_filename=source_name,
             size_bytes=final_size,
             source_kind=source_kind,
+            whole_layer=bool(whole_layer),
         )
         self._refs[ref_id] = record
         log_debug(

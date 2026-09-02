@@ -25,6 +25,8 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..core import qt_compat as QtC
+from ..core import telemetry
+from ..core import telemetry_events as te
 from ..core.config_store import get_export_dial
 from ..core.i18n import tr
 from ..core.reference_image_store import (
@@ -34,7 +36,11 @@ from ..core.reference_image_store import (
     max_references,
 )
 from .dock.style import FOCUS_RING
-from .layer_renderer import load_transient_layers, render_layers_to_qimage
+from .layer_renderer import (
+    layer_misses_zone,
+    load_transient_layers,
+    render_layers_to_qimage,
+)
 from .panel_helpers import main_window_for_dialog
 
 REF_THUMB_PX = 56
@@ -201,6 +207,22 @@ class _ThumbWidget(QFrame):
         font.setBold(True)
         self._badge.setFont(font)
         self._badge.move(2, 2)
+
+        # "Whole layer" (bottom-left): the layer missed the zone, so it was
+        # rendered at its own extent and travels unaligned. Text, not a hue.
+        self._whole_badge = None
+        if getattr(record, "whole_layer", False):
+            self._whole_badge = QLabel(tr("Whole layer"), self)
+            self._whole_badge.setStyleSheet(_THUMB_BADGE_STYLE)
+            self._whole_badge.setFont(font)
+            self._whole_badge.setToolTip(tr(
+                "This layer does not cover your zone, so it is sent whole, "
+                "not aligned to it."
+            ))
+            self._whole_badge.adjustSize()
+            self._whole_badge.move(
+                2, _THUMB_BOX_PX - self._whole_badge.height() - 2
+            )
 
         # Remove button (top-right) - hidden by default, revealed on hover or
         # while the thumbnail has focus, so the strip looks clean and a keyboard
@@ -635,6 +657,10 @@ class ReferenceImagesWidget(QWidget):
             try:
                 if ext in _IMAGE_EXTS:
                     self._store.add(path)
+                    telemetry.track(
+                        te.REFERENCE_ADDED,
+                        {"source_kind": "file", "whole_layer": False},
+                    )
                 else:
                     if ext == ".shp":
                         missing = _missing_shapefile_companions(path)
@@ -672,6 +698,9 @@ class ReferenceImagesWidget(QWidget):
 
     def _render_and_store(self, layers: list, source_name: str) -> None:
         extent, crs = self._current_view_extent()
+        # Decided before the render, from the same rule the renderer applies
+        # when it falls back to the layer's own extent.
+        whole = layer_misses_zone(layers, self._target_extent, self._target_crs)
         image = render_layers_to_qimage(
             layers,
             fallback_extent=extent,
@@ -683,7 +712,56 @@ class ReferenceImagesWidget(QWidget):
             raise ReferenceImageStoreError(
                 tr("Could not render {name}").format(name=source_name)
             )
-        self._store.add_from_qimage(image, source_name)
+        self._store.add_from_qimage(image, source_name, whole_layer=whole)
+        telemetry.track(
+            te.REFERENCE_ADDED, {"source_kind": "layer", "whole_layer": whole}
+        )
+        if whole:
+            self._notify_whole_layer(source_name)
+
+    def _notify_whole_layer(self, source_name: str) -> None:
+        """Say once, in the message bar, that a layer went whole and unaligned."""
+        try:
+            from qgis.utils import iface
+
+            iface.messageBar().pushInfo(
+                "AI Edit",
+                tr('"{layer}" does not cover your zone. It is sent as a whole image.')
+                .format(layer=source_name),
+            )
+        except Exception:  # nosec B110 - no message bar headless; the badge still shows.
+            pass
+
+    def add_captured_image(self, image, source_name: str) -> None:
+        """Store a rectangle captured on the canvas ("Map" in the panel).
+
+        Same gates as every other add: free-tier upsell, hard cap, read-only
+        during a run. A failed render lands as the temp error, never as an
+        empty thumbnail.
+        """
+        if self._readonly:
+            return
+        reason = self._check_can_add()
+        if reason == "free_limit":
+            self.upsell_requested.emit()
+            return
+        if reason == "hard_cap":
+            self._show_temp_error(
+                tr("Maximum {n} reference images reached").format(n=max_references())
+            )
+            return
+        if image is None or image.isNull():
+            self._show_temp_error(tr("Could not capture the map. Zoom in and try again."))
+            return
+        try:
+            self._store.add_from_qimage(image, source_name, source_kind="map")
+        except ReferenceImageStoreError as err:
+            self._show_temp_error(str(err))
+            return
+        telemetry.track(
+            te.REFERENCE_ADDED, {"source_kind": "map", "whole_layer": False}
+        )
+        self._refresh()
 
     def _current_view_extent(self):
         try:

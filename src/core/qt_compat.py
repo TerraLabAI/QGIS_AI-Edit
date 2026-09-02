@@ -310,3 +310,27 @@ def safe_single_shot(msec: int, owner: QObject, callback) -> QTimer:
     timer.timeout.connect(callback)
     timer.start(max(0, int(msec)))
     return timer
+
+
+def safe_disconnect(owner, signal_name: str, slot=None) -> bool:
+    """Disconnect one signal on ``owner``, swallowing the three teardown faults.
+
+    Each of the three is normal during teardown, none is worth a raise:
+    TypeError means this slot was never connected (a second cleanup() call, or
+    a widget built while the project swapped its layer tree), RuntimeError
+    means the C++ half of ``owner`` is already deleted, and AttributeError
+    means ``owner`` is None. Reading ``owner.signal_name`` can itself raise the
+    last two, so the lookup sits inside the guard. One call per signal, never
+    one try block around a batch: the first failure would skip the rest and
+    leave live connections firing into a destroyed widget. True when the
+    disconnect happened.
+    """
+    try:
+        signal = getattr(owner, signal_name)
+        if slot is None:
+            signal.disconnect()
+        else:
+            signal.disconnect(slot)
+        return True
+    except (TypeError, RuntimeError, AttributeError):
+        return False

@@ -5,13 +5,15 @@ main widget. It is a second view over the SAME ReferenceImageStore as the
 compact thumbnail strip above the prompt; every add and remove funnels
 through the shared ReferenceImagesWidget so gating (free tier, hard cap,
 server kill switch wired by the dock) and the strip refresh stay in one
-place. On top of the strip it adds the two explicit import entry points
-and a per-image note field ("what should the AI take from this image"),
-persisted in the store and sent as context_image_notes.
+place. On top of the strip it adds the three explicit import entry points:
+a file, a project layer rendered at the zone, a rectangle captured on the
+map. What the AI should take from an image is said in the prompt, so the
+rows carry no note field any more (owner call 2026-09-02); the store's
+notes and the context_image_notes wire key stay for the agent API.
 
-References stay hidden layers-wise: file imports never touch the project,
-and layer picks are rendered to an offscreen image by the strip's existing
-flow. Nothing here changes any layer's visibility.
+File imports never touch the project, layer picks are rendered to an
+offscreen image by the strip's existing flow, and the map capture is owned
+by the plugin's canvas side. Nothing here changes any layer's visibility.
 """
 from __future__ import annotations
 
@@ -20,7 +22,6 @@ from qgis.PyQt.QtGui import QColor, QIcon, QPainter, QPalette, QPen, QPolygonF
 from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMenu,
     QPushButton,
     QSizePolicy,
@@ -77,6 +78,18 @@ def _make_import_icon(shape: str, color: QColor) -> QIcon:
             QPointF(4, 18.5), QPointF(4, 6.5), QPointF(9.5, 6.5),
             QPointF(11.5, 9), QPointF(20, 9), QPointF(20, 18.5),
         ]))
+    elif shape == "map":
+        # A capture frame: a rectangle with its four corners drawn as brackets.
+        for cx, cy, sx, sy in ((5, 5, 1, 1), (19, 5, -1, 1), (5, 19, 1, -1), (19, 19, -1, -1)):
+            p.drawPolyline(QPolygonF([
+                QPointF(cx, cy + 4.5 * sy), QPointF(cx, cy), QPointF(cx + 4.5 * sx, cy),
+            ]))
+        pen.setStyle(Qt.PenStyle.DotLine)
+        p.setPen(pen)
+        p.drawLine(QPointF(9.5, 5), QPointF(14.5, 5))
+        p.drawLine(QPointF(9.5, 19), QPointF(14.5, 19))
+        p.drawLine(QPointF(5, 9.5), QPointF(5, 14.5))
+        p.drawLine(QPointF(19, 9.5), QPointF(19, 14.5))
     else:
         # Classic layers glyph: one full diamond, two chevrons beneath.
         p.drawPolygon(QPolygonF([
@@ -149,6 +162,15 @@ _IMPORT_CHIP_QSS = (
     "QPushButton:hover {"
     " background: rgba(128, 128, 128, 0.14);"
     " border: 1px solid rgba(128, 128, 128, 0.35);"
+    "}"
+    # Pressed, and checked while the Map capture is armed: a light brand-blue
+    # tint, so the active gesture reads at a glance without a solid fill.
+    "QPushButton:pressed, QPushButton:checked {"
+    " background: rgba(30, 136, 229, 0.18);"
+    " border: 1px solid rgba(30, 136, 229, 0.60);"
+    "}"
+    "QPushButton:checked:hover {"
+    " background: rgba(30, 136, 229, 0.26);"
     "}"
     "QPushButton:disabled {"
     " background: rgba(128, 128, 128, 0.04);"
@@ -232,8 +254,10 @@ class _ReferenceNoteRow(QWidget):
 
         if is_markup:
             tag_text = tr("Mark up")
+        elif record.source_kind == "map":
+            tag_text = tr("Map")
         elif record.source_kind == "layer":
-            tag_text = tr("Layer")
+            tag_text = tr("Whole layer") if getattr(record, "whole_layer", False) else tr("Layer")
         else:
             tag_text = tr("File")
         tag = QLabel(tag_text)
@@ -255,32 +279,13 @@ class _ReferenceNoteRow(QWidget):
         head.addWidget(self._remove_btn, 0)
         right.addLayout(head)
 
-        # The Mark up composite ships through the guidance channel, not as a
-        # context image, so a note on it would never reach the model: no field.
-        self._note_edit: QLineEdit | None = None
-        if not is_markup:
-            note_edit = QLineEdit(self)
-            note_edit.setStyleSheet(_NOTE_EDIT_QSS)
-            note_edit.setPlaceholderText(
-                tr("What should the AI take from this image?")
-            )
-            note_edit.setMaxLength(reference_note_max_chars())
-            note_edit.setAccessibleName(
-                tr("Instructions for reference image {n}").format(n=index)
-            )
-            note_edit.blockSignals(True)
-            note_edit.setText(note)
-            note_edit.blockSignals(False)
-            # textEdited fires on user typing only, never on setText, so the
-            # store is written exactly when the user changes something.
-            note_edit.textEdited.connect(
-                lambda text: self.note_edited.emit(self._ref_id, text)
-            )
-            self._note_edit = note_edit
-            right.addWidget(note_edit)
-        else:
+        # No per-image note field: what the AI should take from an image is
+        # said in the prompt, like everything else (owner call 2026-09-02).
+        # The wire key context_image_notes stays for the agent API, which
+        # still sets notes through the store.
+        if is_markup:
             guidance_hint = QLabel(
-                tr("Your marks guide the edit. No note is needed here.")
+                tr("Your marks guide the edit.")
             )
             guidance_hint.setStyleSheet(_HINT_LABEL_QSS)
             guidance_hint.setWordWrap(True)
@@ -290,8 +295,6 @@ class _ReferenceNoteRow(QWidget):
 
     def set_readonly(self, readonly: bool) -> None:
         self._remove_btn.setEnabled(not readonly)
-        if self._note_edit is not None:
-            self._note_edit.setEnabled(not readonly)
 
 
 class ReferencePanel(QWidget):
@@ -304,6 +307,8 @@ class ReferencePanel(QWidget):
     """
 
     done_clicked = pyqtSignal()
+    # "Map" chip: the plugin arms (or disarms) the canvas capture tool.
+    map_capture_requested = pyqtSignal()
 
     def __init__(
         self,
@@ -329,8 +334,8 @@ class ReferencePanel(QWidget):
         self._reference_hint = DismissibleHint(
             HINT_REFERENCE,
             "",
-            tr("Each image is cropped to your zone and stays hidden from "
-               "the map. Add a note to tell the AI what to take from it."),
+            tr("A layer is cropped to your zone, a map capture is what you "
+               "see. Say in the prompt what the AI should take from each."),
             link_text=tr("See an example"),
         )
         self._reference_hint.link_activated.connect(
@@ -344,12 +349,15 @@ class ReferencePanel(QWidget):
         add_row.setContentsMargins(0, 0, 0, 0)
         add_row.setSpacing(6)
 
+        # Three gestures on one row, short labels so they fit a narrow dock;
+        # the tooltips carry the sentence each label used to be.
         ink = self.palette().color(QPalette.ColorRole.WindowText)
-        self._file_btn = QPushButton(tr("From your computer"))
+        self._file_btn = QPushButton(tr("Computer"))
         self._file_btn.setIcon(_make_import_icon("file", ink))
         self._file_btn.setIconSize(QSize(_IMPORT_ICON_PX, _IMPORT_ICON_PX))
         self._file_btn.setStyleSheet(_IMPORT_CHIP_QSS)
         self._file_btn.setCursor(QtC.PointingHandCursor)
+        self._file_btn.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self._file_btn.setToolTip(
             tr("Pick images or data files. Data files (GeoTIFF, shapefile, "
                "GeoJSON...) are rendered at your zone.")
@@ -357,17 +365,32 @@ class ReferencePanel(QWidget):
         self._file_btn.clicked.connect(self._on_file_import_clicked)
         add_row.addWidget(self._file_btn, 1)
 
-        self._layer_btn = QPushButton(tr("From a QGIS layer"))
+        self._layer_btn = QPushButton(tr("QGIS layer"))
         self._layer_btn.setIcon(_make_import_icon("layer", ink))
         self._layer_btn.setIconSize(QSize(_IMPORT_ICON_PX, _IMPORT_ICON_PX))
         self._layer_btn.setStyleSheet(_IMPORT_CHIP_QSS)
         self._layer_btn.setCursor(QtC.PointingHandCursor)
+        self._layer_btn.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self._layer_btn.setToolTip(
             tr("Snapshot one of this project's layers at your zone. The "
                "layer itself is not changed and stays where it is.")
         )
         self._layer_btn.clicked.connect(self._show_layer_menu)
         add_row.addWidget(self._layer_btn, 1)
+
+        self._map_btn = QPushButton(tr("Map"))
+        self._map_btn.setIcon(_make_import_icon("map", ink))
+        self._map_btn.setIconSize(QSize(_IMPORT_ICON_PX, _IMPORT_ICON_PX))
+        self._map_btn.setStyleSheet(_IMPORT_CHIP_QSS)
+        self._map_btn.setCursor(QtC.PointingHandCursor)
+        self._map_btn.setCheckable(True)
+        self._map_btn.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self._map_btn.setToolTip(
+            tr("Drag a rectangle anywhere on the map to capture what you see "
+               "as a reference. Esc cancels.")
+        )
+        self._map_btn.clicked.connect(self._on_map_capture_clicked)
+        add_row.addWidget(self._map_btn, 1)
         layout.addLayout(add_row)
 
         # Inline error line (the dock's status box lives under the hidden main
@@ -430,10 +453,27 @@ class ReferencePanel(QWidget):
         self._readonly = readonly
         self._file_btn.setEnabled(not readonly)
         self._layer_btn.setEnabled(not readonly)
+        self._map_btn.setEnabled(not readonly)
         for row in self._rows:
             row.set_readonly(readonly)
 
+    def set_capture_armed(self, armed: bool) -> None:
+        """The plugin owns the capture tool; the chip only mirrors its state."""
+        self._map_btn.blockSignals(True)
+        self._map_btn.setChecked(bool(armed))
+        self._map_btn.blockSignals(False)
+
     # -- imports ---------------------------------------------------------
+
+    def _on_map_capture_clicked(self) -> None:
+        # The chip's checked state is set back by set_capture_armed once the
+        # plugin has actually armed (or disarmed) the tool.
+        self._map_btn.blockSignals(True)
+        self._map_btn.setChecked(not self._map_btn.isChecked())
+        self._map_btn.blockSignals(False)
+        if self._readonly:
+            return
+        self.map_capture_requested.emit()
 
     def _on_file_import_clicked(self) -> None:
         # The strip owns the picker: same formats, same free-tier / cap gate,

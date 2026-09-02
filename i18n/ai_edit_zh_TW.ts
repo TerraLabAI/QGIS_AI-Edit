@@ -3275,5 +3275,93 @@ We'd love to hear from you!</source>
         <source>Personal, non-commercial use. A paid plan adds commercial use for one person.</source>
         <translation>個人非商業用途。付費方案支援一人的商業用途。</translation>
     </message>
+    <message>
+        <source>Check for Updates</source>
+        <translation>檢查更新</translation>
+    </message>
+    <message>
+        <source>More from TerraLab...</source>
+        <translation>TerraLab 的更多內容...</translation>
+    </message>
+    <message>
+        <source>Select a raster layer to edit:</source>
+        <translation>選擇要編輯的網格圖層：</translation>
+    </message>
+    <message>
+        <source>Pick the raster layer the edit starts from. Everything else on the map stays out of the input.</source>
+        <translation>選擇編輯所依據的網格圖層。地圖上的其他內容不會納入輸入。</translation>
+    </message>
+    <message>
+        <source>Exit to pick another raster.</source>
+        <translation>退出以選擇其他網格。</translation>
+    </message>
+    <message>
+        <source>Pick a raster layer to edit first.</source>
+        <translation>請先選擇要編輯的網格圖層。</translation>
+    </message>
+    <message>
+        <source>Your zone is outside "{layer}". Pick the right raster or draw inside it.</source>
+        <translation>您的區域在「{layer}」之外。請選擇正確的網格或在其中繪製。</translation>
+    </message>
+    <message>
+        <source>Part of your zone is outside "{layer}". That part will come back blank.</source>
+        <translation>您的部分區域在「{layer}」之外。該部分將回傳空白。</translation>
+    </message>
+    <message>
+        <source>Looking for building, tree or road outlines? AI Segmentation traces them as real geometry.</source>
+        <translation>想要建築、樹木或道路的輪廓？AI Segmentation 可將它們描繪為真實幾何。</translation>
+    </message>
+    <message>
+        <source>Open AI Segmentation</source>
+        <translation>開啟 AI Segmentation</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>電腦</translation>
+    </message>
+    <message>
+        <source>QGIS layer</source>
+        <translation>QGIS 圖層</translation>
+    </message>
+    <message>
+        <source>Map</source>
+        <translation>地圖</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle anywhere on the map to capture what you see as a reference. Esc cancels.</source>
+        <translation>在地圖任意位置拖出一個矩形，將所見內容擷取為參考圖。按 Esc 取消。</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle on the map to capture it as a reference. Esc cancels.</source>
+        <translation>在地圖上拖出一個矩形，將其擷取為參考圖。按 Esc 取消。</translation>
+    </message>
+    <message>
+        <source>Map capture</source>
+        <translation>地圖擷取</translation>
+    </message>
+    <message>
+        <source>Whole layer</source>
+        <translation>整個圖層</translation>
+    </message>
+    <message>
+        <source>This layer does not cover your zone, so it is sent whole, not aligned to it.</source>
+        <translation>此圖層未涵蓋您的區域，因此將整體傳送，不做對齊。</translation>
+    </message>
+    <message>
+        <source>"{layer}" does not cover your zone. It is sent as a whole image.</source>
+        <translation>「{layer}」未涵蓋您的區域。將作為整幅影像傳送。</translation>
+    </message>
+    <message>
+        <source>Could not capture the map. Zoom in and try again.</source>
+        <translation>無法擷取地圖。請放大後再試一次。</translation>
+    </message>
+    <message>
+        <source>A layer is cropped to your zone, a map capture is what you see. Say in the prompt what the AI should take from each.</source>
+        <translation>圖層會裁切到您的區域，地圖擷取則是您所見的內容。請在提示詞中說明 AI 應從每張圖片中取用什麼。</translation>
+    </message>
+    <message>
+        <source>Your marks guide the edit.</source>
+        <translation>您的標記引導編輯。</translation>
+    </message>
 </context>
 </TS>

@@ -466,17 +466,39 @@ def _top_picks_fallback_size() -> int:
 
 
 def get_top_picks(server_catalog: dict | None = None) -> list[dict]:
-    """Top Picks: every LIVE preset flagged `top_pick` in the served catalog,
-    in catalog order (R2 - editorial, not usage-driven). Falls back to the
-    first `_TOP_PICKS_FALLBACK_COUNT` live presets in catalog order when the
-    catalog ships no top_pick flags, so the shelf is never empty just
-    because curation hasn't caught up. `server_catalog` falls back to the
+    """Top Picks: every LIVE preset flagged `top_pick` in the served catalog.
+
+    The served `top_picks` id list, when present, gives the ORDER: the
+    website ranks it by measured use, and the catalog order cannot follow
+    that across categories. Flagged presets the list does not name keep
+    their catalog order after the named ones, so a list and flags that
+    disagree never drop a card. Falls back to the first
+    `_TOP_PICKS_FALLBACK_COUNT` live presets in catalog order when the catalog
+    ships no top_pick flags, so the shelf is never empty just because
+    curation hasn't caught up. `server_catalog` falls back to the
     locally-cached catalog when None, same as the other get_* accessors."""
     if server_catalog is None:
         server_catalog = _cached_catalog()
     live = [_normalize_preset(p, cat_key) for cat_key, p in _iter_live_presets(server_catalog)]
     picks = [p for p in live if p["top_pick"]]
-    return picks or live[:_top_picks_fallback_size()]
+    if not picks:
+        return live[:_top_picks_fallback_size()]
+    order = _served_top_pick_order(server_catalog)
+    if not order:
+        return picks
+    rank = {pid: i for i, pid in enumerate(order)}
+    unranked = len(rank)
+    return sorted(picks, key=lambda p: rank.get(p["id"], unranked))
+
+
+def _served_top_pick_order(catalog: dict | None) -> list[str]:
+    """The `top_picks` id list as served, string ids only, else empty."""
+    if not isinstance(catalog, dict):
+        return []
+    raw = catalog.get("top_picks")
+    if not isinstance(raw, list):
+        return []
+    return [pid for pid in raw if isinstance(pid, str) and pid]
 
 
 def _find_server_category(catalog: dict | None, cat_key: str) -> dict | None:

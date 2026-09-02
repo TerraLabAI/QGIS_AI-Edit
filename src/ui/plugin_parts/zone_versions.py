@@ -10,6 +10,12 @@ from qgis.PyQt.QtGui import QColor, QPixmap
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
+from ...core.canvas_export.zone_validation import (
+    OVERLAP_OK,
+    OVERLAP_OUTSIDE,
+    OVERLAP_PARTIAL,
+    zone_layer_overlap,
+)
 from ...core.i18n import tr
 from ...core.logger import log_debug, log_warning
 
@@ -312,6 +318,17 @@ class ZoneVersionsMixin:
         polygon renders as a plain rectangle with no context frame, and
         nothing downstream may assume it is ever non-None (spec section 4).
         """
+        # The zone must land on the raster picked in the layer header: a zone
+        # that misses it entirely would export blank pixels and bill them, so
+        # it is refused here, before anything downstream reads it. A zone that
+        # mostly hangs outside goes through with a heads-up.
+        overlap = self._zone_layer_overlap_verdict(polygon if polygon is not None else extent)
+        if overlap == OVERLAP_OUTSIDE:
+            self._reject_zone_outside_layer()
+            return
+        if overlap == OVERLAP_PARTIAL:
+            self._warn_zone_partly_outside_layer()
+
         self._selected_extent = extent
         self._selected_polygon = polygon
         # Keep markup clipped to the new zone if the manager already exists.
@@ -371,6 +388,58 @@ class ZoneVersionsMixin:
         except Exception:  # nosec B110 - telemetry must never block selection.
             pass
         log_debug("Zone selected")
+
+    def _input_layer(self):
+        """The raster picked in the dock's layer header, or None."""
+        if self._dock_widget is None:
+            return None
+        try:
+            return self._dock_widget.selected_input_layer()
+        except (RuntimeError, AttributeError):
+            return None
+
+    def _zone_layer_overlap_verdict(self, zone) -> str:
+        """OVERLAP_OUTSIDE / OVERLAP_PARTIAL / OVERLAP_OK for ``zone`` (canvas
+        CRS) against the picked raster. No raster, no verdict."""
+        layer = self._input_layer()
+        if layer is None:
+            return OVERLAP_OK
+        try:
+            return zone_layer_overlap(
+                zone,
+                self._canvas.mapSettings().destinationCrs(),
+                layer.extent(),
+                layer.crs(),
+            )
+        except Exception:  # nosec B110 - a guard that cannot judge lets the zone through.
+            return OVERLAP_OK
+
+    def _reject_zone_outside_layer(self) -> None:
+        """Refuse a zone that misses the picked raster: clear the sketch the
+        way the delete badge does, keep the draw tool armed, say why."""
+        layer = self._input_layer()
+        name = layer.name() if layer is not None else ""
+        if self._map_tool is not None:
+            self._map_tool.set_has_zone(False)
+        self._clear_selection_rectangle()
+        self._selected_extent = None
+        self._selected_polygon = None
+        if self._dock_widget is not None:
+            self._dock_widget.set_zone_cleared()
+        self._iface.messageBar().pushWarning(
+            "AI Edit",
+            tr('Your zone is outside "{layer}". Pick the right raster or draw inside it.')
+            .format(layer=name),
+        )
+
+    def _warn_zone_partly_outside_layer(self) -> None:
+        layer = self._input_layer()
+        name = layer.name() if layer is not None else ""
+        self._iface.messageBar().pushInfo(
+            "AI Edit",
+            tr('Part of your zone is outside "{layer}". That part will come back blank.')
+            .format(layer=name),
+        )
 
     def _on_zone_too_small(self):
         try:

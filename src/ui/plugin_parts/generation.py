@@ -291,19 +291,28 @@ class GenerationMixin:
         self._last_generation_error = ""
         self._last_generation_error_code = ""
 
-        # Pick the base by excluding every AI-Edit result from the EXPORT except
-        # the selected version, so the model sees exactly that base. Original
-        # (base_layer_id None) drops them all for the clean map. The active Mark
-        # up layer is kept (user guidance, not an AI edit). prepare_export
-        # filters a clone, so on-screen layers and the just-generated image are
-        # never hidden.
-        from ..layer_groups import collect_ai_edit_layer_ids
+        # The model sees ONE raster: the version picked in the strip, or, for
+        # Original, the layer chosen in the dock's layer header. Nothing else
+        # on the canvas reaches the export. The active Mark up layer rides on
+        # top (user guidance, not an AI edit): prepare_export lifts it into
+        # the overlay and drops it from the clean base. prepare_export works
+        # on a clone, so on-screen layers are never touched.
+        from qgis.core import QgsProject
 
-        exclude_layer_ids = collect_ai_edit_layer_ids()
+        base_layer = None
         if base_layer_id:
-            exclude_layer_ids.discard(base_layer_id)
+            base_layer = QgsProject.instance().mapLayer(base_layer_id)
+        if base_layer is None:
+            base_layer = self._dock_widget.selected_input_layer()
+        if base_layer is None:
+            self._dock_widget.set_generating(False)
+            self._dock_widget.set_status(
+                tr("Pick a raster layer to edit first."), is_error=True
+            )
+            return
+        render_layers = [base_layer]
         if markup_layer is not None:
-            exclude_layer_ids.discard(markup_layer.id())
+            render_layers.insert(0, markup_layer)
 
         try:
             map_settings = self._canvas.mapSettings()
@@ -316,7 +325,7 @@ class GenerationMixin:
                 self._selected_extent,
                 target_resolution=suggested_res,
                 markup_layer=markup_layer,
-                exclude_layer_ids=exclude_layer_ids,
+                layers=render_layers,
             )
         except Exception as e:
             self._dock_widget.set_generating(False)
@@ -331,6 +340,8 @@ class GenerationMixin:
             return
 
         # Hand off everything the export-completed callback needs.
+        from ..layer_renderer import input_layer_kind
+
         self._pending_generation = {
             "prompt": prompt,
             "ctx": ctx,
@@ -338,6 +349,7 @@ class GenerationMixin:
             "suggested_res": suggested_res,
             "crs_wkt": map_settings.destinationCrs().toWkt(),
             "is_retry": is_retry,
+            "input_layer_kind": input_layer_kind(base_layer),
         }
 
         worker = ExportWorker(prep)
@@ -605,6 +617,7 @@ class GenerationMixin:
                 "template_name": ctx.template_name,
                 "used_template": bool(ctx.template_id),
                 "used_markup": used_markup,
+                "input_layer_kind": pending.get("input_layer_kind", "other"),
             }))
         except Exception as err:  # noqa: BLE001 - telemetry never breaks a run
             log_warning(f"generation_started telemetry failed: {err}")

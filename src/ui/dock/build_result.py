@@ -396,6 +396,9 @@ def _build_side_panels(dock: AIEditDockWidget, layout: QVBoxLayout) -> None:
         )
         dock._reference_panel.setVisible(False)
         dock._reference_panel.done_clicked.connect(dock.reference_done_clicked.emit)
+        dock._reference_panel.map_capture_requested.connect(
+            dock.reference_capture_requested.emit
+        )
         layout.addWidget(dock._reference_panel)
 
     # Vectorize panel - same swap pattern as Mark up.

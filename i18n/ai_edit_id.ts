@@ -3275,5 +3275,93 @@ Kami senang mendengar dari Anda!</translation>
         <source>Personal, non-commercial use. A paid plan adds commercial use for one person.</source>
         <translation>Penggunaan pribadi dan nonkomersial. Paket berbayar mencakup penggunaan komersial untuk satu orang.</translation>
     </message>
+    <message>
+        <source>Check for Updates</source>
+        <translation>Periksa Pembaruan</translation>
+    </message>
+    <message>
+        <source>More from TerraLab...</source>
+        <translation>Lainnya dari TerraLab...</translation>
+    </message>
+    <message>
+        <source>Select a raster layer to edit:</source>
+        <translation>Pilih lapisan raster untuk diedit:</translation>
+    </message>
+    <message>
+        <source>Pick the raster layer the edit starts from. Everything else on the map stays out of the input.</source>
+        <translation>Pilih lapisan raster sebagai titik awal pengeditan. Yang lain di peta tidak ikut dikirim.</translation>
+    </message>
+    <message>
+        <source>Exit to pick another raster.</source>
+        <translation>Keluar untuk memilih raster lain.</translation>
+    </message>
+    <message>
+        <source>Pick a raster layer to edit first.</source>
+        <translation>Pilih dulu lapisan raster untuk diedit.</translation>
+    </message>
+    <message>
+        <source>Your zone is outside "{layer}". Pick the right raster or draw inside it.</source>
+        <translation>Zona Anda berada di luar "{layer}". Pilih raster yang benar atau gambar di dalamnya.</translation>
+    </message>
+    <message>
+        <source>Part of your zone is outside "{layer}". That part will come back blank.</source>
+        <translation>Sebagian zona Anda berada di luar "{layer}". Bagian itu akan kembali kosong.</translation>
+    </message>
+    <message>
+        <source>Looking for building, tree or road outlines? AI Segmentation traces them as real geometry.</source>
+        <translation>Mencari garis luar bangunan, pohon, atau jalan? AI Segmentation menelusurinya sebagai geometri nyata.</translation>
+    </message>
+    <message>
+        <source>Open AI Segmentation</source>
+        <translation>Buka AI Segmentation</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>Komputer</translation>
+    </message>
+    <message>
+        <source>QGIS layer</source>
+        <translation>Lapisan QGIS</translation>
+    </message>
+    <message>
+        <source>Map</source>
+        <translation>Peta</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle anywhere on the map to capture what you see as a reference. Esc cancels.</source>
+        <translation>Seret persegi panjang di mana saja pada peta untuk menangkap yang terlihat sebagai referensi. Esc membatalkan.</translation>
+    </message>
+    <message>
+        <source>Drag a rectangle on the map to capture it as a reference. Esc cancels.</source>
+        <translation>Seret persegi panjang pada peta untuk menangkapnya sebagai referensi. Esc membatalkan.</translation>
+    </message>
+    <message>
+        <source>Map capture</source>
+        <translation>Tangkapan peta</translation>
+    </message>
+    <message>
+        <source>Whole layer</source>
+        <translation>Seluruh lapisan</translation>
+    </message>
+    <message>
+        <source>This layer does not cover your zone, so it is sent whole, not aligned to it.</source>
+        <translation>Lapisan ini tidak mencakup zona Anda, jadi dikirim utuh, tanpa penyelarasan.</translation>
+    </message>
+    <message>
+        <source>"{layer}" does not cover your zone. It is sent as a whole image.</source>
+        <translation>"{layer}" tidak mencakup zona Anda. Dikirim sebagai gambar utuh.</translation>
+    </message>
+    <message>
+        <source>Could not capture the map. Zoom in and try again.</source>
+        <translation>Peta tidak dapat ditangkap. Perbesar dan coba lagi.</translation>
+    </message>
+    <message>
+        <source>A layer is cropped to your zone, a map capture is what you see. Say in the prompt what the AI should take from each.</source>
+        <translation>Lapisan dipotong sesuai zona Anda, tangkapan peta adalah yang Anda lihat. Tulis di prompt apa yang harus diambil AI dari setiap gambar.</translation>
+    </message>
+    <message>
+        <source>Your marks guide the edit.</source>
+        <translation>Tanda Anda memandu pengeditan.</translation>
+    </message>
 </context>
 </TS>

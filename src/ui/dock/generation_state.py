@@ -36,6 +36,43 @@ class DockGenerationStateMixin:
         if self._reference_widget is not None:
             self._reference_widget.set_target_extent(extent, crs)
 
+    def selected_input_layer(self):
+        """The raster the edit starts from, as picked in the layer header, or
+        None when the project holds no visible raster."""
+        combo = getattr(self, "_layer_combo", None)
+        if combo is None:
+            return None
+        try:
+            return combo.currentLayer()
+        except RuntimeError:
+            return None
+
+    def _set_layer_header_state(self, state: str) -> None:
+        """"hidden" on the idle screen, "editable" while the zone is being
+        drawn, "frozen" from the zone commit to the result: the list stops
+        following the layer tree and the map view, and the combo greys out so
+        the user reads which raster the run started from."""
+        header = getattr(self, "_layer_header", None)
+        combo = getattr(self, "_layer_combo", None)
+        if header is None or combo is None:
+            return
+        if state == "hidden":
+            header.setVisible(False)
+            combo.set_frozen(False)
+            combo.set_view_tracking(True)
+            return
+        header.setVisible(True)
+        frozen = state == "frozen"
+        combo.set_frozen(frozen)
+        combo.set_view_tracking(not frozen)
+        combo.setEnabled(not frozen)
+        combo.setToolTip(
+            tr("Exit to pick another raster.") if frozen else tr(
+                "Pick the raster layer the edit starts from. Everything else on "
+                "the map stays out of the input."
+            )
+        )
+
     def set_zone_selected(self):
         """Zone drawn: show the prompt section and the Generate/Exit row."""
         self._zone_selected = True
@@ -44,6 +81,7 @@ class DockGenerationStateMixin:
         self._launch_section.setVisible(False)
         self._select_zone_section.setVisible(False)
         self._result_section.setVisible(False)
+        self._set_layer_header_state("frozen")
         self._prompt_section.setVisible(True)
         self._prompt_container.set_readonly(False)
         self._place_reference_widget("prompt")
@@ -177,6 +215,7 @@ class DockGenerationStateMixin:
             self._reference_widget.setVisible(False)
 
         self._launch_section.setVisible(True)
+        self._set_layer_header_state("hidden")
         self._select_zone_section.setVisible(False)
         self._prompt_section.setVisible(False)
         self._progress_widget.setVisible(False)
@@ -240,6 +279,7 @@ class DockGenerationStateMixin:
             self._reference_widget.setVisible(False)
 
         self._launch_section.setVisible(False)
+        self._set_layer_header_state("editable")
         self._select_zone_section.setVisible(True)
         self._prompt_section.setVisible(False)
         self._progress_widget.setVisible(False)
