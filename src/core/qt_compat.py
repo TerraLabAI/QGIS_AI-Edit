@@ -36,6 +36,7 @@ AlignCenter = _resolve(Qt, "AlignmentFlag", "AlignCenter")
 AlignTop = _resolve(Qt, "AlignmentFlag", "AlignTop")
 AlignBottom = _resolve(Qt, "AlignmentFlag", "AlignBottom")
 AlignLeft = _resolve(Qt, "AlignmentFlag", "AlignLeft")
+AlignRight = _resolve(Qt, "AlignmentFlag", "AlignRight")
 AlignVCenter = _resolve(Qt, "AlignmentFlag", "AlignVCenter")
 
 # Qt.Key

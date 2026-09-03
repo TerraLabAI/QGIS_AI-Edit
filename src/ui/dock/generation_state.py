@@ -13,6 +13,7 @@ from ...core import telemetry_events as te
 from ...core.auth.activation_manager import has_seen_privacy_notice
 from ...core.i18n import tr
 from ...core.paywall_state import classify_paywall_state
+from ...core.pro_ceiling import pro_ceiling_enabled, pro_low_threshold
 from ...core.prompts.loading_messages import get_phase_messages
 from ...core.prompts.prompt_presets import format_template_prompt
 from ...core.resolution_labels import DEFAULT_RESOLUTION_CREDIT_COSTS
@@ -223,6 +224,7 @@ class DockGenerationStateMixin:
         self._layer_saved_label.setVisible(False)
         self._generate_note_box.setVisible(False)
         self._generate_btn.setVisible(False)
+        self.set_generate_block_reason(None)
         self._exit_btn.setVisible(False)
 
         self._prompt_container.set_readonly(False)
@@ -259,8 +261,30 @@ class DockGenerationStateMixin:
         # otherwise hide both via set_status() side effects.
         if self._is_free_tier_exhausted() and self._trial_info_url:
             self._trial_info_box.setVisible(True)
-        elif self._is_free_tier_prewall() and self._prewall_url:
+        elif (self._is_free_tier_prewall() or self._is_pro_low()) and self._prewall_url:
             self._prewall_banner.setVisible(True)
+
+    def set_zone_step_notice(self, text: str = "") -> None:
+        """Answer a refused zone inside the draw step. Empty text clears it."""
+        label = getattr(self, "_select_zone_notice", None)
+        if label is None:
+            return
+        label.setText(text)
+        label.setVisible(bool(text))
+
+    def _scroll_panel_to_top(self) -> None:
+        """Put the top of the panel back in view on a step change.
+
+        Launch used to leave a scrolled dock where it was, so the step it
+        opened could sit below the fold and the click read as a no-op.
+        """
+        area = getattr(self, "_scroll_area", None)
+        if area is None:
+            return
+        try:
+            area.verticalScrollBar().setValue(0)
+        except (RuntimeError, AttributeError):
+            pass
 
     def set_selecting_zone_state(self):
         """SELECTING_ZONE: invite the user to draw a zone on the canvas.
@@ -287,11 +311,15 @@ class DockGenerationStateMixin:
         self._layer_saved_label.setVisible(False)
         self._generate_note_box.setVisible(False)
         self._generate_btn.setVisible(False)
+        self.set_generate_block_reason(None)
         # No Exit in this state - the screen is just the draw invitation.
         self._exit_btn.setVisible(False)
+        self.set_zone_step_notice()
         self._update_layer_warning()
         # Left the idle screen: hide the first-steps guide banner.
         self._update_first_steps_visibility()
+        # The step always shows itself: see _scroll_panel_to_top.
+        self._scroll_panel_to_top()
 
     def set_generating(self, generating: bool):
         """Toggle generation state -- keep prompt visible but grayed out.
@@ -306,6 +334,8 @@ class DockGenerationStateMixin:
             self._progress_widget.setVisible(generating)
             self._result_section.setVisible(False)
             self._warning_widget.setVisible(False)
+            # A run owns the panel: the update card steps aside until it ends.
+            self.sync_update_banner()
 
             if generating:
                 self._progress_bar.setRange(0, 100)
@@ -335,6 +365,7 @@ class DockGenerationStateMixin:
                 self._version_strip.set_readonly(True)
                 self._generate_note_box.setVisible(False)
                 self._generate_btn.setVisible(False)
+                self.set_generate_block_reason(None)
                 # Hide Exit during generation: the user shouldn't be tempted to
                 # cancel mid-run from this row. The title-bar X still works as
                 # an escape hatch.
@@ -471,10 +502,42 @@ class DockGenerationStateMixin:
     def _hide_status_box(self):
         self._status_widget.setVisible(False)
         self._status_label.setText("")
+        self.clear_status_action()
         self._hide_limit_cta()
+
+    def clear_status_action(self) -> None:
+        """Drop the action button and its handler."""
+        button = getattr(self, "_status_action_btn", None)
+        if button is not None:
+            button.setVisible(False)
+            button.setText("")
+        self._status_action_handler = None
+
+    def set_status_action(self, label: str, handler) -> None:
+        """Put ONE next step beside the current status message.
+
+        Call it right after set_status: set_status clears any previous action,
+        so a message can never inherit the button of the one before it.
+        """
+        button = getattr(self, "_status_action_btn", None)
+        if button is None or not label:
+            return
+        self._status_action_handler = handler
+        button.setText(label)
+        button.setVisible(True)
+
+    def _on_status_action_clicked(self) -> None:
+        handler = getattr(self, "_status_action_handler", None)
+        if handler is None:
+            return
+        # Retire the offer before running it: the handler usually replaces the
+        # message, and a stale button under a new one points nowhere.
+        self.clear_status_action()
+        handler()
 
     def set_status(self, message: str, is_error: bool = False):
         self._hide_limit_cta()
+        self.clear_status_action()
         if not message:
             self._hide_status_box()
         else:
@@ -484,7 +547,7 @@ class DockGenerationStateMixin:
         # clobber it.
         if not self._is_free_tier_exhausted():
             self._trial_info_box.setVisible(False)
-        if not self._is_free_tier_prewall():
+        if not (self._is_free_tier_prewall() or self._is_pro_low()):
             self._prewall_banner.setVisible(False)
 
     def _paywall_state(self) -> str:
@@ -493,13 +556,25 @@ class DockGenerationStateMixin:
         threshold semantics (wall wins on overlap)."""
         if self._cached_used is None or self._cached_limit is None:
             return "normal"
-        if not self._is_free_tier or self._cached_limit <= 0:
+        if not self._is_free_tier:
+            return self._pro_paywall_state()
+        if self._cached_limit <= 0:
             return "normal"
         remaining = max(0, self._cached_limit - self._cached_used)
         unit_cost = self._resolution_credit_costs.get(
             "1K", DEFAULT_RESOLUTION_CREDIT_COSTS["1K"]
         )
         return classify_paywall_state(remaining, unit_cost)
+
+    def _pro_paywall_state(self) -> str:
+        """"pro_low" | "normal" for a paid balance. Generation stays
+        allowed either way: the state only drives the contact banner."""
+        if self._cached_limit <= 0 or not pro_ceiling_enabled():
+            return "normal"
+        remaining = max(0, self._cached_limit - self._cached_used)
+        if 0 < remaining <= pro_low_threshold(self._cached_limit):
+            return "pro_low"
+        return "normal"
 
     def _is_free_tier_exhausted(self) -> bool:
         return self._paywall_state() == "wall"
@@ -524,15 +599,17 @@ class DockGenerationStateMixin:
         self._select_zone_section.setVisible(False)
         self._prompt_section.setVisible(False)
         self._generate_btn.setVisible(False)
+        self.set_generate_block_reason(None)
         # The result section has its own Exit button, so suppress the prompt
         # row's Exit to avoid duplication.
         self._exit_btn.setVisible(False)
         self._generate_note_box.setVisible(False)
 
-        # Start the next iteration from a blank prompt instead of replaying the
-        # one that produced this result. An empty field nudges the user to
-        # describe a fresh change rather than re-running the same instruction.
-        self._result_prompt_input.clear()
+        # Keep the prompt that produced this result. A blank field asked the
+        # user to retype what they had just typed, and 110 of the 214 people
+        # whose first generation succeeded left within a minute of seeing it.
+        # Running the same instruction again is now one click.
+        self._result_prompt_input.setPlainText(self.get_prompt())
         self._update_result_generate_enabled()
         self._result_prompt_container.set_readonly(False)
         # Generation is done: clear the (now hidden) prompt container's readonly
@@ -585,6 +662,7 @@ class DockGenerationStateMixin:
         self._select_zone_section.setVisible(False)
         self._prompt_section.setVisible(False)
         self._generate_btn.setVisible(False)
+        self.set_generate_block_reason(None)
         self._exit_btn.setVisible(False)
         self._generate_note_box.setVisible(False)
         self._prompt_container.set_readonly(False)

@@ -3284,6 +3284,16 @@ Kami senang mendengar dari Anda!</translation>
         <translation>Lainnya dari TerraLab...</translation>
     </message>
     <message>
+        <source>Monthly limit reached ({used}/{limit})</source>
+        <translation>Batas bulanan tercapai ({used}/{limit})</translation>
+    </message>
+    <message>
+        <source>Need more this month? Write to us and we set up a plan that fits your volume.</source>
+        <translation>Perlu lebih banyak bulan ini? Hubungi kami dan kami siapkan paket sesuai volume Anda.</translation>
+    </message>
+    <message>
+        <source>{left} of {total} credits left this month</source>
+        <translation>{left} dari {total} kredit tersisa bulan ini</translation>
         <source>Select a raster layer to edit:</source>
         <translation>Pilih lapisan raster untuk diedit:</translation>
     </message>
@@ -3362,6 +3372,122 @@ Kami senang mendengar dari Anda!</translation>
     <message>
         <source>Your marks guide the edit.</source>
         <translation>Tanda Anda memandu pengeditan.</translation>
+    </message>
+    <message>
+        <source>Copy email</source>
+        <translation>Salin email</translation>
+    </message>
+    <message>
+        <source>Custom needs? Write to us: {email}</source>
+        <translation>Punya kebutuhan khusus? Hubungi kami: {email}</translation>
+    </message>
+    <message>
+        <source>Add imagery</source>
+        <translation>Tambah citra</translation>
+    </message>
+    <message>
+        <source>Add a basemap so there is something to edit</source>
+        <translation>Tambahkan peta dasar agar ada yang dapat diedit</translation>
+    </message>
+    <message>
+        <source>Add imagery first</source>
+        <translation>Tambahkan citra terlebih dahulu</translation>
+    </message>
+    <message>
+        <source>An edit is already running</source>
+        <translation>Pengeditan sedang berlangsung</translation>
+    </message>
+    <message>
+        <source>Checking your account...</source>
+        <translation>Memeriksa akun Anda...</translation>
+    </message>
+    <message>
+        <source>Draw a zone on the map first</source>
+        <translation>Gambar zona pada peta terlebih dahulu</translation>
+    </message>
+    <message>
+        <source>Write what you want to change</source>
+        <translation>Tulis perubahan yang diinginkan</translation>
+    </message>
+    <message>
+        <source>Say a bit more: at least {chars} characters and {words} words.</source>
+        <translation>Tambahkan keterangan: minimal {chars} karakter dan {words} kata.</translation>
+    </message>
+    <message>
+        <source>Generate again</source>
+        <translation>Hasilkan lagi</translation>
+    </message>
+    <message>
+        <source>Need more than your plan?</source>
+        <translation>Membutuhkan lebih dari paket Anda?</translation>
+    </message>
+    <message>
+        <source>Custom quota, several seats, invoices for your organisation, a workflow of your own. Tell us what you do and we adapt the plan.</source>
+        <translation>Kuota khusus, beberapa pengguna, faktur untuk organisasi Anda, dan alur kerja sesuai kebutuhan. Beri tahu kami tentang kebutuhan Anda dan kami akan menyesuaikan paketnya.</translation>
+    </message>
+    <message>
+        <source>Working in a team or an organisation?</source>
+        <translation>Bekerja dalam tim atau organisasi?</translation>
+    </message>
+    <message>
+        <source>Several seats, invoices, custom quota: write to us and we set it up.</source>
+        <translation>Beberapa pengguna, faktur, dan kuota khusus: hubungi kami dan kami akan menyiapkannya.</translation>
+    </message>
+    <message>
+        <source>Write to us</source>
+        <translation>Hubungi kami</translation>
+    </message>
+    <message>
+        <source>AI Edit for my organisation</source>
+        <translation>AI Edit untuk organisasi saya</translation>
+    </message>
+    <message>
+        <source>Book a call</source>
+        <translation>Jadwalkan panggilan</translation>
+    </message>
+    <message>
+        <source>Custom quota, team seats, invoices.</source>
+        <translation>Kuota khusus, lisensi tim, faktur.</translation>
+    </message>
+    <message>
+        <source>Hide this update notice</source>
+        <translation>Sembunyikan pemberitahuan pembaruan ini</translation>
+    </message>
+    <message>
+        <source>It applies once QGIS reloads the plugin. Restart QGIS if this panel misbehaves after that.</source>
+        <translation>Ini berlaku setelah QGIS memuat ulang plugin. Mulai ulang QGIS jika panel ini bermasalah setelahnya.</translation>
+    </message>
+    <message>
+        <source>Custom quota, team seats, invoices, or a custom AI solution.</source>
+        <translation>Kuota khusus, lisensi tim, faktur, atau solusi AI khusus.</translation>
+    </message>
+    <message>
+        <source>Manage account</source>
+        <translation>Kelola akun</translation>
+    </message>
+    <message>
+        <source>Opens your terra-lab.ai dashboard in the browser.</source>
+        <translation>Membuka dasbor terra-lab.ai Anda di browser.</translation>
+    </message>
+    <message>
+        <source>Edit your prompt</source>
+        <translation>Edit prompt Anda</translation>
+    </message>
+    <message>
+        <source>Open the prompt library</source>
+        <translation>Buka pustaka prompt</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Coba lagi</translation>
+    </message>
+    <message>
+        <source>AI Edit {version} is out</source>
+        <translation>AI Edit {version} telah tersedia</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation>Nanti</translation>
     </message>
 </context>
 </TS>

@@ -3284,6 +3284,16 @@ We'd love to hear from you!</source>
         <translation>TerraLabの詳細...</translation>
     </message>
     <message>
+        <source>Monthly limit reached ({used}/{limit})</source>
+        <translation>月間上限に達しました（{used}/{limit}）</translation>
+    </message>
+    <message>
+        <source>Need more this month? Write to us and we set up a plan that fits your volume.</source>
+        <translation>今月さらに必要ですか？お問い合わせください。ご利用量に合ったプランをご案内します。</translation>
+    </message>
+    <message>
+        <source>{left} of {total} credits left this month</source>
+        <translation>今月のクレジット残り {left}/{total}</translation>
         <source>Select a raster layer to edit:</source>
         <translation>編集するラスターレイヤーを選択:</translation>
     </message>
@@ -3362,6 +3372,122 @@ We'd love to hear from you!</source>
     <message>
         <source>Your marks guide the edit.</source>
         <translation>描いたマークが編集を導きます。</translation>
+    </message>
+    <message>
+        <source>Copy email</source>
+        <translation>メールアドレスをコピー</translation>
+    </message>
+    <message>
+        <source>Custom needs? Write to us: {email}</source>
+        <translation>特別なご要望がありますか？こちらまでご連絡ください：{email}</translation>
+    </message>
+    <message>
+        <source>Add imagery</source>
+        <translation>画像を追加</translation>
+    </message>
+    <message>
+        <source>Add a basemap so there is something to edit</source>
+        <translation>編集対象を表示するベースマップを追加</translation>
+    </message>
+    <message>
+        <source>Add imagery first</source>
+        <translation>先に画像を追加</translation>
+    </message>
+    <message>
+        <source>An edit is already running</source>
+        <translation>編集を実行中です</translation>
+    </message>
+    <message>
+        <source>Checking your account...</source>
+        <translation>アカウントを確認中…</translation>
+    </message>
+    <message>
+        <source>Draw a zone on the map first</source>
+        <translation>先に地図上でゾーンを描画</translation>
+    </message>
+    <message>
+        <source>Write what you want to change</source>
+        <translation>変更内容を入力</translation>
+    </message>
+    <message>
+        <source>Say a bit more: at least {chars} characters and {words} words.</source>
+        <translation>もう少し詳しく入力してください：{chars}文字以上、{words}語以上。</translation>
+    </message>
+    <message>
+        <source>Generate again</source>
+        <translation>再生成</translation>
+    </message>
+    <message>
+        <source>Need more than your plan?</source>
+        <translation>現在のプランでは足りませんか？</translation>
+    </message>
+    <message>
+        <source>Custom quota, several seats, invoices for your organisation, a workflow of your own. Tell us what you do and we adapt the plan.</source>
+        <translation>カスタムの利用上限、複数のライセンス、組織向けの請求書、独自のワークフロー。ご利用内容をお知らせください。プランを調整します。</translation>
+    </message>
+    <message>
+        <source>Working in a team or an organisation?</source>
+        <translation>チームまたは組織で利用していますか？</translation>
+    </message>
+    <message>
+        <source>Several seats, invoices, custom quota: write to us and we set it up.</source>
+        <translation>複数のライセンス、請求書、カスタムの利用上限について、お問い合わせください。設定します。</translation>
+    </message>
+    <message>
+        <source>Write to us</source>
+        <translation>お問い合わせください</translation>
+    </message>
+    <message>
+        <source>AI Edit for my organisation</source>
+        <translation>組織向けの AI Edit</translation>
+    </message>
+    <message>
+        <source>Book a call</source>
+        <translation>相談を予約</translation>
+    </message>
+    <message>
+        <source>Custom quota, team seats, invoices.</source>
+        <translation>カスタム枠、チームライセンス、請求書。</translation>
+    </message>
+    <message>
+        <source>Hide this update notice</source>
+        <translation>この更新通知を非表示</translation>
+    </message>
+    <message>
+        <source>It applies once QGIS reloads the plugin. Restart QGIS if this panel misbehaves after that.</source>
+        <translation>QGISがプラグインを再読み込みすると適用されます。このパネルがその後正常に動作しない場合は、QGISを再起動してください。</translation>
+    </message>
+    <message>
+        <source>Custom quota, team seats, invoices, or a custom AI solution.</source>
+        <translation>カスタムクォータ、チームライセンス、請求書、またはカスタムAIソリューション。</translation>
+    </message>
+    <message>
+        <source>Manage account</source>
+        <translation>アカウントを管理</translation>
+    </message>
+    <message>
+        <source>Opens your terra-lab.ai dashboard in the browser.</source>
+        <translation>ブラウザでterra-lab.aiのダッシュボードを開きます。</translation>
+    </message>
+    <message>
+        <source>Edit your prompt</source>
+        <translation>プロンプトを編集</translation>
+    </message>
+    <message>
+        <source>Open the prompt library</source>
+        <translation>プロンプトライブラリを開く</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>再試行</translation>
+    </message>
+    <message>
+        <source>AI Edit {version} is out</source>
+        <translation>AI Edit {version} が公開されました</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation>後で</translation>
     </message>
 </context>
 </TS>

@@ -33,6 +33,7 @@ TERMS_URL = build_utm_url("/terms-of-sale", "settings_terms")
 PRIVACY_URL = build_utm_url("/privacy-policy", "settings_privacy")
 CONTACT_CALL_URL = "https://calendly.com/barbot-yvann/30min"
 GUIDE_URL = "https://terra-lab.ai/blog/ai-edit-complete-guide"
+MARKETPLACE_URL = "https://plugins.qgis.org/plugins/AI_Edit/"
 
 
 # A served link goes straight into a rich-text anchor, and several of them send
@@ -164,14 +165,69 @@ def parse_version(text) -> tuple[int, ...] | None:
 def is_update_recommended(installed_version: str) -> bool:
     """True when the server's min_recommended_version parses strictly higher
     than the installed version. Garbage or missing on either side = False."""
+    return _parses_higher(get_server_config().get("min_recommended_version"), installed_version)
+
+
+def _parses_higher(candidate, installed_version: str) -> bool:
+    """True when candidate parses strictly higher than installed_version.
+    Garbage or missing on either side = False, so an unknown value never
+    nudges anyone."""
     installed = parse_version(installed_version)
-    minimum = parse_version(get_server_config().get("min_recommended_version"))
-    if installed is None or minimum is None:
+    offered = parse_version(candidate)
+    if installed is None or offered is None:
         return False
-    width = max(len(installed), len(minimum))
+    width = max(len(installed), len(offered))
     installed += (0,) * (width - len(installed))
-    minimum += (0,) * (width - len(minimum))
-    return minimum > installed
+    offered += (0,) * (width - len(offered))
+    return offered > installed
+
+
+def served_latest_version() -> str | None:
+    """The version the server says is on the marketplace, None when it serves
+    nothing that parses as dotted ints."""
+    value = get_server_config().get("latest_version")
+    if parse_version(value) is None:
+        return None
+    return value.strip()
+
+
+def is_update_available(installed_version: str) -> bool:
+    """True when the served latest_version parses strictly higher than the
+    installed one."""
+    return _parses_higher(served_latest_version(), installed_version)
+
+
+# One line under the banner, never a changelog.
+_MAX_UPDATE_LINE_CHARS = 160
+
+
+def _served_update_line(key: str) -> str | None:
+    """A served sentence about the update; None when the server says nothing
+    usable. Plain text, never markup: the banner escapes it."""
+    value = get_server_config().get(key)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()[:_MAX_UPDATE_LINE_CHARS]
+
+
+def served_release_notes_line() -> str | None:
+    return _served_update_line("release_notes_line")
+
+
+def served_update_message() -> str | None:
+    return _served_update_line("update_message")
+
+
+def served_marketplace_url() -> str:
+    return _server_url("marketplace_url", MARKETPLACE_URL)
+
+
+def is_update_dismissed(version: str, dismissed_version) -> bool:
+    """True when the user closed the banner for exactly this version. A later
+    release is a different version, so it shows again."""
+    if not version or not isinstance(dismissed_version, str):
+        return False
+    return dismissed_version.strip() == version
 
 
 # Hardcoded fallback config (used when server is unreachable).

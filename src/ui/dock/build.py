@@ -34,6 +34,7 @@ from ..onboarding_hint import (
 )
 from ..panel_helpers import make_section_header as _make_section_header
 from ..reference_images_widget import ReferenceImagesWidget
+from .blocked_reasons import _BLOCK_REASON_QSS
 from .build_result import (
     _build_first_steps_hint,
     _build_footer,
@@ -47,9 +48,11 @@ from .prompt_container import _PromptContainer
 from .style import (
     _BTN_BLUE,
     _BTN_GHOST,
+    _BTN_GREEN,
     _BTN_GREEN_AUTH,
     BOOK_SVG,
     BRAND_BLUE,
+    ERROR_TEXT,
     _btn_start_qss,
     svg_url,
 )
@@ -78,8 +81,13 @@ def build_ui(dock: AIEditDockWidget) -> None:
     dock._activation_widget = dock._build_activation_section()
     layout.addWidget(dock._activation_widget)
 
+    # Above everything: an update the user scrolls past is an update they never
+    # install, and this card is the one message that outranks the current step.
+    dock._setup_update_notification(layout)
+
     main_layout = _build_main_section(dock)
     _build_launch_section(dock, main_layout)
+    main_layout.addWidget(dock._warning_widget, 1)
     _build_layer_header(dock, main_layout)
     _build_select_zone_section(dock, main_layout)
     _build_prompt_section(dock, main_layout)
@@ -92,6 +100,8 @@ def build_ui(dock: AIEditDockWidget) -> None:
 
     # Status box + CTA placed after result section so they always appear below
     main_layout.addWidget(dock._status_widget)
+    main_layout.addWidget(dock._pro_contact_email)
+    main_layout.addWidget(dock._pro_contact_btn)
     main_layout.addWidget(dock._limit_cta_btn)
 
     _build_trial_info_box(dock, main_layout)
@@ -109,11 +119,6 @@ def build_ui(dock: AIEditDockWidget) -> None:
     # Spacer to push footer to bottom
     layout.addStretch()
 
-    # --- Update notification, pinned at the bottom (above the footer) so it
-    # stays visible in every state (idle, generating, result). Most users
-    # never check for plugin updates, so this is how they learn one exists.
-    dock._setup_update_notification(layout)
-
     _build_first_steps_hint(dock, layout)
     _build_prewall_banner(dock, layout)
     _build_footer(dock, layout)
@@ -130,13 +135,12 @@ def _build_main_section(dock: AIEditDockWidget) -> QVBoxLayout:
     # a generation runs (see _place_version_strip).
     dock._main_layout = main_layout
 
-    # Empty-canvas hero (no visible layer). Added with stretch factor 1 and
-    # built as a vertically-expanding wrapper so the card CENTERS in the
-    # otherwise-blank panel (same pattern as _select_zone_section below)
-    # instead of clinging to the top.
+    # Empty-canvas hero (no visible layer). Built here, added by build_ui
+    # AFTER the launch section: Launch no longer hides behind the card, and on
+    # a short dock the button plus its reason must be the part that stays in
+    # view, with the card scrolling under it.
     dock._warning_widget = dock._build_warning_widget()
     dock._warning_widget.setVisible(False)
-    main_layout.addWidget(dock._warning_widget, 1)
     return main_layout
 
 
@@ -147,13 +151,29 @@ def _build_launch_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     launch_layout.setContentsMargins(0, 0, 0, 0)
     launch_layout.setSpacing(8)
 
+    # Launch sits in a row of its own so the reason line below it lines up
+    # with the button rather than with the section margin.
+    launch_row = QHBoxLayout()
+    launch_row.setContentsMargins(0, 0, 0, 0)
+    launch_row.setSpacing(6)
+
     dock._launch_btn = QPushButton(tr("Launch AI Edit"))
     dock._launch_btn.setToolTip(tr("Start a new AI edit session"))
     dock._launch_btn.setCursor(QtC.PointingHandCursor)
     dock._launch_btn.setMinimumHeight(40)
     dock._launch_btn.setStyleSheet(_btn_start_qss(_BTN_GREEN_AUTH))
     dock._launch_btn.clicked.connect(dock.launch_clicked.emit)
-    launch_layout.addWidget(dock._launch_btn)
+    launch_row.addWidget(dock._launch_btn, 1)
+
+    launch_layout.addLayout(launch_row)
+
+    # Why Launch is greyed, one muted line, written by set_launch_block_reason.
+    dock._launch_reason_label = QLabel("")
+    dock._launch_reason_label.setWordWrap(True)
+    dock._launch_reason_label.setAlignment(QtC.AlignCenter)
+    dock._launch_reason_label.setStyleSheet(_BLOCK_REASON_QSS)
+    dock._launch_reason_label.setVisible(False)
+    launch_layout.addWidget(dock._launch_reason_label)
 
     # Quiet permanent doorway to past sessions, right under Launch: flat
     # text link, translucent gray at rest, brightening on hover (the retired
@@ -259,6 +279,19 @@ def _build_select_zone_section(dock: AIEditDockWidget, main_layout: QVBoxLayout)
         " background: transparent; border: none; }"
     )
     sz_layout.addWidget(dock._select_zone_hint)
+
+    # A refused zone (too small, outside the picked raster) is answered HERE,
+    # under the instruction the user is reading, not only in the QGIS message
+    # bar at the top of the map where nobody looking at the dock sees it.
+    dock._select_zone_notice = QLabel("")
+    dock._select_zone_notice.setWordWrap(True)
+    dock._select_zone_notice.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    dock._select_zone_notice.setStyleSheet(
+        "QLabel { font-size: 11px; color: " + ERROR_TEXT + ";"
+        " background: transparent; border: none; }"
+    )
+    dock._select_zone_notice.setVisible(False)
+    sz_layout.addWidget(dock._select_zone_notice)
 
     # Compact "Exit" so the user can always bail out of the draw step
     # without committing a zone. Ghost style + centered row mirrors AI
@@ -492,6 +525,15 @@ def _build_generate_row(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> Non
 
     main_layout.addLayout(generate_row)
 
+    # What is still missing before Generate can run, written live under the
+    # button. The click-time warning in the status box stays as the backstop.
+    dock._generate_reason_label = QLabel("")
+    dock._generate_reason_label.setWordWrap(True)
+    dock._generate_reason_label.setAlignment(QtC.AlignCenter)
+    dock._generate_reason_label.setStyleSheet(_BLOCK_REASON_QSS)
+    dock._generate_reason_label.setVisible(False)
+    main_layout.addWidget(dock._generate_reason_label)
+
 
 def _build_generate_note_strip(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> None:
     # Where the imagery goes, said on the panel instead of only in the website
@@ -588,6 +630,20 @@ def _build_status_section(dock: AIEditDockWidget) -> None:
     )
     status_box_layout.addWidget(dock._status_label, 1)
 
+    # One action per message. A failure that only names what went wrong leaves
+    # the user to work out the next move on their own, which is where AI Edit
+    # stopped and AI Segmentation does not. Filled by set_status_action, and
+    # cleared by every set_status, so it can never outlive its message.
+    dock._status_action_btn = QPushButton("")
+    dock._status_action_btn.setCursor(QtC.PointingHandCursor)
+    dock._status_action_btn.setStyleSheet(_BTN_GHOST)
+    dock._status_action_btn.setMinimumHeight(28)
+    dock._status_action_btn.setAutoDefault(False)
+    dock._status_action_btn.setVisible(False)
+    dock._status_action_handler = None
+    dock._status_action_btn.clicked.connect(dock._on_status_action_clicked)
+    status_box_layout.addWidget(dock._status_action_btn, 0, QtC.AlignVCenter)
+
     # CTA button displayed for paid-tier monthly quota exhaustion.
     # Paid users are already subscribed - the action here is plan management,
     # not subscription.
@@ -598,3 +654,16 @@ def _build_status_section(dock: AIEditDockWidget) -> None:
     dock._limit_cta_btn.clicked.connect(dock._on_limit_cta_clicked)
     dock._limit_cta_btn.setVisible(False)
     dock._limit_cta_url = ""
+    # Paid-tier ceiling: the served address in bold and a button that copies
+    # it, ahead of plan management. Both texts are set when shown
+    # (DockProCeilingMixin.show_pro_limit_info).
+    dock._pro_contact_email = QLabel("")
+    dock._pro_contact_email.setWordWrap(True)
+    dock._pro_contact_email.setTextInteractionFlags(QtC.TextSelectableByMouse)
+    dock._pro_contact_email.setStyleSheet("font-size: 12px; color: palette(text);")
+    dock._pro_contact_email.setVisible(False)
+    dock._pro_contact_btn = QPushButton(tr("Copy email"))
+    dock._pro_contact_btn.setCursor(QtC.PointingHandCursor)
+    dock._pro_contact_btn.setStyleSheet(_BTN_GREEN)
+    dock._pro_contact_btn.clicked.connect(dock._on_pro_contact_clicked)
+    dock._pro_contact_btn.setVisible(False)

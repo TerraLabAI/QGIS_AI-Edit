@@ -663,18 +663,26 @@ class PluginLifecycleMixin:
                         self._terralab_menu, ai_seg_action, self._iface.mainWindow())
 
             with teardown_step("toolbar helper import"):
-                from ..terralab_toolbar import remove_action_from_toolbar
+                from ..terralab_toolbar import (
+                    is_terralab_toolbar_alive,
+                    remove_action_from_toolbar,
+                )
 
-            if self._terralab_toolbar:
+            # The cross-promo entry goes first: removing ours can empty the
+            # shared toolbar, and the helper deletes it at that point.
+            toolbar_alive = False
+            with teardown_step("toolbar liveness"):
+                toolbar_alive = is_terralab_toolbar_alive(self._terralab_toolbar)
+            if toolbar_alive and ai_seg_action is not None:
+                with teardown_step("cross-promo toolbar entry"):
+                    toolbar_alive = remove_action_from_toolbar(
+                        self._terralab_toolbar, ai_seg_action, self._iface.mainWindow()
+                    )
+            if toolbar_alive:
                 with teardown_step("toolbar entry"):
                     remove_action_from_toolbar(
                         self._terralab_toolbar, self._action, self._iface.mainWindow()
                     )
-                if ai_seg_action is not None:
-                    with teardown_step("cross-promo toolbar entry"):
-                        remove_action_from_toolbar(
-                            self._terralab_toolbar, ai_seg_action, self._iface.mainWindow()
-                        )
 
         # The three QActions are parented to the QGIS main window, so pulling
         # them out of the menus is not enough: the C++ objects outlive unload

@@ -363,17 +363,21 @@ class ToolPanelsMixin:
                     can_compare = self._swipe_controller.can_swipe_now()
                 except Exception as err:  # nosec B110
                     log_warning(f"re-activate result for Compare failed: {err}")
-        color = self._vectorize_suggestion[1] if self._vectorize_suggestion else None
         if layer is None:
             layer = self._selected_version_layer()
         # A pill for a feature the server switched off would only lead to a
         # refusal, so it does not get drawn at all.
         from ...core.auth.activation_manager import is_feature_enabled
 
-        self._map_tool.show_action_badges(
-            compare=can_compare and is_feature_enabled("swipe"),
-            vectorize=bool(color) and is_feature_enabled("vectorize"),
-        )
+        # The result panel now carries these two as a fixed labelled row, so
+        # the floating pills are not drawn on top of the map any more. The
+        # eligibility computed above still lands on the footer buttons, which
+        # the panel row mirrors.
+        self._map_tool.show_action_badges(compare=False, vectorize=False)
+        if self._dock_widget is not None:
+            self._dock_widget.set_swipe_button_enabled(
+                can_compare and is_feature_enabled("swipe")
+            )
 
     def _on_canvas_vectorize(self) -> None:
         """Vectorize pill (canvas) clicked: open the Vectorize panel pre-filled

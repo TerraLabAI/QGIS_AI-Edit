@@ -3284,6 +3284,16 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <translation>Mehr von TerraLab...</translation>
     </message>
     <message>
+        <source>Monthly limit reached ({used}/{limit})</source>
+        <translation>Monatliches Limit erreicht ({used}/{limit})</translation>
+    </message>
+    <message>
+        <source>Need more this month? Write to us and we set up a plan that fits your volume.</source>
+        <translation>Diesen Monat mehr benötigt? Schreiben Sie uns, und wir richten einen passenden Plan für Ihr Volumen ein.</translation>
+    </message>
+    <message>
+        <source>{left} of {total} credits left this month</source>
+        <translation>Diesen Monat noch {left} von {total} Credits verfügbar</translation>
         <source>Select a raster layer to edit:</source>
         <translation>Rasterebene zum Bearbeiten auswählen:</translation>
     </message>
@@ -3362,6 +3372,122 @@ Wir freuen uns auf Ihre Nachricht!</translation>
     <message>
         <source>Your marks guide the edit.</source>
         <translation>Ihre Markierungen leiten die Bearbeitung.</translation>
+    </message>
+    <message>
+        <source>Copy email</source>
+        <translation>E-Mail kopieren</translation>
+    </message>
+    <message>
+        <source>Custom needs? Write to us: {email}</source>
+        <translation>Besondere Anforderungen? Schreiben Sie uns: {email}</translation>
+    </message>
+    <message>
+        <source>Add imagery</source>
+        <translation>Bilddaten hinzufügen</translation>
+    </message>
+    <message>
+        <source>Add a basemap so there is something to edit</source>
+        <translation>Hintergrundkarte hinzufügen, um etwas zu bearbeiten</translation>
+    </message>
+    <message>
+        <source>Add imagery first</source>
+        <translation>Zuerst Bilddaten hinzufügen</translation>
+    </message>
+    <message>
+        <source>An edit is already running</source>
+        <translation>Eine Bearbeitung läuft bereits</translation>
+    </message>
+    <message>
+        <source>Checking your account...</source>
+        <translation>Konto wird geprüft...</translation>
+    </message>
+    <message>
+        <source>Draw a zone on the map first</source>
+        <translation>Zuerst eine Zone auf der Karte zeichnen</translation>
+    </message>
+    <message>
+        <source>Write what you want to change</source>
+        <translation>Beschreiben Sie, was Sie ändern möchten</translation>
+    </message>
+    <message>
+        <source>Say a bit more: at least {chars} characters and {words} words.</source>
+        <translation>Bitte etwas mehr: mindestens {chars} Zeichen und {words} Wörter.</translation>
+    </message>
+    <message>
+        <source>Generate again</source>
+        <translation>Erneut generieren</translation>
+    </message>
+    <message>
+        <source>Need more than your plan?</source>
+        <translation>Benötigen Sie mehr, als Ihr Tarif umfasst?</translation>
+    </message>
+    <message>
+        <source>Custom quota, several seats, invoices for your organisation, a workflow of your own. Tell us what you do and we adapt the plan.</source>
+        <translation>Individuelles Kontingent, mehrere Sitze, Rechnungen für Ihre Organisation, ein eigener Workflow. Teilen Sie uns mit, wie Sie arbeiten, und wir passen den Tarif an.</translation>
+    </message>
+    <message>
+        <source>Working in a team or an organisation?</source>
+        <translation>Arbeiten Sie in einem Team oder einer Organisation?</translation>
+    </message>
+    <message>
+        <source>Several seats, invoices, custom quota: write to us and we set it up.</source>
+        <translation>Mehrere Sitze, Rechnungen, individuelles Kontingent: Schreiben Sie uns, und wir richten alles ein.</translation>
+    </message>
+    <message>
+        <source>Write to us</source>
+        <translation>Schreiben Sie uns</translation>
+    </message>
+    <message>
+        <source>AI Edit for my organisation</source>
+        <translation>AI Edit für meine Organisation</translation>
+    </message>
+    <message>
+        <source>Book a call</source>
+        <translation>Termin buchen</translation>
+    </message>
+    <message>
+        <source>Custom quota, team seats, invoices.</source>
+        <translation>Individuelles Kontingent, Team-Lizenzen, Rechnungen.</translation>
+    </message>
+    <message>
+        <source>Hide this update notice</source>
+        <translation>Diesen Aktualisierungshinweis ausblenden</translation>
+    </message>
+    <message>
+        <source>It applies once QGIS reloads the plugin. Restart QGIS if this panel misbehaves after that.</source>
+        <translation>Die Aktualisierung wird angewendet, sobald QGIS das Plugin neu lädt. Starten Sie QGIS neu, falls sich dieses Panel danach ungewöhnlich verhält.</translation>
+    </message>
+    <message>
+        <source>Custom quota, team seats, invoices, or a custom AI solution.</source>
+        <translation>Individuelles Kontingent, Team-Lizenzen, Rechnungen oder eine maßgeschneiderte KI-Lösung.</translation>
+    </message>
+    <message>
+        <source>Manage account</source>
+        <translation>Konto verwalten</translation>
+    </message>
+    <message>
+        <source>Opens your terra-lab.ai dashboard in the browser.</source>
+        <translation>Öffnet das Dashboard von terra-lab.ai im Browser.</translation>
+    </message>
+    <message>
+        <source>Edit your prompt</source>
+        <translation>Prompt bearbeiten</translation>
+    </message>
+    <message>
+        <source>Open the prompt library</source>
+        <translation>Prompt-Bibliothek öffnen</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Erneut versuchen</translation>
+    </message>
+    <message>
+        <source>AI Edit {version} is out</source>
+        <translation>AI Edit {version} ist verfügbar</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation>Später</translation>
     </message>
 </context>
 </TS>

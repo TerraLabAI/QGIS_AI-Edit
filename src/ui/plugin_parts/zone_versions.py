@@ -18,6 +18,7 @@ from ...core.canvas_export.zone_validation import (
 )
 from ...core.i18n import tr
 from ...core.logger import log_debug, log_warning
+from ..dock.blocked_reasons import LAUNCH_BLOCK_WORKER_BUSY
 
 # Committed zone chrome: AI Edit's zone blue as an OUTLINE, never a fill. The
 # imagery inside the zone is the model input and the generated result the user
@@ -128,6 +129,11 @@ class ZoneVersionsMixin:
 
     def _on_launch_clicked(self):
         """User clicked 'Launch AI Edit' on the entry screen."""
+        # The global shortcut reaches here from any state, so a run in flight
+        # would have been thrown away without a word. Say so instead.
+        if self._dock_widget.is_generation_in_flight():
+            self._dock_widget.set_launch_block_reason(LAUNCH_BLOCK_WORKER_BUSY)
+            return
         telemetry.track(te.LAUNCH_CLICKED)
         # First real commitment: nudge new users toward the tutorial (once ever).
         self._maybe_show_tutorial_nudge()
@@ -424,13 +430,15 @@ class ZoneVersionsMixin:
         self._clear_selection_rectangle()
         self._selected_extent = None
         self._selected_polygon = None
+        message = tr(
+            'Your zone is outside "{layer}". Pick the right raster or draw inside it.'
+        ).format(layer=name)
         if self._dock_widget is not None:
+            # set_zone_cleared reopens the draw step and wipes the notice, so
+            # the notice goes on after it, never before.
             self._dock_widget.set_zone_cleared()
-        self._iface.messageBar().pushWarning(
-            "AI Edit",
-            tr('Your zone is outside "{layer}". Pick the right raster or draw inside it.')
-            .format(layer=name),
-        )
+            self._dock_widget.set_zone_step_notice(message)
+        self._iface.messageBar().pushWarning("AI Edit", message)
 
     def _warn_zone_partly_outside_layer(self) -> None:
         layer = self._input_layer()
@@ -448,13 +456,12 @@ class ZoneVersionsMixin:
             min_pct = int(round(50 * 100 / canvas_w)) if canvas_w > 0 else 5
         except Exception:
             min_pct = 5
-        self._dock_widget.set_status(
-            tr(
-                "Selected zone too small. Draw a rectangle at least "
-                "{pct}% of the canvas size."
-            ).format(pct=max(1, min_pct)),
-            is_error=True,
-        )
+        message = tr(
+            "Selected zone too small. Draw a rectangle at least "
+            "{pct}% of the canvas size."
+        ).format(pct=max(1, min_pct))
+        self._dock_widget.set_status(message, is_error=True)
+        self._dock_widget.set_zone_step_notice(message)
 
     def _on_zone_invalid(self, code: str, message: str):
         """Edge-zone refusal at draw time (antimeridian, polar, oversized,

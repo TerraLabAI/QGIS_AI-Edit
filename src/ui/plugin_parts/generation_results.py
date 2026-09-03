@@ -150,6 +150,7 @@ class GenerationResultsMixin:
                     "so describe the change you want to see, then try again."
                 )
             self._dock_widget.set_status(enriched, is_error=True)
+            self._offer_model_failure_action(_is_safety_block(message))
         elif _is_service_busy(message, normalized_code):
             # Servers momentarily overloaded; user not charged. Calm inline retry,
             # never the bug-report dialog (nothing for the user to report).
@@ -158,6 +159,7 @@ class GenerationResultsMixin:
                 "Please wait a moment and try again."
             )
             self._dock_widget.set_status(enriched, is_error=True)
+            self._dock_widget.set_status_action(tr("Try again"), self._retry_last_prompt)
         else:
             enriched = _enrich_error_message(message, code)
             # Reassure on EVERY credit-safe failure that no credit was kept (the
@@ -193,6 +195,28 @@ class GenerationResultsMixin:
         # failed from one that produced nothing.
         self._last_generation_error = message or ""
         self._last_generation_error_code = effective_code
+
+    def _offer_model_failure_action(self, is_safety_block: bool) -> None:
+        """The one next step after the model returned nothing.
+
+        A safety refusal is about the words, so it points at the prompt box. An
+        empty result is usually a question typed into an edit box (two thirds of
+        them over 30 days), so it points at the library of prompts that work.
+        """
+        dock = self._dock_widget
+        if is_safety_block:
+            dock.set_status_action(tr("Edit your prompt"), dock.focus_prompt_input)
+        else:
+            dock.set_status_action(
+                tr("Open the prompt library"), dock._on_browse_templates_clicked
+            )
+
+    def _retry_last_prompt(self) -> None:
+        """Re-run the prompt still in the box, on the same zone."""
+        dock = self._dock_widget
+        prompt = dock.get_prompt()
+        if prompt:
+            dock.generate_clicked.emit(prompt)
 
     def _show_error_report(self, error_message: str, request_id: str = "") -> None:
         """Open the copy-logs/email report dialog. A failure here must never

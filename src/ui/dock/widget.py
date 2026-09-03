@@ -12,10 +12,12 @@ from ...core.reference_image_store import ReferenceImageStore
 from ...core.resolution_labels import DEFAULT_RESOLUTION_CREDIT_COSTS
 from ..panel_helpers import make_section_header
 from .account import DockAccountMixin
+from .blocked_reasons import DockBlockedReasonsMixin
 from .build import build_ui
 from .chrome import DockChromeMixin
 from .generation_state import DockGenerationStateMixin
 from .library import DockLibraryMixin
+from .pro_ceiling import DockProCeilingMixin
 from .prompts import DockPromptMixin
 from .tools_footer import DockToolsFooterMixin
 from .versions import DockVersionsMixin
@@ -26,8 +28,10 @@ _make_section_header = make_section_header  # backward-compat alias
 class AIEditDockWidget(
     DockChromeMixin,
     DockAccountMixin,
+    DockBlockedReasonsMixin,
     DockLibraryMixin,
     DockGenerationStateMixin,
+    DockProCeilingMixin,
     DockVersionsMixin,
     DockPromptMixin,
     DockToolsFooterMixin,

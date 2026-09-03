@@ -43,10 +43,38 @@ def add_action_to_toolbar(toolbar, action, product_id, is_cross_promo=False):
     toolbar.addAction(action)
 
 
-def remove_action_from_toolbar(toolbar, action, main_window):
-    """Remove action; delete toolbar if no actions remain."""
-    toolbar.removeAction(action)
-    remaining = [a for a in toolbar.actions() if not a.isSeparator()]
-    if not remaining:
+def is_terralab_toolbar_alive(toolbar) -> bool:
+    """False once Qt has deleted the C++ half under the Python wrapper.
+
+    Both TerraLab plugins share one toolbar and the last one out deletes it,
+    so a wrapper that was valid at startup is routinely dead by unload.
+    """
+    if toolbar is None:
+        return False
+    try:
+        toolbar.objectName()
+    except RuntimeError:
+        return False
+    return True
+
+
+def remove_action_from_toolbar(toolbar, action, main_window) -> bool:
+    """Remove the action, and delete the toolbar once nothing is left on it.
+
+    Returns True while the toolbar is still usable, so a caller removing two
+    actions can stop after the first one emptied it. Removing an action from a
+    toolbar whose C++ half is gone raised "wrapped C/C++ object of type QToolBar
+    has been deleted" for 41 users a month, twice per unload.
+    """
+    if not is_terralab_toolbar_alive(toolbar):
+        return False
+    try:
+        toolbar.removeAction(action)
+        remaining = [a for a in toolbar.actions() if not a.isSeparator()]
+        if remaining:
+            return True
         main_window.removeToolBar(toolbar)
         toolbar.deleteLater()
+    except RuntimeError:
+        pass
+    return False

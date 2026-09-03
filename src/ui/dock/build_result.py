@@ -25,6 +25,7 @@ from qgis.PyQt.QtWidgets import (
 from ...core import qt_compat as QtC
 from ...core.config_store import get_export_copy
 from ...core.i18n import tr
+from ...core.pro_ceiling import pro_ceiling_contact_email
 from ...core.qt_compat import QShortcut
 from ..credit_ring import CreditRing
 from ..onboarding_hint import (
@@ -38,10 +39,12 @@ from ..panels.markup_panel import MarkupPanel
 from ..panels.reference_panel import ReferencePanel
 from ..panels.vectorize_panel import VectorizePanel
 from ..version_strip import VersionStrip
+from .pro_ceiling import custom_needs_line
 from .prompt_container import _PromptContainer
 from .style import (
     _BTN_BLUE,
     _BTN_BLUE_OUTLINE,
+    _BTN_GHOST,
     _BTN_GREEN,
     _BTN_GREEN_OUTLINE,
     _FOOTER_ICON_BTN_STYLE,
@@ -174,6 +177,34 @@ def _build_result_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     result_actions_row.addWidget(dock._result_exit_btn, 0)
 
     dock._result_prompt_layout.addLayout(result_actions_row)
+
+    # Compare and Vectorize as a fixed labelled row, not only as pills floating
+    # on the canvas: of 226 people with one generation, 72 vectorized and 32
+    # compared, and a pill anchored to the zone is easy to never notice. The
+    # two buttons mirror their footer twins, which keep owning the gating.
+    dock._result_tools_row = QWidget()
+    tools_row = QHBoxLayout(dock._result_tools_row)
+    tools_row.setContentsMargins(0, 4, 0, 0)
+    tools_row.setSpacing(6)
+
+    dock._result_compare_btn = QPushButton(tr("Compare"))
+    dock._result_compare_btn.setToolTip(tr("Before / after"))
+    dock._result_compare_btn.setCursor(QtC.PointingHandCursor)
+    dock._result_compare_btn.setCheckable(True)
+    dock._result_compare_btn.setMinimumHeight(32)
+    dock._result_compare_btn.setStyleSheet(_BTN_GHOST)
+    dock._result_compare_btn.toggled.connect(dock._on_result_compare_toggled)
+    tools_row.addWidget(dock._result_compare_btn, 1)
+
+    dock._result_vectorize_btn = QPushButton(tr("Vectorize"))
+    dock._result_vectorize_btn.setToolTip(tr("Vectorize this result"))
+    dock._result_vectorize_btn.setCursor(QtC.PointingHandCursor)
+    dock._result_vectorize_btn.setMinimumHeight(32)
+    dock._result_vectorize_btn.setStyleSheet(_BTN_GHOST)
+    dock._result_vectorize_btn.clicked.connect(dock.vectorize_clicked.emit)
+    tools_row.addWidget(dock._result_vectorize_btn, 1)
+
+    dock._result_prompt_layout.addWidget(dock._result_tools_row)
 
     # Minimal status line - shown under the action row after generation.
     # Submitting the prompt (Enter key) and the Generate button both
@@ -361,6 +392,14 @@ def _build_trial_info_box(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
         "font-size: 11px; color: palette(text);"
     )
     trial_layout.addWidget(dock._trial_info_subtext)
+    # One quiet line for the buyer the subscribe button does not fit (a
+    # team, an invoice, a volume): the served address, under the CTA, never
+    # above it. Selectable so it can be copied from here too.
+    dock._trial_info_custom = QLabel(custom_needs_line(pro_ceiling_contact_email()))
+    dock._trial_info_custom.setWordWrap(True)
+    dock._trial_info_custom.setTextInteractionFlags(QtC.TextSelectableByMouse)
+    dock._trial_info_custom.setStyleSheet("font-size: 10px; color: rgba(128,128,128,0.9);")
+    trial_layout.addWidget(dock._trial_info_custom)
     dock._trial_info_url = ""
     # Kept for backwards compatibility with show_trial_exhausted_info callers
     # that still set a link; rendered inline as a fallback if the button is

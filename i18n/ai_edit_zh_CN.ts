@@ -3284,6 +3284,16 @@ We'd love to hear from you!</source>
         <translation>TerraLab 的更多内容...</translation>
     </message>
     <message>
+        <source>Monthly limit reached ({used}/{limit})</source>
+        <translation>已达到月度上限 ({used}/{limit})</translation>
+    </message>
+    <message>
+        <source>Need more this month? Write to us and we set up a plan that fits your volume.</source>
+        <translation>本月需要更多额度？联系我们，我们将为您的用量制定合适的方案。</translation>
+    </message>
+    <message>
+        <source>{left} of {total} credits left this month</source>
+        <translation>本月剩余 {left}/{total} 个积分</translation>
         <source>Select a raster layer to edit:</source>
         <translation>选择要编辑的栅格图层：</translation>
     </message>
@@ -3362,6 +3372,122 @@ We'd love to hear from you!</source>
     <message>
         <source>Your marks guide the edit.</source>
         <translation>您的标记引导编辑。</translation>
+    </message>
+    <message>
+        <source>Copy email</source>
+        <translation>复制邮箱</translation>
+    </message>
+    <message>
+        <source>Custom needs? Write to us: {email}</source>
+        <translation>有定制需求？请联系我们：{email}</translation>
+    </message>
+    <message>
+        <source>Add imagery</source>
+        <translation>添加影像</translation>
+    </message>
+    <message>
+        <source>Add a basemap so there is something to edit</source>
+        <translation>添加底图后才能编辑</translation>
+    </message>
+    <message>
+        <source>Add imagery first</source>
+        <translation>请先添加影像</translation>
+    </message>
+    <message>
+        <source>An edit is already running</source>
+        <translation>编辑已在进行中</translation>
+    </message>
+    <message>
+        <source>Checking your account...</source>
+        <translation>正在检查账户...</translation>
+    </message>
+    <message>
+        <source>Draw a zone on the map first</source>
+        <translation>请先在地图上绘制区域</translation>
+    </message>
+    <message>
+        <source>Write what you want to change</source>
+        <translation>写下要更改的内容</translation>
+    </message>
+    <message>
+        <source>Say a bit more: at least {chars} characters and {words} words.</source>
+        <translation>请再多写一些：至少 {chars} 个字符、{words} 个词。</translation>
+    </message>
+    <message>
+        <source>Generate again</source>
+        <translation>再次生成</translation>
+    </message>
+    <message>
+        <source>Need more than your plan?</source>
+        <translation>当前方案不够用？</translation>
+    </message>
+    <message>
+        <source>Custom quota, several seats, invoices for your organisation, a workflow of your own. Tell us what you do and we adapt the plan.</source>
+        <translation>可自定义额度、多个席位、向您的组织开具发票，以及适合您们的工作流程。告诉我们您的工作方式，我们会调整方案。</translation>
+    </message>
+    <message>
+        <source>Working in a team or an organisation?</source>
+        <translation>以团队或组织形式工作？</translation>
+    </message>
+    <message>
+        <source>Several seats, invoices, custom quota: write to us and we set it up.</source>
+        <translation>多个席位、发票、自定义额度：联系我们，我们来帮您设置。</translation>
+    </message>
+    <message>
+        <source>Write to us</source>
+        <translation>联系我们</translation>
+    </message>
+    <message>
+        <source>AI Edit for my organisation</source>
+        <translation>为我的组织使用 AI Edit</translation>
+    </message>
+    <message>
+        <source>Book a call</source>
+        <translation>预约通话</translation>
+    </message>
+    <message>
+        <source>Custom quota, team seats, invoices.</source>
+        <translation>自定义配额、团队许可证、发票。</translation>
+    </message>
+    <message>
+        <source>Hide this update notice</source>
+        <translation>隐藏此更新提示</translation>
+    </message>
+    <message>
+        <source>It applies once QGIS reloads the plugin. Restart QGIS if this panel misbehaves after that.</source>
+        <translation>插件将在 QGIS 重新加载后生效。如果此面板之后出现异常，请重启 QGIS。</translation>
+    </message>
+    <message>
+        <source>Custom quota, team seats, invoices, or a custom AI solution.</source>
+        <translation>定制配额、团队许可证、发票或定制 AI 解决方案。</translation>
+    </message>
+    <message>
+        <source>Manage account</source>
+        <translation>管理账户</translation>
+    </message>
+    <message>
+        <source>Opens your terra-lab.ai dashboard in the browser.</source>
+        <translation>在浏览器中打开您的 terra-lab.ai 控制面板。</translation>
+    </message>
+    <message>
+        <source>Edit your prompt</source>
+        <translation>编辑提示词</translation>
+    </message>
+    <message>
+        <source>Open the prompt library</source>
+        <translation>打开提示词库</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>重试</translation>
+    </message>
+    <message>
+        <source>AI Edit {version} is out</source>
+        <translation>AI Edit {version} 已发布</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation>稍后</translation>
     </message>
 </context>
 </TS>

@@ -174,7 +174,15 @@ class DockVersionsMixin:
         if getattr(self, "_result_generate_base", None) == base:
             return
         self._result_generate_base = base
-        self._result_regenerate_btn.setText(tr("Generate from {base}").format(base=base))
+        # On the version this run just produced (the default), the prompt is
+        # still in the field, so the button says what the click does. Picking an
+        # older base is a different job and keeps naming it.
+        strip = self._version_strip
+        on_latest = strip.selected_index() >= strip.count() - 1
+        self._result_regenerate_btn.setText(
+            tr("Generate again") if on_latest
+            else tr("Generate from {base}").format(base=base)
+        )
         self._result_prompt_input.setPlaceholderText(
             tr("Type a prompt to edit {base}...").format(base=base)
         )

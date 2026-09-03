@@ -9,12 +9,15 @@ stay in sync.
 from __future__ import annotations
 
 # Registry schema version this mirror was generated against.
-REGISTRY_VERSION = 1
+REGISTRY_VERSION = 38
 
 # Activation events
 PLUGIN_OPENED = "plugin_opened"
 ACTIVATION_SCREEN_VIEWED = "activation_screen_viewed"
 LAUNCH_CLICKED = "launch_clicked"
+# Launch stayed disabled: reason is no_raster | no_key | tiles_warming |
+# worker_busy, sent once per reason per dock session.
+LAUNCH_BLOCKED = "launch_blocked"
 BASEMAP_CTA_CLICKED = "basemap_cta_clicked"
 ACTIVATION_ATTEMPTED = "activation_attempted"
 PLUGIN_ACTIVATED = "plugin_activated"
@@ -28,6 +31,9 @@ AI_EDIT_PAIR_CANCELLED = "ai_edit_pair_cancelled"
 
 # Generation events
 ZONE_DRAWN = "zone_drawn"
+# Generate stayed disabled: reason is no_zone | prompt_empty |
+# prompt_too_short, sent once per reason per dock session.
+GENERATE_BLOCKED = "generate_blocked"
 TEMPLATE_SELECTED = "template_selected"
 GENERATION_STARTED = "generation_started"
 GENERATION_COMPLETED = "generation_completed"
@@ -41,6 +47,15 @@ SUBSCRIBE_LINK_CLICKED = "subscribe_link_clicked"
 # Pre-wall banner: last free generation of the month, shown ahead of the
 # wall (trial_exhausted_viewed covers the wall itself, reused as-is).
 PAYWALL_PREWALL_SHOWN = "paywall_prewall_shown"
+
+# Update notice in the dock. shown fires once per offered version per install,
+# clicked pairs with it to give a release nudge its take-up rate.
+PLUGIN_UPDATE_PROMPT_SHOWN = "plugin_update_prompt_shown"
+PLUGIN_UPDATE_PROMPT_CLICKED = "plugin_update_prompt_clicked"
+# A newer version is served, but QGIS does not list the plugin as
+# upgradeable yet, so the offer waits rather than sending the user to a
+# Plugin Manager that cannot install it.
+PLUGIN_UPDATE_PROMPT_SUPPRESSED = "plugin_update_prompt_suppressed"
 
 # Onboarding / guidance
 # tutorial_source is the touchpoint id (footer_tutorial, post_signin, ...).
@@ -112,6 +127,7 @@ ALL_EVENTS = frozenset({
     PLUGIN_OPENED,
     ACTIVATION_SCREEN_VIEWED,
     LAUNCH_CLICKED,
+    LAUNCH_BLOCKED,
     BASEMAP_CTA_CLICKED,
     ACTIVATION_ATTEMPTED,
     PLUGIN_ACTIVATED,
@@ -121,6 +137,7 @@ ALL_EVENTS = frozenset({
     AI_EDIT_PAIR_TIMEOUT,
     AI_EDIT_PAIR_CANCELLED,
     ZONE_DRAWN,
+    GENERATE_BLOCKED,
     TEMPLATE_SELECTED,
     GENERATION_STARTED,
     GENERATION_COMPLETED,
@@ -130,6 +147,9 @@ ALL_EVENTS = frozenset({
     TRIAL_EXHAUSTED_VIEWED,
     SUBSCRIBE_LINK_CLICKED,
     PAYWALL_PREWALL_SHOWN,
+    PLUGIN_UPDATE_PROMPT_SHOWN,
+    PLUGIN_UPDATE_PROMPT_CLICKED,
+    PLUGIN_UPDATE_PROMPT_SUPPRESSED,
     TUTORIAL_OPENED,
     GUIDANCE_TIP_SHOWN,
     GUIDANCE_TIP_DISMISSED,
@@ -167,6 +187,7 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     PLUGIN_OPENED: (),
     ACTIVATION_SCREEN_VIEWED: (),
     LAUNCH_CLICKED: (),
+    LAUNCH_BLOCKED: ("reason",),
     BASEMAP_CTA_CLICKED: ("success",),
     ACTIVATION_ATTEMPTED: ("success",),
     PLUGIN_ACTIVATED: (),
@@ -176,6 +197,7 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     AI_EDIT_PAIR_TIMEOUT: (),
     AI_EDIT_PAIR_CANCELLED: (),
     ZONE_DRAWN: (),
+    GENERATE_BLOCKED: ("reason",),
     TEMPLATE_SELECTED: ("template_id",),
     GENERATION_STARTED: ("used_template", "used_markup", "has_geo_context", "is_retry"),
     GENERATION_COMPLETED: ("is_retry", "used_markup", "used_template", "output_rescued"),
@@ -185,6 +207,9 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     TRIAL_EXHAUSTED_VIEWED: ("is_free_tier",),
     SUBSCRIBE_LINK_CLICKED: (),
     PAYWALL_PREWALL_SHOWN: (),
+    PLUGIN_UPDATE_PROMPT_SHOWN: ("offered_version", "trigger"),
+    PLUGIN_UPDATE_PROMPT_CLICKED: ("offered_version", "action"),
+    PLUGIN_UPDATE_PROMPT_SUPPRESSED: ("served_version", "reason"),
     TUTORIAL_OPENED: ("tutorial_source",),
     GUIDANCE_TIP_SHOWN: (),
     GUIDANCE_TIP_DISMISSED: (),

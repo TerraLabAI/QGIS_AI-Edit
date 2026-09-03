@@ -3284,6 +3284,16 @@ Nous serions ravis d'avoir votre retour !</translation>
         <translation>Plus de TerraLab...</translation>
     </message>
     <message>
+        <source>Monthly limit reached ({used}/{limit})</source>
+        <translation>Limite mensuelle atteinte ({used}/{limit})</translation>
+    </message>
+    <message>
+        <source>Need more this month? Write to us and we set up a plan that fits your volume.</source>
+        <translation>Besoin de plus ce mois-ci ? Écrivez-nous et nous vous proposerons un forfait adapté à votre volume.</translation>
+    </message>
+    <message>
+        <source>{left} of {total} credits left this month</source>
+        <translation>Il vous reste {left} crédits sur {total} ce mois-ci</translation>
         <source>Select a raster layer to edit:</source>
         <translation>Sélectionnez une couche raster à modifier :</translation>
     </message>
@@ -3362,6 +3372,122 @@ Nous serions ravis d'avoir votre retour !</translation>
     <message>
         <source>Your marks guide the edit.</source>
         <translation>Vos marques guident la modification.</translation>
+    </message>
+    <message>
+        <source>Copy email</source>
+        <translation>Copier l’e-mail</translation>
+    </message>
+    <message>
+        <source>Custom needs? Write to us: {email}</source>
+        <translation>Besoin spécifique ? Écrivez-nous : {email}</translation>
+    </message>
+    <message>
+        <source>Add imagery</source>
+        <translation>Ajouter une imagerie</translation>
+    </message>
+    <message>
+        <source>Add a basemap so there is something to edit</source>
+        <translation>Ajoutez un fond de carte à modifier</translation>
+    </message>
+    <message>
+        <source>Add imagery first</source>
+        <translation>Ajoutez d'abord une imagerie</translation>
+    </message>
+    <message>
+        <source>An edit is already running</source>
+        <translation>Une modification est déjà en cours</translation>
+    </message>
+    <message>
+        <source>Checking your account...</source>
+        <translation>Vérification de votre compte...</translation>
+    </message>
+    <message>
+        <source>Draw a zone on the map first</source>
+        <translation>Dessinez d'abord une zone sur la carte</translation>
+    </message>
+    <message>
+        <source>Write what you want to change</source>
+        <translation>Décrivez ce que vous voulez modifier</translation>
+    </message>
+    <message>
+        <source>Say a bit more: at least {chars} characters and {words} words.</source>
+        <translation>Précisez votre demande : au moins {chars} caractères et {words} mots.</translation>
+    </message>
+    <message>
+        <source>Generate again</source>
+        <translation>Générer à nouveau</translation>
+    </message>
+    <message>
+        <source>Need more than your plan?</source>
+        <translation>Besoin de plus que ce que prévoit votre offre ?</translation>
+    </message>
+    <message>
+        <source>Custom quota, several seats, invoices for your organisation, a workflow of your own. Tell us what you do and we adapt the plan.</source>
+        <translation>Quota personnalisé, plusieurs licences, factures pour votre organisation, flux de travail adapté. Décrivez-nous vos besoins et nous adaptons l’offre.</translation>
+    </message>
+    <message>
+        <source>Working in a team or an organisation?</source>
+        <translation>Vous travaillez en équipe ou au sein d’une organisation ?</translation>
+    </message>
+    <message>
+        <source>Several seats, invoices, custom quota: write to us and we set it up.</source>
+        <translation>Plusieurs licences, factures, quota personnalisé : écrivez-nous et nous mettons cela en place.</translation>
+    </message>
+    <message>
+        <source>Write to us</source>
+        <translation>Écrivez-nous</translation>
+    </message>
+    <message>
+        <source>AI Edit for my organisation</source>
+        <translation>AI Edit pour mon organisation</translation>
+    </message>
+    <message>
+        <source>Book a call</source>
+        <translation>Réserver un appel</translation>
+    </message>
+    <message>
+        <source>Custom quota, team seats, invoices.</source>
+        <translation>Quota personnalisé, licences d’équipe, factures.</translation>
+    </message>
+    <message>
+        <source>Hide this update notice</source>
+        <translation>Masquer cette notification de mise à jour</translation>
+    </message>
+    <message>
+        <source>It applies once QGIS reloads the plugin. Restart QGIS if this panel misbehaves after that.</source>
+        <translation>Elle s'applique une fois que QGIS a rechargé le plugin. Redémarrez QGIS si ce panneau se comporte mal ensuite.</translation>
+    </message>
+    <message>
+        <source>Custom quota, team seats, invoices, or a custom AI solution.</source>
+        <translation>Quota personnalisé, licences d'équipe, factures ou solution d'IA sur mesure.</translation>
+    </message>
+    <message>
+        <source>Manage account</source>
+        <translation>Gérer le compte</translation>
+    </message>
+    <message>
+        <source>Opens your terra-lab.ai dashboard in the browser.</source>
+        <translation>Ouvre votre tableau de bord terra-lab.ai dans le navigateur.</translation>
+    </message>
+    <message>
+        <source>Edit your prompt</source>
+        <translation>Modifier le prompt</translation>
+    </message>
+    <message>
+        <source>Open the prompt library</source>
+        <translation>Ouvrir la bibliothèque de prompts</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Réessayer</translation>
+    </message>
+    <message>
+        <source>AI Edit {version} is out</source>
+        <translation>AI Edit {version} est disponible</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation>Plus tard</translation>
     </message>
 </context>
 </TS>

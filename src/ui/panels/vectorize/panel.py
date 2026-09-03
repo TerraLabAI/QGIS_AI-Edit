@@ -190,14 +190,10 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
         layout.addWidget(self._status_label)
 
         # Errors are transient feedback (wrong color, missed click, 0 match):
-        # they auto-clear after 4 s so the panel returns to its calm resting
-        # state instead of carrying a stale red line forever. Persistent
-        # messages (hints, in-flight progress) never arm this timer.
-        self._status_timer = QTimer(self)
-        self._status_timer.setSingleShot(True)
-        self._status_timer.timeout.connect(
-            lambda: self._status_label.setVisible(False)
-        )
+        # they stay until something else replaces them. They used to clear
+        # after 4 s, which took the explanation away from the 16 users a month
+        # whose vectorize returns nothing usable, right when they were reading
+        # it. The next status message is what dismisses one.
 
         # Primary: full-width green Vectorize, the ONLY filled button on the
         # panel, mirroring AI Segmentation's review Export button so the
@@ -428,9 +424,3 @@ class VectorizePanel(ColorControlsMixin, RefineUiMixin, RunLifecycleMixin, QWidg
         )
         self._status_label.setText(message)
         self._status_label.setVisible(bool(message))
-        # Auto-dismiss errors after 4 s; cancel any pending dismiss when a
-        # non-error (or empty) message takes over so it isn't hidden early.
-        if message and is_error:
-            self._status_timer.start(4000)
-        else:
-            self._status_timer.stop()

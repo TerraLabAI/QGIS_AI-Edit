@@ -3284,6 +3284,16 @@ We horen graag van u!</translation>
         <translation>Meer van TerraLab...</translation>
     </message>
     <message>
+        <source>Monthly limit reached ({used}/{limit})</source>
+        <translation>Maandelijkse limiet bereikt ({used}/{limit})</translation>
+    </message>
+    <message>
+        <source>Need more this month? Write to us and we set up a plan that fits your volume.</source>
+        <translation>Deze maand meer nodig? Schrijf ons en we stellen een plan op dat bij uw volume past.</translation>
+    </message>
+    <message>
+        <source>{left} of {total} credits left this month</source>
+        <translation>{left} van {total} credits over deze maand</translation>
         <source>Select a raster layer to edit:</source>
         <translation>Selecteer een rasterlaag om te bewerken:</translation>
     </message>
@@ -3362,6 +3372,122 @@ We horen graag van u!</translation>
     <message>
         <source>Your marks guide the edit.</source>
         <translation>Je markeringen sturen de bewerking.</translation>
+    </message>
+    <message>
+        <source>Copy email</source>
+        <translation>E-mailadres kopiëren</translation>
+    </message>
+    <message>
+        <source>Custom needs? Write to us: {email}</source>
+        <translation>Aangepaste behoeften? Schrijf naar: {email}</translation>
+    </message>
+    <message>
+        <source>Add imagery</source>
+        <translation>Beeldmateriaal toevoegen</translation>
+    </message>
+    <message>
+        <source>Add a basemap so there is something to edit</source>
+        <translation>Voeg een basiskaart toe om te kunnen bewerken</translation>
+    </message>
+    <message>
+        <source>Add imagery first</source>
+        <translation>Voeg eerst beeldmateriaal toe</translation>
+    </message>
+    <message>
+        <source>An edit is already running</source>
+        <translation>Er wordt al een bewerking uitgevoerd</translation>
+    </message>
+    <message>
+        <source>Checking your account...</source>
+        <translation>Account controleren...</translation>
+    </message>
+    <message>
+        <source>Draw a zone on the map first</source>
+        <translation>Teken eerst een zone op de kaart</translation>
+    </message>
+    <message>
+        <source>Write what you want to change</source>
+        <translation>Beschrijf wat je wilt wijzigen</translation>
+    </message>
+    <message>
+        <source>Say a bit more: at least {chars} characters and {words} words.</source>
+        <translation>Geef meer details: minstens {chars} tekens en {words} woorden.</translation>
+    </message>
+    <message>
+        <source>Generate again</source>
+        <translation>Opnieuw genereren</translation>
+    </message>
+    <message>
+        <source>Need more than your plan?</source>
+        <translation>Meer nodig dan je abonnement biedt?</translation>
+    </message>
+    <message>
+        <source>Custom quota, several seats, invoices for your organisation, a workflow of your own. Tell us what you do and we adapt the plan.</source>
+        <translation>Een aangepaste limiet, meerdere gebruikers, facturen voor je organisatie of een eigen workflow. Vertel ons wat je doet en we passen het abonnement aan.</translation>
+    </message>
+    <message>
+        <source>Working in a team or an organisation?</source>
+        <translation>Werk je in een team of organisatie?</translation>
+    </message>
+    <message>
+        <source>Several seats, invoices, custom quota: write to us and we set it up.</source>
+        <translation>Meerdere gebruikers, facturen of een aangepaste limiet? Schrijf ons en we regelen het.</translation>
+    </message>
+    <message>
+        <source>Write to us</source>
+        <translation>Schrijf ons</translation>
+    </message>
+    <message>
+        <source>AI Edit for my organisation</source>
+        <translation>AI Edit voor mijn organisatie</translation>
+    </message>
+    <message>
+        <source>Book a call</source>
+        <translation>Plan een gesprek</translation>
+    </message>
+    <message>
+        <source>Custom quota, team seats, invoices.</source>
+        <translation>Aangepast quotum, teamlicenties, facturen.</translation>
+    </message>
+    <message>
+        <source>Hide this update notice</source>
+        <translation>Verberg deze updatemelding</translation>
+    </message>
+    <message>
+        <source>It applies once QGIS reloads the plugin. Restart QGIS if this panel misbehaves after that.</source>
+        <translation>Dit wordt toegepast zodra QGIS de plugin opnieuw heeft geladen. Start QGIS opnieuw op als dit paneel daarna niet goed werkt.</translation>
+    </message>
+    <message>
+        <source>Custom quota, team seats, invoices, or a custom AI solution.</source>
+        <translation>Aangepast quotum, teamlicenties, facturen of een aangepaste AI-oplossing.</translation>
+    </message>
+    <message>
+        <source>Manage account</source>
+        <translation>Account beheren</translation>
+    </message>
+    <message>
+        <source>Opens your terra-lab.ai dashboard in the browser.</source>
+        <translation>Opent je terra-lab.ai-dashboard in de browser.</translation>
+    </message>
+    <message>
+        <source>Edit your prompt</source>
+        <translation>Prompt bewerken</translation>
+    </message>
+    <message>
+        <source>Open the prompt library</source>
+        <translation>Promptbibliotheek openen</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Opnieuw proberen</translation>
+    </message>
+    <message>
+        <source>AI Edit {version} is out</source>
+        <translation>AI Edit {version} is beschikbaar</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation>Later</translation>
     </message>
 </context>
 </TS>

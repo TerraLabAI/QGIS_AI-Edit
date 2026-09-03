@@ -7,29 +7,37 @@ from datetime import datetime
 from qgis.PyQt.QtCore import QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import (
+    QAbstractScrollArea,
+    QApplication,
     QCheckBox,
     QDialog,
     QFileDialog,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QProgressBar,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from ...core import qt_compat as QtC
+from ...core import telemetry
+from ...core import telemetry_events as te
 from ...core.auth.activation_manager import (
+    get_contact_call_url,
     get_dashboard_url,
     get_privacy_url,
     get_terms_url,
 )
 from ...core.config_store import get_export_copy
 from ...core.i18n import tr
+from ...core.pro_ceiling import pro_ceiling_contact_email
 from ...workers.generic_request_task import GenericRequestTask
+from ..dock.pro_ceiling import copy_email_to_clipboard
 from ..dock_widget import (
     _BTN_LABEL_WEIGHT,
     BRAND_BLUE,
@@ -40,6 +48,9 @@ from ..dock_widget import (
 )
 from ..onboarding_hint import reset_hints
 from ..raster_writer import get_output_dir, set_output_dir
+
+# Breathing room between the dialog and the edge of the screen it opens on.
+_SCREEN_MARGIN_PX = 40
 
 PRODUCT_ID = "ai-edit"
 PRODUCT_NAME = "AI Edit"
@@ -72,12 +83,23 @@ _LINK_BTN = (
     f"QPushButton:hover {{ color: {BRAND_BLUE_HOVER}; }}"
 )
 
-# Prominent primary action: open the account dashboard on terra-lab.ai.
-_MANAGE_BTN = (
-    f"QPushButton {{ background-color: {BRAND_BLUE}; color: #ffffff;"
-    f" border: none; border-radius: 8px; padding: 9px 16px;"
-    f" font-size: 12px; font-weight: 600; }}"
-    f"QPushButton:hover {{ background-color: {BRAND_BLUE_HOVER}; }}"
+# Manage account: a quiet blue link in the plan card header, symmetric with
+# the Sign out link in the account chip. A second full-width blue button read
+# as an equal of the primary action and pushed the card taller for nothing.
+_MANAGE_LINK = (
+    f"QPushButton {{ border: none; background: transparent; color: {BRAND_BLUE};"
+    f" font-size: 11px; font-weight: 600; padding: 2px 4px; }}"
+    f"QPushButton:hover {{ color: {BRAND_BLUE_HOVER};"
+    f" text-decoration: underline; }}"
+)
+
+# The two ways to reach us on the contact card: blue outline, equal weight.
+_CONTACT_BTN = (
+    f"QPushButton {{ background: transparent; color: {BRAND_BLUE};"
+    f" border: 1px solid {BRAND_BLUE}; border-radius: 5px;"
+    f" padding: 4px 12px; font-size: 12px; {_BTN_LABEL_WEIGHT} }}"
+    f"QPushButton:hover {{ color: {BRAND_BLUE_HOVER};"
+    f" border-color: {BRAND_BLUE_HOVER}; }}"
 )
 
 # Compact sign-out link (sits inside the account chip, not a full-width button).
@@ -124,8 +146,10 @@ class AccountSettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(tr("Account Settings"))
         self.setModal(True)
-        self.setMinimumWidth(400)
-        self.setMaximumWidth(500)
+        self.setMinimumWidth(600)
+        self.setMaximumWidth(720)
+        # Fits a laptop screen: past this the content scrolls.
+        self.setMaximumHeight(900)
 
         # The activation key now lives only in the web dashboard; Settings is
         # pure account management, so the key is intentionally not shown here.
@@ -175,10 +199,20 @@ class AccountSettingsDialog(QDialog):
         self._content_layout = QVBoxLayout(self._content_widget)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(10)
-        self._content_widget.setVisible(False)
-        self._layout.addWidget(self._content_widget)
-
-        self._layout.addStretch()
+        # The cards outgrew a laptop screen, so they scroll inside the dialog
+        # instead of pushing it past the bottom of the display.
+        self._content_scroll = QScrollArea()
+        self._content_scroll.setWidget(self._content_widget)
+        self._content_scroll.setWidgetResizable(True)
+        self._content_scroll.setFrameShape(QtC.FrameNoFrame)
+        self._content_scroll.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
+        # Its size hint follows the cards, so adjustSize can open the dialog
+        # tall enough to show them all instead of at the scroll area default.
+        self._content_scroll.setSizeAdjustPolicy(
+            QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
+        )
+        self._content_scroll.setVisible(False)
+        self._layout.addWidget(self._content_scroll, 1)
 
         self._client = client
         self._auth = auth
@@ -187,7 +221,7 @@ class AccountSettingsDialog(QDialog):
     def _fetch_account(self):
         self._loading_label.setVisible(True)
         self._error_widget.setVisible(False)
-        self._content_widget.setVisible(False)
+        self._content_scroll.setVisible(False)
 
         from qgis.core import QgsApplication
 
@@ -284,9 +318,23 @@ class AccountSettingsDialog(QDialog):
         sub = self._find_subscription(data)
         if sub:
             self._content_layout.addWidget(self._build_subscription_card(sub))
+            is_free = (
+                sub.get("plan", "free") == "free"
+                and sub.get("status", "active") != "trialing"
+            )
+            self._content_layout.addWidget(self._build_contact_card(is_free))
 
-        self._content_layout.addWidget(self._build_preferences_card())
-        self._content_layout.addWidget(self._build_privacy_card())
+        # Preferences and Privacy are secondary, same-weight info: side by side
+        # they read as one quiet row instead of extending the tower of
+        # full-width cards, and the dialog stops needing a scrollbar. Wrapped in
+        # a QWidget, not a bare layout, so the clear loop above removes it.
+        two_up_row = QWidget()
+        two_up = QHBoxLayout(two_up_row)
+        two_up.setContentsMargins(0, 0, 0, 0)
+        two_up.setSpacing(10)
+        two_up.addWidget(self._build_preferences_card(), 1)
+        two_up.addWidget(self._build_privacy_card(), 1)
+        self._content_layout.addWidget(two_up_row)
 
         # Discreet footer: thin top separator, small muted Terms / Privacy links.
         footer = QFrame()
@@ -311,9 +359,47 @@ class AccountSettingsDialog(QDialog):
         footer_layout.addWidget(legal_label)
         footer_layout.addStretch()
         self._content_layout.addWidget(footer)
+        # Cards keep their own height; the surplus falls below them instead of
+        # being shared out, which is what let a wrapped line overlap its row.
+        self._content_layout.addStretch()
 
-        self._content_widget.setVisible(True)
+        self._content_scroll.setVisible(True)
+        self._content_layout.activate()
+        self._fit_to_content()
+        # Once more after the dialog is on screen: a label only knows its true
+        # wrapped height at the real width, which it does not have yet here.
+        QtC.safe_single_shot(0, self, self._fit_to_content)
+
+    def _fit_to_content(self) -> None:
+        """Open tall enough to show every card, so no scrollbar is needed.
+
+        The scroll area stays as the fallback for a short screen: the height is
+        clamped to the work area of the screen this window is on, minus the
+        frame, and the cards scroll only past that.
+        """
         self.adjustSize()
+        wanted = self._content_widget.sizeHint().height()
+        chrome = max(0, self.height() - self._content_scroll.height())
+        cap = self.maximumHeight()
+        try:
+            screen = self.screen() or QApplication.primaryScreen()
+            if screen is not None:
+                frame_extra = max(0, self.frameGeometry().height() - self.height())
+                cap = min(cap, screen.availableGeometry().height()
+                          - frame_extra - _SCREEN_MARGIN_PX)
+        except (AttributeError, RuntimeError):
+            pass  # nosec B110 -- sizing is best-effort
+        self.resize(self.width(), max(self.minimumSizeHint().height(),
+                                      min(wanted + chrome, cap)))
+        # A second pass: a wrapped label only knows its true height once it has
+        # been laid out at the final width, so the first pass can still leave a
+        # short scroll. Whatever is left over is added back, capped the same way.
+        for _ in range(2):
+            self._content_layout.activate()
+            leftover = self._content_scroll.verticalScrollBar().maximum()
+            if leftover <= 0 or self.height() >= cap:
+                break
+            self.resize(self.width(), min(self.height() + leftover, cap))
 
     def _build_preferences_card(self) -> QFrame:
         card = QFrame()
@@ -467,7 +553,7 @@ class AccountSettingsDialog(QDialog):
         self._loading_label.setVisible(False)
         self._error_label.setText(message)
         self._error_widget.setVisible(True)
-        self._content_widget.setVisible(False)
+        self._content_scroll.setVisible(False)
 
     @staticmethod
     def _find_subscription(data: dict) -> dict | None:
@@ -550,25 +636,33 @@ class AccountSettingsDialog(QDialog):
         card_layout.setContentsMargins(12, 10, 12, 10)
         card_layout.setSpacing(6)
 
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.setSpacing(8)
         title = QLabel(f"<b>{PRODUCT_NAME}</b>")
         title.setStyleSheet("font-size: 13px; color: palette(text);")
-        card_layout.addWidget(title)
+        header.addWidget(title, 1)
+        manage_btn = QPushButton(tr("Manage account") + " ↗")
+        manage_btn.setStyleSheet(_MANAGE_LINK)
+        manage_btn.setCursor(QtC.PointingHandCursor)
+        manage_btn.setAutoDefault(False)
+        manage_btn.setToolTip(
+            tr("Opens your terra-lab.ai dashboard in the browser.")
+        )
+        manage_btn.clicked.connect(self._open_dashboard)
+        header.addWidget(manage_btn, 0, QtC.AlignVCenter)
+        card_layout.addLayout(header)
 
         plan = sub.get("plan", "free")
         status = sub.get("status", "active")
 
-        grid = QGridLayout()
-        grid.setContentsMargins(0, 2, 0, 0)
-        grid.setSpacing(4)
-        grid.setColumnMinimumWidth(0, 70)
-
-        grid.addWidget(self._field_label(tr("Plan")), 0, 0)
         plan_text = self._format_plan(plan, status)
         status_text, status_color = _status_display(status)
-        plan_status = QLabel(f"{plan_text} · <span style='color:{status_color};'>{status_text}</span>")
+        plan_status = QLabel(
+            f"{plan_text} · <span style='color:{status_color};'>{status_text}</span>"
+        )
         plan_status.setStyleSheet("font-size: 12px; color: palette(text);")
-        grid.addWidget(plan_status, 0, 1)
-        row = 1
+        card_layout.addWidget(plan_status)
 
         # Credits
         used = sub.get("usage_this_month", 0)
@@ -576,7 +670,6 @@ class AccountSettingsDialog(QDialog):
         remaining = max(0, limit - used)
         is_free = plan == "free" and status != "trialing"
 
-        grid.addWidget(self._field_label(tr("Credits")), row, 0)
         # Lime fill for the bar; the darker text tone for the number so it stays
         # AA-readable on the light dialog (the fill tone clears only ~2.5:1).
         credits_fill = BRAND_GREEN if remaining > 0 else BRAND_RED
@@ -587,9 +680,7 @@ class AccountSettingsDialog(QDialog):
             credits_text = f"{remaining} / {limit} {tr('credits remaining')}"
         credits_label = QLabel(credits_text)
         credits_label.setStyleSheet(f"font-size: 12px; color: {credits_text_color};")
-        grid.addWidget(credits_label, row, 1)
-
-        card_layout.addLayout(grid)
+        card_layout.addWidget(credits_label)
 
         # Free is for trying the plugin out, not for billable work. The pricing
         # page and the Terms of Use carry the same rule; a free user does their
@@ -628,32 +719,85 @@ class AccountSettingsDialog(QDialog):
             reset_row.addStretch()
             card_layout.addLayout(reset_row)
 
-        card_layout.addSpacing(4)
+        return card
 
-        # Subscribing/upgrading lives on the website (terra-lab.ai); the plugin
-        # only points there via Manage account. Keeps billing out of the plugin.
-        manage_btn = QPushButton(tr("Manage account on terra-lab.ai") + "  ↗")
-        manage_btn.setStyleSheet(_MANAGE_BTN)
-        manage_btn.setCursor(QtC.PointingHandCursor)
-        manage_btn.setMinimumHeight(36)
-        manage_btn.clicked.connect(self._open_dashboard)
-        card_layout.addWidget(manage_btn)
+    def _build_contact_card(self, is_free: bool) -> QFrame:
+        """The organisation contact, as one row under the plan card.
 
-        # A team/organization buy (several seats, one invoice, a purchase order)
-        # has no self-serve path yet, so surface a human contact at the account
-        # screen. Selectable so the email can be copied.
-        contact = QLabel(
-            tr("Team or organization?") + " " + tr("Write to us:") + " <b>yvann.barbot@terra-lab.ai</b>"
+        It used to be a 10px grey line inside the plan card, below the Manage
+        button, which read as a footnote to the billing link. A team buy has no
+        self-serve path, so the ask is a card of its own at normal text size:
+        the wording on the left, the two ways to reach us on the right, one row
+        so it costs the dialog almost no height.
+        """
+        card = QFrame()
+        card.setStyleSheet(_CARD_STYLE)
+        card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+        row = QHBoxLayout(card)
+        row.setContentsMargins(12, 10, 12, 10)
+        row.setSpacing(10)
+
+        heading = (
+            tr("Working in a team or an organisation?") if is_free
+            else tr("Need more than your plan?")
         )
-        contact.setAlignment(QtC.AlignCenter)
-        contact.setWordWrap(True)
-        contact.setTextInteractionFlags(QtC.TextSelectableByMouse)
-        contact.setStyleSheet("font-size: 10px; color: rgba(128,128,128,0.9);")
-        card_layout.addWidget(contact)
+        body = tr("Custom quota, team seats, invoices, or a custom AI solution.")
+
+        words = QVBoxLayout()
+        words.setContentsMargins(0, 0, 0, 0)
+        words.setSpacing(2)
+        title = QLabel(f"<b>{html.escape(heading, quote=False)}</b>")
+        title.setWordWrap(True)
+        title.setStyleSheet("font-size: 12px; color: palette(text);")
+        words.addWidget(title)
+        line = QLabel(body)
+        line.setWordWrap(True)
+        line.setStyleSheet("font-size: 11px; color: palette(text);")
+        words.addWidget(line)
+        row.addLayout(words, 1)
+
+        buttons = QVBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        buttons.setSpacing(4)
+        contact_email = pro_ceiling_contact_email()
+        copy_btn = QPushButton(tr("Copy email"))
+        copy_btn.setStyleSheet(_CONTACT_BTN)
+        copy_btn.setCursor(QtC.PointingHandCursor)
+        copy_btn.setMinimumHeight(28)
+        copy_btn.setAutoDefault(False)
+        copy_btn.clicked.connect(
+            lambda: self._on_copy_contact_email(copy_btn, contact_email)
+        )
+        buttons.addWidget(copy_btn)
+
+        # Booking a call is the only path that gets a real conversation, so it
+        # sits beside the address. The URL is served (contact_call_url); when
+        # the served value is unusable the shipped one stands, and only an
+        # empty shipped constant hides the button.
+        call_url = get_contact_call_url()
+        if call_url:
+            call_btn = QPushButton(tr("Book a call"))
+            call_btn.setStyleSheet(_CONTACT_BTN)
+            call_btn.setCursor(QtC.PointingHandCursor)
+            call_btn.setMinimumHeight(28)
+            call_btn.setAutoDefault(False)
+            call_btn.clicked.connect(lambda: self._open_contact_call(call_url))
+            buttons.addWidget(call_btn)
+        row.addLayout(buttons, 0)
 
         return card
 
-    # -- Helpers --
+    @staticmethod
+    def _on_copy_contact_email(button, address: str) -> None:
+        """Put the address on the clipboard, and name the surface it came from."""
+        telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {"source": "account_contact_copy"})
+        copy_email_to_clipboard(button, address, idle_text=tr("Copy email"))
+
+    @staticmethod
+    def _open_contact_call(url: str) -> None:
+        """Open the booking page, and name the surface the click came from."""
+        telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {"source": "account_contact_call"})
+        QDesktopServices.openUrl(QUrl(url))
 
     @staticmethod
     def _field_label(text: str) -> QLabel:

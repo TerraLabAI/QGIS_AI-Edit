@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from qgis.PyQt.QtCore import QTimer
+from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -18,6 +19,7 @@ from qgis.PyQt.QtWidgets import (
 from ...core import qt_compat as QtC
 from ...core.i18n import tr
 from .style import (
+    _BTN_BLUE_AUTH,
     _BTN_GHOST,
     _BTN_GREEN_AUTH,
     _BTN_LABEL_WEIGHT,
@@ -27,8 +29,34 @@ from .style import (
     BTN_GREEN,
     BTN_GREEN_HOVER,
     DOCK_BRANDING_URL,
+    _btn_start_qss,
 )
 from .widgets import _Spinner
+
+# Per-version banner state. Each key holds ONE version string, so closing the
+# notice for 1.7.4 hides 1.7.4 and nothing else: the next release shows again.
+_UPDATE_DISMISSED_KEY = "AIEdit/update_notice/dismissed_version"
+_UPDATE_ANNOUNCED_KEY = "AIEdit/update_notice/announced_version"
+# The banner is the loudest thing on the dock while an update is pending, and
+# it still has to belong to the panel: the dock's own card ground with a 2px
+# accent border, the way the first-run hero and the tutorial card are built.
+_UPDATE_CARD_STYLE = (
+    "QWidget#updateCard { background-color: rgba(30, 136, 229, 0.10);"
+    f" border: 2px solid {BRAND_BLUE}; border-radius: 10px; }}"
+    "QLabel { background: transparent; border: none; }"
+)
+_UPDATE_TITLE_STYLE = (
+    "font-size: 13px; font-weight: 700; color: palette(text);"
+    " background: transparent;"
+)
+_UPDATE_NOTE_STYLE = (
+    "font-size: 11px; color: rgba(160, 164, 170, 0.95); background: transparent;"
+)
+_UPDATE_LATER_STYLE = (
+    "QPushButton { background: transparent; color: rgba(150, 154, 160, 0.95);"
+    f" border: none; font-size: 11px; padding: 2px 6px; {_BTN_LABEL_WEIGHT} }}"
+    "QPushButton:hover { color: palette(text); text-decoration: underline; }"
+)
 
 
 class DockChromeMixin:
@@ -291,77 +319,307 @@ class DockChromeMixin:
         tool panels). Most users never check for plugin updates, so this banner
         is how they learn a newer version exists.
         """
-        # Container only exists to right-align the badge.
+        # A card, full width, at the top of the dock: an update the user never
+        # notices is an update they never install, and this is the one message
+        # that has to win over whatever step they are on. Built like the
+        # panel's other cards so it reads as part of the dock, not a banner
+        # dropped on top of it.
         self._update_notif_container = QWidget()
-        container_layout = QHBoxLayout(self._update_notif_container)
-        container_layout.setContentsMargins(0, 0, 0, 0)
-        container_layout.setSpacing(0)
-        container_layout.addStretch()
+        self._update_notif_container.setObjectName("updateCard")
+        self._update_notif_container.setStyleSheet(_UPDATE_CARD_STYLE)
+        card = QVBoxLayout(self._update_notif_container)
+        card.setContentsMargins(12, 12, 12, 12)
+        card.setSpacing(8)
 
+        head = QHBoxLayout()
+        head.setContentsMargins(0, 0, 0, 0)
+        head.setSpacing(10)
+        icon_label = QLabel()
+        icon_label.setFixedSize(36, 36)
+        icon_label.setScaledContents(True)
+        # chrome.py sits at src/ui/dock/, so the plugin root is four levels up.
+        plugin_root = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))
+        )))
+        icon_path = os.path.join(plugin_root, "resources", "icons", "icon.png")
+        pixmap = QPixmap(icon_path)
+        if not pixmap.isNull():
+            icon_label.setPixmap(pixmap)
+        head.addWidget(icon_label, 0, QtC.AlignTop)
+
+        words = QVBoxLayout()
+        words.setContentsMargins(0, 0, 0, 0)
+        words.setSpacing(2)
+        self._update_title_label = QLabel("")
+        self._update_title_label.setWordWrap(True)
+        self._update_title_label.setStyleSheet(_UPDATE_TITLE_STYLE)
+        words.addWidget(self._update_title_label)
+        # One line, and only one: the served release note. It says what the
+        # release brings, which is the whole reason to press the button.
         self._update_notification_label = QLabel("")
-        self._update_notification_label.setStyleSheet(
-            "background-color: rgba(30, 136, 229, 0.15); "
-            "border: 2px solid rgba(30, 136, 229, 0.4); border-radius: 6px; "
-            "padding: 6px 12px; font-size: 12px; font-weight: bold; color: palette(text);"
-        )
-        self._update_notification_label.setOpenExternalLinks(False)
-        self._update_notification_label.linkActivated.connect(self._on_open_plugin_manager)
-        container_layout.addWidget(self._update_notification_label)
+        self._update_notification_label.setWordWrap(True)
+        self._update_notification_label.setStyleSheet(_UPDATE_NOTE_STYLE)
+        words.addWidget(self._update_notification_label)
+        head.addLayout(words, 1)
+        card.addLayout(head)
+
+        self._update_now_btn = QPushButton(tr("Update now"))
+        self._update_now_btn.setCursor(QtC.PointingHandCursor)
+        self._update_now_btn.setStyleSheet(_btn_start_qss(_BTN_BLUE_AUTH))
+        self._update_now_btn.setMinimumHeight(38)
+        self._update_now_btn.setAutoDefault(False)
+        self._update_now_btn.clicked.connect(self._on_open_plugin_manager)
+        card.addWidget(self._update_now_btn)
+
+        self._offered_update_version = ""
+        self._update_banner_armed = False
+        later_row = QHBoxLayout()
+        later_row.setContentsMargins(0, 0, 0, 0)
+        later_row.addStretch()
+        later_btn = QPushButton(tr("Later"))
+        later_btn.setCursor(QtC.PointingHandCursor)
+        later_btn.setStyleSheet(_UPDATE_LATER_STYLE)
+        later_btn.setAutoDefault(False)
+        later_btn.clicked.connect(self._on_dismiss_update_banner)
+        later_row.addWidget(later_btn)
+        later_row.addStretch()
+        card.addLayout(later_row)
 
         self._update_notif_container.setVisible(False)
         parent_layout.addWidget(self._update_notif_container)
 
-    def check_for_updates(self) -> bool:
-        """Show the update banner if QGIS reports a newer plugin version.
+    def sync_update_banner(self) -> None:
+        """Show the pending update, except while a generation is running.
 
-        Reads QGIS's cached plugin-repository metadata (the plugin itself makes
-        no network call). Returns True once a newer version is detected so the
-        caller can stop polling.
+        A run owns the panel and its progress; the banner would sit on top of
+        it offering to swap the plugin out mid-flight.
         """
+        container = getattr(self, "_update_notif_container", None)
+        if container is None:
+            return
+        busy = False
+        try:
+            busy = bool(self._progress_widget.isVisible())
+        except (RuntimeError, AttributeError):
+            pass
+        container.setVisible(bool(self._update_banner_armed) and not busy)
+
+    def check_for_updates(self) -> bool:
+        """Offer the update only when QGIS can actually install it.
+
+        The banner used to fire on the served latest_version alone. QGIS
+        usually has not fetched the plugin repository yet at that point, so
+        Update now opened a Plugin Manager whose Upgradeable tab was empty and
+        the user could do nothing for ten minutes. The rule is now the
+        installer's own verdict: status == "upgradeable", nothing else.
+
+        The served version is only the hint that a refresh is worth making.
+        Returns True once the banner is up, so the caller can stop polling.
+        """
+        version = self._upgradeable_version()
+        if version:
+            self._show_update_banner(version, "plugin_registry")
+            return True
+        self._maybe_refresh_plugin_repository()
+        return False
+
+    def _show_update_banner(self, version: str, trigger: str) -> None:
+        """Offer one version, with the served line about what it brings.
+        Silent when the user already closed the notice for it."""
+        if self._is_update_dismissed(version):
+            return
+        self._update_title_label.setText(
+            tr("AI Edit {version} is out").format(version=version)
+        )
+        note = self._served_update_line()
+        self._update_notification_label.setText(note)
+        self._update_notification_label.setVisible(bool(note))
+        self._offered_update_version = version
+        self._update_banner_armed = True
+        self.sync_update_banner()
+        self._track_update_prompt_shown(version, trigger)
+
+    def _plugin_installer_key(self) -> str:
+        """The key pyplugin_installer files this install under: the folder
+        name. A dev clone whose folder differs from the published id is never
+        listed, which is why a dev install sees no banner."""
+        return os.path.basename(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        )
+
+    def _upgradeable_version(self) -> str:
+        """The version QGIS says is installable, or "" when there is none."""
         try:
             from pyplugin_installer.installer_data import plugins
 
-            # The pyplugin_installer key is the installed plugin's folder name,
-            # which equals this package's root directory name. In a dev install
-            # the folder name differs from the published id, so no banner shows.
-            plugin_id = os.path.basename(
-                os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-            )
-            plugin_data = plugins.all().get(plugin_id)
-            if plugin_data and plugin_data.get("status") == "upgradeable":
-                available_version = plugin_data.get("version_available", "?")
-                self._show_update_banner(available_version)
-                return True
+            data = plugins.all().get(self._plugin_installer_key())
+            if data and data.get("status") == "upgradeable":
+                return str(data.get("version_available") or "")
         except Exception:
             pass  # nosec B110  No repo metadata yet, dev install, etc.
-        return self._check_server_update_nudge()
+        return ""
 
-    def _show_update_banner(self, version: str) -> None:
-        text = '{} <a href="#update" style="color: #1e88e5; font-weight: bold;">{}</a>'.format(
-            tr("New version available: v{version}").format(version=version),
-            tr("Update now"),
-        )
-        self._update_notification_label.setText(text)
-        self._update_notif_container.setVisible(True)
+    def _maybe_refresh_plugin_repository(self) -> None:
+        """One non-blocking repository refresh per session, when the server
+        says a newer version exists and QGIS has not caught up.
 
-    def _check_server_update_nudge(self) -> bool:
-        """Server-driven fallback trigger: show the same banner when the cached
-        config's min_recommended_version parses higher than the installed
-        version. Cache-only read; absent or garbage values show nothing."""
+        fetchAvailablePlugins() is not usable here: it opens a modal fetching
+        dialog and exec()s it, which freezes QGIS. requestFetching() is the
+        same work without the dialog, and checkingDone tells us when to look
+        again.
+        """
+        if getattr(self, "_update_refresh_requested", False):
+            return
+        served = self._served_newer_version()
+        if not served:
+            return
+        self._update_refresh_requested = True
+        try:
+            from pyplugin_installer.installer_data import repositories
+        except Exception:
+            self._track_update_prompt_suppressed(served, "installer_unavailable")
+            return
+        try:
+            enabled = list(repositories.allEnabled())
+            if not enabled:
+                self._track_update_prompt_suppressed(served, "no_repository")
+                return
+            repositories.checkingDone.connect(self._on_plugin_repository_checked)
+            for key in enabled:
+                repositories.requestFetching(key, force_reload=True)
+        except Exception:
+            self._track_update_prompt_suppressed(served, "refresh_failed")
+
+    def _on_plugin_repository_checked(self) -> None:
+        """The repository answered: rebuild the plugin list and look again."""
+        served = self._served_newer_version()
+        try:
+            from pyplugin_installer.installer_data import plugins, repositories
+
+            try:
+                repositories.checkingDone.disconnect(self._on_plugin_repository_checked)
+            except (TypeError, RuntimeError):
+                pass
+            plugins.rebuild()
+        except Exception:
+            if served:
+                self._track_update_prompt_suppressed(served, "refresh_failed")
+            return
+        version = self._upgradeable_version()
+        if version:
+            self._show_update_banner(version, "plugin_registry_refreshed")
+        elif served:
+            self._track_update_prompt_suppressed(served, "not_listed")
+
+    def _served_newer_version(self) -> str:
+        """The served version when it is ahead of the installed one, else "".
+
+        Cache-only: the plugin makes no network call to answer this.
+        """
         try:
             from ...core.auth.activation_manager import (
-                get_server_config,
-                is_update_recommended,
+                is_update_available,
+                served_latest_version,
             )
 
-            installed = self._installed_plugin_version()
-            if installed and is_update_recommended(installed):
-                minimum = str(get_server_config().get("min_recommended_version"))
-                self._show_update_banner(minimum)
-                return True
+            if not self._installed_plugin_version():
+                return ""
+            latest = served_latest_version()
+            if latest and is_update_available(self._installed_plugin_version()):
+                return str(latest)
         except Exception:
             pass  # nosec B110  A bad nudge must never break the dock.
-        return False
+        return ""
+
+    def _track_update_prompt_suppressed(self, served_version: str, reason: str) -> None:
+        """Report an offer we chose not to make, once per reason per session."""
+        seen = getattr(self, "_update_suppressed_reported", None)
+        if seen is None:
+            seen = set()
+            self._update_suppressed_reported = seen
+        if reason in seen:
+            return
+        seen.add(reason)
+        try:
+            from ...core import telemetry
+            from ...core import telemetry_events as te
+
+            telemetry.track(
+                te.PLUGIN_UPDATE_PROMPT_SUPPRESSED,
+                {"served_version": served_version, "reason": reason},
+            )
+        except Exception:
+            pass  # nosec B110  Telemetry must never break the dock.
+
+    @staticmethod
+    def _served_update_line() -> str:
+        """The one served sentence to put under the offer: the release note
+        first, the generic update message when there is none."""
+        try:
+            from ...core.auth.activation_manager import (
+                served_release_notes_line,
+                served_update_message,
+            )
+
+            return served_release_notes_line() or served_update_message() or ""
+        except Exception:
+            return ""  # A bad line must never break the dock.
+
+    @staticmethod
+    def _is_update_dismissed(version: str) -> bool:
+        try:
+            from qgis.PyQt.QtCore import QSettings
+
+            from ...core.auth.activation_manager import is_update_dismissed
+
+            return is_update_dismissed(version, QSettings().value(_UPDATE_DISMISSED_KEY, "", type=str))
+        except Exception:
+            return False
+
+    def _on_dismiss_update_banner(self) -> None:
+        version = getattr(self, "_offered_update_version", "")
+        self._update_banner_armed = False
+        self._update_notif_container.setVisible(False)
+        try:
+            from qgis.PyQt.QtCore import QSettings
+
+            QSettings().setValue(_UPDATE_DISMISSED_KEY, version)
+        except Exception:
+            pass  # nosec B110
+        self._track_update_prompt_clicked(version, "dismissed")
+
+    def _track_update_prompt_shown(self, version: str, trigger: str) -> None:
+        """Once per version per install, not once per session."""
+        try:
+            from qgis.PyQt.QtCore import QSettings
+
+            settings = QSettings()
+            if str(settings.value(_UPDATE_ANNOUNCED_KEY, "", type=str)) == version:
+                return
+            settings.setValue(_UPDATE_ANNOUNCED_KEY, version)
+        except Exception:
+            pass  # nosec B110  Settings unreadable: still report it once.
+        self._track_update_event(True, version, trigger)
+
+    def _track_update_prompt_clicked(self, version: str, action: str) -> None:
+        self._track_update_event(False, version, action)
+
+    @staticmethod
+    def _track_update_event(shown: bool, version: str, kind: str) -> None:
+        try:
+            from ...core import telemetry
+            from ...core import telemetry_events as te
+
+            if shown:
+                telemetry.track(te.PLUGIN_UPDATE_PROMPT_SHOWN, {
+                    "offered_version": version, "trigger": kind,
+                })
+            else:
+                telemetry.track(te.PLUGIN_UPDATE_PROMPT_CLICKED, {
+                    "offered_version": version, "action": kind,
+                })
+        except Exception:
+            pass  # nosec B110  Telemetry never breaks the dock.
 
     @staticmethod
     def _installed_plugin_version() -> str:
@@ -380,13 +638,27 @@ class DockChromeMixin:
         return ""
 
     def _on_open_plugin_manager(self, _link: str = "") -> None:
-        """Open QGIS's Plugin Manager on the Upgradeable tab (index 3)."""
+        """Plugin Manager on the Upgradeable tab, the Manage Plugins action, or
+        the marketplace page. Same three ways in as the TerraLab menu entry."""
+        action = "plugin_manager"
         try:
-            from qgis.utils import iface
+            from ...core.auth.activation_manager import served_marketplace_url
 
-            iface.pluginManagerInterface().showPluginManager(3)
+            url = served_marketplace_url()
+            if not self._upgradeable_version():
+                # The Upgradeable tab would be empty, so the marketplace page
+                # is the only place the click can still lead somewhere.
+                from ..external_url import open_external
+
+                open_external(url)
+                action = "marketplace_page"
+            else:
+                from ..terralab_menu import open_plugin_manager_updates
+
+                action = open_plugin_manager_updates(url)
         except Exception:
             pass  # nosec B110
+        self._track_update_prompt_clicked(getattr(self, "_offered_update_version", ""), action)
 
     def _build_warning_widget(self) -> QWidget:
         """Build the empty-canvas first-run hero (shown when no visible layer).

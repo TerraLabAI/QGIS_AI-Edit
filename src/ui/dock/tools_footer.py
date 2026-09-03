@@ -30,6 +30,10 @@ from ..dialogs.error_report_dialog import (
 )
 from ..external_url import open_external
 from ..panel_helpers import make_hidpi_pixmap
+from .blocked_reasons import (
+    LAUNCH_BLOCK_NO_RASTER,
+    LAUNCH_BLOCK_TILES_WARMING,
+)
 from .style import _BTN_BLUE, _BTN_GREEN, _tinted_svg_icon
 
 
@@ -80,10 +84,10 @@ class DockToolsFooterMixin:
             if isinstance(node.layer(), QgsRasterLayer)
         )
         if not has_visible:
-            # Reset first, then reveal the hero. One info per state (Yvann
-            # 2026-07-08): the empty screen shows ONLY the hero card - a big
-            # greyed Launch under it read as clutter, so Launch hides (not
-            # grays) instead.
+            # Reset first, then reveal the hero. Launch STAYS on screen,
+            # greyed, with the reason written under it (2026-09-03): hiding it
+            # left 29 people a month on an entry screen with no primary button
+            # and nothing telling them what was missing.
             self.set_launch_state()
             self._warning_widget.setVisible(True)
             self._sync_demo_button()
@@ -91,13 +95,17 @@ class DockToolsFooterMixin:
             # project may have gone from "no layers" to "layers, all hidden"
             # since the last time the card was up.
             self._sync_warning_actions()
-            self._launch_btn.setVisible(False)
-            self._launch_btn.setEnabled(False)
+            # The card IS the call to action here, so the Launch row stands
+            # down rather than repeating it (Yvann 2026-09-03).
+            self.set_launch_block_reason(
+                LAUNCH_BLOCK_NO_RASTER, has_own_card=True
+            )
             self._past_sessions_link.setVisible(False)
         else:
             self._warning_widget.setVisible(False)
-            self._launch_btn.setVisible(True)
-            self._launch_btn.setEnabled(True)
+            self.set_launch_block_reason(
+                LAUNCH_BLOCK_TILES_WARMING if self._imagery_loading else None
+            )
             self._past_sessions_link.setVisible(True)
         # The first-steps banner follows the same rule: never stacked on the
         # hero card, back once imagery exists.
@@ -383,6 +391,7 @@ class DockToolsFooterMixin:
             self._swipe_btn.setChecked(checked)
         finally:
             self._swipe_btn.blockSignals(False)
+        self._sync_result_tools_row()
 
     def set_swipe_button_enabled(self, can_swipe: bool) -> None:
         """Gate the Before/After button on whether a swipeable layer is
@@ -398,6 +407,34 @@ class DockToolsFooterMixin:
         is_checked = self._swipe_btn.isChecked()
         enabled = (self._swipe_eligible or is_checked) and not self._swipe_panel_lock
         self._swipe_btn.setEnabled(enabled)
+        self._sync_result_tools_row()
+
+    def _on_result_compare_toggled(self, checked: bool) -> None:
+        """Panel Compare button: drive the footer twin, which owns the swipe.
+
+        The equality guard is what stops the two toggles from bouncing off
+        each other, since each one mirrors the other.
+        """
+        if self._swipe_btn.isChecked() != checked:
+            self._swipe_btn.setChecked(checked)
+
+    def _sync_result_tools_row(self) -> None:
+        """Mirror the footer Vectorize and Before/after state onto the fixed
+        row in the result panel. The footer buttons stay the source of truth,
+        so the panel row can never allow what the footer refuses."""
+        compare = getattr(self, "_result_compare_btn", None)
+        if compare is not None:
+            compare.setEnabled(self._swipe_btn.isEnabled())
+            checked = self._swipe_btn.isChecked()
+            if compare.isChecked() != checked:
+                compare.blockSignals(True)
+                try:
+                    compare.setChecked(checked)
+                finally:
+                    compare.blockSignals(False)
+        vectorize = getattr(self, "_result_vectorize_btn", None)
+        if vectorize is not None:
+            vectorize.setEnabled(self._vectorize_btn.isVisible())
 
     def set_settings_button_active(self, active: bool) -> None:
         """Light the green tint on the Settings (gear) footer icon while

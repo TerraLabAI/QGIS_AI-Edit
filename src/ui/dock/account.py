@@ -12,8 +12,10 @@ from ...core.date_format import format_reset_date
 from ...core.entitlements import paid_tier_default
 from ...core.i18n import tr
 from ...core.paywall_state import total_free_generations
+from ...core.pro_ceiling import pro_ceiling_enabled
 from ...core.resolution_labels import DEFAULT_RESOLUTION_CREDIT_COSTS
 from ..external_url import open_external
+from .blocked_reasons import LAUNCH_BLOCK_NO_KEY
 from .style import ERROR_TEXT, SUCCESS_TEXT
 
 
@@ -33,7 +35,7 @@ class DockAccountMixin:
         if enabled:
             self._update_layer_warning()
         else:
-            self._launch_btn.setEnabled(False)
+            self.set_launch_block_reason(LAUNCH_BLOCK_NO_KEY)
 
     def set_activated(self, activated: bool):
         self._activated = activated
@@ -152,6 +154,9 @@ class DockAccountMixin:
                 self.show_prewall_info(get_prewall_url())
                 self._trial_info_box.setVisible(False)
                 self._wall_telemetry_shown = False
+            elif self._is_pro_low():
+                self.show_pro_low_info()
+                self._trial_info_box.setVisible(False)
             else:
                 self._trial_info_box.setVisible(False)
                 self.hide_prewall_info()
@@ -179,14 +184,23 @@ class DockAccountMixin:
         if not total:
             return ""
         date_str = format_reset_date(self._reset_date) if self._reset_date else ""
+        # Served, like the button under it (wall.cta) and the pre-wall banner
+        # before it: 112 users a month read this sentence and it was the only
+        # one of the three credit surfaces that needed a release to change.
+        # Tokens are substituted with replace(), never format(), so a served
+        # line carrying a stray brace cannot raise while the wall is built.
         if date_str:
-            return tr("Your {total} free generations return on {date}").format(
-                total=total, date=date_str
+            title = get_export_copy(
+                "wall.title", tr("Your {total} free generations return on {date}")
             )
+            return title.replace("{total}", str(total)).replace("{date}", date_str)
         # The server has no renewal date for this account (older cached
         # response, or a product outside the monthly free renewal). Same
         # sentence minus the specific day rather than a raw/missing value.
-        return tr("Your {total} free generations return next month").format(total=total)
+        title = get_export_copy(
+            "wall.title_no_date", tr("Your {total} free generations return next month")
+        )
+        return title.replace("{total}", str(total))
 
     def set_subscribe_url(self, url: str) -> None:
         """Prime the subscribe URL so set_credits can show the upsell on its own."""
@@ -221,6 +235,10 @@ class DockAccountMixin:
             self._wall_telemetry_shown = True
 
     def show_usage_limit_info(self, message: str, subscribe_url: str):
+        # Paid tier with the served ceiling on: a human contact, not a wall.
+        if not self._is_free_tier and pro_ceiling_enabled():
+            self.show_pro_limit_info(self.pro_limit_title(message), subscribe_url)
+            return
         self._show_status_box(message, "error")
         self._trial_info_box.setVisible(False)
         self._limit_cta_url = subscribe_url
@@ -239,6 +257,8 @@ class DockAccountMixin:
             tr("Last free generation of the month. Pro gives you about 150 "
                "more, for 29 EUR."),
         ))
+        # The same banner serves the Pro low-credit nudge with its own label.
+        self._prewall_btn.setText(get_export_copy("prewall.cta", tr("Get 150 more edits")))
         self._prewall_url = cta_url
         self._prewall_banner.setVisible(True)
         if not self._prewall_telemetry_shown:
@@ -252,6 +272,9 @@ class DockAccountMixin:
 
     def _on_prewall_cta_clicked(self):
         if not self._prewall_url:
+            return
+        if self._is_pro_low():
+            self._on_pro_contact_clicked(self._prewall_btn)
             return
         from ...core import telemetry
         from ...core import telemetry_events as te
@@ -382,4 +405,6 @@ class DockAccountMixin:
 
     def _hide_limit_cta(self):
         self._limit_cta_btn.setVisible(False)
+        self._pro_contact_btn.setVisible(False)
+        self._pro_contact_email.setVisible(False)
         self._limit_cta_url = ""

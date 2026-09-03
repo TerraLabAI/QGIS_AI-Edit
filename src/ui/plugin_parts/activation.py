@@ -164,11 +164,20 @@ class ActivationMixin:
             parent=self._iface.mainWindow(),
         )
         dlg.sign_out_requested.connect(self._on_sign_out)
-        self._dock_widget.set_settings_button_active(True)
+        # Held across exec(): the dialog is modal, and a plugin reload while it
+        # is open drops self._dock_widget, so the finally below raised an
+        # AttributeError on the way out and swallowed the real exit path.
+        dock = self._dock_widget
+        if dock is not None:
+            dock.set_settings_button_active(True)
         try:
             dlg.exec()
         finally:
-            self._dock_widget.set_settings_button_active(False)
+            if dock is not None:
+                try:
+                    dock.set_settings_button_active(False)
+                except RuntimeError:
+                    pass  # nosec B110 - the dock's C++ half is already gone.
 
     def _on_sign_out(self):
         """Disconnect: clear the stored key and return to the sign-in screen."""

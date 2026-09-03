@@ -87,8 +87,18 @@ _NO_CONTENT_EVENTS = frozenset({
     "activation_screen_viewed",
     "activation_attempted",
     "launch_clicked",
+    # Why Launch stayed greyed. Enum-only reason, no user content, and it
+    # fires before activation (no_key), so it parks pre-auth like the rest.
+    "launch_blocked",
+    # Same shape for the Generate step.
+    "generate_blocked",
     "subscribe_link_clicked",
     "trial_exhausted_viewed",
+    # The update notice can show before activation (it is pinned outside
+    # _main_widget), so its two events park pre-auth like the rest. Version
+    # strings and an enum, no user content.
+    "plugin_update_prompt_shown",
+    "plugin_update_prompt_clicked",
     # Tutorial/guide opens can happen signed-out (footer button is always
     # visible), so they must park pre-auth like the other lifecycle pings.
     "tutorial_opened",

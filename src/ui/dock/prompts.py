@@ -17,6 +17,11 @@ from ..onboarding_hint import (
     dismiss_hint,
     is_hint_dismissed,
 )
+from .blocked_reasons import (
+    GENERATE_BLOCK_NO_ZONE,
+    GENERATE_BLOCK_PROMPT_EMPTY,
+    GENERATE_BLOCK_PROMPT_TOO_SHORT,
+)
 from .style import _BTN_DISABLED, _BTN_GREEN, MAX_PROMPT_CHARS
 
 # Fallbacks for the server-tunable prompt-guard dials.
@@ -57,6 +62,22 @@ class DockPromptMixin:
 
     def get_prompt(self) -> str:
         return self._prompt_input.toPlainText().strip()
+
+    def focus_prompt_input(self) -> None:
+        """Put the caret at the end of the prompt, ready to be reworded.
+
+        The result-side box takes it when that is the one on screen, so the
+        action lands where the user is actually looking.
+        """
+        target = (
+            self._result_prompt_input
+            if self._result_prompt_widget.isVisible()
+            else self._prompt_input
+        )
+        target.setFocus(QtC.OtherFocusReason)
+        cursor = target.textCursor()
+        cursor.movePosition(QtC.CursorEnd)
+        target.setTextCursor(cursor)
 
     # --- Private methods ---
 
@@ -413,16 +434,36 @@ class DockPromptMixin:
         self._on_generate_clicked()
 
     def _update_generate_enabled(self, prompt: str | None = None):
-        has_prompt = bool(self.get_prompt() if prompt is None else prompt)
+        text = self.get_prompt() if prompt is None else prompt
         # Held while an onboarding basemap's online tiles are still warming, so
         # the guided first generation can't export a blank input.
-        enabled = self._zone_selected and has_prompt and not self._imagery_loading
+        reason = self._generate_block_reason(text)
+        # Green and a line saying something is missing contradict each other,
+        # so the button follows the line: a prompt under the minimum was
+        # refused at click time anyway, in the status box.
+        enabled = reason is None and not self._imagery_loading
         self._generate_btn.setEnabled(enabled)
+        self.set_generate_block_reason(reason)
         self._update_generate_style()
         self._update_generate_button_text()
         # Runs on every zone selection too (set_zone_selected), so the tip
         # follows marks that persist onto a redrawn zone.
         self._update_markup_prompt_tip()
+
+    def _generate_block_reason(self, prompt: str) -> str | None:
+        """What still stands between this panel and a run, or None.
+
+        The button stays clickable on a short prompt (the click-time guard
+        answers that one), so the line is a live preview of the refusal rather
+        than a second gate.
+        """
+        if not self._zone_selected:
+            return GENERATE_BLOCK_NO_ZONE
+        if not prompt:
+            return GENERATE_BLOCK_PROMPT_EMPTY
+        if not self._prompt_meets_minimum(prompt):
+            return GENERATE_BLOCK_PROMPT_TOO_SHORT
+        return None
 
     def set_imagery_loading(self, loading: bool):
         """Hold or release Generate while an onboarding basemap warms its tiles.

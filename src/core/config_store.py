@@ -321,6 +321,28 @@ def get_export_copy(
     return html.escape(served, quote=False) if escape else served
 
 
+def get_activation_copy(
+    string_id: str,
+    fallback: str,
+    max_chars: int = _MAX_COPY_CHARS,
+    escape: bool = False,
+) -> str:
+    """Same contract as ``get_export_copy`` for the ``copy`` map of the
+    activation config (the one fetched once per session at startup). The two
+    maps are served by two routes, so a string lives in one or the other,
+    never both."""
+    try:
+        store = get_store()
+        config = store.get_activation_config() if store is not None else None
+        container = config.get("copy") if isinstance(config, dict) else None
+        served = _clean_served_text(container.get(string_id), max_chars) if isinstance(container, dict) else None
+    except Exception:  # nosec B110
+        served = None
+    if served is None:
+        return fallback
+    return html.escape(served, quote=False) if escape else served
+
+
 def get_export_copy_pool(string_id: str, fallback: tuple[str, ...]) -> tuple[str, ...]:
     """Served replacement for a POOL of interchangeable lines under ``copy``,
     or the shipped pool. Replacement rather than union, because a pool is copy:
