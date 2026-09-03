@@ -3,12 +3,23 @@ name=AI Edit by TerraLab
 description=Show a project on real aerial imagery, from a text prompt: a redevelopment before it is built, a street planted with trees, a flood, or an orthophoto redrawn as a clean site plan. Land cover maps, cloud and object removal too. Georeferenced output.
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
-version=1.7.4
+version=1.7.5
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.7.5
+    - A new version of the plugin now shows up on the panel, says what it brings, and installs in one click; close it and it stays closed
+    - The update notice only appears when QGIS can actually install it for you
+    - A failed generation now offers one clear next step instead of a bare sentence
+    - Generate says under the button why it cannot run, and the reason follows the button
+    - The account dialog fits a laptop screen again, with one baseline per plan row
+    - Pro users near the monthly credit limit get a Contact us path that copies our address on click
+    - Your prompt stays in the box after a result, and Compare and Vectorize work from the panel
+    - Fixed: the settings gear no longer raises an error when the panel closes during the dialog
+    - Fixed: a vectorize error stays on screen until something replaces it
+
     1.7.4
     - Pick the raster layer to edit first, then draw your zone in it: the AI now works from that one layer, whatever else is drawn on the map
     - The layer list follows your map view and picks the imagery you are looking at, never a world basemap over a local orthophoto
