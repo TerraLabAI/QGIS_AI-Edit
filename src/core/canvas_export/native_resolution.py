@@ -33,7 +33,7 @@ def _best_native_longest_px(
     ``max_dim`` when no visible layer carries a usable native resolution.
     """
     zw_m, zh_m = _zone_dims_meters(zone_extent, map_crs)
-    if not zw_m or not zh_m or zw_m <= 0 or zh_m <= 0:
+    if not zw_m or not zh_m or not all(math.isfinite(v) and v > 0 for v in (zw_m, zh_m)):
         return max_dim
 
     finest_mpp: float | None = None
@@ -44,9 +44,9 @@ def _best_native_longest_px(
             xy = None
         if xy:
             mpp_x, mpp_y = xy
-            if mpp_x and mpp_x > 0:
+            if mpp_x and math.isfinite(mpp_x) and mpp_x > 0:
                 finest_mpp = mpp_x if finest_mpp is None else min(finest_mpp, mpp_x)
-            if mpp_y and mpp_y > 0:
+            if mpp_y and math.isfinite(mpp_y) and mpp_y > 0:
                 finest_mpp = mpp_y if finest_mpp is None else min(finest_mpp, mpp_y)
 
     if finest_mpp is None:
@@ -212,6 +212,8 @@ def _webmerc_mpp_at_lat(zone_extent, map_crs, zoom: int) -> float | None:
         else:
             transform = QgsCoordinateTransform(map_crs, wgs84, QgsProject.instance())
             lat = transform.transform(zone_extent.center()).y()
+        if not math.isfinite(lat) or zoom < 0:
+            return None
         lat = max(-85.0, min(85.0, lat))
         return _WEBMERC_M_PX_Z0 * math.cos(math.radians(lat)) / (2 ** zoom)
     except Exception:
@@ -236,7 +238,7 @@ def _zone_dims_meters(
             QgsPointXY(center_x, zone_extent.yMinimum()),
             QgsPointXY(center_x, zone_extent.yMaximum()),
         )
-        if width_m <= 0 or height_m <= 0:
+        if not all(math.isfinite(v) and v > 0 for v in (width_m, height_m)):
             return (None, None)
         return (width_m, height_m)
     except Exception:

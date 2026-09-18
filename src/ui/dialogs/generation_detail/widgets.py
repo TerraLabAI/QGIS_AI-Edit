@@ -1,7 +1,8 @@
 """Small helper widgets used by the generation detail dialog."""
 from __future__ import annotations
 
-from qgis.PyQt.QtGui import QIcon, QPixmap
+from qgis.PyQt.QtCore import QSize
+from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -13,8 +14,24 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ....core import qt_compat as QtC
+from ....core.config_store import get_export_copy, get_export_dial
 from ....core.i18n import tr
-from .styles import _ACTION_BTN, _DOWNLOAD_SVG, _REF_OVERLAY_BTN, _REF_THUMB
+from ...dock.design_tokens import INK, RADIUS_CONTROL, qcolor
+from ...icons import icon_for, widget_pixel_ratio
+from ...keyboard_focus import settle_dialog_default_button
+from ...version_strip import rounded_cover_pixmap
+from .styles import (
+    _ACTION_BTN,
+    _LIGHTBOX_QSS,
+    _REF_OVERLAY_BTN,
+    _REF_OVERLAY_BTN_PX,
+    _REF_THUMB,
+)
+
+# The lightbox never displays a reference image larger than this, so an
+# oversized upload never opens a window past a normal screen.
+_LIGHTBOX_MAX_W_PX = 1100
+_LIGHTBOX_MAX_H_PX = 800
 
 
 class _AspectBox(QWidget):
@@ -75,8 +92,13 @@ class _RefThumb(QWidget):
         self._on_open = on_open
         self._full_pm: QPixmap | None = None
         self.setFixedSize(72, 72)
-        self.setCursor(QtC.PointingHandCursor)
-        self.setToolTip(tr("Click to open. Hover to download."))
+        # An empty tile answers no click, so it does not promise one: the
+        # hand cursor arrives with the picture (set_pixmap).
+        self.setCursor(QtC.ArrowCursor)
+        # The hover buttons already say "download"; the tile says what a
+        # click on it does.
+        self.setToolTip(get_export_copy(
+            "dialogs.widgets.ref_thumb_view_tooltip", tr("View full size")))
 
         self._img = QLabel(self)
         self._img.setGeometry(0, 0, 72, 72)
@@ -85,24 +107,31 @@ class _RefThumb(QWidget):
 
         self._overlay = QWidget(self)
         self._overlay.setGeometry(0, 0, 72, 72)
-        self._overlay.setStyleSheet("background: rgba(20,24,15,0.45); border-radius: 4px;")
+        # No scrim: the two round surface buttons read on any picture.
+        self._overlay.setStyleSheet("background: transparent;")
         ov = QHBoxLayout(self._overlay)
         ov.setContentsMargins(0, 0, 0, 0)
         ov.setSpacing(6)
         ov.addStretch(1)
         open_b = QToolButton(self._overlay)
-        open_b.setText("⤢")
-        open_b.setFixedSize(26, 26)
+        open_b.setIcon(icon_for(self, "expand", 14, qcolor(INK)))
+        open_b.setIconSize(QSize(14, 14))
+        open_b.setFixedSize(_REF_OVERLAY_BTN_PX, _REF_OVERLAY_BTN_PX)
         open_b.setCursor(QtC.PointingHandCursor)
-        open_b.setToolTip(tr("Open large"))
+        open_b.setToolTip(get_export_copy("dialogs.widgets.open_large_tooltip", tr("View full size")))
+        open_b.setAccessibleName(open_b.toolTip())
         open_b.setStyleSheet(_REF_OVERLAY_BTN)
         open_b.clicked.connect(lambda: self._on_open(self._index))
         ov.addWidget(open_b)
         dl_b = QToolButton(self._overlay)
-        dl_b.setIcon(QIcon(_DOWNLOAD_SVG))
-        dl_b.setFixedSize(26, 26)
+        dl_b.setIcon(icon_for(self, "download", 14, qcolor(INK)))
+        dl_b.setIconSize(QSize(14, 14))
+        dl_b.setFixedSize(_REF_OVERLAY_BTN_PX, _REF_OVERLAY_BTN_PX)
         dl_b.setCursor(QtC.PointingHandCursor)
-        dl_b.setToolTip(tr("Download original"))
+        # "Original" is the untouched map everywhere else in AI Edit; this is
+        # the reference's own file.
+        dl_b.setToolTip(get_export_copy("dialogs.widgets.download_reference", tr("Download")))
+        dl_b.setAccessibleName(dl_b.toolTip())
         dl_b.setStyleSheet(_REF_OVERLAY_BTN)
         dl_b.clicked.connect(lambda: on_download(self._index))
         ov.addWidget(dl_b)
@@ -111,8 +140,10 @@ class _RefThumb(QWidget):
 
     def set_pixmap(self, pm: QPixmap) -> None:
         self._full_pm = pm
+        self.setCursor(QtC.PointingHandCursor)
+        # Cover-cropped to the tile, on the tile's own curve.
         self._img.setPixmap(
-            pm.scaled(70, 70, QtC.KeepAspectRatio, QtC.SmoothTransformation)
+            rounded_cover_pixmap(pm, 70, RADIUS_CONTROL - 1, widget_pixel_ratio(self))
         )
 
     def full_pixmap(self) -> QPixmap | None:
@@ -139,17 +170,22 @@ class _ImageLightbox(QDialog):
 
     def __init__(self, pixmap: QPixmap, title: str, on_download=None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(title or tr("Reference image"))
+        self.setObjectName("referenceLightbox")
+        self.setStyleSheet(_LIGHTBOX_QSS)
+        self.setWindowTitle(
+            title or get_export_copy("dialogs.widgets.reference_fallback_title", tr("Reference")))
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
 
         img = QLabel(self)
         img.setAlignment(QtC.AlignCenter)
+        max_w = get_export_dial("dialogs.widgets.lightbox_max_w_px", _LIGHTBOX_MAX_W_PX)
+        max_h = get_export_dial("dialogs.widgets.lightbox_max_h_px", _LIGHTBOX_MAX_H_PX)
         shown = pixmap
-        if pixmap.width() > 1100 or pixmap.height() > 800:
+        if pixmap.width() > max_w or pixmap.height() > max_h:
             shown = pixmap.scaled(
-                1100, 800, QtC.KeepAspectRatio, QtC.SmoothTransformation
+                max_w, max_h, QtC.KeepAspectRatio, QtC.SmoothTransformation
             )
         img.setPixmap(shown)
         v.addWidget(img, 1)
@@ -157,15 +193,17 @@ class _ImageLightbox(QDialog):
         row = QHBoxLayout()
         row.addStretch(1)
         if on_download is not None:
-            dl = QPushButton(tr("Download original"))
-            dl.setIcon(QIcon(_DOWNLOAD_SVG))
+            dl = QPushButton(get_export_copy("dialogs.widgets.download_reference", tr("Download")))
+            dl.setIcon(icon_for(self, "download", 16))
             dl.setStyleSheet(_ACTION_BTN)
             dl.setCursor(QtC.PointingHandCursor)
             dl.clicked.connect(on_download)
             row.addWidget(dl)
-        close = QPushButton(tr("Close"))
+        close = QPushButton(get_export_copy("dialogs.widgets.close_button", tr("Close")))
         close.setStyleSheet(_ACTION_BTN)
         close.setCursor(QtC.PointingHandCursor)
         close.clicked.connect(self.accept)
         row.addWidget(close)
         v.addLayout(row)
+        # No filled action here: Enter presses nothing, Escape closes.
+        settle_dialog_default_button(self)

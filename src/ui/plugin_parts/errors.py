@@ -9,11 +9,32 @@ from ...core.auth.activation_manager import (
 )
 from ...core.config_store import (
     ServerDialSet,
+    get_export_copy,
+    get_export_dial,
     get_export_dial_list,
     get_export_text,
 )
 from ...core.errors import NETWORK_ERROR_CODES, PROMPT_BLOCKED_CODES
 from ...core.i18n import tr
+
+# Private names are listed too: other modules import them from here.
+__all__ = [
+    "_CREDIT_REASSURE_CODES",
+    "_enrich_error_message",
+    "_is_model_failure",
+    "_is_prompt_blocked",
+    "_is_safety_block",
+    "_is_service_busy",
+    "_localize_server_error",
+    "_prompt_blocked_message",
+    "_report_policy",
+    "_resolve_class_label",
+    "content_policy_url",
+    "DASHBOARD_ERROR_URL",
+    "dashboard_error_url",
+    "SUBSCRIBE_ERROR_URL",
+    "subscribe_error_url",
+]
 
 # An error message is one or two sentences, a CTA is a link label or one line
 # of guidance. Both caps are deliberately tighter than the copy channel's.
@@ -68,7 +89,9 @@ def _localize_server_error(error: str, code: str) -> str:
     """
     if not code:
         return html.escape(error or "")
-    served = get_export_text("error_messages", code, _MAX_ERROR_CHARS)
+    served = get_export_text(
+        "error_messages", code, get_export_dial("flows.errors.max_error_chars", _MAX_ERROR_CHARS)
+    )
     if served is not None:
         return html.escape(served, quote=False)
     mapping = {
@@ -115,10 +138,9 @@ def _localize_server_error(error: str, code: str) -> str:
         "BAD_REQUEST": tr("Invalid request. Check your prompt and the selected area, then try again."),
         "BAD_INPUT": tr("Invalid input. Check your prompt and the selected area."),
         "INVALID_INPUT": tr("Invalid input. Try a different image or selection."),
-        "PAYLOAD_TOO_LARGE": tr("Image too large. Try selecting a smaller area or lowering the resolution."),
+        "PAYLOAD_TOO_LARGE": tr("Image too large. Draw a smaller zone or pick a lower Quality."),
         "RESOLUTION_NOT_ALLOWED": tr(
-            "This detail level is not available on your plan."
-            " Upgrade to unlock more detail."
+            "This Quality is not in your plan. Upgrade to Pro to use it."
         ),
         "NOT_FOUND": tr("Resource not found."),
         "NOT_SEEDED": tr("Catalog not yet available, please retry shortly."),
@@ -217,7 +239,12 @@ def _is_prompt_blocked(normalized_code: str) -> bool:
 def _prompt_blocked_message(error: str, code: str) -> str:
     """The whole message shown for a refused prompt: what happened, that it
     cost nothing, and where the rules are once that page exists."""
-    parts = [_localize_server_error(error, code), tr("You have not been charged.")]
+    parts = [
+        _localize_server_error(error, code),
+        get_export_copy(
+            "flows.errors.not_charged", tr("You have not been charged."), escape=True
+        ),
+    ]
     url = content_policy_url()
     if url:
         parts.append(f'<a href="{url}">{_served_cta(code) or tr("Read our content rules")}</a>')
@@ -273,8 +300,44 @@ def _served_cta(code: str) -> str:
     for the status label. Empty means keep the shipped CTA."""
     if not code:
         return ""
-    served = get_export_text("error_ctas", code, _MAX_CTA_CHARS)
+    served = get_export_text(
+        "error_ctas", code, get_export_dial("flows.errors.max_cta_chars", _MAX_CTA_CHARS)
+    )
     return html.escape(served, quote=False) if served is not None else ""
+
+
+def _with_proxy_hint(message: str, code: str) -> str:
+    """Append the "turn on the QGIS proxy" step when QGIS sends no proxy."""
+    try:
+        from ...api.network_error_classifier import network_setup_hint
+
+        hint = network_setup_hint(code)
+    except Exception:  # nosec B110 - a hint must never break the message
+        hint = ""
+    if not hint:
+        return message
+    sep = " " if message.endswith((".", "!", "?")) else ". "
+    return f"{message}{sep}{hint}"
+
+
+def network_next_step(code: str) -> str:
+    """One plain sentence telling the user how to fix a connectivity code,
+    for places that show the step without the error (the sign-in wait).
+    Same wording as the error messages. Empty for a code that is not a
+    connectivity code."""
+    code = (code or "").strip().upper()
+    if code == "PROXY_ERROR":
+        return tr("Check QGIS proxy settings: Settings > Options > Network") + "."
+    if code == "SSL_ERROR":
+        return tr(
+            "Ask your IT team to allow terra-lab.ai, or import your company root "
+            "certificate in Settings > Options > Authentication"
+        ) + "."
+    if code == "NETWORK_BLOCKED":
+        return tr("Ask your IT team to allow terra-lab.ai.")
+    if code not in NETWORK_ERROR_CODES:
+        return ""
+    return _with_proxy_hint(tr("Check your internet connection") + ".", code)
 
 
 def _enrich_error_message(error: str, code: str = "") -> str:
@@ -286,35 +349,49 @@ def _enrich_error_message(error: str, code: str = "") -> str:
     whole message."""
     localized = _localize_server_error(error, code)
     cta = _served_cta(code)
+    # Most localized sentences already end with a full stop; adding ". "
+    # after them printed "No internet connection.. Check ...".
+    lead = localized if localized.endswith((".", "!", "?")) else f"{localized}."
     if code in _DASHBOARD_CTA_CODES:
-        return f'{localized}. <a href="{dashboard_error_url()}">{cta or tr("Check your dashboard")}</a>'
+        return f'{lead} <a href="{dashboard_error_url()}">{cta or tr("Check your dashboard")}</a>'
     if code == "TRIAL_EXHAUSTED":
         # upgrade_url has always been the server's say on where to buy; routed
         # through the same validation now, so a malformed one falls back to a
         # working link instead of rendering into the anchor.
         upgrade = get_server_url("upgrade_url", get_dashboard_url())
-        return f'{localized}. <a href="{upgrade}">{cta or tr("Subscribe")}</a>'
+        return f'{lead} <a href="{upgrade}">{cta or tr("Subscribe")}</a>'
     if code == "DEVICE_LIMIT_EXCEEDED":
         return f'{localized} <a href="{dashboard_error_url()}">{cta or tr("Manage your computers")}</a>'
     if code == "PROXY_ERROR":
-        return f"{localized}. {cta or tr('Check QGIS proxy settings: Settings > Options > Network')}"
+        return f"{lead} {cta or tr('Check QGIS proxy settings: Settings > Options > Network')}"
     if code == "SSL_ERROR":
         ssl_hint = cta or tr(
-            "If you are on a corporate network, ask your IT team about SSL inspection settings"
+            "Ask your IT team to allow terra-lab.ai, or import your company root "
+            "certificate in Settings > Options > Authentication"
         )
-        return f"{localized}. {ssl_hint}"
+        return f"{lead} {ssl_hint}"
     if code in ("DNS_ERROR", "NO_NETWORK"):
-        return f"{localized}. {cta or tr('Check your internet connection')}"
+        return _with_proxy_hint(f"{lead} {cta or tr('Check your internet connection')}", code)
     if code == "TIMEOUT":
-        return f"{localized}. {cta or tr('Try again, or check your internet speed')}"
+        message = f"{lead} {cta or tr('Try again, or check your internet speed')}"
+        # The client adds this step when the QGIS network timeout, not ours,
+        # cut the request. The localized sentence above replaced its message,
+        # so carry the step over.
+        qgis_step = tr("Raise the timeout in Settings > Options > Network.")
+        if qgis_step in (error or ""):
+            sep = " " if message.endswith((".", "!", "?")) else ". "
+            message = f"{message}{sep}{qgis_step}"
+        return _with_proxy_hint(message, code)
     if code == "CONNECTION_REFUSED":
-        return f"{localized}. {cta or tr('The service may be temporarily unavailable')}"
+        return _with_proxy_hint(
+            f"{lead} {cta or tr('The service may be temporarily unavailable')}", code
+        )
     if code == "AUTH_ERROR":
-        return f'{localized}. <a href="{dashboard_error_url()}">{cta or tr("Check your dashboard")}</a>'
+        return f'{lead} <a href="{dashboard_error_url()}">{cta or tr("Check your dashboard")}</a>'
     # A code the plugin ships no CTA for. A served one is appended as plain
     # guidance, never as a link: nothing shipped decided where it would point.
     if cta:
-        return f"{localized}. {cta}"
+        return f"{lead} {cta}"
     return localized
 
 

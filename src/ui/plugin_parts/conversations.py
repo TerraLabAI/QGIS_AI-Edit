@@ -12,6 +12,7 @@ from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.i18n import tr
 from ...core.logger import log_debug, log_warning
+from ...core.privacy_notice import has_accepted_privacy_notice
 from ...core.prompts import conversation_thumbs, history_cache
 from ...core.prompts.conversation_summary import conversation_entries
 from ...workers.generic_request_task import GenericRequestTask
@@ -29,6 +30,12 @@ class ConversationsMixin:
         if self._client is None or not self._auth_manager.has_activation_key():
             log_debug("history refresh skipped: no client or key yet")
             return
+        # Account history is not needed to sign in, so it waits for the
+        # first-run privacy notice like everything else; the bootstrap that
+        # follows the accept confirms the key and lands back here.
+        if not has_accepted_privacy_notice():
+            log_debug("history refresh skipped: privacy notice pending")
+            return
         # Several UI paths can ask at once (startup bootstrap + home screen,
         # generation end + Exit): one in-flight fetch serves them all.
         running = getattr(self, "_conversations_refresh_task", None)
@@ -37,28 +44,47 @@ class ConversationsMixin:
             return
         auth = self._auth_manager.get_auth_header()
         client = self._client
+        account_revision = self._history_account_revision()
 
         def _work():
             return client.get_generation_history(auth, limit=50)
 
-        task = GenericRequestTask(tr("Refreshing history"), _work, silent=True)
-        task.succeeded.connect(self._on_conversations_refreshed)
-        task.failed.connect(self._on_conversations_refresh_failed)
+        task = GenericRequestTask(tr("Refreshing sessions"), _work, silent=True)
+        task.succeeded.connect(
+            lambda payload, rev=account_revision:
+            self._on_conversations_refreshed(payload, rev)
+        )
+        task.failed.connect(
+            lambda message, code, rev=account_revision:
+            self._on_conversations_refresh_failed(message, code, rev)
+        )
         self._conversations_refresh_task = task
         self._hold_history_task(task)
         log_debug("history refresh started")
 
-    def _on_conversations_refresh_failed(self, message: str, code: str) -> None:
-        """A stale list beats an empty one: keep rendering the cache. The old
-        lambda swallowed the reason, which made this path undiagnosable."""
+    def _on_conversations_refresh_failed(
+        self, message: str, code: str, account_revision: int | None = None
+    ) -> None:
+        """Keep the stale cache when a current-account refresh fails."""
+        if not self._history_revision_is_current(account_revision):
+            return
         log_warning(f"history refresh failed: {message} ({code})")
 
-    def _on_conversations_refreshed(self, payload) -> None:
+    def _on_conversations_refreshed(
+        self, payload, account_revision: int | None = None
+    ) -> None:
+        if not self._history_revision_is_current(account_revision):
+            return
         dock = self._dock_widget
         if dock is None:
             return
-        payload = payload or {}
-        jobs = payload.get("jobs") or []
+        if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), list):
+            log_warning("history refresh rejected malformed response")
+            return
+        jobs = payload["jobs"]
+        if any(not isinstance(job, dict) for job in jobs):
+            log_warning("history refresh rejected malformed jobs")
+            return
         log_debug(
             f"history refresh: {len(jobs)} jobs"
             f" (has_more={bool(payload.get('has_more'))})"
@@ -70,14 +96,20 @@ class ConversationsMixin:
         # The refresh can be answering the Sessions page's own open (its
         # sessions_refresh_requested), so push the result into the live page.
         self._refresh_sessions_page()
-        self._backfill_conversation_thumbs(jobs)
+        self._backfill_conversation_thumbs(jobs, account_revision)
 
     # One-time catch-up for generations older than the local thumb store:
     # the refresh that just returned carries FRESH signed URLs (valid ~1 h),
     # so this is the only reliable moment to fetch what the store misses.
     # Idempotent: whatever fails stays missing and retries next startup.
 
-    def _backfill_conversation_thumbs(self, jobs: list) -> None:
+    def _backfill_conversation_thumbs(
+        self, jobs: list, account_revision: int | None = None
+    ) -> None:
+        if account_revision is None:
+            account_revision = self._history_account_revision()
+        if not self._history_revision_is_current(account_revision):
+            return
         if getattr(self, "_thumb_backfill_started", False):
             return
         self._thumb_backfill_started = True
@@ -89,7 +121,7 @@ class ConversationsMixin:
             for member in members:
                 rid = member.get("request_id") or ""
                 url = member.get("output_thumb_url") or member.get("output_url")
-                if rid and url and conversation_thumbs.load_thumb(rid) is None:
+                if rid and url and not conversation_thumbs.has_thumb(rid):
                     wanted.append((rid, url))
             session_id = entry.get("session_id") or ""
             oldest = members[-1] if members else {}
@@ -97,7 +129,7 @@ class ConversationsMixin:
             if (
                 session_id
                 and in_url
-                and conversation_thumbs.load_thumb(f"in-{session_id}") is None
+                and not conversation_thumbs.has_thumb(f"in-{session_id}")
             ):
                 wanted.append((f"in-{session_id}", in_url))
         if not wanted:
@@ -114,11 +146,19 @@ class ConversationsMixin:
             return {"blobs": blobs}
 
         task = GenericRequestTask(tr("Loading thumbnails"), _work, silent=True)
-        task.succeeded.connect(self._on_thumb_backfill_done)
+        task.succeeded.connect(
+            lambda payload, rev=account_revision:
+            self._on_thumb_backfill_done(payload, rev)
+        )
         task.failed.connect(lambda *_: None)
         self._hold_history_task(task)
 
-    def _on_thumb_backfill_done(self, payload) -> None:
+    def _on_thumb_backfill_done(self, payload, account_revision: int | None = None) -> None:
+        if not self._history_revision_is_current(account_revision):
+            return
+        if not isinstance(payload, dict) or not isinstance(payload.get("blobs"), dict):
+            log_warning("thumbnail backfill rejected malformed response")
+            return
         # Pixmap work happens here on the main thread (QPixmap is not
         # thread-safe), the task only carried bytes.
         from qgis.PyQt.QtGui import QPixmap
@@ -135,8 +175,10 @@ class ConversationsMixin:
             except Exception:  # one bad blob costs one thumb, not the batch
                 loaded = False
             if loaded:
-                conversation_thumbs.save_thumb(key, pixmap)
+                conversation_thumbs.save_thumb(key, pixmap, prune=False)
                 saved += 1
+        if saved:
+            conversation_thumbs.prune_thumbs()
         if saved and self._dock_widget is not None:
             self._refresh_sessions_page()
 
@@ -146,28 +188,49 @@ class ConversationsMixin:
             return
         auth = self._auth_manager.get_auth_header()
         client = self._client
+        account_revision = self._history_account_revision()
 
         def _work(cursor=before):
             return client.get_generation_history(auth, limit=50, before=cursor)
 
         task = GenericRequestTask(tr("Loading older sessions"), _work, silent=True)
-        task.succeeded.connect(self._on_conversations_page_loaded)
+        task.succeeded.connect(
+            lambda payload, rev=account_revision:
+            self._on_conversations_page_loaded(payload, rev)
+        )
         task.failed.connect(
-            lambda msg, _code: self._notify(msg, self._warning_level(), duration=5)
+            lambda msg, _code, rev=account_revision:
+            self._on_conversations_page_failed(msg, rev)
         )
         self._hold_history_task(task)
 
-    def _on_conversations_page_loaded(self, payload) -> None:
+    def _on_conversations_page_failed(
+        self, message: str, account_revision: int | None = None
+    ) -> None:
+        if self._history_revision_is_current(account_revision):
+            self._notify(message, self._warning_level(), duration=5)
+
+    def _on_conversations_page_loaded(
+        self, payload, account_revision: int | None = None
+    ) -> None:
+        if not self._history_revision_is_current(account_revision):
+            return
         dock = self._dock_widget
         if dock is None:
             return
-        payload = payload or {}
+        if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), list):
+            log_warning("history page rejected malformed response")
+            return
+        jobs = payload["jobs"]
+        if any(not isinstance(job, dict) for job in jobs):
+            log_warning("history page rejected malformed jobs")
+            return
         known = {
             j.get("request_id") for j in dock._library_recent_cache if isinstance(j, dict)
         }
         fresh = [
             j
-            for j in (payload.get("jobs") or [])
+            for j in jobs
             if isinstance(j, dict) and j.get("request_id") not in known
         ]
         # The in-memory cache grows past the disk cap on purpose: paging is a
@@ -191,22 +254,22 @@ class ConversationsMixin:
     # Delete --------------------------------------------------------------
 
     def _on_conversation_delete(self, entry: dict) -> None:
-        from qgis.PyQt.QtWidgets import QMessageBox
+        from ..dialogs.confirm_dialog import question
 
-        box = QMessageBox(self._iface.mainWindow())
-        box.setWindowTitle(tr("Delete this session?"))
-        box.setText(
+        # The shared confirm window, not a raw QMessageBox: a verb on the
+        # red button, Enter answers nothing, Escape keeps the session.
+        if not question(
+            self._iface.mainWindow(),
+            tr("Delete this session?"),
             tr(
                 "This deletes its generations and their images from TerraLab "
                 "servers. Layers already in your project stay. This cannot "
                 "be undone."
-            )
-        )
-        box.setStandardButtons(
-            QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes
-        )
-        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
-        if box.exec() != QMessageBox.StandardButton.Yes:
+            ),
+            default_yes=False,
+            destructive=True,
+            yes_label=tr("Delete"),
+        ):
             return
 
         session_id = entry.get("session_id")
@@ -215,6 +278,7 @@ class ConversationsMixin:
             return
         auth = self._auth_manager.get_auth_header()
         client = self._client
+        account_revision = self._history_account_revision()
 
         def _work(sid=session_id, rid=request_id):
             if sid:
@@ -222,21 +286,33 @@ class ConversationsMixin:
             return client.delete_generation_session(auth, request_id=rid)
 
         task = GenericRequestTask(tr("Deleting session"), _work)
-        task.succeeded.connect(lambda _p, e=entry: self._apply_conversation_delete(e))
+        task.succeeded.connect(
+            lambda _p, e=entry, rev=account_revision:
+            self._apply_conversation_delete(e, rev)
+        )
         task.failed.connect(
-            lambda msg, code, e=entry: self._on_conversation_delete_failed(msg, code, e)
+            lambda msg, code, e=entry, rev=account_revision:
+            self._on_conversation_delete_failed(msg, code, e, rev)
         )
         self._hold_history_task(task)
 
-    def _on_conversation_delete_failed(self, msg: str, code: str, entry: dict) -> None:
+    def _on_conversation_delete_failed(
+        self, msg: str, code: str, entry: dict, account_revision: int | None = None
+    ) -> None:
+        if not self._history_revision_is_current(account_revision):
+            return
         # Already gone server-side (a retry, another machine): treat as done
         # locally instead of stranding a ghost row.
         if code == "WRONG_REQUEST":
-            self._apply_conversation_delete(entry)
+            self._apply_conversation_delete(entry, account_revision)
             return
         self._notify(msg, self._warning_level(), duration=6)
 
-    def _apply_conversation_delete(self, entry: dict) -> None:
+    def _apply_conversation_delete(
+        self, entry: dict, account_revision: int | None = None
+    ) -> None:
+        if not self._history_revision_is_current(account_revision):
+            return
         dock = self._dock_widget
         if dock is None:
             return
@@ -271,7 +347,8 @@ class ConversationsMixin:
         so another account can never read them, and the common sign-out is a
         user reconnecting to the SAME account, who then keeps the whole store
         instead of re-downloading it. Callers that mean "delete everything"
-        (the Account Settings wipe) clear the thumbs themselves."""
+        (_on_account_deleted, after an account erasure is accepted) call
+        conversation_thumbs.clear_thumbs() themselves."""
         dock = self._dock_widget
         history_cache.clear()
         if dock is None:
@@ -307,20 +384,31 @@ class ConversationsMixin:
             return
         auth = self._auth_manager.get_auth_header()
         client = self._client
+        account_revision = self._history_account_revision()
 
         def _work(sid=session_id, text=title):
             return client.rename_generation_session(auth, sid, text)
 
         task = GenericRequestTask(tr("Renaming session"), _work)
         task.succeeded.connect(
-            lambda payload, sid=session_id: self._apply_conversation_rename(sid, payload)
+            lambda payload, sid=session_id, rev=account_revision:
+            self._apply_conversation_rename(sid, payload, rev)
         )
         task.failed.connect(
-            lambda msg, _code: self._notify(msg, self._warning_level(), duration=6)
+            lambda msg, _code, rev=account_revision:
+            self._notify_history_failure(msg, rev)
         )
         self._hold_history_task(task)
 
-    def _apply_conversation_rename(self, session_id: str, payload) -> None:
+    def _notify_history_failure(self, message: str, account_revision: int | None = None) -> None:
+        if self._history_revision_is_current(account_revision):
+            self._notify(message, self._warning_level(), duration=6)
+
+    def _apply_conversation_rename(
+        self, session_id: str, payload, account_revision: int | None = None
+    ) -> None:
+        if not self._history_revision_is_current(account_revision):
+            return
         dock = self._dock_widget
         if dock is None:
             return
@@ -351,9 +439,3 @@ class ConversationsMixin:
         from qgis.core import Qgis
 
         return Qgis.MessageLevel.Warning
-
-    @staticmethod
-    def _success_level():
-        from qgis.core import Qgis
-
-        return Qgis.MessageLevel.Success

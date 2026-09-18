@@ -8,11 +8,12 @@ from qgis.PyQt.QtWidgets import QPushButton
 from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.auth.activation_manager import get_wall_url, mark_privacy_notice_seen
-from ...core.config_store import get_export_dial_list
+from ...core.config_store import get_export_copy, get_export_dial_list
 from ...core.errors import build_failure_props
 from ...core.i18n import tr
 from ...core.log_scrub import scrub_user_paths as _scrub_paths
 from ...core.logger import log, log_warning
+from ...core.number_format import format_count
 from ...core.prompts import history_cache, prompt_history
 from ..dialogs.error_report_dialog import REPORT_PROBLEM_HREF
 from ..layer_groups import bring_ai_edit_group_to_front
@@ -33,6 +34,15 @@ from .errors import (
 
 
 class GenerationResultsMixin:
+    def _restore_failed_iteration(self) -> None:
+        """Put a failed re-generation back on the result it started from."""
+        started_from_result = bool(
+            getattr(self, "_generation_started_from_result", False)
+        )
+        self._generation_started_from_result = False
+        if started_from_result and self._versions:
+            self._dock_widget._enter_iteration_state()
+
     def _on_generation_progress(self, status: str, percentage: int):
         self._dock_widget.set_progress_message(status, percentage)
 
@@ -40,6 +50,7 @@ class GenerationResultsMixin:
         if self._map_tool:
             self._map_tool.set_locked(False)
         self._dock_widget.set_generating(False)
+        self._restore_failed_iteration()
         # Template metadata arrives in the ctx_snapshot dict copied off the
         # worker thread (C2). Read it before cleanup so generation_failed is
         # segmentable by template in telemetry.
@@ -135,31 +146,43 @@ class GenerationResultsMixin:
             # rephrases its refusal does not silently fall to the generic
             # message.
             if _is_safety_block(message):
-                enriched = tr(
-                    "Generation failed: the request was blocked by a safety filter. "
-                    "You have not been charged. Try rephrasing your prompt."
+                enriched = get_export_copy(
+                    "flows.generation_results.safety_block",
+                    tr(
+                        "Generation failed: the request was blocked by a safety filter. "
+                        "You have not been charged. Try rephrasing your prompt."
+                    ), escape=True,
                 )
             else:
                 # Two thirds of these failures over the 30 days to 2026-07-28
                 # were a question or a role prompt typed into the edit box, so
                 # the message names what the tool does instead of asking for a
                 # blind rephrase.
-                enriched = tr(
-                    "Generation failed: the AI returned no image. You have not been "
-                    "charged. AI Edit draws on the map and cannot answer questions, "
-                    "so describe the change you want to see, then try again."
+                enriched = get_export_copy(
+                    "flows.generation_results.no_image_returned",
+                    tr(
+                        "Generation failed: the AI returned no image. You have not been "
+                        "charged. AI Edit draws on the map and cannot answer questions, "
+                        "so describe the change you want to see, then try again."
+                    ), escape=True,
                 )
             self._dock_widget.set_status(enriched, is_error=True)
             self._offer_model_failure_action(_is_safety_block(message))
         elif _is_service_busy(message, normalized_code):
             # Servers momentarily overloaded; user not charged. Calm inline retry,
             # never the bug-report dialog (nothing for the user to report).
-            enriched = tr(
-                "Our image servers are busy right now. You have not been charged. "
-                "Please wait a moment and try again."
+            enriched = get_export_copy(
+                "flows.generation_results.servers_busy",
+                tr(
+                    "Our image servers are busy right now. You have not been charged. "
+                    "Please wait a moment and try again."
+                ), escape=True,
             )
             self._dock_widget.set_status(enriched, is_error=True)
-            self._dock_widget.set_status_action(tr("Try again"), self._retry_last_prompt)
+            self._dock_widget.set_status_action(
+                get_export_copy("flows.generation_results.try_again", tr("Try again")),
+                self._retry_last_prompt,
+            )
         else:
             enriched = _enrich_error_message(message, code)
             # Reassure on EVERY credit-safe failure that no credit was kept (the
@@ -170,7 +193,12 @@ class GenerationResultsMixin:
                 _CREDIT_REASSURE_CODES,
                 normalize=str.upper,
             ):
-                enriched = f"{enriched} {tr('No credit was used.')}"
+                credit_note = get_export_copy(
+                    "flows.generation_results.no_credit_used",
+                    tr("No credit was used."),
+                    escape=True,
+                )
+                enriched = f"{enriched} {credit_note}"
             request_id = snap.get("request_id") or ""
             policy = _report_policy(normalized_code)
             if policy == "link":
@@ -205,15 +233,28 @@ class GenerationResultsMixin:
         """
         dock = self._dock_widget
         if is_safety_block:
-            dock.set_status_action(tr("Edit your prompt"), dock.focus_prompt_input)
+            dock.set_status_action(
+                get_export_copy("flows.generation_results.edit_your_prompt", tr("Edit your prompt")),
+                dock.focus_prompt_input,
+            )
         else:
             dock.set_status_action(
-                tr("Open the prompt library"), dock._on_browse_templates_clicked
+                get_export_copy(
+                    "flows.generation_results.open_library", tr("Open the Library")
+                ),
+                dock._on_browse_templates_clicked,
             )
 
     def _retry_last_prompt(self) -> None:
-        """Re-run the prompt still in the box, on the same zone."""
+        """Re-run the prompt still in the box, on the same zone.
+
+        On a result screen the box is the next-change one, and the run goes
+        through the same path as its Generate button (same base version,
+        counted as a retry); the first prompt screen keeps its own path."""
         dock = self._dock_widget
+        if dock._result_prompt_widget.isVisible():
+            dock._on_retry_clicked()
+            return
         prompt = dock.get_prompt()
         if prompt:
             dock.generate_clicked.emit(prompt)
@@ -242,7 +283,9 @@ class GenerationResultsMixin:
         except Exception as err:  # nosec B110
             log_warning(f"Could not open error report dialog: {err}")
 
-    def _remember_zone_polygon_for_history(self, request_id: str | None) -> None:
+    def _remember_zone_polygon_for_history(
+        self, request_id: str | None, crs_authid: str | None = None
+    ) -> None:
         """Locally-only companion record so history restore can rebuild the
         zone shape later (spec section 7). No-op with no polygon (a plain
         rectangle zone) or no request id (the run never reached the server).
@@ -251,9 +294,13 @@ class GenerationResultsMixin:
         if not request_id or self._selected_polygon is None or self._selected_polygon.isEmpty():
             return
         try:
-            canvas_crs = self._canvas.mapSettings().destinationCrs()
+            # The polygon was captured in the canvas CRS of export time. Read
+            # the canvas again only when the run did not record it: a CRS
+            # change during the run would otherwise mislabel the shape.
+            if not crs_authid:
+                crs_authid = self._canvas.mapSettings().destinationCrs().authid()
             history_cache.save_zone_polygon(
-                request_id, self._selected_polygon.asWkt(), canvas_crs.authid()
+                request_id, self._selected_polygon.asWkt(), crs_authid
             )
         except Exception as err:  # nosec B110 - local history enrichment is best-effort.
             log_warning(f"zone polygon history save failed: {err}")
@@ -263,7 +310,9 @@ class GenerationResultsMixin:
             self._map_tool.set_locked(False)
         # result_info already holds the ctx snapshot copied off the worker.
         self._last_completed_request_id = result_info.get("request_id")
-        self._remember_zone_polygon_for_history(self._last_completed_request_id)
+        self._remember_zone_polygon_for_history(
+            self._last_completed_request_id, result_info.get("crs_authid")
+        )
         vector_color: str | None = result_info.get("vector_color")
         vector_classes: list[dict] | None = result_info.get("vector_classes")
         template_id: str | None = result_info.get("template_id")
@@ -323,7 +372,11 @@ class GenerationResultsMixin:
             # The base this result was generated from is the version that was
             # selected when generation started (still current until we append).
             base_index = self._selected_version_index
-            base_label = tr("Original") if base_index <= 0 else f"V{base_index}"
+            base_label = (
+                tr("Original")
+                if base_index <= 0
+                else f"V{base_index}"
+            )
             self._versions.append({
                 "layer_id": layer.id(),
                 "request_id": self._last_completed_request_id,
@@ -354,7 +407,7 @@ class GenerationResultsMixin:
             # Metadata surfaced in the version-details dialog: the definition the
             # user picked and whether a prompt template shaped this run.
             try:
-                dims = f"{layer.width()} × {layer.height()}"
+                dims = f"{format_count(layer.width())} × {format_count(layer.height())} px"
             except Exception:  # nosec B110 - dimensions are cosmetic only.
                 dims = None
             version_meta = {
@@ -365,7 +418,7 @@ class GenerationResultsMixin:
             }
             try:
                 self._dock_widget.add_version_thumb(thumb, result_prompt, version_meta)
-            except AttributeError:
+            except AttributeError:  # dock without a version strip: thumb is cosmetic
                 pass
             flat_classes = result_info.get("flat_classes") or None
             cta_trigger = ""
@@ -475,10 +528,20 @@ class GenerationResultsMixin:
             telemetry.track(te.RESULT_HIDDEN_WARNED, {"covering_count": len(covering)})
             bar = self._iface.messageBar()
             widget = bar.createMessage(
-                tr("Your result is behind other layers"),
-                tr("It was created, but something opaque is drawn on top of it."),
+                get_export_copy(
+                    "flows.generation_results.result_hidden_title",
+                    tr("Your result is behind other layers"),
+                ),
+                get_export_copy(
+                    "flows.generation_results.result_hidden_body",
+                    tr("It was created, but something opaque is drawn on top of it."),
+                ),
             )
-            front_button = QPushButton(tr("Bring it to the front"))
+            front_button = QPushButton(
+                get_export_copy(
+                    "flows.generation_results.bring_to_front", tr("Bring it to the front")
+                )
+            )
             widget.layout().addWidget(front_button)
 
             def _resolve():
@@ -520,5 +583,5 @@ class GenerationResultsMixin:
                 if sig is None:
                     continue
                 sig.disconnect()
-            except (RuntimeError, TypeError):
+            except (RuntimeError, TypeError):  # worker deleted or signal had no connections
                 pass

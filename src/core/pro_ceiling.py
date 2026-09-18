@@ -8,6 +8,8 @@ plugin release. Reads are cache-only: never a network call.
 """
 from __future__ import annotations
 
+import math
+
 from .auth.activation_manager import _is_safe_email, get_server_config, is_feature_enabled
 
 DEFAULT_CONTACT_EMAIL = "yvann.barbot@terra-lab.ai"
@@ -41,7 +43,7 @@ def pro_ceiling_low_fraction() -> float:
     value = _block().get("low_fraction")
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return DEFAULT_LOW_FRACTION
-    if value != value:  # NaN
+    if math.isnan(value):
         return DEFAULT_LOW_FRACTION
     return min(max(float(value), 0.0), _MAX_LOW_FRACTION)
 

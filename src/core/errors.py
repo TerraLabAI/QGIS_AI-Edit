@@ -13,6 +13,8 @@ class ErrorCode(str, Enum):
     TIMEOUT = "TIMEOUT"
     PROXY_ERROR = "PROXY_ERROR"
     CONNECTION_REFUSED = "CONNECTION_REFUSED"
+    # A filter on the user's network answered 401/403 with its own page.
+    NETWORK_BLOCKED = "NETWORK_BLOCKED"
 
     NO_KEY = "NO_KEY"
     INVALID_KEY = "INVALID_KEY"
@@ -67,6 +69,7 @@ NETWORK_ERROR_CODES = frozenset(
         ErrorCode.TIMEOUT.value,
         ErrorCode.PROXY_ERROR.value,
         ErrorCode.CONNECTION_REFUSED.value,
+        ErrorCode.NETWORK_BLOCKED.value,
     }
 )
 

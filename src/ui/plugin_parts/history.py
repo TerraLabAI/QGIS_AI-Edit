@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import os
+import shutil
+import tempfile
 
 from qgis.core import QgsApplication, QgsGeometry, QgsRectangle
 
 from ...core import telemetry
 from ...core import telemetry_events as te
+from ...core.config_store import get_export_copy, get_export_dial
 from ...core.i18n import tr
 from ...core.logger import log_warning
+from ...core.number_format import format_count
 from ...core.prompts import conversation_thumbs, history_cache
 from ...core.prompts.session_grouping import session_jobs_for
 from ...workers.generic_request_task import GenericRequestTask
@@ -16,10 +20,94 @@ from ..raster_writer import (
     extent_and_crs_from_job,
     get_output_dir,
 )
+from .lifecycle import REQUEST_TASK_SIGNALS, drain_task
 from .session_base_notice import SessionBaseNoticeMixin
+
+# Message-bar notice durations, in seconds.
+_NOTIFY_QUICK_S = 2
+_NOTIFY_BRIEF_S = 4
+_NOTIFY_CONFIRM_S = 5
+_NOTIFY_ERROR_S = 6
+_NOTIFY_PERSISTENT_S = 8
+
+
+def _is_strictly_under(path: str, parent: str) -> bool:
+    """True when ``path`` sits inside ``parent`` (never ``parent`` itself).
+    realpath expands 8.3 short names, which ascii_safe_dir hands out."""
+    try:
+        child = os.path.normcase(os.path.realpath(path))
+        root = os.path.normcase(os.path.realpath(parent))
+        return child != root and os.path.commonpath([child, root]) == root  # win-ok: normcase(realpath) on both sides
+    except (OSError, ValueError):
+        return False
+
+
+def place_downloaded_geotiff(produced: str, tmp_dir: str, dest: str) -> str:
+    """Copy what write_geotiff produced to the user's ``dest``; return the
+    final path.
+
+    write_geotiff may answer with a file outside ``tmp_dir`` (an ASCII-safe
+    reroute or the fallback folder) or with a rescued .png/.jpg plus its
+    .aux.xml georeferencing. A rescued image keeps its own extension, so a PNG
+    never hides under a .tif name, and its sidecar travels with it. Each file
+    is staged beside ``dest`` and swapped in, so an old file is only replaced
+    by a complete one. The produced files, and their folder when it is a temp
+    folder of its own, are removed whatever happens.
+    """
+    from ...core.output_paths import remove_with_retry, replace_staged_file
+
+    ext = os.path.splitext(produced)[1].lower()
+    if ext != ".tif":
+        dest = os.path.splitext(dest)[0] + ext
+    moves = [(produced, dest)]
+    if os.path.exists(produced + ".aux.xml"):
+        moves.append((produced + ".aux.xml", dest + ".aux.xml"))
+    try:
+        for source, target in moves:
+            staged = target + ".part"
+            try:
+                # A copy, not shutil.move: across volumes move is copy then
+                # unlink, and the unlink fails while a scanner reads the file.
+                shutil.copyfile(source, staged)
+            except OSError:
+                remove_with_retry(staged)
+                raise
+            replace_staged_file(staged, target)
+    finally:
+        for source, _target in moves:
+            remove_with_retry(source)
+        produced_dir = os.path.dirname(produced)
+        if (
+            not _is_strictly_under(produced_dir, tmp_dir)
+            and os.path.normcase(os.path.realpath(produced_dir))
+            != os.path.normcase(os.path.realpath(tmp_dir))
+            and _is_strictly_under(produced_dir, tempfile.gettempdir())
+        ):
+            shutil.rmtree(produced_dir, ignore_errors=True)
+    return dest
 
 
 class HistoryMixin(SessionBaseNoticeMixin):
+    def _history_account_revision(self) -> int:
+        """Return the account generation owned by history tasks."""
+        return getattr(self, "_history_account_revision_value", 0)
+
+    def _advance_history_account_revision(self) -> int:
+        revision = self._history_account_revision() + 1
+        self._history_account_revision_value = revision
+        return revision
+
+    def _history_revision_is_current(self, revision: int | None) -> bool:
+        return revision is None or revision == self._history_account_revision()
+
+    def _cancel_history_tasks(self) -> None:
+        """Disconnect and cancel account-bound history tasks on sign-out."""
+        for task in list(getattr(self, "_history_tasks", [])):
+            drain_task(task, REQUEST_TASK_SIGNALS + ("taskTerminated",))
+        self._history_tasks.clear()
+        self._conversations_refresh_task = None
+        self._version_fetch_active = False
+
     def _on_template_selected(self, template_id: str, template_name: str = ""):
         """Track template selection for analytics."""
         props = {"template_id": template_id}
@@ -46,11 +134,26 @@ class HistoryMixin(SessionBaseNoticeMixin):
         self._history_tasks.append(task)
         task.succeeded.connect(lambda *_: self._release_history_task(task))
         task.failed.connect(lambda *_: self._release_history_task(task))
+        # A Cancel from the QGIS Task Manager emits neither signal above.
+        task.taskTerminated.connect(lambda *_: self._on_history_task_terminated(task))
         QgsApplication.taskManager().addTask(task)
 
     def _release_history_task(self, task):
         if task in self._history_tasks:
             self._history_tasks.remove(task)
+
+    def _on_history_task_terminated(self, task):
+        """taskTerminated also follows a plain failure, which ``failed`` has
+        already released and reported; only a real cancel is left here."""
+        if task not in self._history_tasks:
+            return
+        self._release_history_task(task)
+        try:
+            cancelled = task.isCanceled()
+        except RuntimeError:
+            cancelled = True
+        if cancelled:
+            self._notify(tr("Cancelled"), duration=3)
 
     def _track_history_error(self, error_code: str) -> None:
         """Stable, non-localized failure code for a Library history action."""
@@ -64,19 +167,42 @@ class HistoryMixin(SessionBaseNoticeMixin):
         thread."""
         output_url = job.get("output_url")
         if not output_url:
-            self._notify(tr("This generation's image is no longer available."), duration=4)
+            self._notify(
+                get_export_copy(
+                    "flows.history.image_unavailable",
+                    tr("This generation's image is no longer available."),
+                ),
+                duration=get_export_dial("flows.history.notify_brief_s", _NOTIFY_BRIEF_S),
+            )
             return
         geo = extent_and_crs_from_job(job)
         if geo is None:
-            self._notify(tr("Location data unavailable for this generation."), duration=4)
+            self._notify(
+                get_export_copy(
+                    "flows.history.location_unavailable",
+                    tr("Location data unavailable for this generation."),
+                ),
+                duration=get_export_dial("flows.history.notify_brief_s", _NOTIFY_BRIEF_S),
+            )
             return
+        account_revision = self._history_account_revision()
         task = GenericRequestTask(
-            tr("Adding past generation to the map"),
+            get_export_copy(
+                "flows.history.adding_to_map_task", tr("Adding past generation to the map")
+            ),
             self._make_history_geotiff_work(job, geo),
         )
-        task.succeeded.connect(self._on_history_layer_ready)
-        task.failed.connect(self._on_history_add_to_map_failed)
-        self._notify(tr("Adding to map..."), duration=2)
+        task.succeeded.connect(
+            lambda result, rev=account_revision: self._on_history_layer_ready(result, rev)
+        )
+        task.failed.connect(
+            lambda msg, code, rev=account_revision:
+            self._on_history_add_to_map_failed(msg, code, rev)
+        )
+        self._notify(
+            get_export_copy("flows.history.adding_to_map_status", tr("Adding to map...")),
+            duration=get_export_dial("flows.history.notify_quick_s", _NOTIFY_QUICK_S),
+        )
         self._hold_history_task(task)
 
     def _make_history_geotiff_work(self, job: dict, geo: tuple):
@@ -90,6 +216,7 @@ class HistoryMixin(SessionBaseNoticeMixin):
         prompt = job.get("prompt") or ""
         request_id = job.get("request_id") or ""
         output_dir = get_output_dir()
+        client = self._client
 
         def _work(
             url=output_url, in_url=input_url, ed=extent_dict, wkt=crs_wkt,
@@ -97,14 +224,14 @@ class HistoryMixin(SessionBaseNoticeMixin):
         ):
             from ..raster_writer import before_file_base, write_geotiff
 
-            data = self._client.download_image(url)
+            data = client.download_image(url)
             path = write_geotiff(data, ed, wkt, d, prompt=p)
             # Rebuild the swipe's true before side from the archived input.
             # Best-effort: the output layer works without it.
             before_path = ""
             if in_url:
                 try:
-                    before_data = self._client.download_image(in_url)
+                    before_data = client.download_image(in_url)
                     before_path = write_geotiff(
                         before_data, ed, wkt, d, prompt=p,
                         file_base=before_file_base(path),
@@ -119,11 +246,20 @@ class HistoryMixin(SessionBaseNoticeMixin):
 
         return _work
 
-    def _on_history_add_to_map_failed(self, msg, _code):
+    def _on_history_add_to_map_failed(
+        self, msg, _code, account_revision: int | None = None
+    ):
+        if not self._history_revision_is_current(account_revision):
+            return
         self._track_history_error("add_to_map_download_failed")
-        self._notify(tr("Could not add to map: {msg}").format(msg=msg), duration=6)
+        self._notify(
+            tr("Could not add to map: {msg}").format(msg=msg),
+            duration=get_export_dial("flows.history.notify_error_s", _NOTIFY_ERROR_S),
+        )
 
-    def _on_history_layer_ready(self, result):
+    def _on_history_layer_ready(self, result, account_revision: int | None = None):
+        if not self._history_revision_is_current(account_revision):
+            return
         from qgis.core import Qgis
 
         path = (result or {}).get("path")
@@ -138,7 +274,10 @@ class HistoryMixin(SessionBaseNoticeMixin):
             )
         except Exception as err:  # noqa: BLE001
             self._track_history_error("add_to_map_layer_failed")
-            self._notify(tr("Could not add layer: {msg}").format(msg=err), duration=6)
+            self._notify(
+                tr("Could not add layer: {msg}").format(msg=err),
+                duration=get_export_dial("flows.history.notify_error_s", _NOTIFY_ERROR_S),
+            )
             return
         if layer is not None:
             try:
@@ -154,7 +293,13 @@ class HistoryMixin(SessionBaseNoticeMixin):
             path,
             (result or {}).get("before_path") or "",
         )
-        self._notify(tr("Added to map."), level=Qgis.MessageLevel.Success, duration=4)
+        self._notify(
+            get_export_copy(
+                "flows.history.added_to_map_as", tr("Added to your map as {name}")
+            ).replace("{name}", layer.name() if layer is not None else ""),
+            level=Qgis.MessageLevel.Success,
+            duration=get_export_dial("flows.history.notify_brief_s", _NOTIFY_BRIEF_S),
+        )
         telemetry.track(te.HISTORY_RESTORED, {"kind": "add_to_map"})
 
     def _on_history_download(self, job: dict):
@@ -169,11 +314,20 @@ class HistoryMixin(SessionBaseNoticeMixin):
         side = job.get("download_side") or "output"
         output_url = job.get("input_url") if side == "input" else job.get("output_url")
         if not output_url:
-            self._notify(tr("This generation's image is no longer available."), duration=4)
+            self._notify(
+                get_export_copy(
+                    "flows.history.image_unavailable",
+                    tr("This generation's image is no longer available."),
+                ),
+                duration=get_export_dial("flows.history.notify_brief_s", _NOTIFY_BRIEF_S),
+            )
             return
-        base_slug = _slugify(job.get("prompt") or "") or "ai_edit"
+        # Same 40-character cap as the output writer: a long prompt would
+        # otherwise push the file name past the Windows path limit.
+        base_slug = _slugify(job.get("prompt") or "")[:40] or "ai_edit"
         slug = f"{base_slug}_{side}"
         geo = extent_and_crs_from_job(job)
+        client = self._client
 
         if geo is not None:
             extent_dict, crs_wkt = geo
@@ -181,7 +335,7 @@ class HistoryMixin(SessionBaseNoticeMixin):
             default_name = os.path.join(get_output_dir(), f"{slug}.tif")
             dest, _filter = QFileDialog.getSaveFileName(
                 self._iface.mainWindow(),
-                tr("Save georeferenced GeoTIFF"),
+                get_export_copy("flows.history.save_geotiff_title", tr("Save georeferenced GeoTIFF")),
                 default_name,
                 tr("GeoTIFF (*.tif)"),
             )
@@ -189,31 +343,26 @@ class HistoryMixin(SessionBaseNoticeMixin):
                 return
 
             def _work(url=output_url, ed=extent_dict, wkt=crs_wkt, p=prompt, path=dest):
-                import shutil
-                import tempfile
+                from ..raster_writer import write_geotiff
 
-                from ..raster_writer import replace_staged_file, write_geotiff
-
-                data = self._client.download_image(url)
+                data = client.download_image(url)
                 tmp_dir = tempfile.mkdtemp(prefix="ai_edit_dl_")
                 try:
                     produced = write_geotiff(data, ed, wkt, tmp_dir, prompt=p)
-                    # Stage beside the destination (same volume, so the swap is
-                    # atomic) instead of unlinking it first: on Windows the
+                    # Staged beside the destination (same volume, so the swap
+                    # is atomic) instead of unlinking it first: on Windows the
                     # unlink fails outright when the .tif is already loaded as
                     # a layer, and on any platform it would destroy the old
-                    # file when the move then failed.
-                    staged = path + ".part"
-                    shutil.move(produced, staged)
-                    replace_staged_file(staged, path)
+                    # file when the copy then failed.
+                    final = place_downloaded_geotiff(produced, tmp_dir, path)
                 finally:
                     shutil.rmtree(tmp_dir, ignore_errors=True)
-                return {"path": path}
+                return {"path": final}
         else:
             default_name = os.path.join(get_output_dir(), f"{slug}.png")
             dest, _filter = QFileDialog.getSaveFileName(
                 self._iface.mainWindow(),
-                tr("Save generation image"),
+                get_export_copy("flows.history.save_image_title", tr("Save generation image")),
                 default_name,
                 tr("Images (*.png *.jpg *.webp);;All files (*)"),
             )
@@ -223,33 +372,52 @@ class HistoryMixin(SessionBaseNoticeMixin):
             def _work(url=output_url, path=dest):
                 from ..raster_writer import replace_staged_file
 
-                data = self._client.download_image(url)
+                data = client.download_image(url)
                 tmp = path + ".part"
                 with open(tmp, "wb") as f:
                     f.write(data)
                 replace_staged_file(tmp, path)
                 return {"path": path}
 
-        task = GenericRequestTask(tr("Downloading generation"), _work)
-        task.succeeded.connect(self._on_history_download_done)
-        task.failed.connect(self._on_history_download_failed)
+        account_revision = self._history_account_revision()
+        task = GenericRequestTask(
+            get_export_copy("flows.history.downloading_generation_task", tr("Downloading generation")),
+            _work,
+        )
+        task.succeeded.connect(
+            lambda result, rev=account_revision: self._on_history_download_done(result, rev)
+        )
+        task.failed.connect(
+            lambda msg, code, rev=account_revision:
+            self._on_history_download_failed(msg, code, rev)
+        )
         self._hold_history_task(task)
 
-    def _on_history_download_failed(self, msg, _code):
+    def _on_history_download_failed(
+        self, msg, _code, account_revision: int | None = None
+    ):
+        if not self._history_revision_is_current(account_revision):
+            return
         self._track_history_error("download_failed")
-        self._notify(tr("Download failed: {msg}").format(msg=msg), duration=6)
+        self._notify(
+            tr("Download failed: {msg}").format(msg=msg),
+            duration=get_export_dial("flows.history.notify_error_s", _NOTIFY_ERROR_S),
+        )
 
-    def _on_history_download_done(self, result):
+    def _on_history_download_done(self, result, account_revision: int | None = None):
+        if not self._history_revision_is_current(account_revision):
+            return
         from qgis.core import Qgis
+        from qgis.PyQt.QtCore import QDir
 
         path = (result or {}).get("path", "")
         # A georeferenced .tif exports as geotiff; the raw-image fallback keeps
         # its own extension (png/jpg/webp).
         fmt = "geotiff" if path.lower().endswith(".tif") else "image"
         self._notify(
-            tr("Saved to {path}").format(path=path),
+            tr("Saved to {path}").format(path=QDir.toNativeSeparators(path)),
             level=Qgis.MessageLevel.Success,
-            duration=5,
+            duration=get_export_dial("flows.history.notify_confirm_s", _NOTIFY_CONFIRM_S),
         )
         telemetry.track(te.HISTORY_EXPORTED, {"format": fmt})
 
@@ -262,7 +430,13 @@ class HistoryMixin(SessionBaseNoticeMixin):
         geo = extent_and_crs_from_job(job)
         if geo is None:
             self._track_history_error("restore_no_location")
-            self._notify(tr("Location data unavailable for this generation."), duration=4)
+            self._notify(
+                get_export_copy(
+                    "flows.history.location_unavailable",
+                    tr("Location data unavailable for this generation."),
+                ),
+                duration=get_export_dial("flows.history.notify_brief_s", _NOTIFY_BRIEF_S),
+            )
             return
         extent_dict, crs_wkt = geo
         # Locally-only companion lookup (spec section 7, D2): the polygon
@@ -295,7 +469,13 @@ class HistoryMixin(SessionBaseNoticeMixin):
         # V1, V2...) so the next edit continues the chain instead of starting
         # a blank lineage. Thumbnails arrive async; the strip appears then.
         self._restore_session_chain(job)
-        self._notify(tr("Generation restored. Adjust and generate again."), duration=4)
+        self._notify(
+            get_export_copy(
+                "flows.history.session_reopened",
+                tr("Session reopened. Edit the prompt or pick a version, then Generate."),
+            ),
+            duration=get_export_dial("flows.history.notify_brief_s", _NOTIFY_BRIEF_S),
+        )
         telemetry.track(te.HISTORY_RESTORED, {"kind": "restore"})
 
     def _session_chain_for(self, job: dict) -> list[dict]:
@@ -342,19 +522,25 @@ class HistoryMixin(SessionBaseNoticeMixin):
             self._seed_restored_strip(chain, restored_rid, pixmaps)
             return
 
-        def _work(items=missing):
+        client = self._client
+
+        def _work(items=missing, c=client):
             blobs = {}
             for i, url in items:
                 try:
-                    blobs[i] = self._client.download_image(url)
+                    blobs[i] = c.download_image(url)
                 except Exception as err:  # noqa: BLE001
                     log_warning(f"session thumb download failed: {err}")
             return {"blobs": blobs}
 
-        task = GenericRequestTask(tr("Loading session"), _work)
+        account_revision = self._history_account_revision()
+        task = GenericRequestTask(
+            get_export_copy("flows.history.loading_session_task", tr("Loading session")), _work
+        )
         task.succeeded.connect(
-            lambda payload, c=chain, rid=restored_rid, base=tuple(pixmaps):
-            self._on_session_thumbs_loaded(c, rid, base, payload)
+            lambda payload, c=chain, rid=restored_rid, base=tuple(pixmaps),
+            rev=account_revision:
+            self._on_session_thumbs_loaded(c, rid, base, payload, rev)
         )
         task.failed.connect(
             lambda msg, _code: log_warning(f"session restore failed: {msg}")
@@ -362,8 +548,11 @@ class HistoryMixin(SessionBaseNoticeMixin):
         self._hold_history_task(task)
 
     def _on_session_thumbs_loaded(
-        self, chain: list, selected_rid: str | None, base: tuple, payload: dict
+        self, chain: list, selected_rid: str | None, base: tuple, payload: dict,
+        account_revision: int | None = None,
     ) -> None:
+        if not self._history_revision_is_current(account_revision):
+            return
         pixmaps = list(base)
         for i, blob in ((payload or {}).get("blobs") or {}).items():
             if 0 <= i < len(pixmaps) and pixmaps[i] is None:
@@ -390,12 +579,14 @@ class HistoryMixin(SessionBaseNoticeMixin):
         for j, pix in zip(chain, pixmaps[1:]):
             dims = None
             if j.get("output_w") and j.get("output_h"):
-                dims = f"{j['output_w']} × {j['output_h']}"
+                dims = f"{format_count(j['output_w'])} × {format_count(j['output_h'])} px"
             meta = {
                 "definition": j.get("resolution") or "",
                 "dimensions": dims,
                 "template_name": j.get("template_name"),
-                "base_label": None,
+                # "Made from" in the version card, when the history row says
+                # which generation this one was built on.
+                "base_label": self._restored_base_label(j, chain),
             }
             # The job rides along so a click on this tile can download the
             # archived output and put the actual layer on the map.
@@ -426,6 +617,20 @@ class HistoryMixin(SessionBaseNoticeMixin):
             self._materialize_version_layer(index)
         else:
             self._fire_base_imagery_check()
+
+    @staticmethod
+    def _restored_base_label(job: dict, chain: list) -> str | None:
+        """'V{n}' for the version ``job`` was generated from, read off its
+        parent id within the restored chain. None when the row does not name
+        a parent inside this chain (older rows, a version started from the
+        Original): the card then skips the fact rather than guess."""
+        parent = job.get("parent_request_id")
+        if not parent:
+            return None
+        for position, sibling in enumerate(chain, start=1):
+            if sibling.get("request_id") == parent:
+                return tr("V{n}").format(n=position)
+        return None
 
     # --- Restored-version layer materialization ---------------------------
     # A restored session seeds the strip with thumbnails only (layer_id None
@@ -487,14 +692,26 @@ class HistoryMixin(SessionBaseNoticeMixin):
         job = self._version_job_for(version)
         if not job:
             self._track_history_error("version_layer_no_url")
-            self._notify(tr("This generation's image is no longer available."), duration=4)
+            self._notify(
+                get_export_copy(
+                    "flows.history.image_unavailable",
+                    tr("This generation's image is no longer available."),
+                ),
+                duration=get_export_dial("flows.history.notify_brief_s", _NOTIFY_BRIEF_S),
+            )
             self._revert_version_selection(prev_index)
             self._disarm_base_imagery_check()
             return
         geo = extent_and_crs_from_job(job)
         if geo is None:
             self._track_history_error("version_layer_no_location")
-            self._notify(tr("Location data unavailable for this generation."), duration=4)
+            self._notify(
+                get_export_copy(
+                    "flows.history.location_unavailable",
+                    tr("Location data unavailable for this generation."),
+                ),
+                duration=get_export_dial("flows.history.notify_brief_s", _NOTIFY_BRIEF_S),
+            )
             self._revert_version_selection(prev_index)
             self._disarm_base_imagery_check()
             return
@@ -502,19 +719,25 @@ class HistoryMixin(SessionBaseNoticeMixin):
         if self._dock_widget is not None:
             self._dock_widget.set_version_strip_locked(True)
         session_token = self._session_id
+        account_revision = self._history_account_revision()
         task = GenericRequestTask(
-            tr("Adding past generation to the map"),
+            get_export_copy(
+                "flows.history.adding_to_map_task", tr("Adding past generation to the map")
+            ),
             self._make_history_geotiff_work(job, geo),
         )
         task.succeeded.connect(
-            lambda result, i=index, tok=session_token, p=prev_index:
-            self._on_version_layer_ready(i, tok, result, prev_index=p)
+            lambda result, i=index, tok=session_token, p=prev_index, rev=account_revision:
+            self._on_version_layer_ready(i, tok, result, prev_index=p, account_revision=rev)
         )
         task.failed.connect(
-            lambda msg, code, p=prev_index:
-            self._on_version_layer_failed(msg, code, p)
+            lambda msg, code, p=prev_index, rev=account_revision:
+            self._on_version_layer_failed(msg, code, p, rev)
         )
-        self._notify(tr("Adding to map..."), duration=2)
+        self._notify(
+            get_export_copy("flows.history.adding_to_map_status", tr("Adding to map...")),
+            duration=get_export_dial("flows.history.notify_quick_s", _NOTIFY_QUICK_S),
+        )
         self._hold_history_task(task)
 
     def _end_version_fetch(self) -> None:
@@ -535,7 +758,12 @@ class HistoryMixin(SessionBaseNoticeMixin):
             self._selected_version_index = prev_index
             self._dock_widget.select_version(prev_index)
 
-    def _on_version_layer_failed(self, msg: str, code: str, prev_index: int | None) -> None:
+    def _on_version_layer_failed(
+        self, msg: str, code: str, prev_index: int | None,
+        account_revision: int | None = None,
+    ) -> None:
+        if not self._history_revision_is_current(account_revision):
+            return
         from ...core.errors import NETWORK_ERROR_CODES
 
         self._end_version_fetch()
@@ -554,15 +782,25 @@ class HistoryMixin(SessionBaseNoticeMixin):
             )
             if self._dock_widget is not None:
                 self._dock_widget.set_status(offline, is_error=True)
-            self._notify(offline, self._warning_level(), duration=8)
+            self._notify(
+                offline,
+                self._warning_level(),
+                duration=get_export_dial("flows.history.notify_persistent_s", _NOTIFY_PERSISTENT_S),
+            )
         else:
-            self._notify(tr("Could not add to map: {msg}").format(msg=msg), duration=6)
+            self._notify(
+                tr("Could not add to map: {msg}").format(msg=msg),
+                duration=get_export_dial("flows.history.notify_error_s", _NOTIFY_ERROR_S),
+            )
         self._revert_version_selection(prev_index)
 
     def _on_version_layer_ready(
         self, index: int, session_token: str | None, result: dict,
         prev_index: int | None = None,
+        account_revision: int | None = None,
     ) -> None:
+        if not self._history_revision_is_current(account_revision):
+            return
         self._end_version_fetch()
         # Stale arrival: the user drew a new zone or restored something else,
         # which minted a new session id. The file stays on disk but must not
@@ -584,7 +822,10 @@ class HistoryMixin(SessionBaseNoticeMixin):
             )
         except Exception as err:  # noqa: BLE001
             self._track_history_error("version_layer_add_failed")
-            self._notify(tr("Could not add layer: {msg}").format(msg=err), duration=6)
+            self._notify(
+                tr("Could not add layer: {msg}").format(msg=err),
+                duration=get_export_dial("flows.history.notify_error_s", _NOTIFY_ERROR_S),
+            )
             self._disarm_base_imagery_check()
             return
         if layer is None:
@@ -726,7 +967,13 @@ class HistoryMixin(SessionBaseNoticeMixin):
         src_crs = QgsCoordinateReferenceSystem()
         src_crs.createFromWkt(crs_wkt)
         if not src_crs.isValid():
-            self._notify(tr("Location data unavailable for this generation."), duration=4)
+            self._notify(
+                get_export_copy(
+                    "flows.history.location_unavailable",
+                    tr("Location data unavailable for this generation."),
+                ),
+                duration=get_export_dial("flows.history.notify_brief_s", _NOTIFY_BRIEF_S),
+            )
             return False
         rect = QgsRectangle(
             float(extent_dict["xmin"]),
@@ -741,12 +988,21 @@ class HistoryMixin(SessionBaseNoticeMixin):
                 rect = xform.transformBoundingBox(rect)
             except Exception as err:  # noqa: BLE001
                 log_warning(f"restore zone transform failed: {err}")
-                self._notify(tr("Could not place the zone on the current map."), duration=4)
+                self._notify(
+                    get_export_copy(
+                        "flows.history.zone_placement_failed",
+                        tr("Could not place the zone on the current map."),
+                    ),
+                    duration=get_export_dial("flows.history.notify_brief_s", _NOTIFY_BRIEF_S),
+                )
                 return False
         try:
             validate_zone(rect, canvas_crs, self._canvas.rotation())
         except AIEditError as err:
-            self._notify(err.message, duration=5)
+            self._notify(
+                err.message,
+                duration=get_export_dial("flows.history.notify_confirm_s", _NOTIFY_CONFIRM_S),
+            )
             return False
         except Exception:  # nosec B110 - validation is best-effort here.
             pass
@@ -781,24 +1037,34 @@ class HistoryMixin(SessionBaseNoticeMixin):
         if not urls or self._client is None:
             return
 
-        def _work(items=tuple(urls)):
+        client = self._client
+
+        def _work(items=tuple(urls), c=client):
             blobs = []
             for url in items:
                 try:
-                    blobs.append(self._client.download_image(url))
+                    blobs.append(c.download_image(url))
                 except Exception as err:  # noqa: BLE001
                     log_warning(f"reference image download failed: {err}")
                     blobs.append(None)
             return {"blobs": blobs}
 
-        task = GenericRequestTask(tr("Loading reference images"), _work)
-        task.succeeded.connect(self._on_reference_images_loaded)
+        account_revision = self._history_account_revision()
+        task = GenericRequestTask(
+            get_export_copy("flows.history.loading_reference_images_task", tr("Loading reference images")),
+            _work,
+        )
+        task.succeeded.connect(
+            lambda result, rev=account_revision: self._on_reference_images_loaded(result, rev)
+        )
         task.failed.connect(
             lambda msg, _code: log_warning(f"reference reload failed: {msg}")
         )
         self._hold_history_task(task)
 
-    def _on_reference_images_loaded(self, result):
+    def _on_reference_images_loaded(self, result, account_revision: int | None = None):
+        if not self._history_revision_is_current(account_revision):
+            return
         from qgis.PyQt.QtCore import QByteArray
         from qgis.PyQt.QtGui import QImage
 

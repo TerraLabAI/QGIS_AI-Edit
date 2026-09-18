@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 
-from ..config_store import get_export_dial
+from ..config_store import get_export_copy, get_export_dial
 from ..errors import NETWORK_ERROR_CODES, ErrorCode
 from ..i18n import tr
 
@@ -33,16 +33,22 @@ class AuthManager:
         self._activation_key = ""
         self._usage_cache: dict | None = None
         self._usage_cache_monotonic = 0.0
-        self._usage_lock = threading.Lock()
+        self._usage_lock = threading.RLock()
+        self._key_revision = 0
 
     def set_activation_key(self, key: str):
-        self._activation_key = key.strip() if key else ""
+        normalized = key.strip() if isinstance(key, str) else ""
         with self._usage_lock:
+            self._activation_key = normalized
+            self._key_revision += 1
             self._usage_cache = None
+            self._usage_cache_monotonic = 0.0
 
-    def _store_usage(self, usage) -> None:
+    def _store_usage(self, usage, revision: int | None = None) -> None:
         if isinstance(usage, dict) and "error" not in usage:
             with self._usage_lock:
+                if revision is not None and revision != self._key_revision:
+                    return
                 self._usage_cache = dict(usage)
                 self._usage_cache_monotonic = time.monotonic()
 
@@ -70,10 +76,12 @@ class AuthManager:
 
     def get_auth_header(self) -> dict:
         """Build auth headers. Requires activation key."""
-        if not self._activation_key:
+        with self._usage_lock:
+            key = self._activation_key
+        if not key:
             return {}
         headers = {
-            "Authorization": f"Bearer {self._activation_key}",
+            "Authorization": f"Bearer {key}",
             "X-Product-ID": "ai-edit",
         }
         # Anonymous per-machine hash so the server can apply the device limit.
@@ -98,13 +106,18 @@ class AuthManager:
         if not self._activation_key:
             return (
                 False,
-                tr("No activation key. Enter your key to use AI Edit."),
+                get_export_copy(
+                    "pipeline.auth_manager.no_key",
+                    tr("No activation key. Enter your key to use AI Edit."),
+                ),
                 ErrorCode.NO_KEY.value,
             )
 
-        usage = self._fresh_cached_usage()
-        if usage is None:
+        with self._usage_lock:
+            revision = self._key_revision
             auth = self.get_auth_header()
+            usage = self._fresh_cached_usage()
+        if usage is None:
             try:
                 usage = self._client.get_usage(
                     auth=auth,
@@ -115,32 +128,56 @@ class AuthManager:
             except Exception:
                 return (
                     False,
-                    tr("No internet connection. Check your network and try again."),
+                    get_export_copy(
+                        "pipeline.auth_manager.no_network",
+                        tr("No internet connection. Check your network and try again."),
+                    ),
                     ErrorCode.NO_NETWORK.value,
                 )
-            self._store_usage(usage)
+            self._store_usage(usage, revision)
 
+        with self._usage_lock:
+            if revision != self._key_revision:
+                return False, tr("Your account changed. Please try again."), ErrorCode.NO_KEY.value
+        if not isinstance(usage, dict):
+            # Missing quota data does not override the submit endpoint's check.
+            return True, "usage unavailable", ""
         if "error" in usage:
-            code = usage.get("code", "")
+            code = str(usage.get("code") or "").strip().upper()
             if code in NETWORK_ERROR_CODES:
                 # Keep the specific network code so the UI shows the matching hint
                 # and stays inline (no bug-report dialog for a connectivity blip).
                 return (
                     False,
-                    tr("No internet connection. Check your network and try again."),
+                    get_export_copy(
+                        "pipeline.auth_manager.no_network",
+                        tr("No internet connection. Check your network and try again."),
+                    ),
                     code,
                 )
             if code == "INVALID_KEY":
-                return False, tr("Invalid activation key."), ErrorCode.INVALID_KEY.value
+                return (
+                    False,
+                    get_export_copy("pipeline.auth_manager.invalid_key", tr("Invalid activation key.")),
+                    ErrorCode.INVALID_KEY.value,
+                )
             if code == "SUBSCRIPTION_INACTIVE":
-                return False, tr("Subscription expired."), ErrorCode.SUBSCRIPTION_EXPIRED.value
+                return (
+                    False,
+                    get_export_copy("pipeline.auth_manager.subscription_expired", tr("Subscription expired.")),
+                    ErrorCode.SUBSCRIPTION_EXPIRED.value,
+                )
             if code == "NO_AUTH":
                 return (
                     False,
-                    tr("No activation key. Enter your key to use AI Edit."),
+                    get_export_copy(
+                        "pipeline.auth_manager.no_key",
+                        tr("No activation key. Enter your key to use AI Edit."),
+                    ),
                     ErrorCode.NO_KEY.value,
                 )
-            return False, usage.get("error", tr("Unknown error")), code
+            unknown_error = get_export_copy("pipeline.auth_manager.unknown_error", tr("Unknown error"))
+            return False, str(usage.get("error") or unknown_error), code
 
         used = usage.get("images_used")
         limit = usage.get("images_limit")
@@ -148,16 +185,18 @@ class AuthManager:
         # A payload missing either field must never block: defaulting a missing
         # limit to 0 read as "quota exhausted" for a valid paid user. The server
         # re-checks quota on submit anyway, so allow and let it arbitrate.
-        if not isinstance(used, int) or not isinstance(limit, int):
+        if type(used) is not int or type(limit) is not int or used < 0 or limit < 0:
             return True, "usage unavailable", ""
 
         if used >= limit:
             is_free = usage.get("is_free_tier", False)
             if is_free:
-                # Free credits renew monthly on the 1st (UTC, server-side).
+                # Free credits renew at the account's monthly reset (server-side).
                 return (
                     False,
-                    tr("You've used this month's {limit} free credits. They renew on the 1st.").format(limit=limit),
+                    tr("You've used this month's {limit} free credits. They renew at your next monthly reset.").format(
+                        limit=limit,
+                    ),
                     ErrorCode.TRIAL_EXHAUSTED.value,
                 )
             return (
@@ -173,13 +212,30 @@ class AuthManager:
         credit display must be authoritative) and refreshes the snapshot the
         pre-generation check reuses."""
         if not self._activation_key:
-            return {"error": tr("No activation key"), "code": ErrorCode.NO_KEY.value}
+            return {
+                "error": get_export_copy("pipeline.auth_manager.no_key_short", tr("No activation key")),
+                "code": ErrorCode.NO_KEY.value,
+            }
+        with self._usage_lock:
+            revision = self._key_revision
+            auth = self.get_auth_header()
         try:
             usage = self._client.get_usage(
-                auth=self.get_auth_header(),
+                auth=auth,
                 timeout_ms=get_export_dial("auth.credits_timeout_ms", _CREDITS_TIMEOUT_MS),
             )
         except Exception:
-            return {"error": tr("Connection error"), "code": ErrorCode.NO_NETWORK.value}
-        self._store_usage(usage)
+            return {
+                "error": get_export_copy("pipeline.auth_manager.connection_error", tr("Connection error")),
+                "code": ErrorCode.NO_NETWORK.value,
+            }
+        with self._usage_lock:
+            if revision != self._key_revision:
+                return {"error": tr("Your account changed. Please try again."), "code": ErrorCode.NO_KEY.value}
+        if not isinstance(usage, dict):
+            return {
+                "error": tr("Unexpected response from the server. Please try again."),
+                "code": ErrorCode.UNKNOWN.value,
+            }
+        self._store_usage(usage, revision)
         return usage

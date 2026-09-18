@@ -3489,5 +3489,1693 @@ We'd love to hear from you!</source>
         <source>Later</source>
         <translation>稍后</translation>
     </message>
+    <message>
+        <source>(no email)</source>
+        <translation>(无邮箱)</translation>
+    </message>
+    <message>
+        <source>1 polygon</source>
+        <translation>1 个多边形</translation>
+    </message>
+    <message>
+        <source>1 prompt</source>
+        <translation>1 个 prompt</translation>
+    </message>
+    <message>
+        <source>1 stroke</source>
+        <translation>1 笔</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Draw&lt;/b&gt;&lt;br&gt;Draw lines, arrows or circles on the map to show the AI what to change and where. Your drawing is sent with the prompt as visual guidance.</source>
+        <translation>&lt;b&gt;绘制&lt;/b&gt;&lt;br&gt;在地图上绘制线条、箭头或圆圈，告诉 AI 要更改什么以及在哪里更改。您的绘图会与 prompt 一起发送，作为视觉指引。</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Library&lt;/b&gt;&lt;br&gt;Ready-made prompts, your recent prompts and your favorites.</source>
+        <translation>&lt;b&gt;库&lt;/b&gt;&lt;br&gt;现成的 prompt、您最近使用的 prompt 和收藏夹。</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Higher quality is sharper and more precise, and costs more credits. Standard (1K), Detailed (2K), Maximum (4K).</source>
+        <translation>&lt;b&gt;质量&lt;/b&gt;&lt;br&gt;质量越高，结果越清晰精准，消耗的积分也越多。标准（1K）、详细（2K）、最高（4K）。</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;References&lt;/b&gt;&lt;br&gt;Add an image or data file from disk, or one of your project's layers, as guidance for the AI. You can also drag a layer from the Layers panel straight into the prompt box. Everything is cropped to your zone.</source>
+        <translation>&lt;b&gt;参考&lt;/b&gt;&lt;br&gt;从磁盘添加图像或数据文件，或添加项目中的 layer，为 AI 提供指引。您也可以将 layer 面板中的 layer 直接拖入 prompt 框。所有内容都会裁剪到您的区域内。</translation>
+    </message>
+    <message>
+        <source>A newer version is ready. Opens the QGIS plugin manager on it.</source>
+        <translation>有新版本可用。将在其中打开 QGIS plugin 管理器。</translation>
+    </message>
+    <message>
+        <source>AI Edit Pro</source>
+        <translation>AI Edit Pro</translation>
+    </message>
+    <message>
+        <source>AI Edit Settings</source>
+        <translation>AI Edit 设置</translation>
+    </message>
+    <message>
+        <source>AI Edit Settings...</source>
+        <translation>AI Edit 设置...</translation>
+    </message>
+    <message>
+        <source>AI Edit and your data</source>
+        <translation>AI Edit 与您的数据</translation>
+    </message>
+    <message>
+        <source>About 150 edits a month and higher-resolution results. Cancel anytime.</source>
+        <translation>每月约 150 次编辑和更高分辨率的结果。随时取消。</translation>
+    </message>
+    <message>
+        <source>Above 0 grows every shape outward, below 0 shrinks it inward.</source>
+        <translation>大于 0 会使每个形状向外扩展，小于 0 会使其向内收缩。</translation>
+    </message>
+    <message>
+        <source>Account</source>
+        <translation>账户</translation>
+    </message>
+    <message>
+        <source>Account created. Outline an area on the example map to make your first edit.</source>
+        <translation>账户已创建。在示例地图上勾勒一个区域，开始您的第一次编辑。</translation>
+    </message>
+    <message>
+        <source>Account deletion scheduled</source>
+        <translation>已安排删除账户</translation>
+    </message>
+    <message>
+        <source>Account not deleted.</source>
+        <translation>账户未删除。</translation>
+    </message>
+    <message>
+        <source>Account not loaded</source>
+        <translation>账户未加载</translation>
+    </message>
+    <message>
+        <source>Add a layer first</source>
+        <translation>请先添加 layer</translation>
+    </message>
+    <message>
+        <source>Add a layer, or start with a sample.</source>
+        <translation>添加一个 layer，或从示例开始。</translation>
+    </message>
+    <message>
+        <source>Add the Original</source>
+        <translation>添加原始图层</translation>
+    </message>
+    <message>
+        <source>Added</source>
+        <translation>已添加</translation>
+    </message>
+    <message>
+        <source>Added to your map as</source>
+        <translation>已添加到您的地图，名称为</translation>
+    </message>
+    <message>
+        <source>Added to your map as {name}</source>
+        <translation>已作为 {name} 添加到您的地图</translation>
+    </message>
+    <message>
+        <source>Added {added} of {total}. The limit is {n} references.</source>
+        <translation>已添加 {added} 个，共 {total} 个。上限为 {n} 个参考。</translation>
+    </message>
+    <message>
+        <source>Added {hex} to the classes.</source>
+        <translation>已将 {hex} 添加到类别中。</translation>
+    </message>
+    <message>
+        <source>Address copied, paste it in your mail</source>
+        <translation>地址已复制，请将其粘贴到邮件中</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>高级</translation>
+    </message>
+    <message>
+        <source>After</source>
+        <translation>之后</translation>
+    </message>
+    <message>
+        <source>All TerraLab plugins are signed out. To cancel, sign in on terra-lab.ai.</source>
+        <translation>所有 TerraLab plugin 均已退出登录。要取消，请在 terra-lab.ai 上登录。</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>琥珀色</translation>
+    </message>
+    <message>
+        <source>An AI edit of your map zone</source>
+        <translation>对您的地图区域进行的 AI Edit</translation>
+    </message>
+    <message>
+        <source>Another quality level</source>
+        <translation>另一个质量等级</translation>
+    </message>
+    <message>
+        <source>Any subscription stops renewing.</source>
+        <translation>所有订阅都将停止续订。</translation>
+    </message>
+    <message>
+        <source>Apply the next change to the picked version, on the same zone</source>
+        <translation>将下一次更改应用到选定版本的相同区域</translation>
+    </message>
+    <message>
+        <source>Ask your IT team to allow terra-lab.ai, or import your company root certificate in Settings &gt; Options &gt; Authentication</source>
+        <translation>请让 IT 团队允许访问 terra-lab.ai，或在“设置”&gt;“选项”&gt;“认证”中导入公司根证书</translation>
+    </message>
+    <message>
+        <source>Ask your IT team to allow terra-lab.ai.</source>
+        <translation>请让 IT 团队允许访问 terra-lab.ai。</translation>
+    </message>
+    <message>
+        <source>Back to the classes: check, rename or recolor, then vectorize again.</source>
+        <translation>返回类别：检查、重命名或重新着色，然后再次矢量化。</translation>
+    </message>
+    <message>
+        <source>Before</source>
+        <translation>之前</translation>
+    </message>
+    <message>
+        <source>Before you start</source>
+        <translation>开始之前</translation>
+    </message>
+    <message>
+        <source>Best quality, crisp when zoomed or printed</source>
+        <translation>最佳质量，缩放或打印时清晰锐利</translation>
+    </message>
+    <message>
+        <source>Billing</source>
+        <translation>账单</translation>
+    </message>
+    <message>
+        <source>Blog</source>
+        <translation>博客</translation>
+    </message>
+    <message>
+        <source>Bring back the tips you closed</source>
+        <translation>重新显示您关闭的提示</translation>
+    </message>
+    <message>
+        <source>Browse the top picks</source>
+        <translation>浏览精选内容</translation>
+    </message>
+    <message>
+        <source>Bug, question or idea? Write to us.</source>
+        <translation>遇到问题、有疑问或有想法？欢迎来信。</translation>
+    </message>
+    <message>
+        <source>Cancel on terra-lab.ai during the grace period. After that, it is final.</source>
+        <translation>在宽限期内于 terra-lab.ai 上取消。此后将无法撤销。</translation>
+    </message>
+    <message>
+        <source>Cancel the zone</source>
+        <translation>取消区域</translation>
+    </message>
+    <message>
+        <source>Cannot reach the server. Check your internet connection.</source>
+        <translation>无法连接到服务器。请检查您的网络连接。</translation>
+    </message>
+    <message>
+        <source>Check your connection, then reopen the library.</source>
+        <translation>请检查您的网络连接，然后重新打开库。</translation>
+    </message>
+    <message>
+        <source>Check your connection, then retry.</source>
+        <translation>请检查您的网络连接，然后重试。</translation>
+    </message>
+    <message>
+        <source>Checkout on terra-lab.ai</source>
+        <translation>在 terra-lab.ai 上结账</translation>
+    </message>
+    <message>
+        <source>Clear the search</source>
+        <translation>清除搜索</translation>
+    </message>
+    <message>
+        <source>Click a color on the map to add it as a class.</source>
+        <translation>点击地图上的一种颜色，将其添加为类别。</translation>
+    </message>
+    <message>
+        <source>Click a color on the map. Esc cancels.</source>
+        <translation>点击地图上的一种颜色。按 Esc 取消。</translation>
+    </message>
+    <message>
+        <source>Click each point, double-click to finish.</source>
+        <translation>逐个点击每个点，双击完成。</translation>
+    </message>
+    <message>
+        <source>Click to end the comparison</source>
+        <translation>点击结束比较</translation>
+    </message>
+    <message>
+        <source>Close Vectorize</source>
+        <translation>关闭矢量化</translation>
+    </message>
+    <message>
+        <source>Close the panel</source>
+        <translation>关闭面板</translation>
+    </message>
+    <message>
+        <source>Close the zone</source>
+        <translation>关闭区域</translation>
+    </message>
+    <message>
+        <source>Commercial use</source>
+        <translation>商业用途</translation>
+    </message>
+    <message>
+        <source>Complete guide</source>
+        <translation>完整指南</translation>
+    </message>
+    <message>
+        <source>Confirm with your email. Cancel on terra-lab.ai during the grace period.</source>
+        <translation>使用您的邮箱确认。在宽限期内于 terra-lab.ai 上取消。</translation>
+    </message>
+    <message>
+        <source>Confirmation refused. Close and try again.</source>
+        <translation>确认被拒绝。请关闭后重试。</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>继续</translation>
+    </message>
+    <message>
+        <source>Continuing accepts the {terms} and the {privacy}.</source>
+        <translation>继续即表示接受 {terms} 和 {privacy}。</translation>
+    </message>
+    <message>
+        <source>Contracting by {n} px erased every shape. Set “Expand/Contract” closer to 0.</source>
+        <translation>按 {n} px 收缩或扩张会擦除所有形状。请将“扩张/收缩”调得更接近 0。</translation>
+    </message>
+    <message>
+        <source>Copy your logs and send them to us. We will look into it.</source>
+        <translation>复制您的日志并发送给我们。我们会调查此问题。</translation>
+    </message>
+    <message>
+        <source>Could not add {name}. {reason}</source>
+        <translation>无法添加 {name}。{reason}</translation>
+    </message>
+    <message>
+        <source>Could not capture your zone: {error}</source>
+        <translation>无法捕获您的区域：{error}</translation>
+    </message>
+    <message>
+        <source>Could not download the reference.</source>
+        <translation>无法下载参考文件。</translation>
+    </message>
+    <message>
+        <source>Could not reach TerraLab</source>
+        <translation>无法连接到 TerraLab</translation>
+    </message>
+    <message>
+        <source>Credit count not available</source>
+        <translation>积分数量不可用</translation>
+    </message>
+    <message>
+        <source>Credits left and reset date</source>
+        <translation>剩余积分和重置日期</translation>
+    </message>
+    <message>
+        <source>Custom color {hex}</source>
+        <translation>自定义颜色 {hex}</translation>
+    </message>
+    <message>
+        <source>Custom needs</source>
+        <translation>自定义需求</translation>
+    </message>
+    <message>
+        <source>Cyan</source>
+        <translation>青色</translation>
+    </message>
+    <message>
+        <source>Danger zone</source>
+        <translation>危险区域</translation>
+    </message>
+    <message>
+        <source>Data erased after the grace period.</source>
+        <translation>宽限期后数据将被清除。</translation>
+    </message>
+    <message>
+        <source>Data erased on {date}.</source>
+        <translation>数据将于 {date} 清除。</translation>
+    </message>
+    <message>
+        <source>Date</source>
+        <translation>日期</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>默认</translation>
+    </message>
+    <message>
+        <source>Delete account</source>
+        <translation>删除账户</translation>
+    </message>
+    <message>
+        <source>Delete your account?</source>
+        <translation>删除你的账户？</translation>
+    </message>
+    <message>
+        <source>Deleting account</source>
+        <translation>正在删除账户</translation>
+    </message>
+    <message>
+        <source>Deleting...</source>
+        <translation>正在删除...</translation>
+    </message>
+    <message>
+        <source>Deletion already scheduled. Cancel on terra-lab.ai.</source>
+        <translation>删除已安排。请在 terra-lab.ai 取消。</translation>
+    </message>
+    <message>
+        <source>Deletion already set for {date}. Cancel on terra-lab.ai.</source>
+        <translation>已设置于 {date} 删除。请在 terra-lab.ai 取消。</translation>
+    </message>
+    <message>
+        <source>Describe the change, e.g. turn the fields into a forest</source>
+        <translation>描述要做的更改，例如把田地变成森林</translation>
+    </message>
+    <message>
+        <source>Describe the next change</source>
+        <translation>描述下一步更改</translation>
+    </message>
+    <message>
+        <source>Describe the next change to {base}</source>
+        <translation>描述对 {base} 的下一步更改</translation>
+    </message>
+    <message>
+        <source>Detailed and Maximum quality</source>
+        <translation>详细和最高质量</translation>
+    </message>
+    <message>
+        <source>Download Original as a georeferenced GeoTIFF (.tif)</source>
+        <translation>将原图下载为带地理坐标的 GeoTIFF (.tif)</translation>
+    </message>
+    <message>
+        <source>Download as GeoTIFF</source>
+        <translation>下载为 GeoTIFF</translation>
+    </message>
+    <message>
+        <source>Downloading reference</source>
+        <translation>正在下载参考图</translation>
+    </message>
+    <message>
+        <source>Drag a box on the map. Esc cancels.</source>
+        <translation>在地图上拖出一个方框。按 Esc 取消。</translation>
+    </message>
+    <message>
+        <source>Drag across an area. Shift draws a true circle.</source>
+        <translation>拖过一片区域。按 Shift 绘制正圆。</translation>
+    </message>
+    <message>
+        <source>Drag across the area to circle it.</source>
+        <translation>拖过该区域以圈出它。</translation>
+    </message>
+    <message>
+        <source>Drag from the start to the tip.</source>
+        <translation>从起点拖到终点。</translation>
+    </message>
+    <message>
+        <source>Drag from the start to the tip. Shift keeps 45 degree angles.</source>
+        <translation>从起点拖到终点。按 Shift 保持 45 度角。</translation>
+    </message>
+    <message>
+        <source>Drag on the map to draw freely.</source>
+        <translation>在地图上拖动以自由绘制。</translation>
+    </message>
+    <message>
+        <source>Drag the line or use the arrow keys. Esc stops.</source>
+        <translation>拖动线条或使用方向键。按 Esc 停止。</translation>
+    </message>
+    <message>
+        <source>Draw</source>
+        <translation>绘制</translation>
+    </message>
+    <message>
+        <source>Drawing a zone</source>
+        <translation>正在绘制区域</translation>
+    </message>
+    <message>
+        <source>Drop polygons smaller than this after tracing.</source>
+        <translation>追踪后丢弃小于此值的多边形。</translation>
+    </message>
+    <message>
+        <source>Drop this zone and go back to the start</source>
+        <translation>丢弃此区域并返回起点</translation>
+    </message>
+    <message>
+        <source>Duration</source>
+        <translation>时长</translation>
+    </message>
+    <message>
+        <source>Each change updates the same layer.</source>
+        <translation>每次更改都会更新同一个 layer。</translation>
+    </message>
+    <message>
+        <source>Edit the selected area with AI (Enter)</source>
+        <translation>用 AI 编辑所选区域 (Enter)</translation>
+    </message>
+    <message>
+        <source>Erases all data, stops every TerraLab plugin</source>
+        <translation>清除所有数据，停止每个 TerraLab plugin</translation>
+    </message>
+    <message>
+        <source>Errors, versions and features used, linked to your account. Never your imagery, layers or coordinates. On Pro, counts only.</source>
+        <translation>错误、版本和使用的功能，与你的账户关联。绝不包含你的影像、layers 或坐标。在 Pro 上，仅计数。</translation>
+    </message>
+    <message>
+        <source>Every TerraLab plugin stops, on all computers.</source>
+        <translation>所有电脑上的每个 TerraLab plugin 都会停止。</translation>
+    </message>
+    <message>
+        <source>Every edit you run lands here, grouped by place, ready to pick up again.</source>
+        <translation>你运行的每次编辑都会保存在这里，按地点分组，随时可以继续。</translation>
+    </message>
+    <message>
+        <source>Everything we make</source>
+        <translation>我们制作的一切</translation>
+    </message>
+    <message>
+        <source>Failed to download result image after {attempts} attempts: {err}.</source>
+        <translation>尝试 {attempts} 次后仍无法下载结果图像：{err}。</translation>
+    </message>
+    <message>
+        <source>Fill the holes inside each shape.</source>
+        <translation>填充每个形状内部的孔洞。</translation>
+    </message>
+    <message>
+        <source>Finish signing in on the page that just opened</source>
+        <translation>在刚打开的页面上完成登录</translation>
+    </message>
+    <message>
+        <source>For a team?</source>
+        <translation>为团队使用？</translation>
+    </message>
+    <message>
+        <source>Free credits used up this month</source>
+        <translation>本月免费额度已用完</translation>
+    </message>
+    <message>
+        <source>Free plan</source>
+        <translation>免费方案</translation>
+    </message>
+    <message>
+        <source>Free plan limit reached.</source>
+        <translation>已达到免费方案上限。</translation>
+    </message>
+    <message>
+        <source>From zone to finished edit</source>
+        <translation>从区域到完成的编辑</translation>
+    </message>
+    <message>
+        <source>Generate a flat-color map first, then come back.</source>
+        <translation>先生成纯色地图，然后再回来。</translation>
+    </message>
+    <message>
+        <source>Generate the edit on your zone</source>
+        <translation>在你的区域上生成编辑</translation>
+    </message>
+    <message>
+        <source>Generate without it</source>
+        <translation>不使用它生成</translation>
+    </message>
+    <message>
+        <source>Generated in the USA.</source>
+        <translation>在美国生成。</translation>
+    </message>
+    <message>
+        <source>Get Pro</source>
+        <translation>获取 Pro</translation>
+    </message>
+    <message>
+        <source>Get better results</source>
+        <translation>获得更好的结果</translation>
+    </message>
+    <message>
+        <source>Go back one step</source>
+        <translation>返回一步</translation>
+    </message>
+    <message>
+        <source>Good for a quick test</source>
+        <translation>适合快速测试</translation>
+    </message>
+    <message>
+        <source>Guide</source>
+        <translation>指南</translation>
+    </message>
+    <message>
+        <source>Hide this tip</source>
+        <translation>隐藏此提示</translation>
+    </message>
+    <message>
+        <source>Hints you closed in the panel</source>
+        <translation>你在面板中关闭的提示</translation>
+    </message>
+    <message>
+        <source>How far a pixel's color may drift from its class. Higher takes in noisy shades.</source>
+        <translation>像素颜色与其类别允许的偏差程度。数值越高，越能容纳杂色。</translation>
+    </message>
+    <message>
+        <source>Ideas and workflows</source>
+        <translation>创意和工作流程</translation>
+    </message>
+    <message>
+        <source>If your browser works, turn on Settings &gt; Options &gt; Network &gt; Use proxy for web access.</source>
+        <translation>如果你的浏览器可以正常使用，请开启 设置 &gt; 选项 &gt; 网络 &gt; 使用代理访问网络。</translation>
+    </message>
+    <message>
+        <source>Image too large. Draw a smaller zone or pick a lower Quality.</source>
+        <translation>图像过大。请绘制更小的区域或选择更低的质量。</translation>
+    </message>
+    <message>
+        <source>In your prompt, say what to take from each: "roof colours from reference 1".</source>
+        <translation>在 prompt 中说明从每个参考中取用什么："参考 1 的屋顶颜色"。</translation>
+    </message>
+    <message>
+        <source>Install in QGIS</source>
+        <translation>在 QGIS 中安装</translation>
+    </message>
+    <message>
+        <source>Installed</source>
+        <translation>已安装</translation>
+    </message>
+    <message>
+        <source>It is installed but did not start. Restart QGIS to use it.</source>
+        <translation>已安装但未启动。重启 QGIS 即可使用。</translation>
+    </message>
+    <message>
+        <source>It is installed but switched off. Turns it on and opens it.</source>
+        <translation>已安装但处于关闭状态。开启并打开它。</translation>
+    </message>
+    <message>
+        <source>Its companion files are missing ({missing}). Drop the whole set together.</source>
+        <translation>缺少配套文件（{missing}）。请将整套文件一起拖入。</translation>
+    </message>
+    <message>
+        <source>Keep editing with Pro</source>
+        <translation>使用 Pro 继续编辑</translation>
+    </message>
+    <message>
+        <source>Keep the polygons on your map and close this panel</source>
+        <translation>将多边形保留在地图上并关闭此面板</translation>
+    </message>
+    <message>
+        <source>Keep this result on your map and start over on a new zone. The session stays in Sessions.</source>
+        <translation>将此结果保留在地图上，并在新区域重新开始。该会话仍保留在 Sessions 中。</translation>
+    </message>
+    <message>
+        <source>Keep your strokes to guide the edit. They are removed from the result.</source>
+        <translation>保留你的笔触来引导编辑。它们会从结果中移除。</translation>
+    </message>
+    <message>
+        <source>Kept in France.</source>
+        <translation>保存在法国。</translation>
+    </message>
+    <message>
+        <source>Keyboard shortcuts</source>
+        <translation>键盘快捷键</translation>
+    </message>
+    <message>
+        <source>Last free edit this month.</source>
+        <translation>本月最后一次免费编辑。</translation>
+    </message>
+    <message>
+        <source>Leave empty for the default folder</source>
+        <translation>留空则使用默认文件夹</translation>
+    </message>
+    <message>
+        <source>Leave fullscreen</source>
+        <translation>退出全屏</translation>
+    </message>
+    <message>
+        <source>Library (view only)</source>
+        <translation>库（仅查看）</translation>
+    </message>
+    <message>
+        <source>Like it? Pro adds Detailed and Maximum quality, and commercial use.</source>
+        <translation>喜欢吗？Pro 增加详细和最高质量，以及商业用途。</translation>
+    </message>
+    <message>
+        <source>Limit reached. Remove one to add another.</source>
+        <translation>已达上限。移除一个才能再添加。</translation>
+    </message>
+    <message>
+        <source>Linked to your account, no imagery</source>
+        <translation>与你的账户关联，不含影像</translation>
+    </message>
+    <message>
+        <source>Load this prompt, its references and the same map zone back into AI Edit, replacing what you have now.</source>
+        <translation>将此 prompt、其参考和同一地图区域重新载入 AI Edit，替换你当前的内容。</translation>
+    </message>
+    <message>
+        <source>Locked while the AI generates</source>
+        <translation>AI 生成期间锁定</translation>
+    </message>
+    <message>
+        <source>Made from</source>
+        <translation>生成自</translation>
+    </message>
+    <message>
+        <source>Magenta</source>
+        <translation>洋红色</translation>
+    </message>
+    <message>
+        <source>Manage</source>
+        <translation>管理</translation>
+    </message>
+    <message>
+        <source>Map view</source>
+        <translation>地图视图</translation>
+    </message>
+    <message>
+        <source>More edits, commercial use</source>
+        <translation>更多编辑次数，可商用</translation>
+    </message>
+    <message>
+        <source>More from TerraLab</source>
+        <translation>来自 TerraLab 的更多内容</translation>
+    </message>
+    <message>
+        <source>More plugins</source>
+        <translation>更多 plugins</translation>
+    </message>
+    <message>
+        <source>Need more?</source>
+        <translation>还需要更多？</translation>
+    </message>
+    <message>
+        <source>Needs a restart</source>
+        <translation>需要重启</translation>
+    </message>
+    <message>
+        <source>Network error. Check your internet connection.</source>
+        <translation>网络错误。请检查你的网络连接。</translation>
+    </message>
+    <message>
+        <source>New edit</source>
+        <translation>新建编辑</translation>
+    </message>
+    <message>
+        <source>No account linked to this key.</source>
+        <translation>没有与此密钥关联的账户。</translation>
+    </message>
+    <message>
+        <source>No edits yet</source>
+        <translation>暂无编辑</translation>
+    </message>
+    <message>
+        <source>No favorites yet</source>
+        <translation>暂无收藏</translation>
+    </message>
+    <message>
+        <source>No map to vectorize yet</source>
+        <translation>暂无要矢量化的地图</translation>
+    </message>
+    <message>
+        <source>No matches found</source>
+        <translation>未找到匹配项</translation>
+    </message>
+    <message>
+        <source>No pixel matches the checked colors. Adjust a color, or add one with “Add color from map”.</source>
+        <translation>没有像素与已勾选的颜色匹配。请调整颜色，或用“从地图添加颜色”添加一种颜色。</translation>
+    </message>
+    <message>
+        <source>No prompt was saved for this version.</source>
+        <translation>此版本未保存 prompt。</translation>
+    </message>
+    <message>
+        <source>No prompts in this section yet</source>
+        <translation>此部分暂无 prompt</translation>
+    </message>
+    <message>
+        <source>No sessions match</source>
+        <translation>没有匹配的会话</translation>
+    </message>
+    <message>
+        <source>No shape reaches {n} px. Lower “Min polygon size”.</source>
+        <translation>没有形状达到 {n} px。请降低“最小多边形大小”。</translation>
+    </message>
+    <message>
+        <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size” or “Remove speckle”, or raise “Color tolerance”.</source>
+        <translation>使用这些设置后没有剩余形状。请将“扩张/收缩”设为更接近 0，降低“最小多边形大小”或“去除噪点”，或提高“颜色容差”。</translation>
+    </message>
+    <message>
+        <source>No strokes yet</source>
+        <translation>暂无笔画</translation>
+    </message>
+    <message>
+        <source>Not an image or a map file QGIS can open.</source>
+        <translation>不是 QGIS 可以打开的图片或地图文件。</translation>
+    </message>
+    <message>
+        <source>Not signed in</source>
+        <translation>未登录</translation>
+    </message>
+    <message>
+        <source>Nothing was sent. Press Generate again to read the notice.</source>
+        <translation>未发送任何内容。请再次按生成以阅读通知。</translation>
+    </message>
+    <message>
+        <source>Nothing yet. The AI works from your zone and prompt only.</source>
+        <translation>暂无内容。AI 只会根据你的区域和 prompt 工作。</translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation>打开</translation>
+    </message>
+    <message>
+        <source>Open QGIS's Data Source Manager to add data</source>
+        <translation>打开 QGIS 的数据源管理器以添加数据</translation>
+    </message>
+    <message>
+        <source>Open a prompt or a past edit and press its star: it will wait for you here.</source>
+        <translation>打开一个 prompt 或过去的编辑并点击其星标：它会在这里等你。</translation>
+    </message>
+    <message>
+        <source>Open dashboard</source>
+        <translation>打开仪表盘</translation>
+    </message>
+    <message>
+        <source>Open in QGIS</source>
+        <translation>在 QGIS 中打开</translation>
+    </message>
+    <message>
+        <source>Open the AI Edit page</source>
+        <translation>打开 AI Edit 页面</translation>
+    </message>
+    <message>
+        <source>Open the Library</source>
+        <translation>打开资源库</translation>
+    </message>
+    <message>
+        <source>Open your sessions</source>
+        <translation>打开你的会话</translation>
+    </message>
+    <message>
+        <source>Opens in your browser</source>
+        <translation>在你的浏览器中打开</translation>
+    </message>
+    <message>
+        <source>Opens the QGIS plugin manager on this plugin.</source>
+        <translation>在 QGIS plugin 管理器中打开此 plugin。</translation>
+    </message>
+    <message>
+        <source>Opens your dashboard in the browser</source>
+        <translation>在浏览器中打开你的仪表盘</translation>
+    </message>
+    <message>
+        <source>Or drop images and layers here</source>
+        <translation>或将图片和 layers 拖放到这里</translation>
+    </message>
+    <message>
+        <source>Other TerraLab plugins for QGIS</source>
+        <translation>适用于 QGIS 的其他 TerraLab plugins</translation>
+    </message>
+    <message>
+        <source>Other TerraLab plugins...</source>
+        <translation>其他 TerraLab plugins...</translation>
+    </message>
+    <message>
+        <source>Outline an area, say what to change</source>
+        <translation>框选一个区域，说明要修改的内容</translation>
+    </message>
+    <message>
+        <source>Output size</source>
+        <translation>输出大小</translation>
+    </message>
+    <message>
+        <source>Outside the prompt box</source>
+        <translation>prompt 框外</translation>
+    </message>
+    <message>
+        <source>Outside your zone, sent whole</source>
+        <translation>你的区域之外，将整体发送</translation>
+    </message>
+    <message>
+        <source>Part of your zone is off the imagery. That part will come back blank.</source>
+        <translation>你的区域有一部分超出了影像范围，该部分将返回空白。</translation>
+    </message>
+    <message>
+        <source>Personal, non-commercial use</source>
+        <translation>个人、非商业用途</translation>
+    </message>
+    <message>
+        <source>Pick a map under Layer first.</source>
+        <translation>请先在 Layer 下选择地图。</translation>
+    </message>
+    <message>
+        <source>Pick a tool to draw.</source>
+        <translation>选择一种绘制工具。</translation>
+    </message>
+    <message>
+        <source>Plan not loaded</source>
+        <translation>套餐未加载</translation>
+    </message>
+    <message>
+        <source>Plan, payment and invoices</source>
+        <translation>套餐、付款和发票</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>预览</translation>
+    </message>
+    <message>
+        <source>Privacy Policy</source>
+        <translation>隐私政策</translation>
+    </message>
+    <message>
+        <source>Pro</source>
+        <translation>Pro</translation>
+    </message>
+    <message>
+        <source>Pro plan</source>
+        <translation>Pro 套餐</translation>
+    </message>
+    <message>
+        <source>Pro unlocks Detailed and Maximum, for printing and zooming in</source>
+        <translation>Pro 解锁“精细”和“最大”，用于打印和放大查看</translation>
+    </message>
+    <message>
+        <source>Project layer</source>
+        <translation>项目 layer</translation>
+    </message>
+    <message>
+        <source>Prompts and edits you starred.</source>
+        <translation>你收藏的 prompt 和编辑。</translation>
+    </message>
+    <message>
+        <source>Prompts, References, Draw, Vectorize</source>
+        <translation>prompt、参考、绘制、矢量化</translation>
+    </message>
+    <message>
+        <source>Proven prompts to start from. Open one to see it before and after.</source>
+        <translation>经过验证的 prompt，适合作为起点。打开一个即可看到它的前后对比。</translation>
+    </message>
+    <message>
+        <source>Proxy connection failed. Check QGIS proxy settings (Settings &gt; Options &gt; Network).</source>
+        <translation>代理连接失败。请检查 QGIS 代理设置（设置 &gt; 选项 &gt; 网络）。</translation>
+    </message>
+    <message>
+        <source>QGIS could not turn it on. Tick it in Plugins &gt; Manage and Install Plugins.</source>
+        <translation>QGIS 无法启用它。请在 Plugins &gt; Manage and Install Plugins 中勾选它。</translation>
+    </message>
+    <message>
+        <source>Raise the timeout in Settings &gt; Options &gt; Network.</source>
+        <translation>请在“设置 &gt; 选项 &gt; 网络”中提高超时时间。</translation>
+    </message>
+    <message>
+        <source>Read the guide</source>
+        <translation>阅读指南</translation>
+    </message>
+    <message>
+        <source>Reference {n}</source>
+        <translation>参考 {n}</translation>
+    </message>
+    <message>
+        <source>References</source>
+        <translation>参考</translation>
+    </message>
+    <message>
+        <source>Refreshing sessions</source>
+        <translation>正在刷新会话</translation>
+    </message>
+    <message>
+        <source>Release to add</source>
+        <translation>松开以添加</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>移除</translation>
+    </message>
+    <message>
+        <source>Remove every stroke. Undo cannot bring them back.</source>
+        <translation>移除所有笔画。撤销无法恢复它们。</translation>
+    </message>
+    <message>
+        <source>Remove the last point</source>
+        <translation>移除最后一个点</translation>
+    </message>
+    <message>
+        <source>Remove {name}</source>
+        <translation>移除 {name}</translation>
+    </message>
+    <message>
+        <source>Reopen this session in AI Edit: its prompt, references and the same map zone.</source>
+        <translation>在 AI Edit 中重新打开此会话：其 prompt、参考和相同的地图区域。</translation>
+    </message>
+    <message>
+        <source>Request cancelled.</source>
+        <translation>请求已取消。</translation>
+    </message>
+    <message>
+        <source>Request timed out. Check your connection or try again.</source>
+        <translation>请求超时。请检查你的连接或重试。</translation>
+    </message>
+    <message>
+        <source>Reset settings</source>
+        <translation>重置设置</translation>
+    </message>
+    <message>
+        <source>Restart QGIS</source>
+        <translation>重启 QGIS</translation>
+    </message>
+    <message>
+        <source>Result</source>
+        <translation>结果</translation>
+    </message>
+    <message>
+        <source>Results for "{query}"</source>
+        <translation>"{query}" 的结果</translation>
+    </message>
+    <message>
+        <source>Run QGIS from a single sentence.</source>
+        <translation>用一句话运行 QGIS。</translation>
+    </message>
+    <message>
+        <source>Save reference</source>
+        <translation>保存参考</translation>
+    </message>
+    <message>
+        <source>Saved in memory only: the GeoPackage is in use. Save the layer before closing QGIS.</source>
+        <translation>仅保存在内存中：GeoPackage 正在使用中。关闭 QGIS 前请先保存图层。</translation>
+    </message>
+    <message>
+        <source>Search prompts</source>
+        <translation>搜索 prompts</translation>
+    </message>
+    <message>
+        <source>Secure connection failed, often because of company SSL inspection. Ask your IT team to allow terra-lab.ai, or import your company root certificate in Settings &gt; Options &gt; Authentication.</source>
+        <translation>安全连接失败，通常是因为公司 SSL 检查。请让您的 IT 团队允许 terra-lab.ai，或在 设置 &gt; 选项 &gt; 认证 中导入公司根证书。</translation>
+    </message>
+    <message>
+        <source>See Pro</source>
+        <translation>了解 Pro</translation>
+    </message>
+    <message>
+        <source>See it in action</source>
+        <translation>看看它的实际效果</translation>
+    </message>
+    <message>
+        <source>See plans on terra-lab.ai</source>
+        <translation>在 terra-lab.ai 查看套餐</translation>
+    </message>
+    <message>
+        <source>See usage</source>
+        <translation>查看用量</translation>
+    </message>
+    <message>
+        <source>See what Pro unlocks</source>
+        <translation>看看 Pro 解锁了什么</translation>
+    </message>
+    <message>
+        <source>Server refused the connection. The service may be temporarily down.</source>
+        <translation>服务器拒绝了连接。服务可能暂时不可用。</translation>
+    </message>
+    <message>
+        <source>Session expired. Sign out and back in.</source>
+        <translation>会话已过期。请退出后重新登录。</translation>
+    </message>
+    <message>
+        <source>Session reopened. Edit the prompt or pick a version, then Generate.</source>
+        <translation>会话已重新打开。编辑 prompt 或选择一个版本，然后点击生成。</translation>
+    </message>
+    <message>
+        <source>Share usage statistics</source>
+        <translation>共享使用统计信息</translation>
+    </message>
+    <message>
+        <source>Sharp, clean result for real maps</source>
+        <translation>为真实地图提供清晰锐利的结果</translation>
+    </message>
+    <message>
+        <source>Show a layer, or start with a sample.</source>
+        <translation>显示一个图层，或从示例开始。</translation>
+    </message>
+    <message>
+        <source>Show it and generate</source>
+        <translation>显示它并生成</translation>
+    </message>
+    <message>
+        <source>Show the AI a style, a legend or an object to match.</source>
+        <translation>向 AI 展示一种样式、图例或要匹配的对象。</translation>
+    </message>
+    <message>
+        <source>Show the plugin's panel.</source>
+        <translation>显示 plugin 的面板。</translation>
+    </message>
+    <message>
+        <source>Show this layer in the Layers panel</source>
+        <translation>在图层面板中显示此图层</translation>
+    </message>
+    <message>
+        <source>Sign in</source>
+        <translation>登录</translation>
+    </message>
+    <message>
+        <source>Sign in to see your plan</source>
+        <translation>登录以查看您的套餐</translation>
+    </message>
+    <message>
+        <source>Sign in to see your plan.</source>
+        <translation>登录以查看您的套餐。</translation>
+    </message>
+    <message>
+        <source>Sign out, then sign in again.</source>
+        <translation>请退出，然后重新登录。</translation>
+    </message>
+    <message>
+        <source>Sign-in, plan and privacy</source>
+        <translation>登录、套餐与隐私</translation>
+    </message>
+    <message>
+        <source>Sketch where the AI should act.</source>
+        <translation>勾勒出 AI 应处理的区域。</translation>
+    </message>
+    <message>
+        <source>Softer outlines for natural shapes like trees.</source>
+        <translation>为树木等自然形状提供更柔和的轮廓。</translation>
+    </message>
+    <message>
+        <source>Start from {label}</source>
+        <translation>从 {label} 开始</translation>
+    </message>
+    <message>
+        <source>Start the next edit from</source>
+        <translation>从以下内容开始下一次编辑</translation>
+    </message>
+    <message>
+        <source>Start the next edit from this version</source>
+        <translation>从此版本开始下一次编辑</translation>
+    </message>
+    <message>
+        <source>Still generating. The result is added to your map when ready.</source>
+        <translation>仍在生成中。结果生成后会添加到您的地图中。</translation>
+    </message>
+    <message>
+        <source>Still waiting, but AI Edit cannot reach the server to check your sign-in.</source>
+        <translation>仍在等待，但 AI Edit 无法连接服务器以检查您的登录状态。</translation>
+    </message>
+    <message>
+        <source>Straight lines. Click the first point to close, Shift keeps 45 degree angles.</source>
+        <translation>直线。点击第一个点可闭合，按住 Shift 可保持 45 度角。</translation>
+    </message>
+    <message>
+        <source>Stroke color</source>
+        <translation>描边颜色</translation>
+    </message>
+    <message>
+        <source>Strokes count only inside your zone.</source>
+        <translation>仅计算您区域内的笔画。</translation>
+    </message>
+    <message>
+        <source>Subscription inactive. Manage it on terra-lab.ai.</source>
+        <translation>订阅已停用。请在 terra-lab.ai 上管理。</translation>
+    </message>
+    <message>
+        <source>Swipe between the original map and this result</source>
+        <translation>在原始地图和此结果之间滑动切换</translation>
+    </message>
+    <message>
+        <source>Team seats, custom quota, invoices</source>
+        <translation>团队席位、自定义配额、发票</translation>
+    </message>
+    <message>
+        <source>TerraLab blog</source>
+        <translation>TerraLab 博客</translation>
+    </message>
+    <message>
+        <source>TerraLab is busy right now</source>
+        <translation>TerraLab 目前正忙</translation>
+    </message>
+    <message>
+        <source>That click missed the map. Try again on the map itself.</source>
+        <translation>那次点击未落在地图上。请在地图上重试。</translation>
+    </message>
+    <message>
+        <source>That email does not match. Try again.</source>
+        <translation>该邮箱不匹配。请重试。</translation>
+    </message>
+    <message>
+        <source>The AI Edit drawing layer is hidden.</source>
+        <translation>AI Edit 绘图图层已隐藏。</translation>
+    </message>
+    <message>
+        <source>The Free plan takes up to {n} references.</source>
+        <translation>免费套餐最多可包含 {n} 张参考图。</translation>
+    </message>
+    <message>
+        <source>The Free plan takes {n} reference.</source>
+        <translation>免费套餐可包含 {n} 张参考图。</translation>
+    </message>
+    <message>
+        <source>The account could not be deleted.</source>
+        <translation>无法删除该账户。</translation>
+    </message>
+    <message>
+        <source>The free plan includes {n} reference. Remove it to add another.</source>
+        <translation>免费套餐包含 {n} 张参考图。删除它才能添加新的。</translation>
+    </message>
+    <message>
+        <source>The free plan includes {n} references. Remove one to add another.</source>
+        <translation>免费套餐包含 {n} 张参考图。删除一张才能添加新的。</translation>
+    </message>
+    <message>
+        <source>The imagery this session was edited on is not in this project. Add its Original to see your edits in context.</source>
+        <translation>本次会话所编辑的影像不在当前工程中。请添加它的 Original 图层，以在上下文中查看您的编辑。</translation>
+    </message>
+    <message>
+        <source>The layer keeps its last result.</source>
+        <translation>该图层保留其上一次的结果。</translation>
+    </message>
+    <message>
+        <source>The map area you select and your prompt go to our image generation partner only to produce the result, and it deletes them within 30 days.</source>
+        <translation>您选择的地图区域和您的 prompt 仅会发送给我们的图像生成合作伙伴以生成结果，他们会在 30 天内删除这些数据。</translation>
+    </message>
+    <message>
+        <source>The map this layer came from was removed. Vectorize it again.</source>
+        <translation>此图层来源的地图已被移除。请重新进行矢量化。</translation>
+    </message>
+    <message>
+        <source>The next edit starts from it.</source>
+        <translation>下一次编辑将从它开始。</translation>
+    </message>
+    <message>
+        <source>The polygons could not be added to your map. Try again.</source>
+        <translation>无法将多边形添加到您的地图中。请重试。</translation>
+    </message>
+    <message>
+        <source>The prompts could not load</source>
+        <translation>无法加载 prompts</translation>
+    </message>
+    <message>
+        <source>The written tutorial, on the TerraLab blog.</source>
+        <translation>TerraLab 博客上的文字教程。</translation>
+    </message>
+    <message>
+        <source>They help us fix bugs. You can switch them off in Settings whenever you want.</source>
+        <translation>它们有助于我们修复错误。您可以随时在设置中关闭它们。</translation>
+    </message>
+    <message>
+        <source>This Quality is not in your plan. Upgrade to Pro to use it.</source>
+        <translation>此画质不在您的套餐内。升级到 Pro 即可使用。</translation>
+    </message>
+    <message>
+        <source>This computer is no longer signed in</source>
+        <translation>此电脑已退出登录</translation>
+    </message>
+    <message>
+        <source>This looks like a photo. Pick a color below.</source>
+        <translation>这看起来像照片。请选择下方的一种颜色。</translation>
+    </message>
+    <message>
+        <source>This map can't be read. Pick another one.</source>
+        <translation>无法读取此地图。请选择另一张。</translation>
+    </message>
+    <message>
+        <source>This result has no saved map zone, so it cannot be reused.</source>
+        <translation>此结果没有已保存的地图区域，因此无法重复使用。</translation>
+    </message>
+    <message>
+        <source>Tips</source>
+        <translation>提示</translation>
+    </message>
+    <message>
+        <source>Too many attempts. Try again in {seconds} seconds.</source>
+        <translation>尝试次数过多。请在 {seconds} 秒后重试。</translation>
+    </message>
+    <message>
+        <source>Too many attempts. Try again soon.</source>
+        <translation>尝试次数过多。请稍后重试。</translation>
+    </message>
+    <message>
+        <source>Tools</source>
+        <translation>工具</translation>
+    </message>
+    <message>
+        <source>Try again in a moment.</source>
+        <translation>请稍后重试。</translation>
+    </message>
+    <message>
+        <source>Try one word, like "trees"</source>
+        <translation>尝试一个词，比如 "trees"</translation>
+    </message>
+    <message>
+        <source>Turn buildings, trees or water into polygons.</source>
+        <translation>将建筑物、树木或水域转换为多边形。</translation>
+    </message>
+    <message>
+        <source>Turn on</source>
+        <translation>开启</translation>
+    </message>
+    <message>
+        <source>Turn this result into polygons you can edit</source>
+        <translation>将此结果转换为可编辑的多边形</translation>
+    </message>
+    <message>
+        <source>Turned off</source>
+        <translation>已关闭</translation>
+    </message>
+    <message>
+        <source>Turns a flat-color map into polygons, one class per color.</source>
+        <translation>将纯色地图转换为多边形，每种颜色对应一个类别。</translation>
+    </message>
+    <message>
+        <source>Tutorials</source>
+        <translation>教程</translation>
+    </message>
+    <message>
+        <source>Type your email to confirm:</source>
+        <translation>输入您的邮箱以确认：</translation>
+    </message>
+    <message>
+        <source>Undo the last stroke ({shortcut})</source>
+        <translation>撤销上一次笔画（{shortcut}）</translation>
+    </message>
+    <message>
+        <source>Up to 12 reference images</source>
+        <translation>最多 12 张参考图</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>更新</translation>
+    </message>
+    <message>
+        <source>Update available</source>
+        <translation>有可用更新</translation>
+    </message>
+    <message>
+        <source>Update required</source>
+        <translation>需要更新</translation>
+    </message>
+    <message>
+        <source>Update to keep using AI Edit. It takes one click in the QGIS Plugin Manager, and the plugin reloads on its own.</source>
+        <translation>更新以继续使用 AI Edit。只需在 QGIS Plugin Manager 中点击一次即可，plugin 会自动重新加载。</translation>
+    </message>
+    <message>
+        <source>Updating the layer...</source>
+        <translation>正在更新 layer...</translation>
+    </message>
+    <message>
+        <source>Usage</source>
+        <translation>用法</translation>
+    </message>
+    <message>
+        <source>Usage statistics</source>
+        <translation>用量统计</translation>
+    </message>
+    <message>
+        <source>Usage stats are on.</source>
+        <translation>用量统计已开启。</translation>
+    </message>
+    <message>
+        <source>Vectorize cancelled.</source>
+        <translation>矢量化已取消。</translation>
+    </message>
+    <message>
+        <source>Versions</source>
+        <translation>版本</translation>
+    </message>
+    <message>
+        <source>View full size</source>
+        <translation>查看完整大小</translation>
+    </message>
+    <message>
+        <source>Wait for this edit to finish</source>
+        <translation>请等待本次编辑完成</translation>
+    </message>
+    <message>
+        <source>We will look into it and get back to you.</source>
+        <translation>我们会调查此事并尽快回复您。</translation>
+    </message>
+    <message>
+        <source>What will you edit first?</source>
+        <translation>您想先编辑什么？</translation>
+    </message>
+    <message>
+        <source>What would you like to edit?</source>
+        <translation>您想编辑什么？</translation>
+    </message>
+    <message>
+        <source>Where AI Edit writes its generated GeoTIFFs. Leave empty to use {folder} (or the saved project folder).</source>
+        <translation>AI Edit 写入其生成 GeoTIFF 的位置。留空则使用 {folder}（或已保存的项目文件夹）。</translation>
+    </message>
+    <message>
+        <source>Where should the AI edit?</source>
+        <translation>AI 应在哪里进行编辑？</translation>
+    </message>
+    <message>
+        <source>While drawing</source>
+        <translation>绘图时</translation>
+    </message>
+    <message>
+        <source>Yellow</source>
+        <translation>黄色</translation>
+    </message>
+    <message>
+        <source>You can sign back in anytime.</source>
+        <translation>您可以随时重新登录。</translation>
+    </message>
+    <message>
+        <source>You have {installed}.</source>
+        <translation>您已安装 {installed}。</translation>
+    </message>
+    <message>
+        <source>You've used this month's free edits</source>
+        <translation>您已用完本月免费编辑次数</translation>
+    </message>
+    <message>
+        <source>Your computer</source>
+        <translation>您的电脑</translation>
+    </message>
+    <message>
+        <source>Your drawing</source>
+        <translation>您的绘图</translation>
+    </message>
+    <message>
+        <source>Your drawing won't be used</source>
+        <translation>您的绘图不会被使用</translation>
+    </message>
+    <message>
+        <source>Your email</source>
+        <translation>您的邮箱</translation>
+    </message>
+    <message>
+        <source>Your generations stay in your history until you delete them. On {pro} you can set 30 days, 90 days or 1 year in Settings.</source>
+        <translation>您的生成记录会一直保留在历史记录中，直到您删除。在 {pro} 上，您可以在设置中设为 30 天、90 天或 1 年。</translation>
+    </message>
+    <message>
+        <source>Your generations, history and prompts are erased.</source>
+        <translation>您的生成记录、历史记录和 prompts 已被清除。</translation>
+    </message>
+    <message>
+        <source>Your map, before any AI edit</source>
+        <translation>您的地图，在任何 AI Edit 之前</translation>
+    </message>
+    <message>
+        <source>Your network blocked the connection (HTTP {status}). Ask your IT team to allow terra-lab.ai.</source>
+        <translation>您的网络阻止了连接（HTTP {status}）。请让您的 IT 团队允许访问 terra-lab.ai。</translation>
+    </message>
+    <message>
+        <source>Your session is saved. Reopen it from Sessions, the clock at the top.</source>
+        <translation>您的会话已保存。可从 Sessions（顶部时钟）重新打开。</translation>
+    </message>
+    <message>
+        <source>Your zone is off the imagery. Draw it over your layers.</source>
+        <translation>您的区域不在影像范围内。请在您的 layers 上绘制。</translation>
+    </message>
+    <message>
+        <source>Your zone is too small. Draw it at least {pct}% of the map width.</source>
+        <translation>您的区域太小。请绘制至少 {pct}% 的地图宽度。</translation>
+    </message>
+    <message>
+        <source>Your {total} free edits return next month</source>
+        <translation>您的 {total} 次免费编辑将于下个月恢复</translation>
+    </message>
+    <message>
+        <source>Your {total} free edits return on {date}</source>
+        <translation>您的 {total} 次免费编辑将于 {date} 恢复</translation>
+    </message>
+    <message>
+        <source>by TerraLab</source>
+        <translation>由 TerraLab 提供</translation>
+    </message>
+    <message>
+        <source>credits left of {limit}</source>
+        <translation>剩余 {limit} 个额度</translation>
+    </message>
+    <message>
+        <source>no AI edit</source>
+        <translation>无 AI edit</translation>
+    </message>
+    <message>
+        <source>{count} in {k} classes</source>
+        <translation>{count} 个，共 {k} 类</translation>
+    </message>
+    <message>
+        <source>{head} “{name}”: {count}.</source>
+        <translation>{head} “{name}”：{count} 个。</translation>
+    </message>
+    <message>
+        <source>{hex} is already listed as “{name}”. It is checked.</source>
+        <translation>{hex} 已列入 “{name}”。当前已勾选。</translation>
+    </message>
+    <message>
+        <source>{label} {n}</source>
+        <translation>{label} {n}</translation>
+    </message>
+    <message>
+        <source>{map} polygons</source>
+        <translation>{map} 个多边形</translation>
+    </message>
+    <message>
+        <source>{n} of {limit}</source>
+        <translation>{n} / {limit}</translation>
+    </message>
+    <message>
+        <source>{n} polygons</source>
+        <translation>{n} 个多边形</translation>
+    </message>
+    <message>
+        <source>{n} strokes</source>
+        <translation>{n} 个笔画</translation>
+    </message>
+    <message>
+        <source>{n} were not added: {names}. {reason}</source>
+        <translation>{n} 个未添加：{names}。{reason}</translation>
+    </message>
+    <message>
+        <source>{ref} and {markup} show the AI what you mean. The {library} has ready-made prompts.</source>
+        <translation>{ref} 和 {markup} 向 AI 展示您的意图。{library} 中有现成的 prompts。</translation>
+    </message>
+    <message>
+        <source>“Color tolerance” at {n} matches no pixel. Raise it.</source>
+        <translation>“颜色容差”在 {n} 下未匹配任何像素。请调高。</translation>
+    </message>
+    <message>
+        <source>“Remove speckle” at {n} px removed every shape. Lower it.</source>
+        <translation>“去除斑点”在 {n} px 下移除了所有形状。请调低。</translation>
+    </message>
+    <message>
+        <source>“{name}” updated: {count}.</source>
+        <translation>“{name}”已更新：{count} 个。</translation>
+    </message>
+    <message>
+        <source>&#x27;Color tolerance&#x27; at {n} matches no pixel. Raise it.</source>
+        <translation>&#x27;颜色容差&#x27;在 {n} 处未匹配到任何像素。请调高它。</translation>
+    </message>
+    <message>
+        <source>&#x27;Remove speckle&#x27; at {n} px removed every shape. Lower it.</source>
+        <translation>&#x27;去除斑点&#x27;在 {n} 像素处移除了所有形状。请调低它。</translation>
+    </message>
+    <message>
+        <source>2K and 4K output</source>
+        <translation>2K 和 4K 输出</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Draw&lt;/b&gt;&lt;br&gt;Draw arrows, shapes, or labels on the map to show the AI what to change and where. Your drawing is sent with the prompt as visual guidance.</source>
+        <translation>&lt;b&gt;绘制&lt;/b&gt;&lt;br&gt;在地图上绘制箭头、形状或标注，向 AI 说明要修改的内容和位置。您的绘制内容会随 prompt 一起发送，作为视觉指引。</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Output size&lt;/b&gt;&lt;br&gt;A bigger output is sharper and more precise, and costs more credits. Standard (1K), Large (2K), Maximum (4K).</source>
+        <translation>&lt;b&gt;输出尺寸&lt;/b&gt;&lt;br&gt;更大的输出更清晰、更精确，但消耗更多积分。标准 (1K)、大 (2K)、最大 (4K)。</translation>
+    </message>
+    <message>
+        <source>Add a reference</source>
+        <translation>添加参考</translation>
+    </message>
+    <message>
+        <source>An image or a data file</source>
+        <translation>一张图像或一个数据文件</translation>
+    </message>
+    <message>
+        <source>Another output size</source>
+        <translation>其他输出尺寸</translation>
+    </message>
+    <message>
+        <source>Capturing your zone</source>
+        <translation>正在捕获您的区域</translation>
+    </message>
+    <message>
+        <source>Check your connection</source>
+        <translation>检查您的连接</translation>
+    </message>
+    <message>
+        <source>Click to view full size. Hover for download.</source>
+        <translation>点击查看完整尺寸。悬停可下载。</translation>
+    </message>
+    <message>
+        <source>Contracting by {n} px erased every shape. Set &#x27;Expand/Contract&#x27; closer to 0.</source>
+        <translation>按 {n} 像素收缩会擦除所有形状。请将&#x27;扩展/收缩&#x27;调至更接近 0。</translation>
+    </message>
+    <message>
+        <source>Create a map</source>
+        <translation>创建地图</translation>
+    </message>
+    <message>
+        <source>Detail</source>
+        <translation>详情</translation>
+    </message>
+    <message>
+        <source>Drag a box on the map</source>
+        <translation>在地图上拖拽一个框</translation>
+    </message>
+    <message>
+        <source>Drawing your edit</source>
+        <translation>正在绘制您的编辑</translation>
+    </message>
+    <message>
+        <source>Drop a file or a layer here</source>
+        <translation>将文件或 layer 拖放到此处</translation>
+    </message>
+    <message>
+        <source>Each checked color becomes a class.</source>
+        <translation>每个勾选的颜色都会成为一个类别。</translation>
+    </message>
+    <message>
+        <source>Finest detail for print and zoom</source>
+        <translation>打印和缩放下的最精细细节</translation>
+    </message>
+    <message>
+        <source>Generation restored. Change the prompt or the zone, then generate again.</source>
+        <translation>已恢复生成结果。更改 prompt 或区域后，请重新生成。</translation>
+    </message>
+    <message>
+        <source>Generations</source>
+        <translation>生成记录</translation>
+    </message>
+    <message>
+        <source>Keep this result and start a new edit. You can resume this session later.</source>
+        <translation>保留此结果并开始新的编辑。您可以稍后恢复此会话。</translation>
+    </message>
+    <message>
+        <source>Keep your drawing on the zone to guide the edit, and close this panel</source>
+        <translation>将您的绘制保留在区域上以引导编辑，然后关闭此面板</translation>
+    </message>
+    <message>
+        <source>Large</source>
+        <translation>大</translation>
+    </message>
+    <message>
+        <source>Like it? Pro adds 2K, 4K and commercial use.</source>
+        <translation>喜欢吗？Pro 支持 2K、4K 和商业用途。</translation>
+    </message>
+    <message>
+        <source>No shape reaches {n} px. Lower &#x27;Min polygon size&#x27;.</source>
+        <translation>没有形状达到 {n} 像素。请调低&#x27;最小多边形大小&#x27;。</translation>
+    </message>
+    <message>
+        <source>No shapes left with these settings. Set &#x27;Expand/Contract&#x27; closer to 0, lower &#x27;Min polygon size&#x27; or &#x27;Remove speckle&#x27;, or raise &#x27;Color tolerance&#x27;.</source>
+        <translation>按当前设置没有剩余形状。请将&#x27;扩展/收缩&#x27;设为更接近 0，调低&#x27;最小多边形大小&#x27;或&#x27;去除斑点&#x27;，或调高&#x27;颜色容差&#x27;。</translation>
+    </message>
+    <message>
+        <source>No usage yet</source>
+        <translation>暂无用量</translation>
+    </message>
+    <message>
+        <source>Non-commercial use</source>
+        <translation>非商业用途</translation>
+    </message>
+    <message>
+        <source>Open QGIS&#x27;s Data Source Manager to add data</source>
+        <translation>打开 QGIS 的数据源管理器以添加数据</translation>
+    </message>
+    <message>
+        <source>Original, before any edit</source>
+        <translation>原始，编辑前</translation>
+    </message>
+    <message>
+        <source>Placing the result</source>
+        <translation>正在放置结果</translation>
+    </message>
+    <message>
+        <source>Prompts, references, mark up, vectorize</source>
+        <translation>Prompts、参考图、标注、矢量化</translation>
+    </message>
+    <message>
+        <source>Quick draft, lighter on credits</source>
+        <translation>快速草稿，消耗更少额度</translation>
+    </message>
+    <message>
+        <source>Remove this reference</source>
+        <translation>移除该参考图</translation>
+    </message>
+    <message>
+        <source>Rendered and cropped to your zone</source>
+        <translation>已渲染并裁剪至您的区域</translation>
+    </message>
+    <message>
+        <source>Run the prompt again on the same zone, from the selected version</source>
+        <translation>在相同区域上用所选版本重新运行此 prompt</translation>
+    </message>
+    <message>
+        <source>Say in the prompt what to take from each reference.</source>
+        <translation>在 prompt 中说明每个参考图要采用的内容。</translation>
+    </message>
+    <message>
+        <source>Search prompts, e.g. &quot;add trees&quot; or &quot;flood the river&quot;</source>
+        <translation>搜索 prompt，例如&quot;添加树木&quot;或&quot;淹没河流&quot;</translation>
+    </message>
+    <message>
+        <source>Sending the image</source>
+        <translation>正在发送图片</translation>
+    </message>
+    <message>
+        <source>Sent whole, at its own size</source>
+        <translation>按原尺寸完整发送</translation>
+    </message>
+    <message>
+        <source>Sharper result for everyday maps</source>
+        <translation>日常地图也能获得更清晰的结果</translation>
+    </message>
+    <message>
+        <source>Show the plugin&#x27;s panel.</source>
+        <translation>显示 plugin 的面板。</translation>
+    </message>
+    <message>
+        <source>Size</source>
+        <translation>尺寸</translation>
+    </message>
+    <message>
+        <source>The imagery this session was edited on is not in this project. Add a snapshot of it to see your edits in context.</source>
+        <translation>本次会话所用的编辑影像不在当前项目中。添加其快照即可结合上下文查看您的编辑。</translation>
+    </message>
+    <message>
+        <source>Try one word, like &quot;trees&quot;</source>
+        <translation>尝试一个词，例如“trees”</translation>
+    </message>
+    <message>
+        <source>Turn on a layer, or start with a sample.</source>
+        <translation>开启一个 layer，或从示例开始。</translation>
+    </message>
+    <message>
+        <source>Turn one on in the Layers panel to edit it.</source>
+        <translation>在 Layers 面板中开启一个即可进行编辑。</translation>
+    </message>
+    <message>
+        <source>Vectorize turns a flat-color map into polygons.</source>
+        <translation>矢量化将纯色地图转为多边形。</translation>
+    </message>
+    <message>
+        <source>Very large</source>
+        <translation>特大</translation>
+    </message>
+    <message>
+        <source>While marking up</source>
+        <translation>标记期间</translation>
+    </message>
+    <message>
+        <source>Working on your edit</source>
+        <translation>正在处理您的编辑</translation>
+    </message>
+    <message>
+        <source>You&#x27;ve used this month&#x27;s free edits</source>
+        <translation>您已用完本月的免费编辑次数</translation>
+    </message>
+    <message>
+        <source>{n} stroke. Click Done to guide the edit with it.</source>
+        <translation>{n} 条笔画。单击 Done 以用它指导编辑。</translation>
+    </message>
+    <message>
+        <source>{n} strokes. Click Done to guide the edit with them.</source>
+        <translation>{n} 条笔画。单击 Done 以用它们指导编辑。</translation>
+    </message>
 </context>
 </TS>

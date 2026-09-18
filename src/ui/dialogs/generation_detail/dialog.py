@@ -2,17 +2,26 @@
 from __future__ import annotations
 
 from qgis.PyQt.QtCore import Qt, pyqtSignal
-from qgis.PyQt.QtGui import QGuiApplication, QIcon
-from qgis.PyQt.QtWidgets import QDialog
+from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtWidgets import QDialog, QPushButton
 
 from ....core import telemetry
 from ....core import telemetry_events as te
+from ....core.config_store import get_export_copy, get_export_dial_ratio
 from ....core.i18n import tr
 from ....core.prompts import prompt_history
-from .build import BuildUiMixin
+from ...keyboard_focus import settle_dialog_default_button
+from ...panel_helpers import screen_for_dialog
+from .build import _DIALOG_MARGIN_PX, _PANE_GAP_PX, BuildUiMixin
 from .images import ImageLoadMixin
-from .styles import _STAR_FILLED_SVG, _STAR_OUTLINE_SVG
+from .styles import _DETAIL_DIALOG_QSS, _PRIMARY_BTN, _STAR_FILLED_SVG, _STAR_OUTLINE_SVG
 from .widgets import _AspectBox
+
+# How much of the available screen width/height the dialog may claim when
+# sizing itself to the image aspect, so it never asks for more than the
+# screen it is opening on can give it.
+_SCREEN_WIDTH_RATIO = 0.96
+_SCREEN_HEIGHT_RATIO = 0.92
 
 
 class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
@@ -44,6 +53,8 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
         it) while the entry supplies the title, the generation count, and the
         Resume / Rename / Delete footer in place of the generation one."""
         super().__init__(parent)
+        self.setObjectName("generationDetail")
+        self.setStyleSheet(_DETAIL_DIALOG_QSS)
         self._job = job
         self._preset = preset
         self._session = session_entry
@@ -61,7 +72,8 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
 
         src = job or preset or {}
         self._title_text = self._resolve_title(src)
-        self.setWindowTitle(self._title_text or tr("Details"))
+        self.setWindowTitle(
+            self._title_text or get_export_copy("dialogs.dialog.details_title", tr("Details")))
         self.setMinimumSize(560, 420)
         self.setSizeGripEnabled(True)
 
@@ -87,10 +99,21 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
 
         self._loader_hooked = False
         self._has_images = self._build_ui()
+        # Enter fires the one filled action (Use, Reuse, Resume) and nothing else.
+        # A primary that cannot run (browse-only, no saved zone) is not
+        # handed Enter: pressing it would do nothing, silently.
+        primary = next(
+            (
+                b for b in self.findChildren(QPushButton)
+                if b.styleSheet() == _PRIMARY_BTN and b.isEnabled()
+            ),
+            None,
+        )
+        settle_dialog_default_button(self, primary)
         if self._has_images:
             self._apply_image_size()
         else:
-            self.resize(520, 560)
+            self._apply_text_only_size()
         self._start_image_loads()
         # Drop the shared loader connections when the dialog closes so a late
         # network reply never paints into a destroyed dialog (Qt6 crash guard).
@@ -110,9 +133,21 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
                     if fa > 0 and fb > 0:
                         self._aspect_locked = True
                         return fa / fb
-                except ValueError:
+                except ValueError:  # malformed ratio: fall through to the free aspect
                     pass
         return 1.0
+
+    def _apply_text_only_size(self) -> None:
+        """A job without pictures opens 560 px tall, clamped to the screen
+        like the picture case: on a 1366x768 laptop at 150% Windows leaves
+        about 480 px, and the unclamped height put the action row under the
+        taskbar."""
+        height = 560
+        screen = screen_for_dialog(self.parentWidget())
+        if screen is not None:
+            height = min(height, int(screen.availableGeometry().height() * get_export_dial_ratio(
+                "dialogs.dialog.screen_height_ratio", _SCREEN_HEIGHT_RATIO)))
+        self.resize(520, height)
 
     def _apply_image_size(self) -> None:
         """Size the window so the slider area matches the image aspect (so the
@@ -130,10 +165,11 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
         if disp_h < 380.0:
             disp_h = 380.0
             disp_w = min(disp_h * ar, max_w)
-        # 12px spacing between panes + 12px margins on each side. The image now
-        # spans the full pane height (the toolbar row moved onto the image).
-        width = int(disp_w) + info_w + 12 + 24
-        height = int(disp_h) + 24
+        # The layout's own gaps (build.py): 16 px between the panes and 16 px
+        # margins on each side. Counting 12 here squeezed the picture by 12 px
+        # in width and 8 px in height, so it never opened at its true aspect.
+        width = int(disp_w) + info_w + _PANE_GAP_PX + 2 * _DIALOG_MARGIN_PX
+        height = int(disp_h) + 2 * _DIALOG_MARGIN_PX
         # Clamp to the screen, like the library dialog does. Unclamped this
         # asks for up to 1316x624 logical px, which overflows a 1366x768 panel
         # at 125% (1093x614) and an FHD one at the Windows-recommended 150%
@@ -141,11 +177,13 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
         # The screen the dialog will actually open on (Qt centres it on its
         # parent), never the primary one: on a two-monitor desk, measuring the
         # 1920x1080 primary hands the laptop panel a window it cannot fit.
-        screen = self.screen() or QGuiApplication.primaryScreen()
+        screen = screen_for_dialog(self.parentWidget())
         if screen is not None:
             avail = screen.availableGeometry()
-            width = min(width, int(avail.width() * 0.96))
-            height = min(height, int(avail.height() * 0.92))
+            width = min(width, int(avail.width() * get_export_dial_ratio(
+                "dialogs.dialog.screen_width_ratio", _SCREEN_WIDTH_RATIO)))
+            height = min(height, int(avail.height() * get_export_dial_ratio(
+                "dialogs.dialog.screen_height_ratio", _SCREEN_HEIGHT_RATIO)))
         self.resize(max(width, 560), max(height, 420))
 
     # -- public --------------------------------------------------------------
@@ -188,9 +226,11 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
         icon = _STAR_FILLED_SVG if self._is_favorite else _STAR_OUTLINE_SVG
         self._star_btn.setIcon(QIcon(icon))
         self._star_btn.setToolTip(
-            tr("Remove from favorites") if self._is_favorite
-            else tr("Add to favorites")
+            get_export_copy("dialogs.dialog.favorite_remove_tooltip", tr("Remove from favorites"))
+            if self._is_favorite
+            else get_export_copy("dialogs.dialog.favorite_add_tooltip", tr("Add to favorites"))
         )
+        self._star_btn.setAccessibleName(self._star_btn.toolTip())
 
     def _on_star(self) -> None:
         self._is_favorite = not self._is_favorite
@@ -205,9 +245,11 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
         icon = _STAR_FILLED_SVG if self._prompt_is_favorite else _STAR_OUTLINE_SVG
         self._prompt_star_btn.setIcon(QIcon(icon))
         self._prompt_star_btn.setToolTip(
-            tr("Remove from favorites") if self._prompt_is_favorite
-            else tr("Add to favorites")
+            get_export_copy("dialogs.dialog.favorite_remove_tooltip", tr("Remove from favorites"))
+            if self._prompt_is_favorite
+            else get_export_copy("dialogs.dialog.favorite_add_tooltip", tr("Add to favorites"))
         )
+        self._prompt_star_btn.setAccessibleName(self._prompt_star_btn.toolTip())
 
     def _on_prompt_star(self) -> None:
         src = self._preset or {}
@@ -235,9 +277,15 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
         self._fullscreen = not self._fullscreen
         self._info_panel.setVisible(not self._fullscreen)
         if self._fs_btn is not None:
-            self._fs_btn.setText("⤡" if self._fullscreen else "⤢")
+            # The same expand glyph both ways; the checked wash says the
+            # picture is maximised, the tooltip says what a click does.
+            self._fs_btn.blockSignals(True)
+            self._fs_btn.setChecked(self._fullscreen)
+            self._fs_btn.blockSignals(False)
             self._fs_btn.setToolTip(
-                tr("Exit fullscreen") if self._fullscreen else tr("Fullscreen")
+                get_export_copy("dialogs.dialog.leave_fullscreen_tooltip", tr("Leave fullscreen"))
+                if self._fullscreen
+                else get_export_copy("dialogs.dialog.fullscreen_tooltip", tr("Fullscreen"))
             )
         # Maximize rather than true fullscreen: on macOS, showFullScreen() moves
         # the dialog to its own Space so the (modal) prompt library ends up
@@ -256,11 +304,11 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
         for slot in (self._on_image_loaded, self._on_ref_loaded):
             try:
                 self._demo_loader.loaded.disconnect(slot)
-            except (RuntimeError, TypeError):
+            except (RuntimeError, TypeError):  # slot never connected or loader deleted
                 pass
         try:
             self._demo_loader.failed.disconnect(self._on_image_failed)
-        except (RuntimeError, TypeError):
+        except (RuntimeError, TypeError):  # slot never connected or loader deleted
             pass
 
     def keyPressEvent(self, event):  # noqa: N802 - Qt signature

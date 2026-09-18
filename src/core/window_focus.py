@@ -10,8 +10,13 @@ from __future__ import annotations
 
 import sys
 
+from .config_store import get_export_dial
+
 # Win32 constant, ShowWindow(SW_RESTORE): un-minimize without changing size.
 _SW_RESTORE = 9
+
+# How long the taskbar button flashes when the OS refuses to raise the window.
+_TASKBAR_FLASH_MS = 3000
 
 
 def bring_qgis_window_to_front(main_window, dock_widget=None) -> bool:
@@ -48,7 +53,9 @@ def _force_foreground_on_windows(main_window) -> bool:
     try:
         import ctypes
 
-        user32 = ctypes.windll.user32
+        # A private handle: setting argtypes on the shared ctypes.windll.user32
+        # would change these signatures for every other plugin in QGIS.
+        user32 = ctypes.WinDLL("user32")
         # Handles are pointer sized: without these the default c_int return
         # truncates every HWND on 64-bit Windows.
         user32.GetForegroundWindow.restype = ctypes.c_void_p
@@ -86,6 +93,8 @@ def _flash_taskbar_entry(main_window) -> None:
     try:
         from qgis.PyQt.QtWidgets import QApplication
 
-        QApplication.alert(main_window, 3000)
+        QApplication.alert(
+            main_window, get_export_dial("pipeline.window_focus.taskbar_flash_ms", _TASKBAR_FLASH_MS)
+        )
     except Exception:  # nosec B110
         pass

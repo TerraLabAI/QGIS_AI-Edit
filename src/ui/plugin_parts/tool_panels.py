@@ -7,6 +7,7 @@ from qgis.PyQt.QtGui import QColor, QKeySequence
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
+from ...core.config_store import get_export_copy, get_export_dial
 from ...core.i18n import tr
 from ...core.logger import log_warning
 from ...core.qt_compat import QAction
@@ -17,6 +18,11 @@ from ..tools.markup_tools import (
     MarkupLayerManager,
     PencilMapTool,
 )
+
+# How long the "draw inside the zone" warning stays up (ms); the message-bar
+# duration (seconds) and the auto-reset timer are read from the same dial so
+# the notice and its dismissal flag never drift apart.
+_MARKUP_OUTSIDE_NOTICE_MS = 3000
 
 
 class _MarkupUndoFilter(QObject):
@@ -40,7 +46,17 @@ class _MarkupUndoFilter(QObject):
 
 
 class ToolPanelsMixin:
-    # --- Mark up / Vectorize tool panels -------------------------------
+    # --- Draw / References / Vectorize tool panels ---------------------
+
+    def _leave_other_tool_panel(self, target: str) -> None:
+        """Opening one tool panel while another is up goes through that
+        panel's own way out first. Switching straight from Draw to
+        Vectorize used to leave Draw's pencil armed on the map, its undo
+        filter installed and QGIS's own Undo switched off, all while the
+        Vectorize panel showed."""
+        current = getattr(self, "_in_tool_panel", None)
+        if current is not None and current != target:
+            self._exit_tool_panel()
 
     def _tool_feature_blocked(self, name: str) -> bool:
         """Click-time server kill switch; the dock shows the shared notice."""
@@ -50,22 +66,23 @@ class ToolPanelsMixin:
         return dock._feature_blocked(name)
 
     def _on_markup_clicked(self):
-        """User picked Tools → Mark up. Swap the dock view and arm the canvas.
+        """User opened Draw. Swap the dock view and arm the canvas.
 
-        Toggles: a second click on the footer Mark up icon while the panel is
-        already open closes it (same as the in-panel Finish button).
+        Toggles: a second click on the Draw button while the panel is
+        already open closes it (same as the in-panel Done button).
         """
         self._disarm_swipe()
-        if self._map_tool is not None:
-            self._map_tool.hide_action_badges()
-
         if self._in_tool_panel == "markup":
-            # Closing via the footer toggle must match the in-panel Finish
-            # button: capture the marks as a reference and drop the layer.
+            # Closing via the toggle must match the in-panel Done button.
             self._on_markup_done_clicked()
             return
         if self._tool_feature_blocked("markup"):
             return
+        # Leave first: its way out brings the result's pills back, and they
+        # must end up hidden under the panel that opens next.
+        self._leave_other_tool_panel("markup")
+        if self._map_tool is not None:
+            self._map_tool.hide_action_badges()
         if self._markup_manager is None:
             self._markup_manager = MarkupLayerManager(self._canvas, self._dock_widget)
             self._markup_manager.annotation_count_changed.connect(
@@ -99,12 +116,12 @@ class ToolPanelsMixin:
             try:
                 self._canvas.mapToolSet.connect(self._on_markup_maptool_set)
                 self._markup_maptool_set_connected = True
-            except (TypeError, RuntimeError):
+            except (TypeError, RuntimeError):  # canvas gone: the button just won't auto-uncheck
                 pass
         telemetry.track(te.MARKUP_OPENED)
 
     def _on_markup_tool_changed(self, tool_key: str):
-        """User picked Pencil / Line / Arrow / Circle in the Mark up panel."""
+        """User picked Pencil / Line / Arrow / Circle in the Draw panel."""
         if self._markup_manager is None:
             return
         existing = self._markup_tool_objs.get(tool_key)
@@ -168,24 +185,30 @@ class ToolPanelsMixin:
         if self._markup_outside_notice_active:
             return
         self._markup_outside_notice_active = True
+        notice_ms = get_export_dial(
+            "flows.tool_panels.markup_outside_notice_ms", _MARKUP_OUTSIDE_NOTICE_MS
+        )
         try:
             self._iface.messageBar().pushMessage(
                 "AI Edit",
-                tr("You can only draw inside the selected zone."),
+                get_export_copy(
+                    "flows.tool_panels.markup_outside_zone",
+                    tr("You can only draw inside the selected zone."),
+                ),
                 level=Qgis.MessageLevel.Warning,
-                duration=3,
+                duration=max(1, notice_ms // 1000),
             )
         except Exception:  # nosec B110 - a missing message bar never blocks drawing.
             pass
         QtC.safe_single_shot(
-            3000, self._dock_widget, self._reset_markup_outside_notice
+            notice_ms, self._dock_widget, self._reset_markup_outside_notice
         )
 
     def _reset_markup_outside_notice(self):
         self._markup_outside_notice_active = False
 
     def _on_markup_done_clicked(self):
-        """Leave the Mark up panel. The marks stay on the map so they render
+        """Leave the Draw panel. The marks stay on the map so they render
         directly onto the image sent to the model; the same zone WITHOUT the
         marks is sent alongside so the model restores the pixels under each
         mark and no stroke appears in the result. The markup layer is dropped
@@ -199,39 +222,41 @@ class ToolPanelsMixin:
             self._markup_done_in_progress = False
 
     def _on_reference_clicked(self):
-        """Reference chip clicked: open the Reference panel (import + notes).
+        """References chip clicked: open the References panel (import + notes).
 
         Toggles like the other panels: a second click while it is open closes
         it. No map tool to arm or restore, the panel is pure dock UI.
         """
         self._disarm_swipe()
-        if self._map_tool is not None:
-            self._map_tool.hide_action_badges()
         if self._in_tool_panel == "reference":
             self._exit_tool_panel()
             return
+        self._leave_other_tool_panel("reference")
+        if self._map_tool is not None:
+            self._map_tool.hide_action_badges()
         self._in_tool_panel = "reference"
         self._dock_widget.set_reference_state()
 
     def _on_reference_done_clicked(self):
-        """Done in the Reference panel: back to the main flow."""
+        """Done in the References panel: back to the main flow."""
         if self._in_tool_panel == "reference":
             self._exit_tool_panel()
 
     def _on_vectorize_clicked(self):
-        """User picked Tools → Vectorize.
+        """User opened Vectorize from the result screen.
 
-        Toggles: a second click on the footer Vectorize icon while the panel
+        Toggles: a second click on the Vectorize button while the panel
         is open closes it (same as the in-panel Done button).
         """
         self._disarm_swipe()
-        if self._map_tool is not None:
-            self._map_tool.hide_action_badges()
         if self._in_tool_panel == "vectorize":
             self._exit_tool_panel()
             return
         if self._tool_feature_blocked("vectorize"):
             return
+        self._leave_other_tool_panel("vectorize")
+        if self._map_tool is not None:
+            self._map_tool.hide_action_badges()
         current = self._canvas.mapTool()
         if current is not None and current not in self._markup_tool_objs.values():
             self._pre_markup_map_tool = current
@@ -250,6 +275,12 @@ class ToolPanelsMixin:
         """
         if self._tool_feature_blocked("vectorize"):
             return
+        # Compare and Vectorize fight for the map, and the Compare button is
+        # locked while this panel shows: a comparison left running here could
+        # not be turned off. The footer path already disarmed it; this one
+        # did not.
+        self._disarm_swipe()
+        self._leave_other_tool_panel("vectorize")
         # Vectorizing a browsed preview is a commitment: its layer is now the
         # source of derived work, so it stops being replaceable (preview rule).
         self._promote_version_for_layer(layer_id)
@@ -280,7 +311,7 @@ class ToolPanelsMixin:
         self._exit_tool_panel()
 
     def _on_canvas_compare(self) -> None:
-        """Compare pill (canvas) clicked: toggle the before/after swipe.
+        """Compare clicked: toggle the before/after swipe.
 
         The pill stays on the canvas during the comparison (see the overlay
         click-forwarding below), so this is a real toggle: arm if off, disarm
@@ -363,8 +394,6 @@ class ToolPanelsMixin:
                     can_compare = self._swipe_controller.can_swipe_now()
                 except Exception as err:  # nosec B110
                     log_warning(f"re-activate result for Compare failed: {err}")
-        if layer is None:
-            layer = self._selected_version_layer()
         # A pill for a feature the server switched off would only lead to a
         # refusal, so it does not get drawn at all.
         from ...core.auth.activation_manager import is_feature_enabled
@@ -393,8 +422,8 @@ class ToolPanelsMixin:
     def _disarm_swipe(self) -> None:
         """Stop the swipe map tool if it is currently armed.
 
-        Called from every other AI Edit action (vectorize, markup,
-        settings, help, exit, launch) so the canvas only ever runs one
+        Called from every other AI Edit action (Vectorize, Draw,
+        References, settings, Cancel, launch) so the canvas only ever runs one
         AI Edit tool at a time. The user explicitly asked for this: as
         soon as they pick another action, the swipe must release the
         canvas so they are not left in a stale compare mode.
@@ -407,7 +436,8 @@ class ToolPanelsMixin:
             self._disarm_swipe()
 
     def _on_swipe_toggled(self, checked: bool) -> None:
-        """Footer Before/After toggled by the user.
+        """Compare toggled by the user (the result screen's button drives
+        this hidden twin).
 
         ``checked=True`` arms the swipe map tool on the currently active
         AI-Edit raster; ``checked=False`` disarms it and restores the
@@ -451,7 +481,8 @@ class ToolPanelsMixin:
         telemetry.track(te.SWIPE_DISARMED)
 
     def _exit_tool_panel(self):
-        """Common path for Done from either tool panel."""
+        """Common path for Done from any tool panel (Draw, References,
+        Vectorize), and for Escape or hiding the dock while one shows."""
         # A map capture still armed from the Reference panel goes first, so
         # the tool restore below never lands on the capture tool itself.
         self._cancel_reference_capture()
@@ -459,18 +490,18 @@ class ToolPanelsMixin:
         if self._pre_markup_map_tool is not None:
             try:
                 self._canvas.setMapTool(self._pre_markup_map_tool)
-            except RuntimeError:
+            except RuntimeError:  # previous map tool deleted by QGIS
                 pass
         self._pre_markup_map_tool = None
         if self._markup_event_filter is not None:
             try:
                 self._iface.mainWindow().removeEventFilter(self._markup_event_filter)
-            except RuntimeError:
+            except RuntimeError:  # main window or filter already deleted
                 pass
         if self._markup_maptool_set_connected:
             try:
                 self._canvas.mapToolSet.disconnect(self._on_markup_maptool_set)
-            except (TypeError, RuntimeError):
+            except (TypeError, RuntimeError):  # already disconnected or canvas deleted
                 pass
             self._markup_maptool_set_connected = False
         self._restore_qgis_undo()
@@ -494,7 +525,7 @@ class ToolPanelsMixin:
 
     def _suppress_qgis_undo(self) -> None:
         """Disable every main-window QAction bound to Cmd/Ctrl+Z while in
-        Markup so QGIS's project-undo shortcut never intercepts the
+        Draw so QGIS's project-undo shortcut never intercepts the
         keystroke before our handlers can fire. Restored via the matching
         ``_restore_qgis_undo()`` call on panel exit / unload.
         """
@@ -515,7 +546,7 @@ class ToolPanelsMixin:
         for action, was_enabled in self._suppressed_undo_actions:
             try:
                 action.setEnabled(was_enabled)
-            except RuntimeError:
+            except RuntimeError:  # QGIS action deleted since it was disabled
                 pass
         self._suppressed_undo_actions = []
 

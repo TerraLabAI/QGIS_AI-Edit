@@ -2,7 +2,7 @@
 
 Every name that was ever importable from this module stays importable here.
 """
-from ..core.canvas_export.context_metadata import (  # noqa: F401
+from ..core.canvas_export.context_metadata import (
     _BASEMAP_HOSTS,
     _basemap_label,
     _bbox_wgs84,
@@ -13,7 +13,7 @@ from ..core.canvas_export.context_metadata import (  # noqa: F401
     estimate_native_ground_resolution_m,
     estimate_zone_area_km2,
 )
-from ..core.canvas_export.export_config import (  # noqa: F401
+from ..core.canvas_export.export_config import (
     _DEFAULT_INPUT_FORMAT,
     _DEFAULT_INPUT_QUALITY,
     _get_align,
@@ -24,7 +24,8 @@ from ..core.canvas_export.export_config import (  # noqa: F401
     has_server_config,
     set_server_config,
 )
-from ..core.canvas_export.native_resolution import (  # noqa: F401
+from ..core.canvas_export.input_render_set import build_input_render_set
+from ..core.canvas_export.native_resolution import (
     _WEBMERC_M_PX_Z0,
     QgsVectorTileLayer,
     _best_native_longest_px,
@@ -38,7 +39,7 @@ from ..core.canvas_export.native_resolution import (  # noqa: F401
     _xyz_zmax,
     _zone_dims_meters,
 )
-from ..core.canvas_export.render import (  # noqa: F401
+from ..core.canvas_export.render import (
     ExportPrep,
     _clone_map_settings,
     _encode_image,
@@ -48,7 +49,7 @@ from ..core.canvas_export.render import (  # noqa: F401
     render_clean_base,
     render_export,
 )
-from ..core.canvas_export.sizing import (  # noqa: F401
+from ..core.canvas_export.sizing import (
     _INPUT_BUDGET_HEADROOM,
     _RESOLUTION_TARGET_PX,
     _adjust_extent_to_aspect,
@@ -56,7 +57,58 @@ from ..core.canvas_export.sizing import (  # noqa: F401
     _budget_dims,
     get_zone_pixel_size,
 )
-from ..core.canvas_export.zone_validation import (  # noqa: F401
+from ..core.canvas_export.zone_validation import (
     _POLAR_ABS_LAT_DEG,
     validate_zone,
 )
+
+# Public surface, re-exports included, so they read as used.
+__all__ = [
+    "_adjust_extent_to_aspect",
+    "_aspect_dims",
+    "_BASEMAP_HOSTS",
+    "_basemap_label",
+    "_bbox_wgs84",
+    "_best_native_longest_px",
+    "_budget_dims",
+    "_centroid_wgs84",
+    "_clone_map_settings",
+    "_compute_ground_resolution_m",
+    "_DEFAULT_INPUT_FORMAT",
+    "_DEFAULT_INPUT_QUALITY",
+    "_detect_basemap",
+    "_encode_image",
+    "_get_align",
+    "_get_max_dimension",
+    "_get_server_config",
+    "_INPUT_BUDGET_HEADROOM",
+    "_intersects_zone",
+    "_layer_units_to_meters_xy",
+    "_native_pixel_size_xy_m",
+    "_POLAR_ABS_LAT_DEG",
+    "_raster_native_mpp_xy",
+    "_render_markup_overlay",
+    "_render_settings_to_image",
+    "_RESOLUTION_TARGET_PX",
+    "_supported_write_formats",
+    "_vector_tile_native_mpp_xy",
+    "_WEBMERC_M_PX_Z0",
+    "_webmerc_mpp_at_lat",
+    "_xyz_native_mpp_xy",
+    "_xyz_zmax",
+    "_zone_dims_meters",
+    "apply_export_context",
+    "build_input_render_set",
+    "chosen_input_format",
+    "estimate_native_ground_resolution_m",
+    "estimate_zone_area_km2",
+    "ExportPrep",
+    "get_zone_pixel_size",
+    "has_server_config",
+    "prepare_export",
+    "QgsVectorTileLayer",
+    "render_clean_base",
+    "render_export",
+    "set_server_config",
+    "validate_zone",
+]

@@ -1,17 +1,42 @@
 from __future__ import annotations
 
-import json
+import time
+import uuid
+from urllib.parse import quote, urlencode
 
 from qgis.core import QgsBlockingNetworkRequest
 from qgis.PyQt.QtCore import QByteArray, QUrl
 from qgis.PyQt.QtNetwork import QNetworkRequest
 
 from ..core import qt_compat as QtC
-from ..core.config_store import get_export_dial
+from ..core.config_store import get_export_copy, get_export_dial
 from ..core.i18n import tr
-from ..core.log_scrub import scrub_urls
 from ..core.logger import log_debug, log_warning
 from ..core.request_context import request_context
+from .image_download import _TIMEOUT_DOWNLOAD
+from .network_error_classifier import (
+    _MIN_IMAGE_BYTES,
+    CANCELLED_CODE,
+    DownloadError,
+    _cancelled_result,
+    _classify_network_error,
+    _current_feedback,
+    _is_feedback_cancelled,
+    _looks_like_image,  # noqa: F401 - compatibility re-export
+    _reply_failed,
+    _safe_int,
+    network_setup_hint,
+    qgis_timeout_hint,
+    request_feedback,
+)
+from .network_response import (
+    http_failure,
+    json_body,
+    response_object,
+    transfer_timeout,
+    valid_headers,
+    valid_http_url,
+)
 
 # Timeout defaults (milliseconds). Server override via export-config
 # `timeouts_ms` {api, startup, download}; the constants stay the fallback
@@ -21,12 +46,27 @@ _TIMEOUT_API = 30_000
 # credits): short so an unstable connection surfaces fast instead of hanging
 # a visible "checking..." for 30s.
 _TIMEOUT_STARTUP = 8_000
-_TIMEOUT_DOWNLOAD = 180_000
 _SUBMIT_TIMEOUTS_MS = {
     "1K": 45_000,
     "2K": 60_000,
     "4K": 90_000,
 }
+
+# Standard authenticated write/action endpoints (favorite, delete, rename,
+# refund, upload-url request): long enough for a slow link, short enough to
+# fail visibly rather than hang a button.
+_TIMEOUT_WRITE_MS = 10_000
+# Fire-and-forget background posts (cancel a pairing code or a generation,
+# a telemetry batch): the UI never waits on these, so a short budget just
+# keeps a dead connection from lingering.
+_TIMEOUT_QUICK_POST_MS = 5_000
+# Account erasure: a sensitive, infrequent call given extra headroom over
+# the standard write timeout.
+_TIMEOUT_ACCOUNT_DELETE_MS = 15_000
+# Presigned storage PUT default (used when the caller does not override it).
+_TIMEOUT_UPLOAD_PUT_MS = 60_000
+# Unauthenticated pairing status poll (one HTTP round-trip per poll tick).
+_TIMEOUT_PAIR_POLL_MS = 10_000
 
 
 def _api_timeout_ms() -> int:
@@ -49,161 +89,40 @@ def _with_context(path: str) -> str:
         params = request_context()
         if not params:
             return path
-        query = "&".join(f"{key}={value}" for key, value in params.items())
+        query = urlencode(params)
         return f"{path}{'&' if '?' in path else '?'}{query}"
     except Exception:  # nosec B110
         return path
 
 
-def _safe_int(val):
-    """Convert Qt enum or attribute value to int (Qt5 returns int, Qt6 returns enum)."""
-    if val is None:
-        return None
-    try:
-        return int(val)
-    except (TypeError, ValueError):
-        return getattr(val, "value", val)
+# Re-exported: callers that already name these through the client keep working.
+__all__ = [
+    "_looks_like_image",
+    "_MIN_IMAGE_BYTES",
+    "_TIMEOUT_DOWNLOAD",
+    "CANCELLED_CODE",
+    "DownloadError",
+    "TerraLabClient",
+    "network_setup_hint",
+    "qgis_timeout_hint",
+    "request_feedback",
+]
 
 
-# Full URLs, and bare multi-label hosts / IPs (a.b.c, with optional :port). A
-# single-dot token (a filename like output.tif) is intentionally left alone so
-# the log stays useful; only endpoint-shaped tokens are masked.
-# Single implementation in core/log_scrub.py, shared with the bug-report path.
-_scrub_urls = scrub_urls
+# request_context() as a header value, worked out once per session: it reads
+# metadata.txt and the OS name, and the answer cannot change until a restart.
+_client_context: dict[str, bytes | None] = {"header": None}
 
 
-def _classify_network_error(
-    blocker: QgsBlockingNetworkRequest,
-) -> tuple[str, str]:
-    """Map a QgsBlockingNetworkRequest failure to (error_code, user_message).
-
-    Also logs full diagnostics for bug reports.
-    """
-    reply = blocker.reply()
-    qt_error = reply.error() if reply else QtC.UnknownNetworkError
-    error_string = blocker.errorMessage()
-
-    http_status = None
-    if reply:
-        attr = reply.attribute(QtC.HttpStatusCodeAttribute)
-        if attr is not None:
-            http_status = _safe_int(attr)
-
-    log_warning(
-        f"Network error: qt_error={_safe_int(qt_error)}, http_status={http_status}, "
-        f"detail={_scrub_urls(error_string)[:500]}"
-    )
-
-    if qt_error == QtC.HostNotFoundError:
-        return (
-            "DNS_ERROR",
-            "Cannot reach the server. Check your internet connection.",
-        )
-
-    if qt_error == QtC.ConnectionRefusedError_:
-        return (
-            "CONNECTION_REFUSED",
-            "Server refused the connection. The service may be temporarily down.",
-        )
-
-    if qt_error == QtC.TimeoutError_:
-        return (
-            "TIMEOUT",
-            "Request timed out. Check your connection or try again.",
-        )
-
-    if qt_error == QtC.SslHandshakeFailedError:
-        return (
-            "SSL_ERROR",
-            "SSL certificate error. Your network may be blocking secure connections.",
-        )
-
-    if qt_error in QtC.PROXY_ERRORS:
-        return (
-            "PROXY_ERROR",
-            "Proxy connection failed. "
-            "Check QGIS proxy settings (Settings > Options > Network).",
-        )
-
-    if qt_error in (QtC.ContentAccessDenied, QtC.AuthenticationRequiredError):
-        return (
-            "AUTH_ERROR",
-            "Authentication failed. Check your activation key.",
-        )
-
-    # An oversized request body is rejected by the platform (often before our
-    # handler runs) as 413. Without this branch it falls through to the generic
-    # "check your connection" message, which misleads the user into blaming
-    # their network instead of removing a reference image.
-    if http_status == 413:
-        return (
-            "PAYLOAD_TOO_LARGE",
-            "Too much image data to send. Remove a reference image or lower the resolution, then try again.",
-        )
-
-    # The server DID answer, with a failure status whose body was not
-    # parseable JSON (typically a bare infrastructure incident page). The
-    # user's connection worked, so "check your internet" points them at the
-    # wrong side. SERVER_ERROR is already a known transient code (localizer,
-    # report policy), and the activation flow keeps the session on it.
-    if http_status is not None and http_status >= 500:
-        return (
-            "SERVER_ERROR",
-            tr(
-                "The service is temporarily unavailable (server error). "
-                "Your connection is fine - please try again in a few minutes."
-            ),
-        )
-
-    # Fallback. Canonical code is NO_NETWORK (ErrorCode enum) so every consumer
-    # (inline-only set, retry list, message localizer) treats it as a handled
-    # network failure instead of opening the bug-report dialog.
-    return (
-        "NO_NETWORK",
-        "Network error. Check your internet connection.",
-    )
-
-
-class DownloadError(RuntimeError):
-    """A failed image download, carrying a structured `code` so the refund
-    event / ops alert can say WHY (TIMEOUT, SSL_ERROR, INCOMPLETE, ...)
-    instead of a bare "download_failed".
-    """
-
-    def __init__(self, code: str, message: str):
-        super().__init__(message)
-        self.code = code
-
-
-# Smallest plausible real image. A transient proxy/CDN error body
-# ({"code":"UPSTREAM_UNAVAILABLE"} or an HTML error page) is well under this,
-# so the floor also catches non-image payloads that slip past the magic-byte
-# check below.
-_MIN_IMAGE_BYTES = 64
-
-
-def _looks_like_image(data: bytes) -> bool:
-    """True if the bytes start with a known raster image signature.
-
-    The image proxy can answer a slow/transient backend with a 200 and a tiny
-    JSON/HTML error body (a storage hiccup, an upstream 503 surfaced as a branded
-    page). Those bytes are not an image: writing them produces a corrupt
-    GeoTIFF that fails later as a write error. Detecting them here instead lets
-    the caller's retry loop re-download (escalating to the stream=1 bypass),
-    so a recoverable blip never becomes a lost generation.
-    """
-    if len(data) < 12:
-        return False
-    signatures = (
-        data[:8] == b"\x89PNG\r\n\x1a\n",  # PNG
-        data[:3] == b"\xff\xd8\xff",  # JPEG
-        data[:4] == b"RIFF" and data[8:12] == b"WEBP",  # WebP
-        data[:6] in (b"GIF87a", b"GIF89a"),  # GIF
-        data[:2] in (b"II", b"MM") and data[2:4] in (b"\x2a\x00", b"\x00\x2a"),  # TIFF
-        data[:2] == b"BM",  # BMP
-        data[4:8] == b"ftyp",  # AVIF / HEIF (ISO-BMFF)
-    )
-    return any(signatures)
+def _client_context_value() -> bytes:
+    if _client_context["header"] is None:
+        try:
+            params = request_context()
+            value = urlencode(params)
+            _client_context["header"] = value.encode("ascii", errors="ignore")
+        except Exception:  # nosec B110
+            _client_context["header"] = b""
+    return _client_context["header"] or b""
 
 
 class TerraLabClient:
@@ -222,6 +141,8 @@ class TerraLabClient:
                 base_url = env_vars["TERRALAB_BASE_URL"]
             else:
                 base_url = self._read_base_url()
+        if not valid_http_url(base_url):
+            raise ValueError("Invalid API base URL")
         self.base_url = base_url.rstrip("/")
         # Dev-only raw-prompt mode: when RAW_PROMPT=true in .env.local, every
         # submit carries raw_prompt so the server (TerraLab team allowlist only)
@@ -238,7 +159,7 @@ class TerraLabClient:
         env_path = os.path.join(plugin_dir, ".env.local")
         try:
             if os.path.isfile(env_path):
-                with open(env_path, encoding="utf-8") as f:
+                with open(env_path, encoding="utf-8-sig", errors="replace") as f:
                     for line in f:
                         line = line.strip()
                         if line.startswith("TERRALAB_BASE_URL="):
@@ -298,6 +219,8 @@ class TerraLabClient:
         (``parent_request_id``) are sent only when present, so older backends
         silently ignore them.
         """
+        if _is_feedback_cancelled(_current_feedback()):
+            return _cancelled_result()
         if (image_b64 is None) == (upload_token is None):
             raise ValueError(
                 "submit_generation requires exactly one of image_b64 or upload_token"
@@ -363,7 +286,7 @@ class TerraLabClient:
         # side). Absent for normal users, so older/standard servers ignore it.
         if self._raw_prompt:
             payload["raw_prompt"] = True
-        body = json.dumps(payload).encode("utf-8")
+        body = json_body(payload)
         return self._request(
             "POST",
             "/api/ai-edit/generate",
@@ -385,13 +308,13 @@ class TerraLabClient:
             {"upload_token": str, "upload_url": str, "expires_at": int,
              "max_bytes": int, "required_headers": {"Content-Type": str, ...}}
         """
-        body = json.dumps({"format": image_format}).encode("utf-8")
+        body = json_body({"format": image_format})
         return self._request(
             "POST",
             "/api/ai-edit/upload-url",
             auth=auth,
             body=body,
-            timeout_ms=10_000,
+            timeout_ms=get_export_dial("pipeline.terralab_client.write_timeout_ms", _TIMEOUT_WRITE_MS),
         )
 
     def upload_to_signed_url(
@@ -399,28 +322,41 @@ class TerraLabClient:
         url: str,
         data: bytes,
         headers: dict,
-        timeout_ms: int = 60_000,
+        timeout_ms: int | None = None,
     ) -> tuple[bool, str | None]:
         """PUT raw bytes to a presigned upload URL. Returns (ok, error_message)."""
+        if timeout_ms is None:
+            timeout_ms = get_export_dial("pipeline.terralab_client.upload_put_timeout_ms", _TIMEOUT_UPLOAD_PUT_MS)
+        if _is_feedback_cancelled(_current_feedback()):
+            return (False, f"{CANCELLED_CODE}: cancelled")
+        if not valid_http_url(url) or not valid_headers(headers):
+            return (False, "CLIENT_ERROR: invalid upload request")
+        if not isinstance(data, bytes) or not data:
+            return (False, "CLIENT_ERROR: empty upload")
+        timeout_ms = transfer_timeout(timeout_ms, _TIMEOUT_UPLOAD_PUT_MS)
         req = QNetworkRequest(QUrl(url))
         for k, v in headers.items():
             req.setRawHeader(k.encode("utf-8"), v.encode("utf-8"))
         QtC.set_transfer_timeout(req, timeout_ms)
+        feedback = _current_feedback()
+        if _is_feedback_cancelled(feedback):
+            return (False, f"{CANCELLED_CODE}: cancelled")
         blocker = QgsBlockingNetworkRequest()
         payload = QByteArray(data)
         try:
-            err = blocker.put(req, payload)
+            err = blocker.put(req, payload, feedback=feedback)
         except AttributeError:
             return (False, "QgsBlockingNetworkRequest.put not available")
-        if err != QtC.BlockingNoError:
-            code, msg = _classify_network_error(blocker)
+        if _is_feedback_cancelled(feedback):
+            return (False, f"{CANCELLED_CODE}: cancelled")
+        if _reply_failed(err, blocker):
+            code, msg = _classify_network_error(blocker, timeout_ms)
             return (False, f"{code}: {msg}")
         reply = blocker.reply()
         http_status = reply.attribute(QtC.HttpStatusCodeAttribute) if reply else None
         status_int = _safe_int(http_status) if http_status is not None else None
-        if status_int is not None and status_int >= 400:
-            raw = bytes(reply.content()).decode("utf-8", errors="replace") if reply else ""
-            log_warning(f"Upload PUT failed: HTTP {status_int} {_scrub_urls(raw)[:200]}")
+        if status_int is None or not 200 <= status_int < 300:
+            log_warning(f"Upload PUT failed: HTTP {status_int}")
             return (False, f"HTTP {status_int}")
         return (True, None)
 
@@ -428,7 +364,7 @@ class TerraLabClient:
         """Poll generation status. force_fallback=True bypasses the server's
         grace window and asks it to hit the provider queue immediately. Used as a last
         attempt right before the plugin gives up polling."""
-        path = f"/api/ai-edit/generate/status?request_id={request_id}"
+        path = f"/api/ai-edit/generate/status?request_id={quote(request_id, safe='')}"
         if force_fallback:
             path += "&force_fallback=true"
         return self._request("GET", path, auth=auth)
@@ -459,20 +395,20 @@ class TerraLabClient:
         if favorites_only:
             path += "&favorites_only=true"
         if before:
-            from urllib.parse import quote
-
-            path += f"&before={quote(before)}"
+            path += f"&before={quote(before, safe='')}"
         return self._request("GET", path, auth=auth)
 
     def set_generation_favorite(
         self, auth: dict, request_id: str, is_favorite: bool
     ) -> dict:
         """Star or unstar a past generation. Idempotent."""
-        body = json.dumps(
-            {"request_id": request_id, "is_favorite": is_favorite}
-        ).encode("utf-8")
+        body = json_body({"request_id": request_id, "is_favorite": is_favorite})
         return self._request(
-            "POST", "/api/ai-edit/history/favorite", auth=auth, body=body, timeout_ms=10_000
+            "POST",
+            "/api/ai-edit/history/favorite",
+            auth=auth,
+            body=body,
+            timeout_ms=get_export_dial("pipeline.terralab_client.write_timeout_ms", _TIMEOUT_WRITE_MS),
         )
 
     def delete_generation_session(
@@ -483,27 +419,67 @@ class TerraLabClient:
         two must be given; the server accepts either but never both."""
         if bool(session_id) == bool(request_id):
             raise ValueError("Pass exactly one of session_id or request_id")
-        body = json.dumps(
-            {"session_id": session_id} if session_id else {"request_id": request_id}
-        ).encode("utf-8")
+        body = json_body({"session_id": session_id} if session_id else {"request_id": request_id})
         return self._request(
-            "POST", "/api/ai-edit/history/delete", auth=auth, body=body, timeout_ms=10_000
+            "POST",
+            "/api/ai-edit/history/delete",
+            auth=auth,
+            body=body,
+            timeout_ms=get_export_dial("pipeline.terralab_client.write_timeout_ms", _TIMEOUT_WRITE_MS),
         )
 
     def delete_all_generations(self, auth: dict) -> dict:
         """Delete every past generation for this account. Requires explicit
         confirmation in the request body (the server refuses without it)."""
-        body = json.dumps({"confirm": True}).encode("utf-8")
+        body = json_body({"confirm": True})
         return self._request(
-            "POST", "/api/ai-edit/history/delete-all", auth=auth, body=body, timeout_ms=10_000
+            "POST",
+            "/api/ai-edit/history/delete-all",
+            auth=auth,
+            body=body,
+            timeout_ms=get_export_dial("pipeline.terralab_client.write_timeout_ms", _TIMEOUT_WRITE_MS),
         )
+
+    def delete_account(self, auth: dict, confirm: str) -> dict:
+        """Schedule the erasure of the whole account.
+
+        ``confirm`` is the account email address exactly as the user retyped
+        it; the server refuses the call when the two do not match. This does
+        not delete on the spot: the account is locked out of every TerraLab
+        plugin right away and the data is erased for good once the grace
+        period named in the answer runs out.
+        """
+        body = json_body({"confirm": confirm})
+        result = self._request(
+            "POST",
+            "/api/plugin/account/delete",
+            auth=auth,
+            body=body,
+            timeout_ms=get_export_dial(
+                "pipeline.terralab_client.account_delete_timeout_ms", _TIMEOUT_ACCOUNT_DELETE_MS
+            ),
+        )
+        # A refusal is a 4xx, which QgsBlockingNetworkRequest reports as a
+        # network error, and _request then hands the parsed body straight back.
+        # That body carries its reason code but not always a human line, and
+        # without one every caller reads the refusal as a success. Give it one.
+        if isinstance(result, dict) and "error" not in result and result.get("code"):
+            result = dict(result)
+            result["error"] = get_export_copy(
+                "pipeline.terralab_client.account_delete_failed", tr("The account could not be deleted.")
+            )
+        return result
 
     def rename_generation_session(self, auth: dict, session_id: str, title: str) -> dict:
         """Rename a conversation. The server normalizes and clamps the title
         and returns the normalized value in the response."""
-        body = json.dumps({"session_id": session_id, "title": title}).encode("utf-8")
+        body = json_body({"session_id": session_id, "title": title})
         return self._request(
-            "POST", "/api/ai-edit/history/rename", auth=auth, body=body, timeout_ms=10_000
+            "POST",
+            "/api/ai-edit/history/rename",
+            auth=auth,
+            body=body,
+            timeout_ms=get_export_dial("pipeline.terralab_client.write_timeout_ms", _TIMEOUT_WRITE_MS),
         )
 
     def add_favorite(
@@ -514,25 +490,36 @@ class TerraLabClient:
         source_category: str | None = None,
     ) -> dict:
         """Star a prompt server-side. Idempotent."""
-        body = json.dumps({
+        body = json_body({
             "prompt": prompt,
             "label": label,
             "source_category": source_category,
-        }).encode("utf-8")
-        return self._request("POST", "/api/plugin/favorites", auth=auth, body=body)
+        })
+        return self._request(
+            "POST", "/api/plugin/favorites", auth=auth, body=body,
+            timeout_ms=get_export_dial("pipeline.terralab_client.write_timeout_ms", _TIMEOUT_WRITE_MS),
+        )
 
     def remove_favorite(self, auth: dict, prompt: str) -> dict:
         """Unstar a prompt server-side. Idempotent."""
-        body = json.dumps({"prompt": prompt}).encode("utf-8")
+        body = json_body({"prompt": prompt})
         return self._request(
-            "POST", "/api/plugin/favorites/delete", auth=auth, body=body
+            "POST", "/api/plugin/favorites/delete", auth=auth, body=body,
+            timeout_ms=get_export_dial("pipeline.terralab_client.write_timeout_ms", _TIMEOUT_WRITE_MS),
         )
 
-    def get_account(self, auth: dict) -> dict:
-        """Get account info (email, subscriptions, usage)."""
-        return self._request(
-            "GET", "/api/plugin/account", auth=auth, timeout_ms=_startup_timeout_ms()
-        )
+    def get_account(self, auth: dict, include_usage: bool = False) -> dict:
+        """Get account info (email, subscriptions, usage).
+
+        ``include_usage`` asks the server to bundle the /api/plugin/usage
+        payload under a top-level ``usage`` key, so one request feeds both
+        the account dialog and the credits display. Older servers ignore the
+        param and the key is simply absent: callers must treat it as optional.
+        """
+        path = "/api/plugin/account"
+        if include_usage:
+            path += "?include=usage"
+        return self._request("GET", path, auth=auth, timeout_ms=_startup_timeout_ms())
 
     def get_export_config(self) -> dict:
         """Fetch export config from the server (no auth required)."""
@@ -556,17 +543,45 @@ class TerraLabClient:
     def get_config(self, product: str) -> dict:
         """Fetch server-driven plugin config (no auth required)."""
         return self._request(
-            "GET", _with_context(f"/api/plugin/config?product={product}")
+            "GET", _with_context(f"/api/plugin/config?product={quote(product, safe='')}"),
+            timeout_ms=_startup_timeout_ms(),
         )
 
-    def poll_pairing(self, code: str, timeout_ms: int = 10_000) -> dict:
+    def get_plugin_login_link(
+        self, target: str, cta_source: str, auth: dict, locale: str | None = None
+    ) -> dict:
+        """A one-time link that opens ``target`` on the website signed in.
+
+        Returns ``{"url": ...}``, ``{"url": None, "reason": ...}`` when the
+        server declines, or ``{"error", "code"}``. The caller opens its plain
+        URL on anything but an https ``url``.
+        """
+        from ..core.request_context import plugin_version
+
+        payload: dict = {
+            "target": target,
+            "cta_source": cta_source,
+            "plugin_version": plugin_version(),
+        }
+        if locale:
+            payload["locale"] = locale
+        return self._request(
+            "POST",
+            "/api/plugin/login-link",
+            auth=auth,
+            body=json_body(payload),
+            timeout_ms=5_000,
+        )
+
+    def poll_pairing(self, code: str, timeout_ms: int | None = None) -> dict:
         """Poll whether a pairing code has been bound to an activation key.
 
         Unauthenticated GET (the code itself is the bearer of trust). Returns
         {"status": "pending" | "ready" | "not_found", ...} or {"error", "code"}
         on a network/server failure (the caller retries those within a deadline).
         """
-        from urllib.parse import quote
+        if timeout_ms is None:
+            timeout_ms = get_export_dial("pipeline.terralab_client.pair_poll_timeout_ms", _TIMEOUT_PAIR_POLL_MS)
         return self._request(
             "GET",
             f"/api/plugin/pair/poll?code={quote(code, safe='')}",
@@ -579,16 +594,23 @@ class TerraLabClient:
 
         Unauthenticated POST (the code itself is the bearer of trust).
         """
-        body = json.dumps({"code": code, "product": "ai-edit"}).encode("utf-8")
+        body = json_body({"code": code, "product": "ai-edit"})
         return self._request(
-            "POST", "/api/plugin/pair/cancel", body=body, timeout_ms=5_000
+            "POST",
+            "/api/plugin/pair/cancel",
+            body=body,
+            timeout_ms=get_export_dial("pipeline.terralab_client.quick_post_timeout_ms", _TIMEOUT_QUICK_POST_MS),
         )
 
     def send_telemetry_batch(self, events: list, auth: dict) -> dict:
         """Send a batch of telemetry events to the track endpoint."""
-        body = json.dumps({"events": events}).encode("utf-8")
+        body = json_body({"events": events})
         return self._request(
-            "POST", "/api/plugin/track", auth=auth, body=body, timeout_ms=5_000
+            "POST",
+            "/api/plugin/track",
+            auth=auth,
+            body=body,
+            timeout_ms=get_export_dial("pipeline.terralab_client.quick_post_timeout_ms", _TIMEOUT_QUICK_POST_MS),
         )
 
     def cancel_generation(self, request_id: str, auth: dict) -> dict:
@@ -598,9 +620,13 @@ class TerraLabClient:
         marked 'cancelled' (and credits refunded) instead of being orphaned
         until the reconcile cron times it out.
         """
-        body = json.dumps({"request_id": request_id}).encode("utf-8")
+        body = json_body({"request_id": request_id})
         return self._request(
-            "POST", "/api/ai-edit/generate/cancel", auth=auth, body=body, timeout_ms=5_000
+            "POST",
+            "/api/ai-edit/generate/cancel",
+            auth=auth,
+            body=body,
+            timeout_ms=get_export_dial("pipeline.terralab_client.quick_post_timeout_ms", _TIMEOUT_QUICK_POST_MS),
         )
 
     def refund_generation(
@@ -616,79 +642,20 @@ class TerraLabClient:
         payload = {"request_id": request_id, "reason": reason}
         if error_code:
             payload["error_code"] = error_code
-        body = json.dumps(payload).encode("utf-8")
+        body = json_body(payload)
         return self._request(
-            "POST", "/api/ai-edit/generate/refund", auth=auth, body=body, timeout_ms=10_000
+            "POST",
+            "/api/ai-edit/generate/refund",
+            auth=auth,
+            body=body,
+            timeout_ms=get_export_dial("pipeline.terralab_client.write_timeout_ms", _TIMEOUT_WRITE_MS),
         )
 
     def download_image(self, url: str) -> bytes:
-        """Download image bytes from a signed URL.
+        """Download validated image bytes, raising DownloadError on failure."""
+        from .image_download import download_image
 
-        Raises RuntimeError on failure (callers use try/except).
-        """
-        req = QNetworkRequest(QUrl(url))
-        # Follow the 302 to storage. Resolved through qt_compat because PyQt5 on
-        # some QGIS 3 builds exposes these enums flat, not scoped.
-        req.setAttribute(QtC.RedirectPolicyAttribute, QtC.NoLessSafeRedirectPolicy)
-        QtC.set_transfer_timeout(
-            req, get_export_dial("timeouts_ms.download", _TIMEOUT_DOWNLOAD)
-        )
-
-        blocker = QgsBlockingNetworkRequest()
-        err = blocker.get(req, forceRefresh=True)
-
-        if err != QtC.BlockingNoError:
-            code, msg = _classify_network_error(blocker)
-            raise DownloadError(
-                code, tr("Download failed ({code}): {msg}").format(code=code, msg=msg)
-            )
-
-        reply = blocker.reply()
-        http_status = reply.attribute(QtC.HttpStatusCodeAttribute)
-        if http_status and _safe_int(http_status) >= 400:
-            raise DownloadError(
-                f"HTTP_{_safe_int(http_status)}",
-                tr("Download failed: HTTP {status}").format(status=http_status),
-            )
-
-        data = bytes(reply.content())
-        content_type = reply.rawHeader(b"Content-Type")
-        ct_str = bytes(content_type).decode("ascii", errors="replace") if content_type else "?"
-        head_hex = data[:16].hex() if data else ""
-        log_debug(
-            f"Downloaded {len(data)} bytes, content-type={ct_str}, head={head_hex}"
-        )
-        # A flaky/slow link can drop the connection after the 200 headers arrive,
-        # leaving a truncated or empty body that QgsBlockingNetworkRequest still
-        # reports as success. Raise so the caller's retry loop re-downloads
-        # instead of writing a corrupt GeoTIFF.
-        if not data:
-            raise DownloadError(
-                "EMPTY_BODY", tr("Server returned an empty response (0 bytes)")
-            )
-        # A 200 carrying a tiny non-image body is a transient backend hiccup the
-        # proxy surfaced as a branded error page or JSON, not the image. Treat it
-        # as a retryable download failure so the caller re-downloads (and on the
-        # next attempt switches to the stream=1 bypass) instead of handing these
-        # bytes to the GeoTIFF writer, where they would fail as a write error and
-        # never be retried.
-        min_bytes = get_export_dial("download.min_image_bytes", _MIN_IMAGE_BYTES)
-        if len(data) < min_bytes or not _looks_like_image(data):
-            raise DownloadError(
-                "NOT_IMAGE",
-                tr("Server returned a non-image response, retrying download"),
-            )
-        declared = reply.rawHeader(b"Content-Length")
-        if declared:
-            expected = _safe_int(bytes(declared).decode("ascii", errors="replace"))
-            if expected and len(data) < expected:
-                raise DownloadError(
-                    "INCOMPLETE",
-                    tr("Download incomplete: received {got} of {total} bytes").format(
-                        got=len(data), total=expected
-                    ),
-                )
-        return data
+        return download_image(url, QgsBlockingNetworkRequest)
 
     # -- internal ----------------------------------------------------------
 
@@ -705,84 +672,69 @@ class TerraLabClient:
         Returns a dict - either the parsed JSON response or
         {"error": "...", "code": "..."} on failure.
         """
-        if timeout_ms is None:
-            timeout_ms = _api_timeout_ms()
+        if _is_feedback_cancelled(_current_feedback()):
+            return _cancelled_result()
+        if method not in ("GET", "POST"):
+            return {"error": "Unsupported request method", "code": "CLIENT_ERROR"}
+        if not isinstance(path, str) or not path.startswith("/") or path.startswith("//"):
+            return {"error": "Invalid request path", "code": "CLIENT_ERROR"}
+        if auth is not None and not valid_headers(auth):
+            return {"error": "Invalid request headers", "code": "CLIENT_ERROR"}
+        timeout_ms = transfer_timeout(_api_timeout_ms() if timeout_ms is None else timeout_ms, _TIMEOUT_API)
         url = f"{self.base_url}{path}"
+        if not valid_http_url(url):
+            return {"error": "Invalid request URL", "code": "CLIENT_ERROR"}
         req = QNetworkRequest(QUrl(url))
-        # Follow redirects (e.g. signed-image 302s). Resolved through qt_compat
-        # because PyQt5 on some QGIS 3 builds exposes these enums flat.
         req.setAttribute(QtC.RedirectPolicyAttribute, QtC.NoLessSafeRedirectPolicy)
         req.setRawHeader(b"Content-Type", b"application/json")
+        req.setRawHeader(b"Accept", b"application/json")
         QtC.set_transfer_timeout(req, timeout_ms)
-
         if auth:
             for key, value in auth.items():
                 req.setRawHeader(key.encode("utf-8"), value.encode("utf-8"))
-
+        context_header = _client_context_value()
+        if context_header:
+            req.setRawHeader(b"X-Client-Context", context_header)
+        trace_id = uuid.uuid4().hex
+        req.setRawHeader(b"X-Client-Request-ID", trace_id.encode("ascii"))
+        feedback = _current_feedback()
         blocker = QgsBlockingNetworkRequest()
-
+        started = time.perf_counter()
         if method == "GET":
-            err = blocker.get(req, forceRefresh=True)
-        elif method == "POST":
-            payload = QByteArray(body) if body else QByteArray()
-            err = blocker.post(req, payload)
+            err = blocker.get(req, forceRefresh=True, feedback=feedback)
         else:
-            return {
-                "error": f"Unsupported method: {method}",
-                "code": "CLIENT_ERROR",
-            }
-
-        # -- Network-level failure -----------------------------------------
-        if err != QtC.BlockingNoError:
-            # Still try to parse the HTTP response body: QgsBlockingNetworkRequest
-            # treats HTTP 4xx/5xx as errors, but we need the JSON reason codes.
-            reply = blocker.reply()
-            if reply:
-                http_attr = reply.attribute(QtC.HttpStatusCodeAttribute)
-                if http_attr and _safe_int(http_attr) >= 400:
-                    # `errors='replace'` so a non-UTF8 proxy/CDN error page
-                    # never crashes the client with UnicodeDecodeError.
-                    raw = bytes(reply.content()).decode("utf-8", errors="replace")
-                    if raw:
-                        try:
-                            return json.loads(raw)
-                        except Exception:
-                            pass  # nosec B110
-            code, msg = _classify_network_error(blocker)
-            return {"error": msg, "code": code}
-
-        # -- HTTP-level handling -------------------------------------------
+            payload = QByteArray(body) if body else QByteArray()
+            err = blocker.post(req, payload, feedback=feedback)
+        if _is_feedback_cancelled(feedback):
+            return _cancelled_result()
         reply = blocker.reply()
-        http_status = reply.attribute(QtC.HttpStatusCodeAttribute)
-        raw_body = bytes(reply.content()).decode("utf-8", errors="replace")
-
-        if http_status and _safe_int(http_status) >= 400:
-            # Server returned an error - try to parse JSON body. Scrubbed:
-            # a 4xx/5xx body can be a bare infrastructure incident page whose
-            # hostnames must never reach the QGIS log (it feeds bug reports).
-            log_warning(f"HTTP {http_status}: {_scrub_urls(raw_body)[:500]}")
-            try:
-                error_body = json.loads(raw_body)
-                if "error" in error_body:
-                    return error_body
-                return {
-                    "error": error_body.get("detail", raw_body[:200]),
-                    "code": "SERVER_ERROR",
-                }
-            except Exception:
-                return {
-                    "error": f"Server error (HTTP {http_status})",
-                    "code": "SERVER_ERROR",
-                }
-
-        # -- Success -------------------------------------------------------
-        if not raw_body:
-            return {}
-        try:
-            return json.loads(raw_body)
-        except json.JSONDecodeError:
-            log_warning(f"Invalid JSON response: {_scrub_urls(raw_body)[:500]}")
+        status = _safe_int(reply.attribute(QtC.HttpStatusCodeAttribute)) if reply is not None else None
+        raw = bytes(reply.content()) if reply is not None else b""
+        log_debug(
+            f"API request id={trace_id} method={method} status={status} "
+            f"duration_ms={int((time.perf_counter() - started) * 1000)} bytes={len(raw)}"
+        )
+        parsed = response_object(raw) if raw else None
+        if _reply_failed(err, blocker):
+            if status is not None and status >= 400 and parsed is not None and "error" in parsed:
+                return http_failure(parsed, status, reply.rawHeader(b"Retry-After"))
+            code, msg = _classify_network_error(blocker, timeout_ms)
+            result = {"error": msg, "code": code}
+            if status is not None and status >= 400:
+                return http_failure(result, status, reply.rawHeader(b"Retry-After"))
+            return result
+        if status is not None and status >= 400:
+            log_warning(f"API request failed id={trace_id} status={status}")
+            return http_failure(parsed, status, reply.rawHeader(b"Retry-After"))
+        # A missing/redirect/partial status is not a completed JSON API call.
+        if status is None or not 200 <= status < 300 or status == 206:
             return {"error": "Invalid server response", "code": "SERVER_ERROR"}
+        if not raw and status == 204:
+            return {}
+        if parsed is None:
+            log_warning(f"Invalid API response id={trace_id} bytes={len(raw)}")
+            return {"error": "Invalid server response", "code": "SERVER_ERROR"}
+        return parsed
 
 
 def _get_submit_timeout_ms(resolution: str) -> int:
@@ -801,8 +753,7 @@ def _get_submit_timeout_ms(resolution: str) -> int:
             server_map = cfg.get("submit_timeouts_ms")
             if isinstance(server_map, dict):
                 val = server_map.get(resolution)
-                if isinstance(val, (int, float)) and val > 0:
-                    return int(val)
+                return transfer_timeout(val, _SUBMIT_TIMEOUTS_MS.get(resolution, _TIMEOUT_API))
     except Exception:  # nosec B110
         pass
     return _SUBMIT_TIMEOUTS_MS.get(resolution, _TIMEOUT_API)

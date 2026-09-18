@@ -1,6 +1,6 @@
 # Thin facade over the src/ui/dock/ package. Kept so every existing
 # import path (plugin.py, dialogs) keeps working unchanged.
-from .dock.mime import (  # noqa: F401
+from .dock.mime import (
     _GEODATA_DROP_EXTS,
     _IMAGE_DROP_EXTS,
     _LAYERTREE_MIME,
@@ -9,8 +9,8 @@ from .dock.mime import (  # noqa: F401
     _layers_from_mime,
     _mime_has_droppable,
 )
-from .dock.prompt_container import _PromptContainer  # noqa: F401
-from .dock.style import (  # noqa: F401
+from .dock.prompt_container import _PromptContainer
+from .dock.style import (
     _BTN_BLUE,
     _BTN_BLUE_AUTH,
     _BTN_DISABLED,
@@ -46,8 +46,8 @@ from .dock.style import (  # noqa: F401
     _picture_plus_icon,
     _tinted_svg_icon,
 )
-from .dock.widget import AIEditDockWidget, _make_section_header  # noqa: F401
-from .dock.widgets import (  # noqa: F401
+from .dock.widget import AIEditDockWidget, _make_section_header
+from .dock.widgets import (
     _FooterIconButton,
     _PromptHighlighter,
     _ResolutionMenuItem,
@@ -55,3 +55,57 @@ from .dock.widgets import (  # noqa: F401
     _SubmitTextEdit,
     _ZoneGestureGlyph,
 )
+
+# Public surface, re-exports included, so they read as used.
+__all__ = [
+    "_BTN_BLUE",
+    "_BTN_BLUE_AUTH",
+    "_BTN_DISABLED",
+    "_BTN_GHOST",
+    "_BTN_GRAY",
+    "_BTN_GREEN",
+    "_BTN_GREEN_AUTH",
+    "_BTN_LABEL_WEIGHT",
+    "_BTN_PAIR_CANCEL",
+    "_BTN_PAIR_NEUTRAL",
+    "_CHIP_HEIGHT",
+    "_file_paths_from_mime",
+    "_FOOTER_ICON_BTN_STYLE",
+    "_FOOTER_MENU_STYLE",
+    "_FooterIconButton",
+    "_GEODATA_DROP_EXTS",
+    "_IMAGE_DROP_EXTS",
+    "_INSTRUCTION_BOX",
+    "_layers_from_mime",
+    "_LAYERTREE_MIME",
+    "_make_section_header",
+    "_mime_has_droppable",
+    "_pencil_icon",
+    "_picture_plus_icon",
+    "_PromptContainer",
+    "_PromptHighlighter",
+    "_ResolutionMenuItem",
+    "_Spinner",
+    "_SubmitTextEdit",
+    "_tinted_svg_icon",
+    "_URI_MIME",
+    "_ZoneGestureGlyph",
+    "AIEditDockWidget",
+    "BRAND_BLUE",
+    "BRAND_BLUE_HOVER",
+    "BRAND_DISABLED",
+    "BRAND_GRAY",
+    "BRAND_GRAY_HOVER",
+    "BRAND_GREEN",
+    "BRAND_GREEN_TEXT",
+    "BRAND_RED",
+    "BRAND_RED_HOVER",
+    "BTN_GREEN",
+    "BTN_GREEN_DISABLED",
+    "BTN_GREEN_HOVER",
+    "DISABLED_TEXT",
+    "DOCK_BRANDING_URL",
+    "ERROR_TEXT",
+    "MAX_PROMPT_CHARS",
+    "SUCCESS_TEXT",
+]

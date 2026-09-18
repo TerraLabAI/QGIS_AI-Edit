@@ -9,12 +9,16 @@ from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.config_store import get_export_copy
-from ...core.errors import TRANSIENT_SERVER_ERROR_CODES
+from ...core.errors import NETWORK_ERROR_CODES, TRANSIENT_SERVER_ERROR_CODES
 from ...core.i18n import tr
 from ...core.logger import log_debug, log_warning
+from ...core.privacy_notice import (
+    has_accepted_privacy_notice,
+    save_privacy_notice_accepted,
+)
 from ...workers.generic_request_task import GenericRequestTask
 from ..canvas_exporter import set_server_config
-from .errors import _localize_server_error
+from .errors import _enrich_error_message, _localize_server_error
 
 
 def _server_catalog_request(client, force_refresh: bool):
@@ -30,16 +34,10 @@ def _server_catalog_request(client, force_refresh: bool):
 class StartupMixin:
     def _toggle_dock(self):
         if self._dock_widget.isVisible():
-            # A toolbar toggle is a pure, non-destructive hide: it must preserve
-            # everything (in-progress generation, selected zone, tool panel) so
-            # re-opening restores the exact state. The guard tells the
-            # visibilityChanged handler this is a toggle, not a real close, so it
-            # skips the teardown that cancels the generation. The selection tool
-            # is the one thing we stand down while hidden, so a stray map click
-            # can't draw a zone behind the user's back; it returns on re-open.
-            self._selection_tool_was_active = self._canvas.mapTool() is self._map_tool
-            if self._selection_tool_was_active:
-                self._deactivate_selection_tool()
+            # A toolbar toggle is a non-destructive hide: the zone, the prompt
+            # and a running generation all survive it, so re-opening restores
+            # the exact state. The guard tells the visibilityChanged handler
+            # this is a toggle, not a close, so it keeps the zone.
             self._toggling_dock = True
             try:
                 self._dock_widget.hide()
@@ -56,15 +54,21 @@ class StartupMixin:
             self._dock_widget.show()
             self._dock_widget.raise_()
             self._ensure_dock_height()
-            # Restore the selection tool if it was active when we toggled away.
-            if self._selection_tool_was_active:
-                self._activate_selection_tool()
-                self._selection_tool_was_active = False
-            if not self._plugin_opened_emitted:
-                self._plugin_opened_emitted = True
-                telemetry.track(te.PLUGIN_OPENED, {"open_source": "manual"})
-                telemetry.flush()
+            self._emit_plugin_opened("manual")
             log_debug("Dock shown")
+
+    def _emit_plugin_opened(self, open_source: str) -> None:
+        """Send plugin_opened once per session. Before the privacy notice is
+        accepted the collector drops everything, so the source is parked and
+        the event goes out from the notice's accept handler instead."""
+        if self._plugin_opened_emitted:
+            return
+        if not has_accepted_privacy_notice():
+            self._pending_open_source = open_source
+            return
+        self._plugin_opened_emitted = True
+        telemetry.track(te.PLUGIN_OPENED, {"open_source": open_source})
+        telemetry.flush()
 
     def _ensure_dock_widget(self):
         """Return the dock, opening it first when it is closed.
@@ -114,7 +118,7 @@ class StartupMixin:
         )
         self._export_config_loader.succeeded.connect(self._on_export_config_loaded)
         self._export_config_loader.failed.connect(
-            lambda msg, code: self._on_export_config_failed(msg, code)
+            self._on_export_config_failed
         )
         QgsApplication.taskManager().addTask(self._export_config_loader)
 
@@ -124,11 +128,83 @@ class StartupMixin:
         Once-guarded so toggling the dock open/closed never refires a network
         storm. Deferring here (instead of initGui) means an idle install makes
         no network calls at all.
+
+        The privacy notice is deliberately NOT shown here. QGIS restores an
+        open dock at launch, so a notice on first show reads as a popup that
+        greets the user before they have asked for anything. It is shown at
+        the last moment instead, when the first generation is about to send a
+        map extent off the machine (`_require_privacy_notice`). Until then the
+        telemetry collector still drops every event, so nothing about this
+        user's usage reaches anyone who has not read the notice.
         """
         if self._startup_bootstrap_done:
             return
         self._startup_bootstrap_done = True
         self._bootstrap_startup()
+
+    def _require_privacy_notice(self, on_accept) -> bool:
+        """Gate the first thing that leaves the machine behind the notice.
+
+        Returns True when this profile has already accepted the current notice
+        and the caller may go ahead now. Otherwise it opens the notice and
+        runs `on_accept` once the user presses Continue, so the action they
+        clicked still happens without them clicking twice."""
+        if has_accepted_privacy_notice():
+            return True
+        self._privacy_notice_on_accept = on_accept
+        self._show_privacy_notice()
+        return False
+
+    def _show_privacy_notice(self):
+        """The notice, opened at the moment the user asks for something that
+        leaves the machine. Nothing but the dialog happens until they answer:
+        the queued action waits in the accept handler, and the collector drops
+        every event meanwhile. Non-blocking (open, not exec) so the caller
+        returns and an outside driver can reach the dialog."""
+        from ..dialogs.privacy_notice_dialog import PrivacyNoticeDialog
+
+        if self._privacy_notice_dialog is not None:
+            self._privacy_notice_dialog.raise_()
+            return
+        dialog = PrivacyNoticeDialog(self._iface.mainWindow())
+        dialog.accepted.connect(self._on_privacy_notice_accepted)
+        dialog.rejected.connect(self._on_privacy_notice_declined)
+        dialog.finished.connect(self._on_privacy_notice_closed)
+        self._privacy_notice_dialog = dialog
+        dialog.open()
+
+    def _on_privacy_notice_accepted(self):
+        save_privacy_notice_accepted()
+        log_debug("Privacy notice accepted")
+        if not self._startup_bootstrap_done:
+            self._startup_bootstrap_done = True
+            self._bootstrap_startup()
+        pending = self._pending_open_source
+        self._pending_open_source = None
+        if pending is not None:
+            self._emit_plugin_opened(pending)
+        queued = self._privacy_notice_on_accept
+        self._privacy_notice_on_accept = None
+        if queued is not None:
+            queued()
+
+    def _on_privacy_notice_declined(self):
+        """Not now: the action they clicked does not run, and the next one
+        asks again. The dock stays where it is, because the user came here to
+        generate, not to open a plugin."""
+        log_debug("Privacy notice declined")
+        self._privacy_notice_on_accept = None
+        if self._dock_widget is not None:
+            self._dock_widget.set_status(
+                tr("Nothing was sent. Press Generate again to read the notice."),
+                is_error=False,
+            )
+
+    def _on_privacy_notice_closed(self, _result: int):
+        dialog = self._privacy_notice_dialog
+        self._privacy_notice_dialog = None
+        if dialog is not None:
+            dialog.deleteLater()
 
     def _bootstrap_startup(self):
         """One background call for export config + preset catalog + key
@@ -141,7 +217,7 @@ class StartupMixin:
             silent=True,
         )
         task.succeeded.connect(self._on_bootstrap_loaded)
-        task.failed.connect(lambda _msg, _code: self._bootstrap_fallback())
+        task.failed.connect(self._on_bootstrap_failed)
         self._bootstrap_task = task
         QgsApplication.taskManager().addTask(task)
         self._warm_activation_config()
@@ -201,6 +277,23 @@ class StartupMixin:
         elif isinstance(usage, dict):
             self._on_key_valid(usage)
         # usage None = signed-out startup; the sign-up screen is already shown.
+
+    def _on_bootstrap_failed(self, message: str, code: str):
+        """A network failure would hit the per-route requests too, each one
+        waiting out its own timeout behind the same broken proxy: show the
+        notice now. Anything else (an older server without /bootstrap) takes
+        the legacy route."""
+        if (code or "").strip().upper() in NETWORK_ERROR_CODES:
+            log_debug(f"Bootstrap failed on the network ({code}); skipping the legacy loaders")
+            if self._dock_widget is None:
+                return
+            if self._auth_manager.has_activation_key():
+                # Same keep-session path as a failed key check on the network.
+                self._on_key_invalid(message, code)
+            else:
+                self._show_connectivity_notice(code, message)
+            return
+        self._bootstrap_fallback()
 
     def _bootstrap_fallback(self):
         """Older server without /bootstrap: run the three legacy loaders."""
@@ -265,9 +358,9 @@ class StartupMixin:
         forwarded so a server-side 5xx shows the 'service unavailable' copy
         instead of blaming the user's connection."""
         log_warning(f"Export config failed to load: {error_message} (code={code})")
-        self._show_connectivity_notice(code)
+        self._show_connectivity_notice(code, error_message)
 
-    def _show_connectivity_notice(self, code: str = "") -> None:
+    def _show_connectivity_notice(self, code: str = "", message: str = "") -> None:
         """Show ONE transient, dismissible 'no connection' notice per startup
         episode. Non-blocking (message bar), deduped so the three fallback
         loaders (config + catalog + key validation) never stack notices. The
@@ -292,45 +385,83 @@ class StartupMixin:
                 tr("AI Edit could not reach the server. Some features need an internet connection."),
                 escape=True,
             )
+        # A proxy, SSL or filter failure has its own next step, which the
+        # generic "no connection" banner hides: give it in the dock line.
+        if code_up in NETWORK_ERROR_CODES:
+            detail = _enrich_error_message(message, code_up)
+        else:
+            detail = _localize_server_error("", code)
         self._notify(
             banner,
             level=Qgis.MessageLevel.Warning,
             duration=8,
         )
         if self._dock_widget:
-            detail = _localize_server_error("", code) or tr("No internet connection.")
-            self._dock_widget.set_status(detail, is_error=True)
+            self._dock_widget.set_status(detail or tr("No internet connection."), is_error=True)
+
+    def _generation_in_flight(self) -> bool:
+        """A canvas export or a generation is running for the current zone."""
+        for task in (self._worker, self._export_worker):
+            try:
+                if task is not None and task.is_active():
+                    return True
+            except RuntimeError:  # the task manager already deleted it
+                continue
+        return False
 
     def _on_dock_visibility_changed(self, visible: bool):
         if visible:
-            # First real show (toolbar, launch shortcut, or QGIS restoring the
-            # dock open at launch) is what kicks off the deferred startup network.
+            # First real show (toolbar, launch shortcut, Panels menu, or QGIS
+            # restoring the dock open at launch) is what kicks off the
+            # deferred startup network.
             self._maybe_bootstrap_on_show()
+            # Whatever way the dock came back, the zone tool it stood down on
+            # the hide returns with it.
+            if self._selection_tool_was_active:
+                self._selection_tool_was_active = False
+                if self._map_tool is not None and self._dock_widget is not None:
+                    self._activate_selection_tool()
             return
-        # A toolbar toggle hide is non-destructive (see _toggle_dock): preserve
-        # the in-progress generation and all dock state so re-opening restores
-        # it. Only a real close (title-bar X) runs the teardown below.
-        if self._toggling_dock:
-            return
-        # Closing the dock from inside a tool panel (Mark up / Vectorize)
-        # must reset to the base view; otherwise the next open stacks the
-        # main widget on top of the still-visible tool panel (issue #164).
-        # Done before the mid-generation early-return so it always runs.
+        # Every hide (toolbar button, title-bar X, Panels menu) leaves a tool
+        # panel the way Done does: its map tool goes back to the one it
+        # borrowed from, a running vectorize stops, the pointer is QGIS's
+        # again. Without this a hidden panel kept its tool armed on the map.
         if self._in_tool_panel is not None:
             self._exit_tool_panel()
-        # Mid-generation: cancel through _on_stop so refund + state reset run together.
-        if self._worker is not None and self._worker.is_active():
-            self._on_stop()
-            return
-        self._deactivate_selection_tool()
-        self._clear_selection_rectangle()
-        self._selected_extent = None
-        self._selected_polygon = None
-        if self._map_tool:
-            self._map_tool.set_has_zone(False)
+        # The zone tool stands down while nobody can see the dock, so a stray
+        # map click can't draw a zone behind the user's back.
+        self._selection_tool_was_active = (
+            self._map_tool is not None and self._canvas.mapTool() is self._map_tool
+        )
+        if self._selection_tool_was_active:
+            self._deactivate_selection_tool()
         # Disarm swipe: without the dock the toggle is unreachable.
         if self._swipe_controller is not None and self._swipe_controller.is_active():
             self._swipe_controller.stop()
+        # A generation is never cancelled by a hide: its credits are already
+        # booked, so a stop would charge the user for nothing. It keeps
+        # running, the result lands on the map, and the dock shows it when it
+        # opens again. The zone it runs on stays too.
+        if self._generation_in_flight():
+            self._notify(
+                get_export_copy(
+                    "flows.dock_hidden.generation_continues",
+                    tr("Still generating. The result is added to your map when ready."),
+                    escape=True,
+                ),
+                duration=6,
+            )
+            return
+        # A toolbar toggle keeps the zone for the next open; a close (X)
+        # clears it, the way it always has.
+        if self._toggling_dock:
+            return
+        self._clear_selection_rectangle()
+        self._selected_extent = None
+        self._selected_polygon = None
+        self._selection_tool_was_active = False
+        if self._map_tool:
+            self._map_tool.set_has_zone(False)
 
     def _check_for_plugin_update(self):
         """Poll QGIS's plugin metadata for a newer version, retrying on a backoff.

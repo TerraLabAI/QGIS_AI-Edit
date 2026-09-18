@@ -3489,5 +3489,1693 @@ We'd love to hear from you!</source>
         <source>Later</source>
         <translation>後で</translation>
     </message>
+    <message>
+        <source>(no email)</source>
+        <translation>（メールアドレスなし）</translation>
+    </message>
+    <message>
+        <source>1 polygon</source>
+        <translation>ポリゴン 1個</translation>
+    </message>
+    <message>
+        <source>1 prompt</source>
+        <translation>prompt 1件</translation>
+    </message>
+    <message>
+        <source>1 stroke</source>
+        <translation>ストローク 1本</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Draw&lt;/b&gt;&lt;br&gt;Draw lines, arrows or circles on the map to show the AI what to change and where. Your drawing is sent with the prompt as visual guidance.</source>
+        <translation>&lt;b&gt;描画&lt;/b&gt;&lt;br&gt;マップ上に線、矢印、円を描いて、AIに変更内容と場所を示します。描画は視覚的なガイダンスとしてpromptと一緒に送信されます。</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Library&lt;/b&gt;&lt;br&gt;Ready-made prompts, your recent prompts and your favorites.</source>
+        <translation>&lt;b&gt;ライブラリ&lt;/b&gt;&lt;br&gt;すぐに使えるprompt、最近使用したprompt、お気に入り。</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Higher quality is sharper and more precise, and costs more credits. Standard (1K), Detailed (2K), Maximum (4K).</source>
+        <translation>&lt;b&gt;品質&lt;/b&gt;&lt;br&gt;品質を上げると、より鮮明で正確になりますが、より多くのクレジットを消費します。標準（1K）、詳細（2K）、最高（4K）。</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;References&lt;/b&gt;&lt;br&gt;Add an image or data file from disk, or one of your project's layers, as guidance for the AI. You can also drag a layer from the Layers panel straight into the prompt box. Everything is cropped to your zone.</source>
+        <translation>&lt;b&gt;参照&lt;/b&gt;&lt;br&gt;ディスク上の画像またはデータファイル、あるいはプロジェクトのlayerのいずれかを、AIのガイダンスとして追加します。Layersパネルからlayerをpromptボックスに直接ドラッグすることもできます。すべてが指定した範囲に合わせて切り抜かれます。</translation>
+    </message>
+    <message>
+        <source>A newer version is ready. Opens the QGIS plugin manager on it.</source>
+        <translation>新しいバージョンを利用できます。そのバージョンのQGIS plugin managerを開きます。</translation>
+    </message>
+    <message>
+        <source>AI Edit Pro</source>
+        <translation>AI Edit Pro</translation>
+    </message>
+    <message>
+        <source>AI Edit Settings</source>
+        <translation>AI Edit 設定</translation>
+    </message>
+    <message>
+        <source>AI Edit Settings...</source>
+        <translation>AI Edit 設定...</translation>
+    </message>
+    <message>
+        <source>AI Edit and your data</source>
+        <translation>AI Editとデータ</translation>
+    </message>
+    <message>
+        <source>About 150 edits a month and higher-resolution results. Cancel anytime.</source>
+        <translation>月約150回の編集と高解像度の結果。いつでもキャンセルできます。</translation>
+    </message>
+    <message>
+        <source>Above 0 grows every shape outward, below 0 shrinks it inward.</source>
+        <translation>0より大きい値ではすべての図形が外側に拡大し、0より小さい値では内側に縮小します。</translation>
+    </message>
+    <message>
+        <source>Account</source>
+        <translation>アカウント</translation>
+    </message>
+    <message>
+        <source>Account created. Outline an area on the example map to make your first edit.</source>
+        <translation>アカウントを作成しました。サンプルマップ上で範囲を囲んで、最初の編集を行いましょう。</translation>
+    </message>
+    <message>
+        <source>Account deletion scheduled</source>
+        <translation>アカウント削除を予約しました</translation>
+    </message>
+    <message>
+        <source>Account not deleted.</source>
+        <translation>アカウントは削除されませんでした。</translation>
+    </message>
+    <message>
+        <source>Account not loaded</source>
+        <translation>アカウントを読み込めません</translation>
+    </message>
+    <message>
+        <source>Add a layer first</source>
+        <translation>まずlayerを追加してください</translation>
+    </message>
+    <message>
+        <source>Add a layer, or start with a sample.</source>
+        <translation>layerを追加するか、サンプルから始めてください。</translation>
+    </message>
+    <message>
+        <source>Add the Original</source>
+        <translation>Originalを追加</translation>
+    </message>
+    <message>
+        <source>Added</source>
+        <translation>追加済み</translation>
+    </message>
+    <message>
+        <source>Added to your map as</source>
+        <translation>マップに次の名前で追加しました</translation>
+    </message>
+    <message>
+        <source>Added to your map as {name}</source>
+        <translation>マップに{name}として追加しました</translation>
+    </message>
+    <message>
+        <source>Added {added} of {total}. The limit is {n} references.</source>
+        <translation>{total}件中{added}件を追加しました。参照は{n}件までです。</translation>
+    </message>
+    <message>
+        <source>Added {hex} to the classes.</source>
+        <translation>{hex}をクラスに追加しました。</translation>
+    </message>
+    <message>
+        <source>Address copied, paste it in your mail</source>
+        <translation>アドレスをコピーしました。メールに貼り付けてください</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>詳細設定</translation>
+    </message>
+    <message>
+        <source>After</source>
+        <translation>後</translation>
+    </message>
+    <message>
+        <source>All TerraLab plugins are signed out. To cancel, sign in on terra-lab.ai.</source>
+        <translation>すべてのTerraLab pluginからサインアウトしました。キャンセルするには、terra-lab.aiでサインインしてください。</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>アンバー</translation>
+    </message>
+    <message>
+        <source>An AI edit of your map zone</source>
+        <translation>マップ範囲のAI編集</translation>
+    </message>
+    <message>
+        <source>Another quality level</source>
+        <translation>別の品質レベル</translation>
+    </message>
+    <message>
+        <source>Any subscription stops renewing.</source>
+        <translation>すべてのサブスクリプションの更新が停止されます。</translation>
+    </message>
+    <message>
+        <source>Apply the next change to the picked version, on the same zone</source>
+        <translation>同じ範囲で、選択したバージョンに次の変更を適用</translation>
+    </message>
+    <message>
+        <source>Ask your IT team to allow terra-lab.ai, or import your company root certificate in Settings &gt; Options &gt; Authentication</source>
+        <translation>ITチームにterra-lab.aiの許可を依頼するか、設定 &gt; オプション &gt; 認証で会社のルート証明書をインポートしてください</translation>
+    </message>
+    <message>
+        <source>Ask your IT team to allow terra-lab.ai.</source>
+        <translation>ITチームにterra-lab.aiの許可を依頼してください。</translation>
+    </message>
+    <message>
+        <source>Back to the classes: check, rename or recolor, then vectorize again.</source>
+        <translation>クラスに戻る：確認、名前変更、色の変更を行ってから、もう一度ベクトル化してください。</translation>
+    </message>
+    <message>
+        <source>Before</source>
+        <translation>前</translation>
+    </message>
+    <message>
+        <source>Before you start</source>
+        <translation>始める前に</translation>
+    </message>
+    <message>
+        <source>Best quality, crisp when zoomed or printed</source>
+        <translation>最高品質。ズームや印刷でも鮮明です</translation>
+    </message>
+    <message>
+        <source>Billing</source>
+        <translation>請求</translation>
+    </message>
+    <message>
+        <source>Blog</source>
+        <translation>ブログ</translation>
+    </message>
+    <message>
+        <source>Bring back the tips you closed</source>
+        <translation>閉じたヒントを再表示</translation>
+    </message>
+    <message>
+        <source>Browse the top picks</source>
+        <translation>おすすめを表示</translation>
+    </message>
+    <message>
+        <source>Bug, question or idea? Write to us.</source>
+        <translation>バグ、質問、アイデアがありますか？お問い合わせください。</translation>
+    </message>
+    <message>
+        <source>Cancel on terra-lab.ai during the grace period. After that, it is final.</source>
+        <translation>猶予期間中にterra-lab.aiでキャンセルしてください。その後は取り消せません。</translation>
+    </message>
+    <message>
+        <source>Cancel the zone</source>
+        <translation>範囲をキャンセル</translation>
+    </message>
+    <message>
+        <source>Cannot reach the server. Check your internet connection.</source>
+        <translation>サーバーに接続できません。インターネット接続を確認してください。</translation>
+    </message>
+    <message>
+        <source>Check your connection, then reopen the library.</source>
+        <translation>接続を確認してから、ライブラリを再度開いてください。</translation>
+    </message>
+    <message>
+        <source>Check your connection, then retry.</source>
+        <translation>接続を確認してから、もう一度お試しください。</translation>
+    </message>
+    <message>
+        <source>Checkout on terra-lab.ai</source>
+        <translation>terra-lab.aiでチェックアウト</translation>
+    </message>
+    <message>
+        <source>Clear the search</source>
+        <translation>検索をクリア</translation>
+    </message>
+    <message>
+        <source>Click a color on the map to add it as a class.</source>
+        <translation>マップ上の色をクリックして、クラスとして追加します。</translation>
+    </message>
+    <message>
+        <source>Click a color on the map. Esc cancels.</source>
+        <translation>マップ上の色をクリックしてください。Escでキャンセルします。</translation>
+    </message>
+    <message>
+        <source>Click each point, double-click to finish.</source>
+        <translation>各ポイントをクリックし、ダブルクリックして終了します。</translation>
+    </message>
+    <message>
+        <source>Click to end the comparison</source>
+        <translation>比較を終了するにはクリック</translation>
+    </message>
+    <message>
+        <source>Close Vectorize</source>
+        <translation>ベクトル化を閉じる</translation>
+    </message>
+    <message>
+        <source>Close the panel</source>
+        <translation>パネルを閉じる</translation>
+    </message>
+    <message>
+        <source>Close the zone</source>
+        <translation>範囲を閉じる</translation>
+    </message>
+    <message>
+        <source>Commercial use</source>
+        <translation>商用利用</translation>
+    </message>
+    <message>
+        <source>Complete guide</source>
+        <translation>完全ガイド</translation>
+    </message>
+    <message>
+        <source>Confirm with your email. Cancel on terra-lab.ai during the grace period.</source>
+        <translation>メールで確認してください。猶予期間中にterra-lab.aiでキャンセルできます。</translation>
+    </message>
+    <message>
+        <source>Confirmation refused. Close and try again.</source>
+        <translation>確認が拒否されました。閉じてから、もう一度お試しください。</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>続行</translation>
+    </message>
+    <message>
+        <source>Continuing accepts the {terms} and the {privacy}.</source>
+        <translation>続行すると、{terms}と{privacy}に同意したものとみなされます。</translation>
+    </message>
+    <message>
+        <source>Contracting by {n} px erased every shape. Set “Expand/Contract” closer to 0.</source>
+        <translation>{n} pxで収縮すると、すべての図形が消えました。「拡大/縮小」を0に近い値に設定してください。</translation>
+    </message>
+    <message>
+        <source>Copy your logs and send them to us. We will look into it.</source>
+        <translation>ログをコピーして送信してください。調査します。</translation>
+    </message>
+    <message>
+        <source>Could not add {name}. {reason}</source>
+        <translation>{name}を追加できませんでした。{reason}</translation>
+    </message>
+    <message>
+        <source>Could not capture your zone: {error}</source>
+        <translation>範囲を取得できませんでした：{error}</translation>
+    </message>
+    <message>
+        <source>Could not download the reference.</source>
+        <translation>参照をダウンロードできませんでした。</translation>
+    </message>
+    <message>
+        <source>Could not reach TerraLab</source>
+        <translation>TerraLabに接続できませんでした</translation>
+    </message>
+    <message>
+        <source>Credit count not available</source>
+        <translation>クレジット数を利用できません</translation>
+    </message>
+    <message>
+        <source>Credits left and reset date</source>
+        <translation>残りのクレジットとリセット日</translation>
+    </message>
+    <message>
+        <source>Custom color {hex}</source>
+        <translation>カスタム色 {hex}</translation>
+    </message>
+    <message>
+        <source>Custom needs</source>
+        <translation>カスタム要件</translation>
+    </message>
+    <message>
+        <source>Cyan</source>
+        <translation>シアン</translation>
+    </message>
+    <message>
+        <source>Danger zone</source>
+        <translation>危険区域</translation>
+    </message>
+    <message>
+        <source>Data erased after the grace period.</source>
+        <translation>猶予期間後にデータが消去されます。</translation>
+    </message>
+    <message>
+        <source>Data erased on {date}.</source>
+        <translation>{date}にデータが消去されます。</translation>
+    </message>
+    <message>
+        <source>Date</source>
+        <translation>日付</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>デフォルト</translation>
+    </message>
+    <message>
+        <source>Delete account</source>
+        <translation>アカウントを削除</translation>
+    </message>
+    <message>
+        <source>Delete your account?</source>
+        <translation>アカウントを削除しますか？</translation>
+    </message>
+    <message>
+        <source>Deleting account</source>
+        <translation>アカウントを削除中</translation>
+    </message>
+    <message>
+        <source>Deleting...</source>
+        <translation>削除中...</translation>
+    </message>
+    <message>
+        <source>Deletion already scheduled. Cancel on terra-lab.ai.</source>
+        <translation>削除はすでに予定されています。terra-lab.aiでキャンセルできます。</translation>
+    </message>
+    <message>
+        <source>Deletion already set for {date}. Cancel on terra-lab.ai.</source>
+        <translation>{date}に削除がすでに設定されています。terra-lab.aiでキャンセルできます。</translation>
+    </message>
+    <message>
+        <source>Describe the change, e.g. turn the fields into a forest</source>
+        <translation>変更を説明してください（例：畑を森に変える）</translation>
+    </message>
+    <message>
+        <source>Describe the next change</source>
+        <translation>次の変更を説明してください</translation>
+    </message>
+    <message>
+        <source>Describe the next change to {base}</source>
+        <translation>{base}への次の変更を説明してください</translation>
+    </message>
+    <message>
+        <source>Detailed and Maximum quality</source>
+        <translation>詳細と最大品質</translation>
+    </message>
+    <message>
+        <source>Download Original as a georeferenced GeoTIFF (.tif)</source>
+        <translation>オリジナルを地理参照付きGeoTIFF（.tif）としてダウンロード</translation>
+    </message>
+    <message>
+        <source>Download as GeoTIFF</source>
+        <translation>GeoTIFFとしてダウンロード</translation>
+    </message>
+    <message>
+        <source>Downloading reference</source>
+        <translation>参照をダウンロード中</translation>
+    </message>
+    <message>
+        <source>Drag a box on the map. Esc cancels.</source>
+        <translation>マップ上でボックスをドラッグします。Escでキャンセル。</translation>
+    </message>
+    <message>
+        <source>Drag across an area. Shift draws a true circle.</source>
+        <translation>エリアを横切るようにドラッグします。Shiftで真円を描けます。</translation>
+    </message>
+    <message>
+        <source>Drag across the area to circle it.</source>
+        <translation>エリアを横切るようにドラッグして円で囲みます。</translation>
+    </message>
+    <message>
+        <source>Drag from the start to the tip.</source>
+        <translation>始点から先端までドラッグします。</translation>
+    </message>
+    <message>
+        <source>Drag from the start to the tip. Shift keeps 45 degree angles.</source>
+        <translation>始点から先端までドラッグします。Shiftで45度の角度を維持します。</translation>
+    </message>
+    <message>
+        <source>Drag on the map to draw freely.</source>
+        <translation>マップ上でドラッグして自由に描画します。</translation>
+    </message>
+    <message>
+        <source>Drag the line or use the arrow keys. Esc stops.</source>
+        <translation>線をドラッグするか矢印キーを使用します。Escで停止。</translation>
+    </message>
+    <message>
+        <source>Draw</source>
+        <translation>描画</translation>
+    </message>
+    <message>
+        <source>Drawing a zone</source>
+        <translation>ゾーンを描画中</translation>
+    </message>
+    <message>
+        <source>Drop polygons smaller than this after tracing.</source>
+        <translation>トレース後、これより小さいポリゴンを削除します。</translation>
+    </message>
+    <message>
+        <source>Drop this zone and go back to the start</source>
+        <translation>このゾーンを破棄して最初に戻る</translation>
+    </message>
+    <message>
+        <source>Duration</source>
+        <translation>期間</translation>
+    </message>
+    <message>
+        <source>Each change updates the same layer.</source>
+        <translation>各変更は同じlayerを更新します。</translation>
+    </message>
+    <message>
+        <source>Edit the selected area with AI (Enter)</source>
+        <translation>AIで選択エリアを編集（Enter）</translation>
+    </message>
+    <message>
+        <source>Erases all data, stops every TerraLab plugin</source>
+        <translation>すべてのデータを消去し、すべてのTerraLab pluginを停止します</translation>
+    </message>
+    <message>
+        <source>Errors, versions and features used, linked to your account. Never your imagery, layers or coordinates. On Pro, counts only.</source>
+        <translation>エラー、バージョン、使用された機能をアカウントに紐づけて収集します。お客様の画像、layers、座標は決して収集しません。Proでは回数のみ。</translation>
+    </message>
+    <message>
+        <source>Every TerraLab plugin stops, on all computers.</source>
+        <translation>すべてのコンピューターで、すべてのTerraLab pluginが停止します。</translation>
+    </message>
+    <message>
+        <source>Every edit you run lands here, grouped by place, ready to pick up again.</source>
+        <translation>実行したすべての編集がここに保存され、場所ごとにまとめられ、いつでも再開できます。</translation>
+    </message>
+    <message>
+        <source>Everything we make</source>
+        <translation>私たちが作るすべて</translation>
+    </message>
+    <message>
+        <source>Failed to download result image after {attempts} attempts: {err}.</source>
+        <translation>{attempts}回試行しましたが、結果画像のダウンロードに失敗しました：{err}。</translation>
+    </message>
+    <message>
+        <source>Fill the holes inside each shape.</source>
+        <translation>各シェイプ内の穴を埋めます。</translation>
+    </message>
+    <message>
+        <source>Finish signing in on the page that just opened</source>
+        <translation>開いたページでサインインを完了してください</translation>
+    </message>
+    <message>
+        <source>For a team?</source>
+        <translation>チームで利用しますか？</translation>
+    </message>
+    <message>
+        <source>Free credits used up this month</source>
+        <translation>今月の無料クレジットを使い切りました</translation>
+    </message>
+    <message>
+        <source>Free plan</source>
+        <translation>無料プラン</translation>
+    </message>
+    <message>
+        <source>Free plan limit reached.</source>
+        <translation>無料プランの上限に達しました。</translation>
+    </message>
+    <message>
+        <source>From zone to finished edit</source>
+        <translation>ゾーンから完成した編集まで</translation>
+    </message>
+    <message>
+        <source>Generate a flat-color map first, then come back.</source>
+        <translation>先にフラットカラーのマップを生成してから戻ってください。</translation>
+    </message>
+    <message>
+        <source>Generate the edit on your zone</source>
+        <translation>ゾーンで編集を生成</translation>
+    </message>
+    <message>
+        <source>Generate without it</source>
+        <translation>それなしで生成</translation>
+    </message>
+    <message>
+        <source>Generated in the USA.</source>
+        <translation>米国で生成されました。</translation>
+    </message>
+    <message>
+        <source>Get Pro</source>
+        <translation>Proを入手</translation>
+    </message>
+    <message>
+        <source>Get better results</source>
+        <translation>より良い結果を得る</translation>
+    </message>
+    <message>
+        <source>Go back one step</source>
+        <translation>1ステップ戻る</translation>
+    </message>
+    <message>
+        <source>Good for a quick test</source>
+        <translation>簡単なテストに最適</translation>
+    </message>
+    <message>
+        <source>Guide</source>
+        <translation>ガイド</translation>
+    </message>
+    <message>
+        <source>Hide this tip</source>
+        <translation>このヒントを非表示</translation>
+    </message>
+    <message>
+        <source>Hints you closed in the panel</source>
+        <translation>パネルで閉じたヒント</translation>
+    </message>
+    <message>
+        <source>How far a pixel's color may drift from its class. Higher takes in noisy shades.</source>
+        <translation>ピクセルの色がそのクラスからどの程度ずれてよいか。値を大きくするとノイズの多い色調も取り込みます。</translation>
+    </message>
+    <message>
+        <source>Ideas and workflows</source>
+        <translation>アイデアとワークフロー</translation>
+    </message>
+    <message>
+        <source>If your browser works, turn on Settings &gt; Options &gt; Network &gt; Use proxy for web access.</source>
+        <translation>ブラウザが動作する場合は、Settings &gt; Options &gt; Network &gt; Use proxy for web accessをオンにしてください。</translation>
+    </message>
+    <message>
+        <source>Image too large. Draw a smaller zone or pick a lower Quality.</source>
+        <translation>画像が大きすぎます。より小さいゾーンを描くか、より低い品質を選択してください。</translation>
+    </message>
+    <message>
+        <source>In your prompt, say what to take from each: "roof colours from reference 1".</source>
+        <translation>promptで、それぞれから何を取り入れるかを指定してください：「屋根の色は参照1から」。</translation>
+    </message>
+    <message>
+        <source>Install in QGIS</source>
+        <translation>QGISにインストール</translation>
+    </message>
+    <message>
+        <source>Installed</source>
+        <translation>インストール済み</translation>
+    </message>
+    <message>
+        <source>It is installed but did not start. Restart QGIS to use it.</source>
+        <translation>インストールされていますが起動しませんでした。使用するにはQGISを再起動してください。</translation>
+    </message>
+    <message>
+        <source>It is installed but switched off. Turns it on and opens it.</source>
+        <translation>インストールされていますがオフになっています。オンにして開きます。</translation>
+    </message>
+    <message>
+        <source>Its companion files are missing ({missing}). Drop the whole set together.</source>
+        <translation>付属ファイルがありません（{missing}）。セット全体をまとめてドロップしてください。</translation>
+    </message>
+    <message>
+        <source>Keep editing with Pro</source>
+        <translation>Proで編集を続ける</translation>
+    </message>
+    <message>
+        <source>Keep the polygons on your map and close this panel</source>
+        <translation>ポリゴンをマップに残してこのパネルを閉じる</translation>
+    </message>
+    <message>
+        <source>Keep this result on your map and start over on a new zone. The session stays in Sessions.</source>
+        <translation>この結果をマップに残して新しいゾーンでやり直します。セッションはSessionsに残ります。</translation>
+    </message>
+    <message>
+        <source>Keep your strokes to guide the edit. They are removed from the result.</source>
+        <translation>ストロークを編集のガイドとして保持します。結果からは削除されます。</translation>
+    </message>
+    <message>
+        <source>Kept in France.</source>
+        <translation>フランスで保持されます。</translation>
+    </message>
+    <message>
+        <source>Keyboard shortcuts</source>
+        <translation>キーボードショートカット</translation>
+    </message>
+    <message>
+        <source>Last free edit this month.</source>
+        <translation>今月最後の無料編集です。</translation>
+    </message>
+    <message>
+        <source>Leave empty for the default folder</source>
+        <translation>デフォルトフォルダーにする場合は空欄にします</translation>
+    </message>
+    <message>
+        <source>Leave fullscreen</source>
+        <translation>全画面を終了</translation>
+    </message>
+    <message>
+        <source>Library (view only)</source>
+        <translation>ライブラリ（表示のみ）</translation>
+    </message>
+    <message>
+        <source>Like it? Pro adds Detailed and Maximum quality, and commercial use.</source>
+        <translation>気に入りましたか？Proでは詳細と最大品質、および商用利用が追加されます。</translation>
+    </message>
+    <message>
+        <source>Limit reached. Remove one to add another.</source>
+        <translation>上限に達しました。1つ削除して別のものを追加してください。</translation>
+    </message>
+    <message>
+        <source>Linked to your account, no imagery</source>
+        <translation>アカウントに紐づけ、画像は収集しません</translation>
+    </message>
+    <message>
+        <source>Load this prompt, its references and the same map zone back into AI Edit, replacing what you have now.</source>
+        <translation>このprompt、その参照、同じマップゾーンをAI Editに読み込み、現在の内容を置き換えます。</translation>
+    </message>
+    <message>
+        <source>Locked while the AI generates</source>
+        <translation>AIの生成中はロックされます</translation>
+    </message>
+    <message>
+        <source>Made from</source>
+        <translation>作成元</translation>
+    </message>
+    <message>
+        <source>Magenta</source>
+        <translation>マゼンタ</translation>
+    </message>
+    <message>
+        <source>Manage</source>
+        <translation>管理</translation>
+    </message>
+    <message>
+        <source>Map view</source>
+        <translation>地図ビュー</translation>
+    </message>
+    <message>
+        <source>More edits, commercial use</source>
+        <translation>追加の編集、商用利用</translation>
+    </message>
+    <message>
+        <source>More from TerraLab</source>
+        <translation>TerraLab をもっと見る</translation>
+    </message>
+    <message>
+        <source>More plugins</source>
+        <translation>他のプラグイン</translation>
+    </message>
+    <message>
+        <source>Need more?</source>
+        <translation>もっと必要ですか？</translation>
+    </message>
+    <message>
+        <source>Needs a restart</source>
+        <translation>再起動が必要です</translation>
+    </message>
+    <message>
+        <source>Network error. Check your internet connection.</source>
+        <translation>ネットワークエラー。インターネット接続を確認してください。</translation>
+    </message>
+    <message>
+        <source>New edit</source>
+        <translation>新しい編集</translation>
+    </message>
+    <message>
+        <source>No account linked to this key.</source>
+        <translation>このキーにリンクされているアカウントがありません。</translation>
+    </message>
+    <message>
+        <source>No edits yet</source>
+        <translation>まだ編集がありません</translation>
+    </message>
+    <message>
+        <source>No favorites yet</source>
+        <translation>まだお気に入りがありません</translation>
+    </message>
+    <message>
+        <source>No map to vectorize yet</source>
+        <translation>ベクター化できるマップがまだありません</translation>
+    </message>
+    <message>
+        <source>No matches found</source>
+        <translation>一致する項目が見つかりません</translation>
+    </message>
+    <message>
+        <source>No pixel matches the checked colors. Adjust a color, or add one with “Add color from map”.</source>
+        <translation>チェックした色に一致するピクセルがありません。色を調整するか、「マップから色を追加」で色を追加してください。</translation>
+    </message>
+    <message>
+        <source>No prompt was saved for this version.</source>
+        <translation>このバージョンの prompt は保存されていません。</translation>
+    </message>
+    <message>
+        <source>No prompts in this section yet</source>
+        <translation>このセクションにはまだ prompt がありません</translation>
+    </message>
+    <message>
+        <source>No sessions match</source>
+        <translation>一致するセッションがありません</translation>
+    </message>
+    <message>
+        <source>No shape reaches {n} px. Lower “Min polygon size”.</source>
+        <translation>{n} px に達するシェイプがありません。「最小ポリゴン サイズ」を下げてください。</translation>
+    </message>
+    <message>
+        <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size” or “Remove speckle”, or raise “Color tolerance”.</source>
+        <translation>この設定ではシェイプが残りません。「拡張/収縮」を 0 に近づけ、「最小ポリゴン サイズ」または「スペックルの除去」を下げるか、「色の許容度」を上げてください。</translation>
+    </message>
+    <message>
+        <source>No strokes yet</source>
+        <translation>まだストロークがありません</translation>
+    </message>
+    <message>
+        <source>Not an image or a map file QGIS can open.</source>
+        <translation>QGIS で開ける画像またはマップファイルではありません。</translation>
+    </message>
+    <message>
+        <source>Not signed in</source>
+        <translation>サインインしていません</translation>
+    </message>
+    <message>
+        <source>Nothing was sent. Press Generate again to read the notice.</source>
+        <translation>何も送信されませんでした。通知を読むには、もう一度「生成」を押してください。</translation>
+    </message>
+    <message>
+        <source>Nothing yet. The AI works from your zone and prompt only.</source>
+        <translation>まだ何もありません。AI はゾーンと prompt のみで動作します。</translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation>開く</translation>
+    </message>
+    <message>
+        <source>Open QGIS's Data Source Manager to add data</source>
+        <translation>データを追加するには、QGIS のデータソースマネージャーを開いてください</translation>
+    </message>
+    <message>
+        <source>Open a prompt or a past edit and press its star: it will wait for you here.</source>
+        <translation>prompt または過去の編集を開いてスターを押してください。ここに保存されます。</translation>
+    </message>
+    <message>
+        <source>Open dashboard</source>
+        <translation>ダッシュボードを開く</translation>
+    </message>
+    <message>
+        <source>Open in QGIS</source>
+        <translation>QGIS で開く</translation>
+    </message>
+    <message>
+        <source>Open the AI Edit page</source>
+        <translation>AI Edit ページを開く</translation>
+    </message>
+    <message>
+        <source>Open the Library</source>
+        <translation>ライブラリを開く</translation>
+    </message>
+    <message>
+        <source>Open your sessions</source>
+        <translation>セッションを開く</translation>
+    </message>
+    <message>
+        <source>Opens in your browser</source>
+        <translation>ブラウザで開きます</translation>
+    </message>
+    <message>
+        <source>Opens the QGIS plugin manager on this plugin.</source>
+        <translation>このプラグインで QGIS のプラグインマネージャーを開きます。</translation>
+    </message>
+    <message>
+        <source>Opens your dashboard in the browser</source>
+        <translation>ブラウザでダッシュボードを開きます</translation>
+    </message>
+    <message>
+        <source>Or drop images and layers here</source>
+        <translation>または、ここに画像と layer をドロップしてください</translation>
+    </message>
+    <message>
+        <source>Other TerraLab plugins for QGIS</source>
+        <translation>QGIS 用のその他の TerraLab プラグイン</translation>
+    </message>
+    <message>
+        <source>Other TerraLab plugins...</source>
+        <translation>その他の TerraLab プラグイン...</translation>
+    </message>
+    <message>
+        <source>Outline an area, say what to change</source>
+        <translation>領域を囲んで、変更内容を指定してください</translation>
+    </message>
+    <message>
+        <source>Output size</source>
+        <translation>出力サイズ</translation>
+    </message>
+    <message>
+        <source>Outside the prompt box</source>
+        <translation>prompt ボックスの外側</translation>
+    </message>
+    <message>
+        <source>Outside your zone, sent whole</source>
+        <translation>ゾーンの外側:全体を送信</translation>
+    </message>
+    <message>
+        <source>Part of your zone is off the imagery. That part will come back blank.</source>
+        <translation>ゾーンの一部が画像の範囲外です。その部分は空白になります。</translation>
+    </message>
+    <message>
+        <source>Personal, non-commercial use</source>
+        <translation>個人利用、非商用</translation>
+    </message>
+    <message>
+        <source>Pick a map under Layer first.</source>
+        <translation>最初に Layer でマップを選択してください。</translation>
+    </message>
+    <message>
+        <source>Pick a tool to draw.</source>
+        <translation>描画するツールを選択してください。</translation>
+    </message>
+    <message>
+        <source>Plan not loaded</source>
+        <translation>プランが読み込まれていません</translation>
+    </message>
+    <message>
+        <source>Plan, payment and invoices</source>
+        <translation>プラン、支払い、請求書</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>プレビュー</translation>
+    </message>
+    <message>
+        <source>Privacy Policy</source>
+        <translation>プライバシーポリシー</translation>
+    </message>
+    <message>
+        <source>Pro</source>
+        <translation>Pro</translation>
+    </message>
+    <message>
+        <source>Pro plan</source>
+        <translation>Pro プラン</translation>
+    </message>
+    <message>
+        <source>Pro unlocks Detailed and Maximum, for printing and zooming in</source>
+        <translation>Pro で「詳細」と「最大」がアンロックされ、印刷やズームに利用できます</translation>
+    </message>
+    <message>
+        <source>Project layer</source>
+        <translation>プロジェクト layer</translation>
+    </message>
+    <message>
+        <source>Prompts and edits you starred.</source>
+        <translation>スターを付けた prompt と編集。</translation>
+    </message>
+    <message>
+        <source>Prompts, References, Draw, Vectorize</source>
+        <translation>prompt、参照、描画、ベクター化</translation>
+    </message>
+    <message>
+        <source>Proven prompts to start from. Open one to see it before and after.</source>
+        <translation>実績のある prompt で始められます。開くと前後の比較を確認できます。</translation>
+    </message>
+    <message>
+        <source>Proxy connection failed. Check QGIS proxy settings (Settings &gt; Options &gt; Network).</source>
+        <translation>プロキシ接続に失敗しました。QGIS のプロキシ設定を確認してください(設定 &gt; オプション &gt; ネットワーク)。</translation>
+    </message>
+    <message>
+        <source>QGIS could not turn it on. Tick it in Plugins &gt; Manage and Install Plugins.</source>
+        <translation>QGIS で有効にできませんでした。「プラグイン &gt; プラグインの管理とインストール」でチェックしてください。</translation>
+    </message>
+    <message>
+        <source>Raise the timeout in Settings &gt; Options &gt; Network.</source>
+        <translation>設定 &gt; オプション &gt; ネットワークでタイムアウトを延長してください。</translation>
+    </message>
+    <message>
+        <source>Read the guide</source>
+        <translation>ガイドを読む</translation>
+    </message>
+    <message>
+        <source>Reference {n}</source>
+        <translation>参照 {n}</translation>
+    </message>
+    <message>
+        <source>References</source>
+        <translation>参照</translation>
+    </message>
+    <message>
+        <source>Refreshing sessions</source>
+        <translation>セッションを更新中</translation>
+    </message>
+    <message>
+        <source>Release to add</source>
+        <translation>離して追加</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>削除</translation>
+    </message>
+    <message>
+        <source>Remove every stroke. Undo cannot bring them back.</source>
+        <translation>すべてのストロークを削除します。元に戻すことはできません。</translation>
+    </message>
+    <message>
+        <source>Remove the last point</source>
+        <translation>最後の点を削除</translation>
+    </message>
+    <message>
+        <source>Remove {name}</source>
+        <translation>{name} を削除</translation>
+    </message>
+    <message>
+        <source>Reopen this session in AI Edit: its prompt, references and the same map zone.</source>
+        <translation>このセッションを AI Edit で再度開きます:prompt、参照、同じマップゾーンが含まれます。</translation>
+    </message>
+    <message>
+        <source>Request cancelled.</source>
+        <translation>リクエストがキャンセルされました。</translation>
+    </message>
+    <message>
+        <source>Request timed out. Check your connection or try again.</source>
+        <translation>リクエストがタイムアウトしました。接続を確認するか、もう一度お試しください。</translation>
+    </message>
+    <message>
+        <source>Reset settings</source>
+        <translation>設定をリセット</translation>
+    </message>
+    <message>
+        <source>Restart QGIS</source>
+        <translation>QGIS を再起動</translation>
+    </message>
+    <message>
+        <source>Result</source>
+        <translation>結果</translation>
+    </message>
+    <message>
+        <source>Results for "{query}"</source>
+        <translation>"{query}" の検索結果</translation>
+    </message>
+    <message>
+        <source>Run QGIS from a single sentence.</source>
+        <translation>1 つの文章から QGIS を実行します。</translation>
+    </message>
+    <message>
+        <source>Save reference</source>
+        <translation>参照を保存</translation>
+    </message>
+    <message>
+        <source>Saved in memory only: the GeoPackage is in use. Save the layer before closing QGIS.</source>
+        <translation>メモリ内のみに保存されました: GeoPackage が使用中です。QGIS を閉じる前に layer を保存してください。</translation>
+    </message>
+    <message>
+        <source>Search prompts</source>
+        <translation>prompt を検索</translation>
+    </message>
+    <message>
+        <source>Secure connection failed, often because of company SSL inspection. Ask your IT team to allow terra-lab.ai, or import your company root certificate in Settings &gt; Options &gt; Authentication.</source>
+        <translation>安全な接続に失敗しました。多くの場合、会社の SSL 検査が原因です。IT チームに terra-lab.ai の許可を依頼するか、Settings &gt; Options &gt; Authentication で会社のルート証明書をインポートしてください。</translation>
+    </message>
+    <message>
+        <source>See Pro</source>
+        <translation>Pro を見る</translation>
+    </message>
+    <message>
+        <source>See it in action</source>
+        <translation>実際の動作を見る</translation>
+    </message>
+    <message>
+        <source>See plans on terra-lab.ai</source>
+        <translation>terra-lab.ai でプランを見る</translation>
+    </message>
+    <message>
+        <source>See usage</source>
+        <translation>使用状況を見る</translation>
+    </message>
+    <message>
+        <source>See what Pro unlocks</source>
+        <translation>Pro で使える機能を見る</translation>
+    </message>
+    <message>
+        <source>Server refused the connection. The service may be temporarily down.</source>
+        <translation>サーバーが接続を拒否しました。サービスが一時的に停止している可能性があります。</translation>
+    </message>
+    <message>
+        <source>Session expired. Sign out and back in.</source>
+        <translation>セッションの有効期限が切れました。サインアウトして再度サインインしてください。</translation>
+    </message>
+    <message>
+        <source>Session reopened. Edit the prompt or pick a version, then Generate.</source>
+        <translation>セッションを再開しました。prompt を編集するかバージョンを選び、Generate を押してください。</translation>
+    </message>
+    <message>
+        <source>Share usage statistics</source>
+        <translation>使用統計を共有</translation>
+    </message>
+    <message>
+        <source>Sharp, clean result for real maps</source>
+        <translation>実際の地図向けの、くっきりとしたきれいな結果</translation>
+    </message>
+    <message>
+        <source>Show a layer, or start with a sample.</source>
+        <translation>layer を表示するか、サンプルから始めましょう。</translation>
+    </message>
+    <message>
+        <source>Show it and generate</source>
+        <translation>表示して生成</translation>
+    </message>
+    <message>
+        <source>Show the AI a style, a legend or an object to match.</source>
+        <translation>一致させたいスタイル、凡例、オブジェクトを AI に見せてください。</translation>
+    </message>
+    <message>
+        <source>Show the plugin's panel.</source>
+        <translation>plugin のパネルを表示します。</translation>
+    </message>
+    <message>
+        <source>Show this layer in the Layers panel</source>
+        <translation>この layer を Layers パネルに表示</translation>
+    </message>
+    <message>
+        <source>Sign in</source>
+        <translation>サインイン</translation>
+    </message>
+    <message>
+        <source>Sign in to see your plan</source>
+        <translation>サインインしてプランを確認</translation>
+    </message>
+    <message>
+        <source>Sign in to see your plan.</source>
+        <translation>サインインしてプランを確認してください。</translation>
+    </message>
+    <message>
+        <source>Sign out, then sign in again.</source>
+        <translation>サインアウトして、再度サインインしてください。</translation>
+    </message>
+    <message>
+        <source>Sign-in, plan and privacy</source>
+        <translation>サインイン、プラン、プライバシー</translation>
+    </message>
+    <message>
+        <source>Sketch where the AI should act.</source>
+        <translation>AI に処理させたい場所をスケッチします。</translation>
+    </message>
+    <message>
+        <source>Softer outlines for natural shapes like trees.</source>
+        <translation>木などの自然な形状向けの、やわらかい輪郭。</translation>
+    </message>
+    <message>
+        <source>Start from {label}</source>
+        <translation>{label} から開始</translation>
+    </message>
+    <message>
+        <source>Start the next edit from</source>
+        <translation>次回の編集の開始元</translation>
+    </message>
+    <message>
+        <source>Start the next edit from this version</source>
+        <translation>次回の編集をこのバージョンから開始</translation>
+    </message>
+    <message>
+        <source>Still generating. The result is added to your map when ready.</source>
+        <translation>まだ生成中です。結果は準備でき次第、地図に追加されます。</translation>
+    </message>
+    <message>
+        <source>Still waiting, but AI Edit cannot reach the server to check your sign-in.</source>
+        <translation>まだ待機中ですが、AI Edit はサーバーに接続できず、サインイン状態を確認できません。</translation>
+    </message>
+    <message>
+        <source>Straight lines. Click the first point to close, Shift keeps 45 degree angles.</source>
+        <translation>直線。最初の点をクリックして閉じます。Shift で 45 度の角度を維持します。</translation>
+    </message>
+    <message>
+        <source>Stroke color</source>
+        <translation>ストロークの色</translation>
+    </message>
+    <message>
+        <source>Strokes count only inside your zone.</source>
+        <translation>ストロークはゾーン内のみカウントされます。</translation>
+    </message>
+    <message>
+        <source>Subscription inactive. Manage it on terra-lab.ai.</source>
+        <translation>サブスクリプションが無効です。terra-lab.ai で管理してください。</translation>
+    </message>
+    <message>
+        <source>Swipe between the original map and this result</source>
+        <translation>元の地図とこの結果をスワイプで切り替え</translation>
+    </message>
+    <message>
+        <source>Team seats, custom quota, invoices</source>
+        <translation>チームのシート、カスタムクォータ、請求書</translation>
+    </message>
+    <message>
+        <source>TerraLab blog</source>
+        <translation>TerraLab ブログ</translation>
+    </message>
+    <message>
+        <source>TerraLab is busy right now</source>
+        <translation>TerraLab は現在混み合っています</translation>
+    </message>
+    <message>
+        <source>That click missed the map. Try again on the map itself.</source>
+        <translation>クリックが地図から外れました。地図上でもう一度試してください。</translation>
+    </message>
+    <message>
+        <source>That email does not match. Try again.</source>
+        <translation>メールアドレスが一致しません。もう一度試してください。</translation>
+    </message>
+    <message>
+        <source>The AI Edit drawing layer is hidden.</source>
+        <translation>AI Edit の描画 layer が非表示です。</translation>
+    </message>
+    <message>
+        <source>The Free plan takes up to {n} references.</source>
+        <translation>Free プランでは最大 {n} 個の参照を利用できます。</translation>
+    </message>
+    <message>
+        <source>The Free plan takes {n} reference.</source>
+        <translation>Free プランでは {n} 個の参照を利用できます。</translation>
+    </message>
+    <message>
+        <source>The account could not be deleted.</source>
+        <translation>アカウントを削除できませんでした。</translation>
+    </message>
+    <message>
+        <source>The free plan includes {n} reference. Remove it to add another.</source>
+        <translation>Free プランには {n} 個の参照が含まれます。別の参照を追加するには削除してください。</translation>
+    </message>
+    <message>
+        <source>The free plan includes {n} references. Remove one to add another.</source>
+        <translation>Free プランには {n} 個の参照が含まれます。別の参照を追加するには 1 つ削除してください。</translation>
+    </message>
+    <message>
+        <source>The imagery this session was edited on is not in this project. Add its Original to see your edits in context.</source>
+        <translation>このセッションで編集した画像がこのプロジェクトにありません。コンテキスト内で編集を確認するには、その Original を追加してください。</translation>
+    </message>
+    <message>
+        <source>The layer keeps its last result.</source>
+        <translation>layer は最後の結果を保持します。</translation>
+    </message>
+    <message>
+        <source>The map area you select and your prompt go to our image generation partner only to produce the result, and it deletes them within 30 days.</source>
+        <translation>選択した地図範囲と prompt は、結果を生成するためだけに当社の画像生成パートナーに送信され、30 日以内に削除されます。</translation>
+    </message>
+    <message>
+        <source>The map this layer came from was removed. Vectorize it again.</source>
+        <translation>この layer の元の地図が削除されました。もう一度ベクター化してください。</translation>
+    </message>
+    <message>
+        <source>The next edit starts from it.</source>
+        <translation>次回の編集はここから始まります。</translation>
+    </message>
+    <message>
+        <source>The polygons could not be added to your map. Try again.</source>
+        <translation>ポリゴンを地図に追加できませんでした。もう一度試してください。</translation>
+    </message>
+    <message>
+        <source>The prompts could not load</source>
+        <translation>prompt を読み込めませんでした</translation>
+    </message>
+    <message>
+        <source>The written tutorial, on the TerraLab blog.</source>
+        <translation>TerraLab ブログのテキストチュートリアル。</translation>
+    </message>
+    <message>
+        <source>They help us fix bugs. You can switch them off in Settings whenever you want.</source>
+        <translation>バグの修正に役立ちます。Settings でいつでもオフにできます。</translation>
+    </message>
+    <message>
+        <source>This Quality is not in your plan. Upgrade to Pro to use it.</source>
+        <translation>この Quality はご利用のプランに含まれていません。使用するには Pro にアップグレードしてください。</translation>
+    </message>
+    <message>
+        <source>This computer is no longer signed in</source>
+        <translation>このコンピューターはサインイン済みではなくなりました</translation>
+    </message>
+    <message>
+        <source>This looks like a photo. Pick a color below.</source>
+        <translation>これは写真のようです。下から色を選んでください。</translation>
+    </message>
+    <message>
+        <source>This map can't be read. Pick another one.</source>
+        <translation>この地図を読み込めません。別のものを選んでください。</translation>
+    </message>
+    <message>
+        <source>This result has no saved map zone, so it cannot be reused.</source>
+        <translation>この結果には保存された地図ゾーンがないため、再利用できません。</translation>
+    </message>
+    <message>
+        <source>Tips</source>
+        <translation>ヒント</translation>
+    </message>
+    <message>
+        <source>Too many attempts. Try again in {seconds} seconds.</source>
+        <translation>試行回数が多すぎます。{seconds} 秒後にもう一度試してください。</translation>
+    </message>
+    <message>
+        <source>Too many attempts. Try again soon.</source>
+        <translation>試行回数が多すぎます。しばらくしてからもう一度試してください。</translation>
+    </message>
+    <message>
+        <source>Tools</source>
+        <translation>ツール</translation>
+    </message>
+    <message>
+        <source>Try again in a moment.</source>
+        <translation>しばらくしてからもう一度試してください。</translation>
+    </message>
+    <message>
+        <source>Try one word, like "trees"</source>
+        <translation>「trees」のように 1 語で試してください</translation>
+    </message>
+    <message>
+        <source>Turn buildings, trees or water into polygons.</source>
+        <translation>建物、木、水域をポリゴンに変換します。</translation>
+    </message>
+    <message>
+        <source>Turn on</source>
+        <translation>オンにする</translation>
+    </message>
+    <message>
+        <source>Turn this result into polygons you can edit</source>
+        <translation>この結果を編集可能なポリゴンに変換</translation>
+    </message>
+    <message>
+        <source>Turned off</source>
+        <translation>オフ</translation>
+    </message>
+    <message>
+        <source>Turns a flat-color map into polygons, one class per color.</source>
+        <translation>単色の地図をポリゴンに変換します。色ごとに 1 クラスです。</translation>
+    </message>
+    <message>
+        <source>Tutorials</source>
+        <translation>チュートリアル</translation>
+    </message>
+    <message>
+        <source>Type your email to confirm:</source>
+        <translation>確認のためメールアドレスを入力してください:</translation>
+    </message>
+    <message>
+        <source>Undo the last stroke ({shortcut})</source>
+        <translation>最後のストロークを元に戻す（{shortcut}）</translation>
+    </message>
+    <message>
+        <source>Up to 12 reference images</source>
+        <translation>最大 12 枚の参照画像</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>更新</translation>
+    </message>
+    <message>
+        <source>Update available</source>
+        <translation>更新があります</translation>
+    </message>
+    <message>
+        <source>Update required</source>
+        <translation>更新が必要です</translation>
+    </message>
+    <message>
+        <source>Update to keep using AI Edit. It takes one click in the QGIS Plugin Manager, and the plugin reloads on its own.</source>
+        <translation>AI Edit を使い続けるには更新してください。QGIS Plugin Manager でワンクリックするだけで、plugin は自動的に再読み込みされます。</translation>
+    </message>
+    <message>
+        <source>Updating the layer...</source>
+        <translation>layer を更新しています...</translation>
+    </message>
+    <message>
+        <source>Usage</source>
+        <translation>使用状況</translation>
+    </message>
+    <message>
+        <source>Usage statistics</source>
+        <translation>使用統計</translation>
+    </message>
+    <message>
+        <source>Usage stats are on.</source>
+        <translation>使用統計はオンです。</translation>
+    </message>
+    <message>
+        <source>Vectorize cancelled.</source>
+        <translation>ベクタライズがキャンセルされました。</translation>
+    </message>
+    <message>
+        <source>Versions</source>
+        <translation>バージョン</translation>
+    </message>
+    <message>
+        <source>View full size</source>
+        <translation>フルサイズで表示</translation>
+    </message>
+    <message>
+        <source>Wait for this edit to finish</source>
+        <translation>この編集が完了するまでお待ちください</translation>
+    </message>
+    <message>
+        <source>We will look into it and get back to you.</source>
+        <translation>調査してご連絡いたします。</translation>
+    </message>
+    <message>
+        <source>What will you edit first?</source>
+        <translation>まず何を編集しますか？</translation>
+    </message>
+    <message>
+        <source>What would you like to edit?</source>
+        <translation>何を編集しますか？</translation>
+    </message>
+    <message>
+        <source>Where AI Edit writes its generated GeoTIFFs. Leave empty to use {folder} (or the saved project folder).</source>
+        <translation>AI Edit が生成した GeoTIFF の書き込み先です。空のままにすると {folder}（または保存済みプロジェクトフォルダー）を使用します。</translation>
+    </message>
+    <message>
+        <source>Where should the AI edit?</source>
+        <translation>AI にどこを編集させますか？</translation>
+    </message>
+    <message>
+        <source>While drawing</source>
+        <translation>描画中</translation>
+    </message>
+    <message>
+        <source>Yellow</source>
+        <translation>黄色</translation>
+    </message>
+    <message>
+        <source>You can sign back in anytime.</source>
+        <translation>いつでも再度サインインできます。</translation>
+    </message>
+    <message>
+        <source>You have {installed}.</source>
+        <translation>{installed} があります。</translation>
+    </message>
+    <message>
+        <source>You've used this month's free edits</source>
+        <translation>今月の無料編集を使い切りました</translation>
+    </message>
+    <message>
+        <source>Your computer</source>
+        <translation>お使いのコンピューター</translation>
+    </message>
+    <message>
+        <source>Your drawing</source>
+        <translation>あなたの描画</translation>
+    </message>
+    <message>
+        <source>Your drawing won't be used</source>
+        <translation>あなたの描画は使用されません</translation>
+    </message>
+    <message>
+        <source>Your email</source>
+        <translation>あなたのメールアドレス</translation>
+    </message>
+    <message>
+        <source>Your generations stay in your history until you delete them. On {pro} you can set 30 days, 90 days or 1 year in Settings.</source>
+        <translation>生成した画像は、削除するまで履歴に残ります。{pro} では、設定で 30 日、90 日、または 1 年を選択できます。</translation>
+    </message>
+    <message>
+        <source>Your generations, history and prompts are erased.</source>
+        <translation>生成した画像、履歴、および prompts は消去されます。</translation>
+    </message>
+    <message>
+        <source>Your map, before any AI edit</source>
+        <translation>AI 編集前のマップ</translation>
+    </message>
+    <message>
+        <source>Your network blocked the connection (HTTP {status}). Ask your IT team to allow terra-lab.ai.</source>
+        <translation>お使いのネットワークが接続をブロックしました（HTTP {status}）。IT チームに terra-lab.ai のアクセス許可を依頼してください。</translation>
+    </message>
+    <message>
+        <source>Your session is saved. Reopen it from Sessions, the clock at the top.</source>
+        <translation>セッションは保存されています。上部の時計（Sessions）から再度開いてください。</translation>
+    </message>
+    <message>
+        <source>Your zone is off the imagery. Draw it over your layers.</source>
+        <translation>ゾーンが画像の範囲外です。layers の上に描き直してください。</translation>
+    </message>
+    <message>
+        <source>Your zone is too small. Draw it at least {pct}% of the map width.</source>
+        <translation>ゾーンが小さすぎます。マップ幅の少なくとも {pct}% で描いてください。</translation>
+    </message>
+    <message>
+        <source>Your {total} free edits return next month</source>
+        <translation>{total} 回の無料編集は来月に復活します</translation>
+    </message>
+    <message>
+        <source>Your {total} free edits return on {date}</source>
+        <translation>{total} 回の無料編集は {date} に復活します</translation>
+    </message>
+    <message>
+        <source>by TerraLab</source>
+        <translation>TerraLab 提供</translation>
+    </message>
+    <message>
+        <source>credits left of {limit}</source>
+        <translation>残りクレジット {limit}</translation>
+    </message>
+    <message>
+        <source>no AI edit</source>
+        <translation>AI 編集なし</translation>
+    </message>
+    <message>
+        <source>{count} in {k} classes</source>
+        <translation>{k} クラスに {count} 件</translation>
+    </message>
+    <message>
+        <source>{head} “{name}”: {count}.</source>
+        <translation>{head} “{name}”: {count} 件。</translation>
+    </message>
+    <message>
+        <source>{hex} is already listed as “{name}”. It is checked.</source>
+        <translation>{hex} は既に “{name}” として登録されています。チェック済みです。</translation>
+    </message>
+    <message>
+        <source>{label} {n}</source>
+        <translation>{label} {n}</translation>
+    </message>
+    <message>
+        <source>{map} polygons</source>
+        <translation>{map} ポリゴン</translation>
+    </message>
+    <message>
+        <source>{n} of {limit}</source>
+        <translation>{n} / {limit}</translation>
+    </message>
+    <message>
+        <source>{n} polygons</source>
+        <translation>{n} ポリゴン</translation>
+    </message>
+    <message>
+        <source>{n} strokes</source>
+        <translation>{n} ストローク</translation>
+    </message>
+    <message>
+        <source>{n} were not added: {names}. {reason}</source>
+        <translation>{n} 件は追加されませんでした: {names}。{reason}</translation>
+    </message>
+    <message>
+        <source>{ref} and {markup} show the AI what you mean. The {library} has ready-made prompts.</source>
+        <translation>{ref} と {markup} は、AI にあなたの意図を示します。{library} には既製の prompts が用意されています。</translation>
+    </message>
+    <message>
+        <source>“Color tolerance” at {n} matches no pixel. Raise it.</source>
+        <translation>“Color tolerance” を {n} にしても一致するピクセルがありません。値を上げてください。</translation>
+    </message>
+    <message>
+        <source>“Remove speckle” at {n} px removed every shape. Lower it.</source>
+        <translation>“Remove speckle” を {n} px にすると、すべての図形が削除されました。値を下げてください。</translation>
+    </message>
+    <message>
+        <source>“{name}” updated: {count}.</source>
+        <translation>“{name}” を更新しました: {count} 件。</translation>
+    </message>
+    <message>
+        <source>&#x27;Color tolerance&#x27; at {n} matches no pixel. Raise it.</source>
+        <translation>{n} で「色の許容差」に一致するピクセルがありません。値を上げてください。</translation>
+    </message>
+    <message>
+        <source>&#x27;Remove speckle&#x27; at {n} px removed every shape. Lower it.</source>
+        <translation>{n} px の「斑点除去」で全てのシェイプが削除されました。値を下げてください。</translation>
+    </message>
+    <message>
+        <source>2K and 4K output</source>
+        <translation>2K および 4K 出力</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Draw&lt;/b&gt;&lt;br&gt;Draw arrows, shapes, or labels on the map to show the AI what to change and where. Your drawing is sent with the prompt as visual guidance.</source>
+        <translation>&lt;b&gt;描画&lt;/b&gt;&lt;br&gt;変更内容と場所を AI に示すため、地図上に矢印、シェイプ、ラベルを描画します。描画は視覚的なガイダンスとして prompt と一緒に送信されます。</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Output size&lt;/b&gt;&lt;br&gt;A bigger output is sharper and more precise, and costs more credits. Standard (1K), Large (2K), Maximum (4K).</source>
+        <translation>&lt;b&gt;出力サイズ&lt;/b&gt;&lt;br&gt;出力を大きくすると、よりシャープで正確になり、より多くのクレジットを消費します。標準 (1K)、大 (2K)、最大 (4K)。</translation>
+    </message>
+    <message>
+        <source>Add a reference</source>
+        <translation>参照を追加</translation>
+    </message>
+    <message>
+        <source>An image or a data file</source>
+        <translation>画像またはデータファイル</translation>
+    </message>
+    <message>
+        <source>Another output size</source>
+        <translation>別の出力サイズ</translation>
+    </message>
+    <message>
+        <source>Capturing your zone</source>
+        <translation>ゾーンを取得中</translation>
+    </message>
+    <message>
+        <source>Check your connection</source>
+        <translation>接続を確認してください</translation>
+    </message>
+    <message>
+        <source>Click to view full size. Hover for download.</source>
+        <translation>クリックで全サイズ表示。ホバーでダウンロード。</translation>
+    </message>
+    <message>
+        <source>Contracting by {n} px erased every shape. Set &#x27;Expand/Contract&#x27; closer to 0.</source>
+        <translation>{n} px の縮小で全てのシェイプが削除されました。「拡大/縮小」を 0 に近づけてください。</translation>
+    </message>
+    <message>
+        <source>Create a map</source>
+        <translation>マップを作成</translation>
+    </message>
+    <message>
+        <source>Detail</source>
+        <translation>詳細</translation>
+    </message>
+    <message>
+        <source>Drag a box on the map</source>
+        <translation>地図上でボックスをドラッグ</translation>
+    </message>
+    <message>
+        <source>Drawing your edit</source>
+        <translation>編集を描画中</translation>
+    </message>
+    <message>
+        <source>Drop a file or a layer here</source>
+        <translation>ここにファイルまたは layer をドロップ</translation>
+    </message>
+    <message>
+        <source>Each checked color becomes a class.</source>
+        <translation>チェックした各色がクラスになります。</translation>
+    </message>
+    <message>
+        <source>Finest detail for print and zoom</source>
+        <translation>印刷とズームに最適な高精細</translation>
+    </message>
+    <message>
+        <source>Generation restored. Change the prompt or the zone, then generate again.</source>
+        <translation>生成結果を復元しました。prompt または範囲を変更して、もう一度生成してください。</translation>
+    </message>
+    <message>
+        <source>Generations</source>
+        <translation>生成履歴</translation>
+    </message>
+    <message>
+        <source>Keep this result and start a new edit. You can resume this session later.</source>
+        <translation>この結果を保持して新しい編集を開始します。このセッションは後で再開できます。</translation>
+    </message>
+    <message>
+        <source>Keep your drawing on the zone to guide the edit, and close this panel</source>
+        <translation>範囲上に描画を残して編集をガイドし、このパネルを閉じてください</translation>
+    </message>
+    <message>
+        <source>Large</source>
+        <translation>大</translation>
+    </message>
+    <message>
+        <source>Like it? Pro adds 2K, 4K and commercial use.</source>
+        <translation>気に入りましたか?Pro なら 2K・4K と商用利用が追加されます。</translation>
+    </message>
+    <message>
+        <source>No shape reaches {n} px. Lower &#x27;Min polygon size&#x27;.</source>
+        <translation>{n} px に達する図形がありません。「最小ポリゴン サイズ」を下げてください。</translation>
+    </message>
+    <message>
+        <source>No shapes left with these settings. Set &#x27;Expand/Contract&#x27; closer to 0, lower &#x27;Min polygon size&#x27; or &#x27;Remove speckle&#x27;, or raise &#x27;Color tolerance&#x27;.</source>
+        <translation>これらの設定では図形が残りません。「拡大/縮小」を 0 に近づけ、「最小ポリゴン サイズ」または「斑点を除去」を下げるか、「色の許容度」を上げてください。</translation>
+    </message>
+    <message>
+        <source>No usage yet</source>
+        <translation>まだ使用実績がありません</translation>
+    </message>
+    <message>
+        <source>Non-commercial use</source>
+        <translation>非商用利用</translation>
+    </message>
+    <message>
+        <source>Open QGIS&#x27;s Data Source Manager to add data</source>
+        <translation>データを追加するには、QGIS のデータソースマネージャーを開いてください</translation>
+    </message>
+    <message>
+        <source>Original, before any edit</source>
+        <translation>オリジナル(編集前)</translation>
+    </message>
+    <message>
+        <source>Placing the result</source>
+        <translation>結果を配置中</translation>
+    </message>
+    <message>
+        <source>Prompts, references, mark up, vectorize</source>
+        <translation>prompt、参照、マークアップ、ベクタライズ</translation>
+    </message>
+    <message>
+        <source>Quick draft, lighter on credits</source>
+        <translation>クイックドラフト、クレジット消費は少なめ</translation>
+    </message>
+    <message>
+        <source>Remove this reference</source>
+        <translation>この参照を削除</translation>
+    </message>
+    <message>
+        <source>Rendered and cropped to your zone</source>
+        <translation>レンダリングされ、範囲に合わせてクロップされました</translation>
+    </message>
+    <message>
+        <source>Run the prompt again on the same zone, from the selected version</source>
+        <translation>選択したバージョンから、同じ範囲で prompt を再実行します</translation>
+    </message>
+    <message>
+        <source>Say in the prompt what to take from each reference.</source>
+        <translation>prompt で、各参照から何を取り込むかを指定してください。</translation>
+    </message>
+    <message>
+        <source>Search prompts, e.g. &quot;add trees&quot; or &quot;flood the river&quot;</source>
+        <translation>prompt を検索。例:「木を追加」や「川を氾濫させる」</translation>
+    </message>
+    <message>
+        <source>Sending the image</source>
+        <translation>画像を送信中</translation>
+    </message>
+    <message>
+        <source>Sent whole, at its own size</source>
+        <translation>元のサイズのまま全体を送信</translation>
+    </message>
+    <message>
+        <source>Sharper result for everyday maps</source>
+        <translation>一般的な地図でより鮮明な結果</translation>
+    </message>
+    <message>
+        <source>Show the plugin&#x27;s panel.</source>
+        <translation>plugin のパネルを表示します。</translation>
+    </message>
+    <message>
+        <source>Size</source>
+        <translation>サイズ</translation>
+    </message>
+    <message>
+        <source>The imagery this session was edited on is not in this project. Add a snapshot of it to see your edits in context.</source>
+        <translation>このセッションで編集した画像がこのプロジェクトにありません。そのスナップショットを追加すると、編集内容を文脈の中で確認できます。</translation>
+    </message>
+    <message>
+        <source>Try one word, like &quot;trees&quot;</source>
+        <translation>「trees」のように 1 語で試してください</translation>
+    </message>
+    <message>
+        <source>Turn on a layer, or start with a sample.</source>
+        <translation>layer をオンにするか、サンプルから始めます。</translation>
+    </message>
+    <message>
+        <source>Turn one on in the Layers panel to edit it.</source>
+        <translation>編集するには、Layers パネルでいずれかをオンにします。</translation>
+    </message>
+    <message>
+        <source>Vectorize turns a flat-color map into polygons.</source>
+        <translation>ベクター化はフラットカラーの地図をポリゴンに変換します。</translation>
+    </message>
+    <message>
+        <source>Very large</source>
+        <translation>非常に大きい</translation>
+    </message>
+    <message>
+        <source>While marking up</source>
+        <translation>マークアップ中</translation>
+    </message>
+    <message>
+        <source>Working on your edit</source>
+        <translation>編集を処理しています</translation>
+    </message>
+    <message>
+        <source>You&#x27;ve used this month&#x27;s free edits</source>
+        <translation>今月の無料編集を使い切りました</translation>
+    </message>
+    <message>
+        <source>{n} stroke. Click Done to guide the edit with it.</source>
+        <translation>{n} 本のストローク。完了をクリックすると編集のガイドに使用されます。</translation>
+    </message>
+    <message>
+        <source>{n} strokes. Click Done to guide the edit with them.</source>
+        <translation>{n} 本のストローク。完了をクリックすると編集のガイドに使用されます。</translation>
+    </message>
 </context>
 </TS>

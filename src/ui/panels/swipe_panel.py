@@ -1,11 +1,12 @@
-"""Before/after swipe tool.
+"""Compare: the before/after swipe on the map.
 
 Headless controller that arms/disarms a canvas swipe map tool. There is
-no dock panel; the user toggles the swipe through the dock's footer
-Before/After button. The swipe target is whatever raster is the active
-layer in the QGIS Layers panel; selecting a different raster retargets
-the swipe live. Esc on the canvas disarms the tool. Middle-mouse drag
-pans without leaving swipe mode.
+no dock panel; the user toggles it with the Compare button under a result.
+The swipe target is the active AI Edit result in the QGIS Layers panel
+(else the newest one); selecting another result retargets the swipe live.
+Drag the line, or use the Left and Right arrow keys (Shift for bigger
+steps, Home and End for the edges). Esc on the canvas ends the comparison
+and hands the map back as it was. Middle-mouse drag pans without leaving it.
 """
 from __future__ import annotations
 
@@ -19,19 +20,48 @@ from qgis.core import (
     QgsRasterLayer,
 )
 from qgis.gui import QgsMapCanvasItem, QgsMapTool
-from qgis.PyQt.QtCore import QObject, QPoint, QRect, QRectF, Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QCursor, QImage, QPainter, QPen
+from qgis.PyQt.QtCore import QObject, QPoint, QPointF, QRect, QRectF, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtGui import QColor, QCursor, QFont, QFontMetrics, QImage, QPainter, QPen
 
+from ...core.config_store import get_export_copy, get_export_dial
 from ...core.i18n import tr
 from ...core.raster_writer import BEFORE_PATH_PROPERTY
+from ..dock.design_tokens import FIXED_INK, qcolor
+from ..icons import render_pixmap
+
+# Debounce before re-rendering the underlying-layers image after a pan/zoom,
+# so rapid extent changes don't spawn dozens of render jobs per second.
+_RENDER_DEBOUNCE_MS = 80
+# The divider's handle: a 28 px disc with two 12 px chevrons in the light
+# theme's ink (the disc is always white, whatever the QGIS theme).
+_GRIP_PX = 28
+_GRIP_GLYPH_PX = 12
+_GRIP_INK = FIXED_INK
+_DIVIDER_HALO_ALPHA = 180
+# How long the status-bar hint stays up once the comparison starts.
+_ESC_HINT_DURATION_MS = 4000
+# The Result and Original labels at the top of the line: a dark pill with
+# white words, the same on every map and in both QGIS themes.
+_SIDE_LABEL_FONT_PX = 11
+_SIDE_LABEL_PAD_X = 8
+_SIDE_LABEL_PAD_Y = 3
+_SIDE_LABEL_GAP_PX = 8
+# Keyboard steps of the divider, in canvas pixels (Shift takes the big one).
+_KEY_STEP_PX = 10
+_KEY_STEP_BIG_PX = 60
 
 
 def _is_visible_raster(layer) -> bool:
-    """The swipe accepts any visible raster (AI-Edit output or not)."""
+    """A visible AI Edit result. Compare shows the Original under a result,
+    so a basemap picked in the Layers panel is no target: it used to become
+    one, and the whole map turned into a split of the imagery against
+    nothing."""
     if not isinstance(layer, QgsRasterLayer):
         return False
     node = QgsProject.instance().layerTreeRoot().findLayer(layer.id())
-    return node is not None and node.isVisible()
+    if node is None or not node.isVisible():
+        return False
+    return any(other.id() == layer.id() for _node, other in _iter_ai_edit_rasters())
 
 
 def _iter_ai_edit_rasters() -> list:
@@ -51,11 +81,21 @@ def _iter_ai_edit_rasters() -> list:
     return pairs
 
 
+def _ai_edit_layer_ids() -> set:
+    """Ids of every layer under the AI-Edit group, of any type."""
+    from ..layer_groups import AI_EDIT_GROUP_NAME
+
+    group = QgsProject.instance().layerTreeRoot().findGroup(AI_EDIT_GROUP_NAME)
+    if group is None:
+        return set()
+    return {node.layerId() for node in group.findLayers()}
+
+
 def _resolve_swipe_target() -> tuple:
     """The raster the swipe should compare, plus whether it is currently
     hidden and must be re-shown to arm.
 
-    The active layer wins when it is a visible raster. Otherwise fall back to
+    The active layer wins when it is a visible AI Edit result. Otherwise fall back to
     the newest AI-Edit result: tools routinely leave a VECTOR layer active
     (Vectorize even hides the source raster), which used to permanently grey
     out Before/After until the user manually re-picked a raster - the
@@ -137,7 +177,10 @@ class _SwipeOverlay(QgsMapCanvasItem):
         if self._top_layer is None:
             self._underlying_layers = []
             return
-        ai_edit_ids = {layer.id() for _node, layer in _iter_ai_edit_rasters()}
+        # Everything under the AI-Edit group, vectors included: the polygons
+        # Vectorize traced from a result sat on the Original side, so the
+        # "before" showed the edit's own shapes.
+        ai_edit_ids = _ai_edit_layer_ids()
         under = [
             lyr for lyr in self._canvas.layers()
             if lyr != self._top_layer and lyr.id() not in ai_edit_ids
@@ -172,6 +215,15 @@ class _SwipeOverlay(QgsMapCanvasItem):
         """Set the divider X (in widget coords) and request a repaint."""
         self._x_pos = max(0, int(x))
         self._safe_update_canvas()
+
+    def nudge_divider(self, dx: int) -> None:
+        """Move the divider by ``dx`` pixels, kept on the result's footprint
+        so a run of key presses never parks it off the image."""
+        bounds = self._top_layer_pixel_bounds()
+        x = (self._x_pos if self._x_pos >= 0 else self._canvas.width() // 2) + int(dx)
+        if bounds is not None:
+            x = max(bounds.left(), min(x, bounds.right()))
+        self.set_divider(x)
 
     def cancel_pending_render(self) -> None:
         """Cancel the in-flight render without dropping the cached image.
@@ -339,16 +391,72 @@ class _SwipeOverlay(QgsMapCanvasItem):
                 painter.drawImage(0, 0, self._image)
                 painter.restore()
 
-        # Divider line, scoped to the raster's vertical span only.
+        # Divider line, scoped to the raster's vertical span only: a white
+        # core on a dark halo so it reads on any imagery.
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        halo_pen = QPen(QColor(0, 0, 0, 180))
+        halo = QColor(Qt.GlobalColor.black)
+        halo.setAlpha(_DIVIDER_HALO_ALPHA)
+        halo_pen = QPen(halo)
         halo_pen.setWidth(4)
         painter.setPen(halo_pen)
         painter.drawLine(x_div, y_top, x_div, y_bot)
-        core_pen = QPen(QColor("#FFFFFF"))
+        core_pen = QPen(QColor(Qt.GlobalColor.white))
         core_pen.setWidth(2)
         painter.setPen(core_pen)
         painter.drawLine(x_div, y_top, x_div, y_bot)
+        self._paint_grip(painter, x_div, (y_top + y_bot) / 2.0)
+        self._paint_side_labels(painter, x_div, bounds)
+
+    @staticmethod
+    def _paint_side_labels(painter: QPainter, x: float, bounds: QRect) -> None:
+        """Name each side at the top of the line, Result on the left and
+        Original on the right: the split alone did not say which half was
+        which. A label that would leave the result's footprint (the line
+        near an edge) is left out rather than drawn over the map around it."""
+        font = QFont(painter.font())
+        font.setPixelSize(_SIDE_LABEL_FONT_PX)
+        font.setWeight(QFont.Weight.DemiBold)
+        painter.setFont(font)
+        metrics = QFontMetrics(font)
+        height = _SIDE_LABEL_FONT_PX + 2 * _SIDE_LABEL_PAD_Y
+        top = bounds.top() + _SIDE_LABEL_GAP_PX
+        if top + height > bounds.bottom():
+            return
+        pill = QColor(Qt.GlobalColor.black)
+        pill.setAlpha(_DIVIDER_HALO_ALPHA)
+        for text, on_left in (
+            (get_export_copy("widgets.swipe_panel.result_side", tr("Result")), True),
+            (get_export_copy("widgets.swipe_panel.original_side", tr("Original")), False),
+        ):
+            width = metrics.horizontalAdvance(text) + 2 * _SIDE_LABEL_PAD_X
+            left = x - _SIDE_LABEL_GAP_PX - width if on_left else x + _SIDE_LABEL_GAP_PX
+            if left < bounds.left() or left + width > bounds.right():
+                continue
+            rect = QRectF(left, top, width, height)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(pill)
+            painter.drawRoundedRect(rect, height / 2.0, height / 2.0)
+            painter.setPen(QPen(QColor(Qt.GlobalColor.white)))
+            painter.drawText(rect, int(Qt.AlignmentFlag.AlignCenter), text)
+
+    @staticmethod
+    def _paint_grip(painter: QPainter, x: float, y: float) -> None:
+        """A round handle on the divider: a white disc on the same halo, two
+        chevrons in the dark ink, so the line reads as something to drag."""
+        radius = _GRIP_PX / 2.0
+        if radius <= 0:
+            return
+        halo = QColor(Qt.GlobalColor.black)
+        halo.setAlpha(_DIVIDER_HALO_ALPHA)
+        painter.setPen(QPen(halo, 1.5))
+        painter.setBrush(QColor(Qt.GlobalColor.white))
+        painter.drawEllipse(QPointF(x, y), radius, radius)
+        ink = qcolor(_GRIP_INK)
+        glyph = _GRIP_GLYPH_PX
+        for name, dx in (("chevron_left", -glyph + 2), ("chevron_right", -2)):
+            pixmap = render_pixmap(name, ink, glyph, 2.0)
+            painter.drawPixmap(QRectF(x + dx, y - glyph / 2.0, glyph, glyph), pixmap,
+                               QRectF(pixmap.rect()))
 
 
 class _SwipeSignals(QObject):
@@ -358,9 +466,9 @@ class _SwipeSignals(QObject):
 class _SwipeMapTool(QgsMapTool):
     """QgsMapTool that drives the swipe overlay from mouse position.
 
-    Left-button drag = move the divider, full stop. To pan without
-    leaving swipe mode, use middle-mouse drag (handled natively by
-    QgsMapCanvas). Press Esc to exit swipe.
+    Left-button drag or the arrow keys move the divider. To pan without
+    leaving the comparison, use middle-mouse drag (handled natively by
+    QgsMapCanvas). Esc ends the comparison.
     """
 
     def __init__(self, canvas, overlay: _SwipeOverlay, on_overlay_click=None):
@@ -406,10 +514,37 @@ class _SwipeMapTool(QgsMapTool):
             self.signals.escape_pressed.emit()
             e.accept()
             return
+        # The keyboard way to move the line: arrows step it, Shift steps
+        # further, Home and End jump to the result's edges.
+        step = self._key_step(e)
+        if step is not None:
+            self._overlay.nudge_divider(step)
+            # QgsMapCanvas reads it backwards: a map tool claims a key by
+            # IGNORING it. Accepting let the canvas pan on the same arrow,
+            # so the image slid away under the line it was meant to move.
+            e.ignore()
+            return
         # Space used to toggle a pan mode here; it bugged the swipe state
         # and middle-mouse drag (handled natively by QgsMapCanvas) covers
         # the same use case more reliably.
         super().keyPressEvent(e)
+
+    @staticmethod
+    def _key_step(e):
+        """The divider move a key asks for, or None for any other key.
+        Home and End answer with a step big enough to reach the edge."""
+        key = e.key()
+        big = bool(e.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+        step = _KEY_STEP_BIG_PX if big else _KEY_STEP_PX
+        if key == Qt.Key.Key_Left:
+            return -step
+        if key == Qt.Key.Key_Right:
+            return step
+        if key == Qt.Key.Key_Home:
+            return -100000
+        if key == Qt.Key.Key_End:
+            return 100000
+        return None
 
     def canvasPressEvent(self, e) -> None:  # noqa: N802 - Qt signature
         if e.button() != Qt.MouseButton.LeftButton:
@@ -458,17 +593,17 @@ class _SwipeMapTool(QgsMapTool):
 class SwipeController(QObject):
     """Headless controller: arm or disarm the swipe map tool on the canvas.
 
-    There is no dock panel. The user toggles the swipe via the footer
-    Before/After button. The swipe target is the QGIS Layers panel's
-    active layer (must be a visible AI-Edit output); picking a different
-    AI-Edit layer while the swipe is on retargets it live. Press Esc on
-    the canvas to disarm.
+    There is no dock panel. The user toggles the comparison with the
+    Compare button under a result. The swipe target is the QGIS Layers
+    panel's active layer (must be a visible AI-Edit output); picking a
+    different AI-Edit layer while the swipe is on retargets it live. Press
+    Esc on the canvas to end it.
     """
 
     activated = pyqtSignal()
     deactivated = pyqtSignal()
-    # True when the current iface.activeLayer() is a swipeable AI-Edit
-    # output. The dock button uses this to enable/disable itself.
+    # True when a swipeable AI-Edit result exists (the active one, else the
+    # newest). The Compare button uses this to enable/disable itself.
     eligibility_changed = pyqtSignal(bool)
 
     def __init__(self, parent: QObject | None = None) -> None:
@@ -488,6 +623,11 @@ class SwipeController(QObject):
         # The layerTreeRoot the eligibility tracker is bound to (project
         # open/clear replaces the root, so disconnect must target this one).
         self._eligibility_root = None
+        # One pass per burst: opening a project fires addedChildren and
+        # visibilityChanged once per node, and each pass walks the tree.
+        self._eligibility_timer = QTimer(self)
+        self._eligibility_timer.setSingleShot(True)
+        self._eligibility_timer.timeout.connect(self._emit_eligibility_now)
         # Always-on eligibility tracker so the button enable state
         # follows the active layer even when the swipe is off.
         self._connect_eligibility_tracker()
@@ -546,6 +686,7 @@ class SwipeController(QObject):
 
         self._overlay = _SwipeOverlay(canvas)
         self._overlay.set_top_layer(target)
+        self._bring_result_into_view(canvas, target)
         self._tool = _SwipeMapTool(canvas, self._overlay, on_overlay_click)
         # Esc on the canvas disarms the swipe; the controller routes that
         # back into stop() so button state stays in sync.
@@ -569,7 +710,7 @@ class SwipeController(QObject):
         try:
             canvas.mapToolSet.connect(self._on_maptool_set)
             self._maptool_set_connected = True
-        except (TypeError, RuntimeError):
+        except (TypeError, RuntimeError):  # canvas gone: swipe runs without the tool-swap exit
             pass
 
         self._connect_active_layer_tracker()
@@ -579,9 +720,35 @@ class SwipeController(QObject):
             from qgis.utils import iface as _iface_msg
             if _iface_msg is not None:
                 _iface_msg.statusBarIface().showMessage(
-                    tr("Press Esc to exit Before/After mode"), 4000
+                    get_export_copy(
+                        "widgets.swipe_panel.compare_hint_short",
+                        tr("Drag the line or use the arrow keys. Esc stops."),
+                    ),
+                    get_export_dial("widgets.swipe_panel.esc_hint_duration_ms", _ESC_HINT_DURATION_MS),
                 )
         except Exception:  # nosec B110
+            pass
+
+    def _bring_result_into_view(self, canvas, target) -> None:
+        """A result panned out of sight left Compare with nothing to draw:
+        the button lit up and the map did not change. Show the whole result
+        first, and only then, so a result already on screen keeps the view."""
+        if self._overlay is None or self._overlay._top_layer_pixel_bounds() is not None:  # noqa: SLF001
+            return
+        try:
+            from qgis.core import QgsCoordinateTransform
+
+            extent = target.extent()
+            dest = canvas.mapSettings().destinationCrs()
+            if target.crs() != dest:
+                extent = QgsCoordinateTransform(
+                    target.crs(), dest, QgsProject.instance()
+                ).transformBoundingBox(extent)
+            if extent.isEmpty():
+                return
+            canvas.setExtent(extent.buffered(extent.width() * 0.05))
+            canvas.refresh()
+        except Exception:  # nosec B110 - the comparison still starts, just off-screen
             pass
 
     def _on_extents_changed(self) -> None:
@@ -591,10 +758,12 @@ class SwipeController(QObject):
         if self._overlay is not None:
             self._overlay.cancel_pending_render()
         if self._render_debounce_timer is not None:
-            self._render_debounce_timer.start(80)
+            self._render_debounce_timer.start(
+                get_export_dial("widgets.swipe_panel.render_debounce_ms", _RENDER_DEBOUNCE_MS)
+            )
 
     def _on_maptool_set(self, new_tool, _old=None) -> None:
-        # Disarm cleanly if anything else (Launch AI Edit, Mark up panel,
+        # Disarm cleanly if anything else (Launch AI Edit, the Draw panel,
         # an external plugin) takes the canvas. Avoids the "button stays
         # green but canvas is in pan mode" inconsistency. `_previous_tool`
         # gets cleared so stop() doesn't try to restore it on top of the
@@ -637,6 +806,13 @@ class SwipeController(QObject):
     def stop(self) -> None:
         if not self.is_active():
             return
+        # The start hint must not outlive the comparison it describes.
+        try:
+            from qgis.utils import iface as _iface_msg
+            if _iface_msg is not None:
+                _iface_msg.statusBarIface().clearMessage()
+        except Exception:  # nosec B110 - the status bar is cosmetic
+            pass
         try:
             from qgis.utils import iface as _iface
         except ImportError:  # pragma: no cover - non-QGIS env
@@ -652,12 +828,12 @@ class SwipeController(QObject):
         if canvas is not None and self._extents_connected:
             try:
                 canvas.extentsChanged.disconnect(self._on_extents_changed)
-            except (TypeError, RuntimeError):
+            except (TypeError, RuntimeError):  # already disconnected or canvas deleted
                 pass
         if canvas is not None and self._maptool_set_connected:
             try:
                 canvas.mapToolSet.disconnect(self._on_maptool_set)
-            except (TypeError, RuntimeError):
+            except (TypeError, RuntimeError):  # already disconnected or canvas deleted
                 pass
         self._destroy_debounce_timer()
         self._extents_connected = False
@@ -670,14 +846,14 @@ class SwipeController(QObject):
             # pan/zoom debounce is the reproducer).
             try:
                 self._overlay.cancel_pending_render()
-            except RuntimeError:
+            except RuntimeError:  # overlay already deleted by Qt
                 pass
             self._overlay.clear()
             try:
                 scene = canvas.scene() if canvas is not None else None
                 if scene is not None:
                     scene.removeItem(self._overlay)
-            except RuntimeError:
+            except RuntimeError:  # scene or overlay already deleted by Qt
                 pass
             # removeItem hands ownership back to Python; a QgsMapCanvasItem is
             # a QGraphicsItem, not a QObject, so dropping the reference here is
@@ -704,11 +880,11 @@ class SwipeController(QObject):
             # this controller and pins the plugin graph unless it is deleted.
             try:
                 tool.signals.escape_pressed.disconnect(self.stop)
-            except (RuntimeError, TypeError):
+            except (RuntimeError, TypeError):  # already disconnected or tool deleted
                 pass
             try:
                 tool.deleteLater()
-            except (RuntimeError, AttributeError):
+            except (RuntimeError, AttributeError):  # tool already deleted with the canvas
                 pass
         self._tool = None
         self._previous_tool = None
@@ -740,7 +916,7 @@ class SwipeController(QObject):
             if _iface is not None:
                 _iface.currentLayerChanged.connect(self._on_active_layer_changed)
                 self._iface_layer_connected = True
-        except (ImportError, TypeError, RuntimeError):
+        except (ImportError, TypeError, RuntimeError):  # no iface (headless): active-layer tracking is optional
             pass
 
     def _disconnect_active_layer_tracker(self) -> None:
@@ -750,7 +926,7 @@ class SwipeController(QObject):
             from qgis.utils import iface as _iface
             if _iface is not None:
                 _iface.currentLayerChanged.disconnect(self._on_active_layer_changed)
-        except (ImportError, TypeError, RuntimeError):
+        except (ImportError, TypeError, RuntimeError):  # already disconnected or iface gone
             pass
         self._iface_layer_connected = False
 
@@ -780,7 +956,7 @@ class SwipeController(QObject):
                 self._on_layers_will_be_removed
             )
             self._project_connected = True
-        except (TypeError, RuntimeError):
+        except (TypeError, RuntimeError):  # project gone: layer-removal tracking is optional
             pass
 
     def _disconnect_project_signals(self) -> None:
@@ -790,7 +966,7 @@ class SwipeController(QObject):
             QgsProject.instance().layersWillBeRemoved.disconnect(
                 self._on_layers_will_be_removed
             )
-        except (TypeError, RuntimeError):
+        except (TypeError, RuntimeError):  # already disconnected or project gone
             pass
         self._project_connected = False
 
@@ -807,7 +983,7 @@ class SwipeController(QObject):
             from qgis.utils import iface as _iface
             if _iface is not None:
                 _iface.currentLayerChanged.connect(self._emit_eligibility)
-        except (ImportError, TypeError, RuntimeError):
+        except (ImportError, TypeError, RuntimeError):  # no iface (headless): eligibility falls back to project signals
             pass
         try:
             project = QgsProject.instance()
@@ -817,7 +993,7 @@ class SwipeController(QObject):
             # tools_footer._on_project_loaded), so rebind on project lifecycle.
             project.readProject.connect(self._on_project_loaded)
             project.cleared.connect(self._on_project_loaded)
-        except (TypeError, RuntimeError):
+        except (TypeError, RuntimeError):  # project gone: eligibility then follows the active layer only
             pass
         self._connect_eligibility_root()
 
@@ -847,7 +1023,7 @@ class SwipeController(QObject):
         ):
             try:
                 signal.disconnect(self._emit_eligibility)
-            except (TypeError, RuntimeError):
+            except (TypeError, RuntimeError):  # old layer tree already gone or never connected
                 pass
         self._eligibility_root = None
 
@@ -862,7 +1038,7 @@ class SwipeController(QObject):
             from qgis.utils import iface as _iface
             if _iface is not None:
                 _iface.currentLayerChanged.disconnect(self._emit_eligibility)
-        except (ImportError, TypeError, RuntimeError):
+        except (ImportError, TypeError, RuntimeError):  # never connected or iface gone
             pass
         # One try per signal: batching them meant the first raise (a signal
         # already disconnected) skipped every later one.
@@ -879,9 +1055,12 @@ class SwipeController(QObject):
             ):
                 try:
                     signal.disconnect(slot)
-                except (TypeError, RuntimeError):
+                except (TypeError, RuntimeError):  # never connected or project gone
                     pass
         self._disconnect_eligibility_root()
 
     def _emit_eligibility(self, *_args) -> None:
+        self._eligibility_timer.start(0)
+
+    def _emit_eligibility_now(self) -> None:
         self.eligibility_changed.emit(self.can_swipe_now())

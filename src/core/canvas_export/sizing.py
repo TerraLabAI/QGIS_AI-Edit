@@ -1,8 +1,20 @@
 from __future__ import annotations
 
+import math
+
 from qgis.core import QgsMapSettings, QgsRectangle
 
 from ..config_store import ServerDialMap, get_export_dial
+
+# Private names are listed too: other modules import them from here.
+__all__ = [
+    "_adjust_extent_to_aspect",
+    "_aspect_dims",
+    "_budget_dims",
+    "_INPUT_BUDGET_HEADROOM",
+    "_RESOLUTION_TARGET_PX",
+    "get_zone_pixel_size",
+]
 
 # Map user-facing resolution labels to target pixel counts (longest side).
 # Per-entry server override via export-config `resolution_targets_px`.
@@ -15,6 +27,8 @@ def _aspect_dims(
     extent: QgsRectangle, longest: int, align: int, max_dim: int
 ) -> tuple[int, int]:
     """Derive (out_w, out_h) from the longest side and the extent's aspect."""
+    max_dim = _aligned_limit(extent, align, max_dim)
+    longest = min(max_dim, max(align, longest))
     ext_ratio = extent.width() / extent.height()
     if ext_ratio >= 1:
         out_w = longest
@@ -46,6 +60,7 @@ def _budget_dims(
     A small headroom keeps the input >= the output; the long side is capped at
     ``max_dim`` proportionally so the aspect is preserved even when clamped.
     """
+    max_dim = _aligned_limit(extent, align, max_dim)
     ext_ratio = extent.width() / extent.height()
     headroom = get_export_dial("input_budget_headroom", _INPUT_BUDGET_HEADROOM)
     budget = (float(ref) * headroom) ** 2
@@ -97,7 +112,8 @@ def get_zone_pixel_size(
     canvas_extent = map_settings.extent()
     canvas_size = map_settings.outputSize()
 
-    if canvas_extent.width() <= 0 or canvas_extent.height() <= 0:
+    dimensions = (canvas_extent.width(), canvas_extent.height(), extent.width(), extent.height())
+    if not all(math.isfinite(v) and v > 0 for v in dimensions):
         return (0, 0)
 
     px_per_map_unit_x = canvas_size.width() / canvas_extent.width()
@@ -107,3 +123,12 @@ def get_zone_pixel_size(
         round(abs(extent.width() * px_per_map_unit_x)),
         round(abs(extent.height() * px_per_map_unit_y)),
     )
+
+
+def _aligned_limit(extent, align, max_dim):
+    """Reject invalid geometry/config before QSize allocation or division."""
+    if not all(math.isfinite(v) and v > 0 for v in (extent.width(), extent.height())):
+        raise ValueError("Invalid extent: width and height must be positive")
+    if align <= 0 or max_dim < align:
+        raise ValueError("Invalid pixel alignment")
+    return (max_dim // align) * align

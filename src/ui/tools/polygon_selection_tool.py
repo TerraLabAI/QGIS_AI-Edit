@@ -28,7 +28,9 @@ from qgis.PyQt.QtGui import QColor, QCursor, QKeySequence
 from qgis.PyQt.QtWidgets import QMenu
 
 from ...core import qt_compat as QtC
+from ...core.config_store import get_export_copy
 from ...core.i18n import tr
+from ..dock.design_tokens import GREEN, qcolor
 from .click_thresholds import is_near_point, is_step_too_small
 from .selection_map_tool import _ZoneActionBadge, _ZoneDeleteBadge, supported_ratios
 
@@ -37,10 +39,16 @@ from .selection_map_tool import _ZoneActionBadge, _ZoneDeleteBadge, supported_ra
 # Segmentation's brand blue.
 _ZONE_BLUE = QColor(65, 105, 225)
 _DRAW_LINE = QColor(65, 105, 225, 210)
-_TRANSPARENT = QColor(0, 0, 0, 0)
-# "Click here to close" highlight on the first vertex, matching the markup
-# Line tool's close affordance so both tools share one drawing grammar.
-_CLOSE_GREEN = QColor(34, 197, 94)
+_TRANSPARENT = QColor(Qt.GlobalColor.transparent)
+# "Click here to close" highlight on the first vertex: the design system's
+# "done" green. The markup Line tool imports it, so both tools keep one
+# drawing grammar.
+_CLOSE_GREEN = qcolor(GREEN)
+
+# Redraw budget for the cursor preview, in milliseconds. Windows delivers
+# mouse moves far faster than the canvas can repaint the fill and the dashed
+# edge, and that backlog is what makes the next click land late.
+_MOVE_REDRAW_MS = 16
 
 
 def _repair_polygon(geom: QgsGeometry) -> QgsGeometry | None:
@@ -149,10 +157,6 @@ class PolygonSelectionTool(QgsMapTool):
     # to leave the tool to move around. Well above MIN_STEP_PX, so an ordinary
     # click can never turn into a pan.
     PAN_DRAG_PX = 8
-    # Redraw budget for the cursor preview, in milliseconds. Windows delivers
-    # mouse moves far faster than the canvas can repaint the fill and the
-    # dashed edge, and that backlog is what makes the next click land late.
-    MOVE_REDRAW_MS = 16
 
     def __init__(self, canvas):
         super().__init__(canvas)
@@ -183,7 +187,7 @@ class PolygonSelectionTool(QgsMapTool):
         # pans the map (see PAN_DRAG_PX); a click drops a vertex on release.
         self._press_pos = None
         # Cursor position waiting to be drawn, and the one already drawn.
-        # canvasMoveEvent stores, the timer flushes (see MOVE_REDRAW_MS).
+        # canvasMoveEvent stores, the timer flushes (see _MOVE_REDRAW_MS).
         self._pending_move_pos = None
         self._drawn_move_pos = None
         self._move_timer = QTimer(self)
@@ -304,7 +308,7 @@ class PolygonSelectionTool(QgsMapTool):
         if self._move_timer.isActive():
             return
         self._draw_cursor_preview(self._pending_move_pos)
-        self._move_timer.start(self.MOVE_REDRAW_MS)
+        self._move_timer.start(_MOVE_REDRAW_MS)
 
     def _drag_beats_pan_threshold(self, pos) -> bool:
         """True when the pointer has left the press point far enough that this
@@ -346,7 +350,7 @@ class PolygonSelectionTool(QgsMapTool):
         if pos == self._drawn_move_pos:
             return
         self._draw_cursor_preview(pos)
-        self._move_timer.start(self.MOVE_REDRAW_MS)
+        self._move_timer.start(_MOVE_REDRAW_MS)
 
     def canvasReleaseEvent(self, event):
         if event.button() == QtC.RightButton:
@@ -445,7 +449,7 @@ class PolygonSelectionTool(QgsMapTool):
             marker = self._markers.pop()
             try:
                 self._canvas.scene().removeItem(marker)
-            except (RuntimeError, AttributeError):
+            except (RuntimeError, AttributeError):  # marker or canvas already deleted by Qt
                 pass
         self._restyle_markers()
         self._draw_edges()
@@ -486,7 +490,7 @@ class PolygonSelectionTool(QgsMapTool):
             marker.setIconType(QtC.VertexIconCircle)
         marker.setColor(_ZONE_BLUE)
         try:
-            marker.setFillColor(QColor(255, 255, 255))
+            marker.setFillColor(QColor(Qt.GlobalColor.white))
         except (AttributeError, TypeError):
             pass  # older builds: outline-only marker is still clearly visible
         marker.setPenWidth(3)
@@ -527,7 +531,7 @@ class PolygonSelectionTool(QgsMapTool):
         for m in self._markers:
             try:
                 self._canvas.scene().removeItem(m)
-            except (RuntimeError, AttributeError):
+            except (RuntimeError, AttributeError):  # marker or canvas already deleted by Qt
                 pass
         self._markers = []
         self._can_close = False
@@ -549,9 +553,9 @@ class PolygonSelectionTool(QgsMapTool):
             self.zone_invalid.emit(
                 "ZONE_INVALID_POLYGON",
                 tr(
-                    "This shape is too thin, too small, or crosses itself. "
-                    "Draw it again."
-                ),
+                        "This shape is too thin, too small, or crosses itself. "
+                        "Draw it again."
+                    ),
             )
             return
 
@@ -627,7 +631,10 @@ class PolygonSelectionTool(QgsMapTool):
         # the QGIS main-window palette or stylesheet on Windows. deleteLater
         # because the parent would otherwise keep one menu per right-click.
         menu = QMenu(self._canvas)
-        menu.addAction(tr("Clear zone"), self._on_delete_zone)
+        menu.addAction(
+            get_export_copy("widgets.polygon_selection_tool.clear_zone_menu", tr("Clear zone")),
+            self._on_delete_zone,
+        )
         menu.exec(pos)
         menu.deleteLater()
 
@@ -690,7 +697,7 @@ class PolygonSelectionTool(QgsMapTool):
             if scene is not None:
                 try:
                     scene.removeItem(badge)
-                except RuntimeError:
+                except RuntimeError:  # badge already deleted by Qt
                     pass
             setattr(self, attr, None)
         # The three persistent rubber bands are created in __init__ and only
@@ -704,7 +711,7 @@ class PolygonSelectionTool(QgsMapTool):
             if scene is not None:
                 try:
                     scene.removeItem(band)
-                except RuntimeError:
+                except RuntimeError:  # band already deleted by Qt
                     pass
             setattr(self, attr, None)
 
@@ -763,12 +770,20 @@ class PolygonSelectionTool(QgsMapTool):
             return
         if compare and self._compare_badge is None:
             self._compare_badge = _ZoneActionBadge(
-                self.canvas(), "compare", tr("Compare")
+                self.canvas(),
+                "compare",
+                get_export_copy("widgets.polygon_selection_tool.compare_badge_label", tr("Compare")),
             )
-            self._compare_badge.setToolTip(tr("Before / after"))
+            # The dock's Compare button sentence, not a second name for it.
+            self._compare_badge.setToolTip(get_export_copy(
+                "widgets.polygon_selection_tool.compare_tooltip",
+                tr("Swipe between the original map and this result"),
+            ))
         if vectorize and self._vectorize_badge is None:
             self._vectorize_badge = _ZoneActionBadge(
-                self.canvas(), "vectorize", tr("Vectorize")
+                self.canvas(),
+                "vectorize",
+                get_export_copy("widgets.polygon_selection_tool.vectorize_badge_label", tr("Vectorize")),
             )
         top_right = self._badge_anchor()
         # Lay the visible pills out leftward from the corner: Compare nearest
@@ -817,9 +832,18 @@ class PolygonSelectionTool(QgsMapTool):
         """
         if self._compare_badge is not None:
             self._compare_badge.set_active(active)
-            self._compare_badge.setToolTip(
-                tr("Click to exit the comparison") if active else tr("Before / after")
-            )
+            if active:
+                exit_tip = get_export_copy(
+                    "widgets.polygon_selection_tool.end_comparison_tooltip",
+                    tr("Click to end the comparison"),
+                )
+                self._compare_badge.setToolTip(exit_tip)
+            else:
+                before_after_tip = get_export_copy(
+                    "widgets.polygon_selection_tool.compare_tooltip",
+                    tr("Swipe between the original map and this result"),
+                )
+                self._compare_badge.setToolTip(before_after_tip)
         self._compare_active = bool(active)
         self._sync_delete_badge_with_compare()
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 
-from qgis.PyQt.QtCore import QEvent, QSize, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import QEvent, QSettings, QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QFont, QPixmap
 from qgis.PyQt.QtWidgets import (
     QApplication,
@@ -27,7 +27,7 @@ from qgis.PyQt.QtWidgets import (
 from ..core import qt_compat as QtC
 from ..core import telemetry
 from ..core import telemetry_events as te
-from ..core.config_store import get_export_dial
+from ..core.config_store import get_export_copy, get_export_dial, get_export_dial_ratio
 from ..core.i18n import tr
 from ..core.reference_image_store import (
     ReferenceImage,
@@ -35,7 +35,8 @@ from ..core.reference_image_store import (
     ReferenceImageStoreError,
     max_references,
 )
-from .dock.style import FOCUS_RING
+from .dock import design_tokens as tokens
+from .icons import icon_for, pixmap_for
 from .layer_renderer import (
     layer_misses_zone,
     load_transient_layers,
@@ -61,6 +62,10 @@ _REMOVE_BTN_PX = 24
 # three references and only learn on Generate that two were never allowed.
 FREE_TIER_MAX_REFERENCES = 1
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+# How much of the available screen the modal preview may fill.
+_PREVIEW_MAX_SCREEN_RATIO = 0.8
+# Auto-dismiss delay for a temp error shown under the strip.
+_ERROR_CLEAR_MS = 4000
 
 
 def free_tier_max_references() -> int:
@@ -86,16 +91,16 @@ def reference_add_reason(store: ReferenceImageStore, free_tier: bool) -> str:
 
 
 def reference_preview_title(record: ReferenceImage | None, is_markup: bool) -> str:
-    """Window title for a reference preview: the source name, with a Mark up
-    tag when the image is the Mark up composite."""
+    """Window title for a reference preview: the source name, or "Your
+    drawing" when the image is the Draw composite."""
     if record is None:
-        return tr("Reference image")
+        return get_export_copy("widgets.reference_images_widget.reference_image", tr("Reference image"))
     if is_markup:
-        return tr("Mark up reference")
+        return get_export_copy("widgets.reference_images_widget.draw_reference", tr("Your drawing"))
     name = (record.source_filename or "").strip()
     if name:
         return tr("Reference image: {name}").format(name=name)
-    return tr("Reference image")
+    return get_export_copy("widgets.reference_images_widget.reference_image", tr("Reference image"))
 
 
 def open_reference_preview(anchor: QWidget, image_path: str, title: str) -> None:
@@ -135,41 +140,78 @@ def _missing_shapefile_companions(shp_path: str) -> list[str]:
     return missing
 
 
+_LAST_DIR_KEY = "ai_edit/reference_last_dir"
+
+
+def _hard_cap_message() -> str:
+    return tr("Maximum {n} reference images reached").format(n=max_references())
+
+
+def _partial_cap_message(added: int, total: int) -> str:
+    """The ceiling hit halfway through a multi-file drop: say how many made
+    it, not only that a maximum exists."""
+    if added <= 0 or total <= 1:
+        return _hard_cap_message()
+    return tr("Added {added} of {total}. The limit is {n} references.").format(
+        added=added, total=total, n=max_references()
+    )
+
+
+def _failures_message(failures: list[tuple[str, str]]) -> str:
+    """One readable line for the files or layers that were not added, with
+    their names: a bare "Failed to decode image" never said which one."""
+    if len(failures) == 1:
+        name, reason = failures[0]
+        return tr("Could not add {name}. {reason}").format(name=name, reason=reason)
+    names = ", ".join(name for name, _reason in failures)
+    return tr("{n} were not added: {names}. {reason}").format(
+        n=len(failures), names=names, reason=failures[0][1]
+    )
+
+
 _THUMB_STYLE = (
-    "QFrame { background: rgba(0, 0, 0, 0.0);"
-    " border: 1px solid rgba(128, 128, 128, 0.3); border-radius: 4px; }"
-    f"QFrame:focus {{ border: 2px solid {FOCUS_RING}; }}"
+    f"QFrame {{ background: {tokens.INSET};"
+    f" border: 1px solid {tokens.LINE}; border-radius: {tokens.RADIUS_CONTROL}px; }}"
+    f"QFrame:focus {{ border: 2px solid {tokens.ACCENT_BORDER}; }}"
 )
 
 # No margin: a QSS margin trims what is painted and not what is clickable, and
 # this button removes the reference. It used to leave 176 of its 576 px2
 # unpainted but still destructive, so the circle now fills the whole box.
 _REMOVE_BTN_STYLE = (
-    "QToolButton { background: rgba(0, 0, 0, 0.55); color: white;"
-    " border: none; border-radius: 12px; font-weight: bold; font-size: 13px;"
-    " margin: 0px; }"
-    "QToolButton:hover { background: rgba(211, 47, 47, 0.85); }"
+    f"QToolButton {{ background: {tokens.SURFACE}; border: 1px solid {tokens.LINE_STRONG};"
+    " border-radius: 12px; margin: 0px; padding: 0px; }"
+    f"QToolButton:hover {{ background: {tokens.RED_TINT}; border-color: {tokens.RED}; }}"
 )
 
+# The number tag's side: room for an 11 px digit.
+_NUMBER_BADGE_PX = 16
 _THUMB_BADGE_STYLE = (
-    "QLabel { background: rgba(0, 0, 0, 0.55); color: rgba(255, 255, 255, 0.9);"
-    " border: none; border-top-left-radius: 3px; border-bottom-right-radius: 3px;"
-    " font-size: 9px; font-weight: bold; padding: 0 2px; }"
+    f"QLabel {{ background: {tokens.SURFACE}; color: {tokens.INK};"
+    f" border: none; border-radius: {tokens.RADIUS_CHIP}px;"
+    f" font-size: {tokens.FONT_HINT}px; font-weight: bold; padding: 0 2px; }}"
 )
 
 
 class _ThumbWidget(QFrame):
-    """Single reference thumbnail with numbered badge and remove button."""
+    """Single reference thumbnail with numbered badge and remove button.
+
+    ``remove_overlay=False`` is the References panel card: the card carries
+    its own always-visible remove button, so the hover one would be a second
+    X on the same row. Delete on the focused thumbnail still removes, as its
+    accessible description promises."""
 
     remove_clicked = pyqtSignal(str)
     preview_requested = pyqtSignal(str)  # emits the image path
 
-    def __init__(self, record: ReferenceImage, index: int, parent=None):
+    def __init__(self, record: ReferenceImage, index: int, parent=None,
+                 remove_overlay: bool = True, whole_badge: bool = True):
         super().__init__(parent)
         self._ref_id = record.id
         self._image_path = record.path
         self._readonly = False
         self._hovered = False
+        self._remove_overlay = bool(remove_overlay)
         self.setFixedSize(_THUMB_BOX_PX, _THUMB_BOX_PX)
         self.setStyleSheet(_THUMB_STYLE)
         self.setCursor(QtC.PointingHandCursor)
@@ -180,8 +222,14 @@ class _ThumbWidget(QFrame):
         # for.
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.setAccessibleName(tr("Reference image {n}").format(n=index))
+        self.setToolTip(get_export_copy(
+            "widgets.reference_images_widget.thumb_preview_tooltip", tr("Preview")
+        ))
         self.setAccessibleDescription(
-            tr("Press Enter to preview it, Delete to remove it.")
+            get_export_copy(
+                "widgets.reference_images_widget.thumb_a11y_hint",
+                tr("Press Enter to preview it, Delete to remove it."),
+            )
         )
 
         self._pixmap_label = QLabel(self)
@@ -199,30 +247,42 @@ class _ThumbWidget(QFrame):
 
         # Number badge (top-left corner tag)
         self._badge = QLabel(str(index), self)
-        self._badge.setFixedSize(14, 14)
+        self._badge.setFixedSize(_NUMBER_BADGE_PX, _NUMBER_BADGE_PX)
         self._badge.setAlignment(QtC.AlignCenter)
         self._badge.setStyleSheet(_THUMB_BADGE_STYLE)
         font = QFont()
-        font.setPixelSize(9)
+        font.setPixelSize(tokens.FONT_HINT)
         font.setBold(True)
         self._badge.setFont(font)
         self._badge.move(2, 2)
+        # The Draw composite is not a numbered reference (it travels on its
+        # own channel), so it carries no number the prompt could name.
+        self._badge.setVisible(index > 0)
 
-        # "Whole layer" (bottom-left): the layer missed the zone, so it was
-        # rendered at its own extent and travels unaligned. Text, not a hue.
+        # Whole-layer mark (bottom-left): the layer missed the zone, so it was
+        # rendered at its own extent and travels unaligned. A glyph on the
+        # badge ground with the sentence as its tooltip: the old "Whole layer"
+        # words were wider than the 56 px tile and read "Whole lay". The
+        # panel card says it in words, so it asks for no badge.
         self._whole_badge = None
-        if getattr(record, "whole_layer", False):
-            self._whole_badge = QLabel(tr("Whole layer"), self)
+        if whole_badge and getattr(record, "whole_layer", False):
+            self._whole_badge = QLabel(self)
+            self._whole_badge.setFixedSize(_NUMBER_BADGE_PX, _NUMBER_BADGE_PX)
+            self._whole_badge.setAlignment(QtC.AlignCenter)
             self._whole_badge.setStyleSheet(_THUMB_BADGE_STYLE)
-            self._whole_badge.setFont(font)
-            self._whole_badge.setToolTip(tr(
-                "This layer does not cover your zone, so it is sent whole, "
-                "not aligned to it."
-            ))
-            self._whole_badge.adjustSize()
-            self._whole_badge.move(
-                2, _THUMB_BOX_PX - self._whole_badge.height() - 2
+            self._whole_badge.setPixmap(
+                pixmap_for(self._whole_badge, "expand", 10, tokens.qcolor(tokens.INK))
             )
+            whole_tip = get_export_copy(
+                "widgets.reference_images_widget.whole_layer_tooltip",
+                tr(
+                    "This layer does not cover your zone, so it is sent whole, "
+                    "not aligned to it."
+                ),
+            )
+            self._whole_badge.setToolTip(whole_tip)
+            self.setToolTip(whole_tip)
+            self._whole_badge.move(2, _THUMB_BOX_PX - _NUMBER_BADGE_PX - 2)
 
         # Remove button (top-right) - hidden by default, revealed on hover or
         # while the thumbnail has focus, so the strip looks clean and a keyboard
@@ -230,7 +290,7 @@ class _ThumbWidget(QFrame):
         # chain: a hidden widget cannot hold focus, and Delete on the focused
         # thumbnail runs the same removal.
         self._remove_btn = QToolButton(self)
-        self._remove_btn.setText("×")
+        self._remove_btn.setIcon(icon_for(self._remove_btn, "close", 12, tokens.qcolor(tokens.INK)))
         self._remove_btn.setFixedSize(_REMOVE_BTN_PX, _REMOVE_BTN_PX)
         self._remove_btn.setStyleSheet(_REMOVE_BTN_STYLE)
         self._remove_btn.setCursor(QtC.PointingHandCursor)
@@ -238,7 +298,9 @@ class _ThumbWidget(QFrame):
         self._remove_btn.setAccessibleName(
             tr("Remove reference image {n}").format(n=index)
         )
-        self._remove_btn.setToolTip(tr("Remove this reference image"))
+        self._remove_btn.setToolTip(
+            get_export_copy("widgets.reference_images_widget.remove_tooltip", tr("Remove this reference image"))
+        )
         self._remove_btn.move(_THUMB_BOX_PX - _REMOVE_BTN_PX, 0)
         self._remove_btn.setVisible(False)
         self._remove_btn.clicked.connect(
@@ -253,7 +315,9 @@ class _ThumbWidget(QFrame):
 
     def _update_remove_visible(self) -> None:
         self._remove_btn.setVisible(
-            not self._readonly and (self._hovered or self.hasFocus())
+            self._remove_overlay
+            and not self._readonly
+            and (self._hovered or self.hasFocus())
         )
 
     def enterEvent(self, event):  # noqa: N802
@@ -326,7 +390,8 @@ class _ImagePreviewDialog(QDialog):
 
     def __init__(self, image_path: str, parent=None, title: str | None = None):
         super().__init__(parent)
-        self.setWindowTitle(title or tr("Reference image"))
+        default_title = get_export_copy("widgets.reference_images_widget.reference_image", tr("Reference image"))
+        self.setWindowTitle(title or default_title)
         self.setModal(True)
 
         pixmap = QPixmap(image_path)
@@ -339,8 +404,11 @@ class _ImagePreviewDialog(QDialog):
         # main monitor and opens with its edges off-screen.
         screen = self.screen() or QApplication.primaryScreen()
         avail = screen.availableGeometry() if screen is not None else None
-        max_w = int(avail.width() * 0.8) if avail is not None else 1280
-        max_h = int(avail.height() * 0.8) if avail is not None else 800
+        screen_ratio = get_export_dial_ratio(
+            "widgets.reference_images_widget.preview_max_screen_ratio", _PREVIEW_MAX_SCREEN_RATIO
+        )
+        max_w = int(avail.width() * screen_ratio) if avail is not None else 1280
+        max_h = int(avail.height() * screen_ratio) if avail is not None else 800
         scaled = pixmap.scaled(
             QSize(max_w, max_h),
             QtC.KeepAspectRatio,
@@ -408,9 +476,10 @@ class ReferenceImagesWidget(QWidget):
         # Parented QTimer for the 4 s "error cleared" auto-dismiss. Holding a
         # ref so we can stop it when the widget is destroyed first.
         self._error_clear_timer: QTimer | None = None
-        # Store id of the current Mark up composite, if any. Tracked so a new
-        # drawing replaces the previous one instead of stacking.
-        self._markup_ref_id: str | None = None
+        # Ids of the references added for the layers drawn above the picked
+        # layer (set_layers_above), so a new zone swaps them instead of
+        # stacking a second, misaligned copy.
+        self._above_ref_ids: list[str] = []
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -458,40 +527,47 @@ class ReferenceImagesWidget(QWidget):
 
     def clear(self) -> None:
         self._store.clear()
-        self._markup_ref_id = None
+        self._above_ref_ids = []
         self._refresh()
 
-    def set_markup_image(self, image, name: str = "Mark up") -> None:
-        """Add (or replace) the single Mark up composite reference - the user's
-        zone with their marks on top. Re-drawing replaces the previous one so
-        only one Mark up reference exists at a time."""
-        if image is None or image.isNull():
-            return
-        if self._markup_ref_id is not None:
-            self._store.remove(self._markup_ref_id)
-            self._markup_ref_id = None
-        cap = max_references()
-        if self._store.count() >= cap:
-            self._show_temp_error(
-                tr("Maximum {n} reference images reached").format(n=cap)
-            )
-            self._refresh()
-            return
-        try:
-            record = self._store.add_from_qimage(image, name)
-            self._markup_ref_id = record.id
-            # Flag it so the store ships it via the guidance channel, not as a
-            # context image.
-            self._store.mark_as_markup(record.id)
-        except ReferenceImageStoreError as err:
-            self._show_temp_error(str(err))
+    def set_layers_above(self, layers: list) -> int:
+        """Attach the layers drawn above the picked layer, one reference each.
+
+        The input image is the one layer picked in "Image to edit"; what the
+        user drew over it (polygons, labels, another raster) still guides the
+        edit, as references rendered at the zone (Yvann, 2026-09-18). Called
+        on every zone commit: the previous batch goes first, so a redrawn zone
+        never keeps copies cropped to the old one.
+
+        Added quietly up to the plan's limit: an automatic batch opens no
+        upsell and no error, and the user can remove any card. Returns how
+        many were added.
+        """
+        if self._readonly:
+            return 0
+        for ref_id in self._above_ref_ids:
+            self._store.remove(ref_id)
+        self._above_ref_ids = []
+        for layer in layers or []:
+            if self._store.count() >= self.add_limit():
+                break
+            try:
+                record = self._render_and_store([layer], layer.name())
+            except (ReferenceImageStoreError, RuntimeError):
+                continue
+            self._above_ref_ids.append(record.id)
         self._refresh()
+        return len(self._above_ref_ids)
 
     def clear_markup_image(self) -> None:
-        """Drop the Mark up composite reference, if present."""
-        if self._markup_ref_id is not None:
-            self._store.remove(self._markup_ref_id)
-            self._markup_ref_id = None
+        """Drop the Draw composite reference, if the store holds one. The
+        store is the one record of which image that is (the strip used to
+        keep a second id that nothing ever set)."""
+        markup = next(
+            (r for r in self._store.list() if self._store.is_markup(r.id)), None
+        )
+        if markup is not None:
+            self._store.remove(markup.id)
             self._refresh()
 
     def get_all_b64(self) -> list[str]:
@@ -514,6 +590,17 @@ class ReferenceImagesWidget(QWidget):
         adding more.
         """
         self._free_tier = free_tier
+
+    def is_free_tier(self) -> bool:
+        return self._free_tier
+
+    def add_limit(self) -> int:
+        """How many references this user may hold: the free-plan cap on the
+        free tier, the hard ceiling otherwise. What the References panel
+        states as "n of limit"."""
+        if self._free_tier:
+            return min(free_tier_max_references(), max_references())
+        return max_references()
 
     def _check_can_add(self) -> str:
         """Add gate for this strip's tier state; see reference_add_reason."""
@@ -566,25 +653,35 @@ class ReferenceImagesWidget(QWidget):
             self.upsell_requested.emit()
             return
         if reason == "hard_cap":
-            self._show_temp_error(
-                tr("Maximum {n} reference images reached").format(n=max_references())
-            )
+            self._show_temp_error(_hard_cap_message())
             return
         # Parent on the top-level window (the dock), not self: this widget is
         # hidden while the store is empty, and a hidden parent causes the file
         # picker to silently fail to show up on Windows.
         supported = tr(
-            "Supported files (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff "
-            "*.asc *.img *.vrt *.dem *.pdf *.shp *.gpkg *.geojson *.kml *.kmz)"
+                "Supported files (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff "
+                "*.asc *.img *.vrt *.dem *.pdf *.shp *.gpkg *.geojson *.kml *.kmz)"
+            )
+        all_files = tr("All files (*)")
+        file_filter = f"{supported};;{all_files}"
+        picker_title = get_export_copy(
+            "widgets.reference_images_widget.file_picker_title", tr("Select reference images or layers")
         )
-        file_filter = f"{supported};;{tr('All files (*)')}"
+        # Opens where the last pick came from: references tend to live in one
+        # project folder, and the process folder the picker used to open on
+        # is QGIS's install directory on Windows.
+        settings = QSettings()
+        start_dir = str(settings.value(_LAST_DIR_KEY, "") or "")
+        if start_dir and not os.path.isdir(start_dir):
+            start_dir = ""
         paths, _ = QFileDialog.getOpenFileNames(
             self.window(),
-            tr("Select reference images or layers"),
-            "",
+            picker_title,
+            start_dir,
             file_filter,
         )
         if paths:
+            settings.setValue(_LAST_DIR_KEY, os.path.dirname(paths[0]))
             self._add_paths(paths)
 
     # -- internal ----------------------------------------------------------
@@ -616,42 +713,41 @@ class ReferenceImagesWidget(QWidget):
         if self._readonly:
             return
         added = 0
-        error_shown = False
+        failures: list[tuple[str, str]] = []
+        stop = ""
         for layer in layers:
-            reason = self._check_can_add()
-            if reason == "free_limit":
-                self.upsell_requested.emit()
-                break
-            if reason == "hard_cap":
-                if not error_shown:
-                    self._show_temp_error(
-                        tr("Maximum {n} reference images reached").format(n=max_references())
-                    )
-                    error_shown = True
+            stop = self._check_can_add()
+            if stop != "ok":
                 break
             try:
                 self._render_and_store([layer], layer.name())
                 added += 1
             except ReferenceImageStoreError as err:
-                self._show_temp_error(str(err))
-                error_shown = True
+                failures.append((layer.name(), str(err)))
+        self._finish_batch(added, len(layers), failures, stop)
+
+    def _finish_batch(self, added: int, total: int,
+                      failures: list[tuple[str, str]], stop: str) -> None:
+        """Refresh once, THEN say what went wrong. The refresh fires
+        images_changed, and a view that clears its message on a change (the
+        References panel) would otherwise wipe the error it was just given
+        when part of a drop went through."""
         if added > 0:
             self._refresh()
+        if stop == "free_limit":
+            self.upsell_requested.emit()
+        elif stop == "hard_cap":
+            self._show_temp_error(_partial_cap_message(added, total))
+        elif failures:
+            self._show_temp_error(_failures_message(failures))
 
     def _add_paths(self, paths: list[str]) -> None:
         added = 0
-        error_shown = False
+        failures: list[tuple[str, str]] = []
+        stop = ""
         for path in paths:
-            reason = self._check_can_add()
-            if reason == "free_limit":
-                self.upsell_requested.emit()
-                break
-            if reason == "hard_cap":
-                if not error_shown:
-                    self._show_temp_error(
-                        tr("Maximum {n} reference images reached").format(n=max_references())
-                    )
-                    error_shown = True
+            stop = self._check_can_add()
+            if stop != "ok":
                 break
             ext = os.path.splitext(path)[1].lower()
             try:
@@ -665,30 +761,30 @@ class ReferenceImagesWidget(QWidget):
                     if ext == ".shp":
                         missing = _missing_shapefile_companions(path)
                         if missing:
+                            # The name is already in the "Could not add"
+                            # line this reason is shown in.
                             raise ReferenceImageStoreError(
                                 tr(
-                                    "Shapefile {name} is missing required "
-                                    "companion files ({missing}). Drop the "
-                                    "whole set together."
-                                ).format(
-                                    name=os.path.basename(path),
-                                    missing=", ".join(missing),
-                                )
+                                    "Its companion files are missing ({missing}). "
+                                    "Drop the whole set together."
+                                ).format(missing=", ".join(missing))
                             )
                     layers = load_transient_layers(path)
                     if not layers:
-                        raise ReferenceImageStoreError(
-                            tr("Could not load {name} as a layer").format(
-                                name=os.path.basename(path)
-                            )
-                        )
-                    self._render_and_store(layers, os.path.basename(path))
+                        raise ReferenceImageStoreError(get_export_copy(
+                            "widgets.reference_images_widget.not_openable",
+                            tr("Not an image or a map file QGIS can open."),
+                        ))
+                    # A data file picked on disk is still "Your computer":
+                    # tagging it "Project layer" named a layer the project
+                    # does not have.
+                    self._render_and_store(
+                        layers, os.path.basename(path), source_kind="file"
+                    )
                 added += 1
             except ReferenceImageStoreError as err:
-                self._show_temp_error(str(err))
-                error_shown = True
-        if added > 0:
-            self._refresh()
+                failures.append((os.path.basename(path), str(err)))
+        self._finish_batch(added, len(paths), failures, stop)
 
     def set_target_extent(self, extent, crs) -> None:
         """Set the generation-zone extent that references should align to. Pass
@@ -696,7 +792,8 @@ class ReferenceImagesWidget(QWidget):
         self._target_extent = extent
         self._target_crs = crs
 
-    def _render_and_store(self, layers: list, source_name: str) -> None:
+    def _render_and_store(self, layers: list, source_name: str,
+                          source_kind: str = "layer") -> ReferenceImage:
         extent, crs = self._current_view_extent()
         # Decided before the render, from the same rule the renderer applies
         # when it falls back to the layer's own extent.
@@ -712,12 +809,15 @@ class ReferenceImagesWidget(QWidget):
             raise ReferenceImageStoreError(
                 tr("Could not render {name}").format(name=source_name)
             )
-        self._store.add_from_qimage(image, source_name, whole_layer=whole)
+        record = self._store.add_from_qimage(
+            image, source_name, source_kind=source_kind, whole_layer=whole
+        )
         telemetry.track(
-            te.REFERENCE_ADDED, {"source_kind": "layer", "whole_layer": whole}
+            te.REFERENCE_ADDED, {"source_kind": source_kind, "whole_layer": whole}
         )
         if whole:
             self._notify_whole_layer(source_name)
+        return record
 
     def _notify_whole_layer(self, source_name: str) -> None:
         """Say once, in the message bar, that a layer went whole and unaligned."""
@@ -746,12 +846,13 @@ class ReferenceImagesWidget(QWidget):
             self.upsell_requested.emit()
             return
         if reason == "hard_cap":
-            self._show_temp_error(
-                tr("Maximum {n} reference images reached").format(n=max_references())
-            )
+            self._show_temp_error(_hard_cap_message())
             return
         if image is None or image.isNull():
-            self._show_temp_error(tr("Could not capture the map. Zoom in and try again."))
+            self._show_temp_error(get_export_copy(
+                "widgets.reference_images_widget.map_capture_failed",
+                tr("Could not capture the map. Zoom in and try again."),
+            ))
             return
         try:
             self._store.add_from_qimage(image, source_name, source_kind="map")
@@ -783,7 +884,7 @@ class ReferenceImagesWidget(QWidget):
         timer = QTimer(self)
         timer.setSingleShot(True)
         timer.timeout.connect(self.error_cleared.emit)
-        timer.start(4000)
+        timer.start(get_export_dial("widgets.reference_images_widget.error_clear_ms", _ERROR_CLEAR_MS))
         self._error_clear_timer = timer
 
     def remove_reference(self, ref_id: str) -> None:
@@ -792,18 +893,18 @@ class ReferenceImagesWidget(QWidget):
         self._on_remove(ref_id)
 
     def _on_remove(self, ref_id: str) -> None:
-        if ref_id == self._markup_ref_id:
-            self._markup_ref_id = None
         self._store.remove(ref_id)
+        if ref_id in self._above_ref_ids:
+            self._above_ref_ids.remove(ref_id)
         self._refresh()
 
     def _build_preview_title(self, image_path: str) -> str:
-        """Window title for the preview: the source name, with a Mark up tag when
-        the image is the Mark up composite, so the user knows what they opened."""
+        """Window title for the preview: the source name, or "Your drawing"
+        for the Draw composite, so the user knows what they opened."""
         record = next(
             (r for r in self._store.list() if r.path == image_path), None
         )
-        is_markup = record is not None and record.id == self._markup_ref_id
+        is_markup = record is not None and self._store.is_markup(record.id)
         return reference_preview_title(record, is_markup)
 
     def _open_preview(self, image_path: str) -> None:

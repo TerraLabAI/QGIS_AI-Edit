@@ -3,13 +3,14 @@ from __future__ import annotations
 import os
 import tempfile
 
-from qgis.PyQt.QtCore import QRectF, Qt, pyqtSignal
+from qgis.PyQt.QtCore import QRectF, QSize, Qt, pyqtSignal
 from qgis.PyQt.QtGui import (
     QBrush,
     QColor,
     QFont,
     QImage,
     QPainter,
+    QPalette,
     QPen,
     QSyntaxHighlighter,
     QTextCharFormat,
@@ -19,20 +20,84 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QTextEdit,
     QToolButton,
+    QVBoxLayout,
     QWidget,
 )
 
 from ...core import qt_compat as QtC
+from ...core.config_store import get_export_copy
 from ...core.i18n import tr
 from ...core.prompts.hex_highlight import HEX_RX, contrast_text_for, expand_hex
+from ..icons import icon_for, pixmap_for
+from ..input_decisions import (
+    PASTE_FILES,
+    PASTE_IMAGE,
+    PASTE_TEXT,
+    paste_kind_for_mime,
+)
+from . import design_tokens as tokens
 from .mime import _file_paths_from_mime
-from .style import BRAND_GREEN, DISABLED_TEXT
+from .resolution_visuals import resolution_note, resolution_tile, resolution_visual
+
+# The chevron a select chip draws into its own right padding, and the air
+# between it and the chip's edge. AI Agent's select buttons at the same sizes.
+CHIP_CHEVRON_PX = 12
+CHIP_CHEVRON_INSET = 6
+
+
+def set_link_ink(label: QLabel) -> None:
+    """Paint a rich-text label's links in the link ink.
+
+    A QLabel colours an ``<a>`` from the palette's Link role, which is Qt's
+    stock dark blue: 2.4:1 on the dark theme's surfaces. The label's QSS
+    cannot reach it, so the palette carries the token instead."""
+    palette = label.palette()
+    for role in (QPalette.ColorRole.Link, QPalette.ColorRole.LinkVisited):
+        palette.setColor(role, tokens.qcolor(tokens.LINK_INK))
+    label.setPalette(palette)
+
+
+class _GlyphNote(QWidget):
+    """A tinted note with its glyph on the left, the status box's shape for
+    a message that is not a status (the zone heads-up). Keeps QLabel's
+    setText/text so callers treat it as the label it replaced."""
+
+    def __init__(self, glyph: str, tint: str, ink: str, parent=None, line: str = ""):
+        super().__init__(parent)
+        self.setObjectName("glyphNote")
+        self.setAttribute(QtC.WA_StyledBackground, True)
+        self.setStyleSheet(
+            f"QWidget#glyphNote {{ background: {tint}; border: 1px solid {line or tokens.LINE};"
+            f" border-radius: {tokens.RADIUS_CARD}px; }}"
+        )
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 10, 10, 10)
+        layout.setSpacing(8)
+        icon = QLabel()
+        icon.setFixedSize(16, 16)
+        icon.setStyleSheet("background: transparent; border: none;")
+        icon.setPixmap(pixmap_for(icon, glyph, 16, tokens.qcolor(ink)))
+        layout.addWidget(icon, 0, QtC.AlignTop)
+        self._label = QLabel("")
+        self._label.setWordWrap(True)
+        self._label.setStyleSheet(
+            f"font-size: {tokens.FONT_BODY}px; color: {tokens.INK};"
+            " background: transparent; border: none;"
+        )
+        layout.addWidget(self._label, 1)
+
+    def setText(self, text: str) -> None:
+        self._label.setText(text)
+
+    def text(self) -> str:
+        return self._label.text()
 
 
 class _Spinner(QWidget):
-    """A small rotating arc, the conventional 'busy' indicator. Driven by an
-    external QTimer calling ``advance()`` so one timer can be paused with the
-    section it belongs to."""
+    """A small rotating arc, the conventional 'busy' indicator, the same
+    round-capped arc AI Agent and AI Segmentation turn. Driven by an external
+    QTimer calling ``advance()`` so one timer can be paused with the section
+    it belongs to."""
 
     def __init__(self, diameter: int = 16, parent=None):
         super().__init__(parent)
@@ -44,23 +109,32 @@ class _Spinner(QWidget):
         self._angle = (self._angle + 30) % 360
         self.update()
 
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        margin = 2.0
-        rect = QRectF(margin, margin, self._d - 2 * margin, self._d - 2 * margin)
-        pen = QPen(QColor(BRAND_GREEN))
-        pen.setWidthF(2.2)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        painter.setPen(pen)
-        painter.drawArc(rect, int(-self._angle * 16), 270 * 16)
-        painter.end()
+    def paintEvent(self, event):  # noqa: N802 - Qt signature
+        # An exception raised here escapes into Qt's paint dispatch and can
+        # take QGIS down, so the paint is guarded like AI Segmentation's.
+        try:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            margin = 2.0
+            rect = QRectF(margin, margin, self._d - 2 * margin, self._d - 2 * margin)
+            # The interaction blue: the leaf green is the brand mark's colour
+            # only (ui.md).
+            pen = QPen(tokens.qcolor(tokens.BRAND_BLUE))
+            pen.setWidthF(2.2)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.setPen(pen)
+            painter.drawArc(rect, int(-self._angle * 16), 270 * 16)
+            painter.end()
+        except Exception:  # noqa: BLE001 - a paintEvent must never raise
+            return
 
 
 class _ZoneGestureGlyph(QWidget):
-    """Vector 'draw a box' glyph: a dashed rounded box with a drag arrow across
-    it. Painted live in paintEvent so it stays crisp at any DPI (no rasterised
-    pixmap to pixelate). Blue, to echo the zone box drawn on the canvas.
+    """Vector 'outline an area' glyph: a dashed polygon with its clicked
+    corners and the pointer on the last one. The zone is a polygon placed
+    click by click; the glyph used to draw a dragged box, a gesture the tool
+    does not take. Painted live in paintEvent so it stays crisp at any DPI.
+    Blue, to echo the zone drawn on the canvas.
     """
 
     def __init__(self, color: QColor, size: int = 56, parent=None):
@@ -70,32 +144,34 @@ class _ZoneGestureGlyph(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
     def paintEvent(self, event):  # noqa: N802 - Qt signature
-        from qgis.PyQt.QtCore import QPointF, QRectF, Qt
+        from qgis.PyQt.QtCore import QPointF, Qt
         from qgis.PyQt.QtGui import QPainter, QPen, QPolygonF
         s = float(self.width())
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        # Dashed box (the zone being drawn), set to the upper-left so the cursor
-        # can grab its bottom-right corner without leaving the widget.
-        box = QPen(self._color)
-        box.setWidthF(s * 0.045)
-        box.setStyle(Qt.PenStyle.DashLine)
-        box.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        p.setPen(box)
+        # Dashed polygon (the zone being outlined), its last corner at the
+        # lower right so the pointer can sit on it inside the widget.
+        corners = [(0.14, 0.30), (0.40, 0.08), (0.62, 0.22), (0.60, 0.60), (0.22, 0.56)]
+        outline = QPen(self._color)
+        outline.setWidthF(s * 0.045)
+        outline.setStyle(Qt.PenStyle.DashLine)
+        outline.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        p.setPen(outline)
         p.setBrush(Qt.BrushStyle.NoBrush)
-        a, b = s * 0.10, s * 0.60
-        p.drawRoundedRect(QRectF(a, a, b - a, b - a), s * 0.05, s * 0.05)
-        # Solid handle on the corner being dragged.
-        hs = s * 0.05
+        p.drawPolygon(QPolygonF([QPointF(x * s, y * s) for (x, y) in corners]))
+        # A solid dot on each clicked corner.
+        hs = s * 0.045
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(self._color))
-        p.drawRect(QRectF(b - hs, b - hs, 2 * hs, 2 * hs))
+        for x, y in corners:
+            p.drawEllipse(QPointF(x * s, y * s), hs, hs)
+        b = s * 0.60
         # Mouse cursor (arrow) pulling that corner: tip on the handle, classic
         # up-left pointer shape, blue fill with a white edge so it reads clearly.
         f = s * 0.020
         pts = [(0, 0), (0, 15), (3.5, 11.5), (6, 17), (8, 16), (5.5, 10.5), (10, 10)]
         cursor = QPolygonF([QPointF(b + x * f, b + y * f) for (x, y) in pts])
-        edge = QPen(QColor(255, 255, 255, 235))
+        edge = QPen(tokens.qcolor(tokens.SURFACE))
         edge.setWidthF(s * 0.022)
         edge.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         p.setPen(edge)
@@ -118,6 +194,35 @@ class _FooterIconButton(QToolButton):
         super().__init__(parent)
         self.setProperty("hover", False)
         self.setProperty("active", False)
+        self._chip_glyph: tuple | None = None
+
+    def set_chip_glyph(
+        self,
+        name: str,
+        size: int,
+        color: str,
+        hover_color: str | None = None,
+    ) -> None:
+        """Carry the glyph, re-inked under the pointer like AI Agent's ``+``.
+
+        A quiet chip writes its word in the second ink and raises it to the
+        full ink on hover; a glyph left at the resting ink then reads a shade
+        paler than the word beside it. ``hover_color`` of None keeps one ink,
+        which is what a glyph in a hue of its own wants.
+        """
+        self._chip_glyph = (name, int(size), color, hover_color)
+        self._apply_chip_glyph()
+
+    def _apply_chip_glyph(self) -> None:
+        if self._chip_glyph is None:
+            return
+        name, size, color, hover_color = self._chip_glyph
+        ink = hover_color if (hover_color and self.property("hover")) else color
+        self.setIcon(icon_for(
+            self, name, size, tokens.qcolor(ink),
+            disabled_color=tokens.qcolor(tokens.INK_3),
+        ))
+        self.setIconSize(QSize(size, size))
 
     def set_hovered(self, hovered: bool) -> None:
         if bool(self.property("hover")) == hovered:
@@ -126,6 +231,7 @@ class _FooterIconButton(QToolButton):
         # Re-polish so the [hover="true"] selector takes effect.
         self.style().unpolish(self)
         self.style().polish(self)
+        self._apply_chip_glyph()
         self.update()
 
     def set_active(self, active: bool) -> None:
@@ -189,7 +295,8 @@ class _SubmitTextEdit(QTextEdit):
     images_pasted = pyqtSignal(list)
 
     _INNER_STYLE = (
-        "QTextEdit { background: transparent; padding: 4px; }"
+        f"QTextEdit {{ background: transparent; padding: 4px; color: {tokens.INK};"
+        f" font-size: {tokens.FONT_BASE}px; selection-background-color: {tokens.ACCENT_BORDER_SOFT}; }}"
         # Some Qt styles still reserve a thin strip for the horizontal
         # scrollbar even with ScrollBarAlwaysOff; force its height to 0.
         "QTextEdit QScrollBar:horizontal { height: 0px; margin: 0px; }"
@@ -208,6 +315,11 @@ class _SubmitTextEdit(QTextEdit):
         # Setting QPalette.Base ourselves silently disables the caret on some
         # Qt builds, hence the QSS-only path here.
         self.setStyleSheet(self._INNER_STYLE)
+        # The placeholder in the third ink, like AI Agent's composer. The
+        # PlaceholderText role leaves Base alone, so the native caret stays.
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.PlaceholderText, tokens.qcolor(tokens.INK_3))
+        self.setPalette(palette)
         # Wrap long tokens (URLs, glued words) mid-character so the line never
         # exceeds the box width, and kill the horizontal scrollbar - Qt
         # otherwise reserves space for it (the "invisible bar" at the bottom).
@@ -224,22 +336,38 @@ class _SubmitTextEdit(QTextEdit):
 
     def keyPressEvent(self, event):  # noqa: N802
         if event.key() in (QtC.Key_Return, QtC.Key_Enter) and not event.modifiers() & QtC.ShiftModifier:
-            self.submitted.emit()
+            # A locked box (a generation in flight) swallows Enter: the caret
+            # can still sit in it, and a second submit would ask for a second
+            # paid run on top of the first.
+            if not self.isReadOnly():
+                self.submitted.emit()
             return
         super().keyPressEvent(event)
 
+    @staticmethod
+    def _paste_kind(source, paths: list[str]) -> str:
+        text = source.text() if source.hasText() else ""
+        return paste_kind_for_mime(bool(paths), text, source.hasImage())
+
     def canInsertFromMimeData(self, source):  # noqa: N802
-        if source.hasImage() or _file_paths_from_mime(source):
+        paths = _file_paths_from_mime(source)
+        if self._paste_kind(source, paths) in (PASTE_FILES, PASTE_IMAGE):
             return False
         return super().canInsertFromMimeData(source)
 
     def insertFromMimeData(self, source):  # noqa: N802
         paths = _file_paths_from_mime(source)
-        if paths:
+        kind = self._paste_kind(source, paths)
+        if kind == PASTE_FILES:
             self.images_pasted.emit(paths)
             return
-        if source.hasImage():
+        if kind == PASTE_IMAGE:
             self._emit_clipboard_image(source)
+            return
+        if kind == PASTE_TEXT:
+            # Text copied from Excel or OneNote carries a bitmap too; paste
+            # the words only.
+            self.insertPlainText(source.text())
             return
         super().insertFromMimeData(source)
 
@@ -264,19 +392,50 @@ class _SubmitTextEdit(QTextEdit):
             # the refs store has its own compressed copy by now.
             try:
                 os.unlink(tmp_path)
-            except OSError:
+            except OSError:  # temp file already gone; the OS temp dir cleans up
                 pass
 
 
+class _ResolutionChipButton(_FooterIconButton):
+    """The footer's Quality chip: the picked tier's glyph, its name, a
+    chevron.
+
+    AI Agent's select buttons draw the chevron themselves into the button's
+    right padding (``PermissionChip.paintEvent``) instead of spending the
+    button's one icon slot on it. Doing the same here frees that slot for the
+    tier's own glyph, so the level is readable with the menu closed.
+    """
+
+    def paintEvent(self, event):  # noqa: N802 - Qt override
+        super().paintEvent(event)
+        painter = QPainter(self)
+        try:
+            pixmap = pixmap_for(
+                self, "chevron_down", CHIP_CHEVRON_PX, tokens.qcolor(tokens.INK_2))
+            x = self.width() - CHIP_CHEVRON_PX - CHIP_CHEVRON_INSET
+            y = (self.height() - CHIP_CHEVRON_PX) // 2
+            painter.drawPixmap(x, y, pixmap)
+        finally:
+            painter.end()
+
+
 class _ResolutionMenuItem(QWidget):
-    """Custom widget for one resolution row inside the resolution QMenu.
+    """One quality row in the picker, AI Agent's popover row shape.
 
-    Layout:   [ ✓ ]  Label  [Pro]                   N credits
+    Layout::
 
-    The leading checkmark column is fixed-width so all three rows align.
-    Locked rows (free-tier 2K / 4K) render in a muted color, carry the
-    "Pro" tag, and stay clickable - the click still fires so the dock
-    widget can show the "Subscribe for higher resolution" banner.
+        [tile]  Detailed (2K)   [Pro]   30 credits  [check]
+                Sharp, clean result for real maps
+
+    The tile is the tier's own glyph in its own hue (``resolution_visuals``),
+    the same pair the closed chip wears. The picked row is a soft tint of that
+    hue with a thin border in its ink and a check, never a solid fill
+    (``design_tokens.picked_qss`` is that recipe for a checkable button; a
+    QWidgetAction row is not checkable, so it is spelled out here from the same
+    two helpers).
+
+    Locked rows (free-tier 2K / 4K) keep the muted ink and the "Pro" tag, and
+    stay clickable: the click still fires so the dock can push Pro.
 
     QMenu does not paint its selection highlight under QWidgetAction items,
     so the hover background is drawn by the widget itself via a :hover
@@ -287,9 +446,16 @@ class _ResolutionMenuItem(QWidget):
 
     clicked = pyqtSignal()
 
-    _ITEM_STYLE = (
-        "QWidget#resolutionMenuItem { background: transparent; border-radius: 4px; }"
-        "QWidget#resolutionMenuItem:hover { background: rgba(128,128,128,0.20); }"
+    # Wide enough for the longest of the three notes at 11 px without wrapping
+    # it into a ragged second line inside a popup nobody can resize.
+    _ROW_MIN_WIDTH = 296
+    _CHECK_PX = 14
+    # The locked rows' "Pro" word, a small blue pill: the tier a click on the
+    # row leads to.
+    _PRO_TAG_STYLE = (
+        f"QLabel {{ background: {tokens.ACCENT_TINT}; color: {tokens.LINK_INK};"
+        f" border: none; border-radius: 8px; padding: 0 6px;"
+        f" font-size: {tokens.FONT_MICRO}px; font-weight: 600; }}"
     )
 
     def __init__(
@@ -302,47 +468,51 @@ class _ResolutionMenuItem(QWidget):
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
+        _glyph, hue = resolution_visual(resolution)
+        hue_ink = tokens.category_ink(hue)
         self.setObjectName("resolutionMenuItem")
         self.setAttribute(QtC.WA_StyledBackground, True)
-        self.setStyleSheet(self._ITEM_STYLE)
+        self.setStyleSheet(self._row_style(hue, hue_ink, selected))
         self.setCursor(QtC.PointingHandCursor)
-        self.setMinimumHeight(26)
+        self.setMinimumWidth(self._ROW_MIN_WIDTH)
         if locked:
-            self.setToolTip(tr("Pro gives you 2K and 4K, for printing and zooming in"))
+            # The same sentence the row's action carries (prompt_container),
+            # naming the tiers by their Quality words, not a second wording.
+            self.setToolTip(get_export_copy(
+                "dock.prompt_container.quality_pro_tooltip",
+                tr("Pro unlocks Detailed and Maximum, for printing and zooming in"),
+            ))
 
         row = QHBoxLayout(self)
-        row.setContentsMargins(8, 4, 16, 4)
-        row.setSpacing(8)
+        row.setContentsMargins(8, 7, 10, 7)
+        row.setSpacing(10)
+        row.addWidget(resolution_tile(self, resolution), 0, QtC.AlignTop)
 
-        # Leading column: checkmark on the selected row, empty otherwise.
-        check = QLabel("✓" if selected else "", self)
-        check.setStyleSheet(
-            "font-size: 12px; color: palette(text); background: transparent;"
-        )
-        # Measured, not 12px flat: the Windows fallback face (Segoe UI Symbol)
-        # gives U+2713 a wider advance than the macOS one and shaved the tick.
-        check.setFixedWidth(max(12, check.fontMetrics().horizontalAdvance("✓") + 2))
-        check.setAttribute(QtC.WA_TransparentForMouseEvents, True)
-        row.addWidget(check)
+        column = QVBoxLayout()
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(2)
 
-        muted = f"color: {DISABLED_TEXT};" if locked else "color: palette(text);"
-        # "Standard" reads as the row label; the exact resolution "(1K)" trails
-        # in a dimmer tint as the supporting detail.
-        res_color = DISABLED_TEXT if locked else "rgba(128,128,128,0.85)"
+        # The tag, the credits and the check share the name's line, so the
+        # muted note under them runs the full width of the row instead of
+        # wrapping into a narrow column.
+        head = QHBoxLayout()
+        head.setContentsMargins(0, 0, 0, 0)
+        head.setSpacing(8)
+        ink = tokens.INK_2 if locked else tokens.INK
+        # "Large" reads as the row label; the exact resolution "(2K)" trails
+        # in the third ink as the supporting detail.
         name = QLabel(
-            f"{quality} <span style='color: {res_color};'>({resolution})</span>",
+            f"{quality} <span style='color: {tokens.INK_3};'>({resolution})</span>",
             self,
         )
         name.setTextFormat(Qt.TextFormat.RichText)
-        name.setStyleSheet(f"font-size: 12px; background: transparent; {muted}")
-        name.setAttribute(QtC.WA_TransparentForMouseEvents, True)
-        row.addWidget(name)
-
-        cost_color = (
-            f"color: {DISABLED_TEXT};"
-            if locked
-            else "color: rgba(128,128,128,0.85);"
+        name.setStyleSheet(
+            f"font-size: {tokens.FONT_BODY}px; font-weight: 500;"
+            f" background: transparent; color: {ink};"
         )
+        name.setAttribute(QtC.WA_TransparentForMouseEvents, True)
+        head.addWidget(name)
+        head.addStretch(1)
 
         # A word, not just the muted tint: colour alone carries the locked state
         # to nobody who cannot see it, and a tooltip is out of reach by keyboard.
@@ -352,22 +522,55 @@ class _ResolutionMenuItem(QWidget):
         # the site ships it untranslated in every locale.
         if locked:
             pro = QLabel("Pro", self)
-            pro.setStyleSheet(
-                f"font-size: 10px; background: transparent; {cost_color}"
-            )
+            pro.setFixedHeight(16)
+            pro.setStyleSheet(self._PRO_TAG_STYLE)
             pro.setAttribute(QtC.WA_TransparentForMouseEvents, True)
-            row.addWidget(pro)
+            head.addWidget(pro, 0, QtC.AlignVCenter)
 
-        row.addStretch()
         cost_text = (
             tr("{n} credit").format(n=credits)
             if credits == 1
             else tr("{n} credits").format(n=credits)
         )
         cost = QLabel(cost_text, self)
-        cost.setStyleSheet(f"font-size: 11px; background: transparent; {cost_color}")
+        cost.setStyleSheet(
+            f"font-size: {tokens.FONT_HINT}px; background: transparent; color: {tokens.INK_3};"
+        )
         cost.setAttribute(QtC.WA_TransparentForMouseEvents, True)
-        row.addWidget(cost)
+        head.addWidget(cost, 0, QtC.AlignVCenter)
+
+        check = QLabel(self)
+        check.setFixedSize(self._CHECK_PX, self._CHECK_PX)
+        check.setStyleSheet("background: transparent; border: none;")
+        if selected and not locked:
+            check.setPixmap(pixmap_for(check, "check", self._CHECK_PX, tokens.qcolor(hue_ink)))
+        check.setAttribute(QtC.WA_TransparentForMouseEvents, True)
+        head.addWidget(check, 0, QtC.AlignVCenter)
+        column.addLayout(head)
+
+        note = QLabel(resolution_note(resolution), self)
+        note.setStyleSheet(
+            f"font-size: {tokens.FONT_HINT}px; background: transparent; color: {tokens.INK_2};"
+        )
+        note.setAttribute(QtC.WA_TransparentForMouseEvents, True)
+        column.addWidget(note)
+        row.addLayout(column, 1)
+
+    @staticmethod
+    def _row_style(hue: str, hue_ink: str, selected: bool) -> str:
+        """The picked recipe spelled out: tint, a thin border in the hue's ink.
+
+        The border is drawn on every row, transparent when the row is not the
+        picked one, so picking does not shift the text by a pixel.
+        """
+        ground = tokens.category_tint(hue) if selected else "transparent"
+        border = hue_ink if selected else "transparent"
+        hover = tokens.category_tint(hue, strong=True) if selected else tokens.HOVER
+        return (
+            f"QWidget#resolutionMenuItem {{ background: {ground};"
+            f" border: 1px solid {border}; border-radius: {tokens.RADIUS_CONTROL}px; }}"
+            f"QWidget#resolutionMenuItem:hover {{ background: {hover}; }}"
+        )
 
     def mouseReleaseEvent(self, event):  # noqa: N802
         if event.button() == QtC.LeftButton:

@@ -6,50 +6,131 @@ from qgis.PyQt.QtCore import QSize, QUrl
 from qgis.PyQt.QtGui import QColor, QIcon, QPainter
 
 from ...core.auth.activation_manager import build_utm_url
+from . import design_tokens as tokens
+from .design_tokens import (  # noqa: F401 - re-exported: style.py is the style home
+    ACCENT,
+    ACCENT_BORDER,
+    ACCENT_BORDER_SOFT,
+    ACCENT_DARK,
+    ACCENT_INK,
+    ACCENT_TINT,
+    ACCENT_TINT_ON,
+    BODY_QSS,
+    BTN_DANGER_GHOST_QSS,
+    BTN_GHOST_QSS,
+    BTN_ICON_QSS,
+    BTN_LINK_QSS,
+    BTN_PRIMARY_QSS,
+    BTN_PRIMARY_WIDE_QSS,
+    BTN_PX,
+    BTN_QUIET_QSS,
+    CARD_QSS,
+    FIELD,
+    FONT_BASE,
+    FONT_BODY,
+    FONT_HINT,
+    FONT_MICRO,
+    HINT_QSS,
+    HOVER,
+    HOVER_ON,
+    INK,
+    INK_2,
+    INK_3,
+    INPUT_QSS,
+    LINE,
+    LINE_STRONG,
+    LINK_INK,
+    MENU_QSS,
+    MICRO_QSS,
+    ON_ACCENT,
+    PROGRESS_QSS,
+    RADIUS_CARD,
+    RADIUS_CHIP,
+    RADIUS_CONTROL,
+    RADIUS_PANEL,
+    RADIUS_PILL,
+    RADIUS_PILL_WIDE,
+    SCROLL_AREA_QSS,
+    SURFACE,
+    TITLE_QSS,
+    qcolor,
+    repolish_widget,
+)
+
+# Private names are listed too: other modules import them from here.
+__all__ = [
+    "_BTN_BLUE",
+    "_BTN_BLUE_AUTH",
+    "_BTN_BLUE_OUTLINE",
+    "_BTN_DISABLED",
+    "_BTN_GHOST",
+    "_BTN_GRAY",
+    "_BTN_GREEN",
+    "_BTN_GREEN_AUTH",
+    "_BTN_GREEN_OUTLINE",
+    "_BTN_LABEL_WEIGHT",
+    "_BTN_PAIR_CANCEL",
+    "_BTN_PAIR_NEUTRAL",
+    "_BTN_RED",
+    "_btn_start_qss",
+    "_CHIP_HEIGHT",
+    "_FOOTER_ICON_BTN_STYLE",
+    "_FOOTER_MENU_STYLE",
+    "_INSTRUCTION_BOX",
+    "_pencil_icon",
+    "_picture_plus_icon",
+    "_tinted_svg_icon",
+    "BOOK_SVG",
+    "BRAND_BLUE",
+    "BRAND_BLUE_HOVER",
+    "BRAND_DISABLED",
+    "BRAND_GRAY",
+    "BRAND_GRAY_HOVER",
+    "BRAND_GREEN",
+    "BRAND_GREEN_TEXT",
+    "BRAND_RED",
+    "BRAND_RED_HOVER",
+    "BTN_GREEN",
+    "BTN_GREEN_DISABLED",
+    "BTN_GREEN_HOVER",
+    "COPY_BTN_QSS",
+    "COPY_SVG",
+    "DISABLED_TEXT",
+    "DOCK_BRANDING_URL",
+    "ERROR_TEXT",
+    "FAVORITE_STAR_COLOR",
+    "FOCUS_RING",
+    "FOCUS_RING_ON_FILL",
+    "ICONS_DIR",
+    "MAX_PROMPT_CHARS",
+    "STAR_FILLED_SVG",
+    "STAR_OUTLINE_SVG",
+    "SUCCESS_TEXT",
+    "svg_url",
+]
 
 # ---------------------------------------------------------------------------
-# Brand colors (Material Design 2 - shared with AI Segmentation)
+# Brand colours under their historical names (Material, shared with AI
+# Segmentation). The shapes around them follow the AI Agent line since
+# 2026-09-17 (design_tokens.py); new code imports the design_tokens names.
 # ---------------------------------------------------------------------------
-# Primary CTA buttons (Generate / Regenerate / Launch / Login) keep the
-# original material green - it reads as THE action color and stays unchanged.
-# Every other green accent uses the QGIS lime below.
-BTN_GREEN = "#43a047"
-BTN_GREEN_HOVER = "#2e7d32"
-BTN_GREEN_DISABLED = "#c8e6c9"
+BTN_GREEN = tokens.ACCENT
+BTN_GREEN_HOVER = tokens.ACCENT_DARK
+BTN_GREEN_DISABLED = tokens.PRIMARY_DISABLED_FILL
 
-# Brand accent green = the QGIS green (the --qgis-green brand token). Lime
-# fills use BRAND_GREEN; green text on light backgrounds uses BRAND_GREEN_TEXT
-# (#8bac27 only clears ~2.5:1 on white, the darker tone clears AA).
-BRAND_GREEN = "#8bac27"
+BRAND_GREEN = tokens.BRAND_GREEN
 BRAND_GREEN_TEXT = "#4d7c0f"
-BRAND_BLUE = "#1e88e5"
-BRAND_BLUE_HOVER = "#1976d2"
+BRAND_BLUE = tokens.BRAND_BLUE
+BRAND_BLUE_HOVER = tokens.BRAND_BLUE_HOVER
 BRAND_RED = "#d32f2f"
 BRAND_RED_HOVER = "#b71c1c"
 BRAND_GRAY = "#757575"
 BRAND_GRAY_HOVER = "#616161"
 BRAND_DISABLED = "#b0bec5"
-# Keyboard focus ring. One hue for the whole plugin, and it is BRAND_BLUE
-# rather than a colour of its own: measured (WCAG 2.1 relative luminance)
-# 3.68:1 on white, 3.43:1 on the #f7f7f7 card fill, and 3.43 / 3.85 / 3.00:1 on
-# the #333333 / #2b2b2b / #3c3c3c the QGIS dark themes paint. That is the only
-# brand token clearing SC 1.4.11's 3:1 on both themes; Material Blue 800
-# (#1565c0) reads 5.75:1 on white but 2.20 / 2.46 / 1.92:1 on those same greys.
-# The buttons below set `border: none`, which drops the native Windows focus
-# rectangle, so every button constant paints its own ring on :focus. Where the
-# resting rule has padding, the :focus rule subtracts the ring width from it,
-# so taking focus never resizes the button. Four rules have no resting padding
-# to subtract from - _BTN_GREEN_AUTH, _BTN_BLUE_AUTH, _BTN_PAIR_NEUTRAL,
-# _BTN_PAIR_CANCEL - and their size hint does grow 4x4 on focus. Nothing moves
-# on screen: each of those buttons carries a setMinimumHeight (28 to 38) far
-# above the focused hint and takes its width from the layout row it sits in.
+# Keyboard focus ring: BRAND_BLUE clears 3:1 on white and on the QGIS dark
+# greys. On a filled button the ring is white (the only ink that clears 3:1
+# against every brand fill).
 FOCUS_RING = BRAND_BLUE
-# A ring drawn INSIDE a filled brand button has that fill as its only
-# neighbour, and no brand colour clears 3:1 against those fills (BRAND_BLUE
-# measures 1.00 on its own fill, 1.11 on BTN_GREEN, 1.25 on BRAND_GRAY). White
-# clears all three - 3.68 on BRAND_BLUE, 3.30 on BTN_GREEN, 4.61 on BRAND_GRAY
-# - and is achromatic, so it adds no hue. Transparent and tinted buttons keep
-# FOCUS_RING: their ring sits on the panel background, not on a fill.
 FOCUS_RING_ON_FILL = "#ffffff"
 DISABLED_TEXT = "#666666"
 ERROR_TEXT = "#ef5350"
@@ -85,43 +166,24 @@ def svg_url(path: str) -> str:
 # The flat copy button, shared by the version strip and the generation detail
 # dialog. Same widget, same look, so one stylesheet.
 COPY_BTN_QSS = (
-    "QPushButton { background: transparent; border: none; "
-    "color: rgba(128,128,128,0.95); font-size: 11px; font-weight: 600; "
-    "padding: 1px 6px; border-radius: 4px; }"
-    "QPushButton:hover { background: rgba(128,128,128,0.14); color: palette(text); }"
-    f"QPushButton:focus {{ border: 1px solid {FOCUS_RING}; padding: 0px 5px; }}"
+    "QPushButton { background: transparent; border: 1px solid transparent;"
+    f" color: {tokens.INK_2}; font-size: {tokens.FONT_HINT}px; font-weight: 500;"
+    f" padding: 1px 7px; border-radius: {tokens.RADIUS_CHIP}px; }}"
+    f"QPushButton:hover {{ background: {tokens.HOVER}; color: {tokens.INK}; }}"
+    f"QPushButton:focus {{ border-color: {FOCUS_RING}; color: {tokens.INK}; }}"
 )
 
-# Weight of every button label. Windows draws the default UI font much
-# thinner than macOS does, and a regular-weight label on a filled button
-# was the first thing that stopped being readable there.
+# Weight of every button label. Windows draws the default UI font thinner
+# than macOS does, so labels keep a medium-to-semibold weight.
 _BTN_LABEL_WEIGHT = "font-weight: 600;"
 
-# Design-system QSS constants. border: none kills the native frame on dark themes.
-_BTN_GREEN = (
-    f"QPushButton {{ background-color: {BTN_GREEN}; color: #000000;"
-    f" padding: 8px 16px; border: none; border-radius: 4px; {_BTN_LABEL_WEIGHT} }}"
-    f"QPushButton:hover {{ background-color: {BTN_GREEN_HOVER}; color: #000000; }}"
-    f"QPushButton:disabled {{ background-color: {BTN_GREEN_DISABLED};"
-    f" color: {DISABLED_TEXT}; }}"
-    f"QPushButton:focus {{ border: 2px solid {FOCUS_RING_ON_FILL};"
-    f" padding: 6px 14px; }}"
-)
+# The four buttons of the line, under the names the call sites use.
+_BTN_GREEN = tokens.BTN_PRIMARY_QSS
+_BTN_GREEN_AUTH = tokens.BTN_PRIMARY_WIDE_QSS
 
-_BTN_GREEN_AUTH = (
-    f"QPushButton {{ background-color: {BTN_GREEN}; color: #000000;"
-    f" border: none; border-radius: 4px; {_BTN_LABEL_WEIGHT} }}"
-    f"QPushButton:hover {{ background-color: {BTN_GREEN_HOVER}; }}"
-    f"QPushButton:disabled {{ background-color: {BRAND_DISABLED};"
-    f" color: {DISABLED_TEXT}; }}"
-    f"QPushButton:focus {{ border: 2px solid {FOCUS_RING_ON_FILL}; }}"
-)
-
-
-# The one button that starts a session. It is alone on its screen and it is the
-# only thing there is to click, so its label is larger than a button sitting in
-# a row with others. Mirrors _btn_start_qss in AI Segmentation.
-_BTN_START_FONT_PX = 13
+# The one button that starts a session: the wide primary already carries the
+# larger label.
+_BTN_START_FONT_PX = tokens.FONT_BASE
 
 
 def _btn_start_qss(base: str) -> str:
@@ -129,134 +191,67 @@ def _btn_start_qss(base: str) -> str:
     return base + f"QPushButton {{ font-size: {_BTN_START_FONT_PX}px; }}"
 
 
+# The blue pill: same shape as the primary, filled in the brand blue, as in
+# AI Segmentation. A second emphasis beside the green one, never alone on a
+# screen that has a green primary.
 _BTN_BLUE = (
-    f"QPushButton {{ background-color: {BRAND_BLUE}; color: #000000;"
-    f" padding: 6px 12px; border: none; border-radius: 4px; {_BTN_LABEL_WEIGHT} }}"
-    f"QPushButton:hover {{ background-color: {BRAND_BLUE_HOVER}; color: #000000; }}"
-    f"QPushButton:disabled {{ background-color: {BRAND_DISABLED};"
-    f" color: {DISABLED_TEXT}; }}"
-    f"QPushButton:focus {{ border: 2px solid {FOCUS_RING_ON_FILL};"
-    f" padding: 4px 10px; }}"
+    f"QPushButton {{ background: {BRAND_BLUE}; color: #000000;"
+    f" border: none; border-radius: {tokens.RADIUS_PILL}px; padding: 0 16px;"
+    f" min-height: {tokens.BTN_PX}px; font-size: {tokens.FONT_BODY}px; font-weight: 600; }}"
+    f"QPushButton:hover {{ background: {BRAND_BLUE_HOVER}; }}"
+    f"QPushButton:pressed {{ background: {BRAND_BLUE_HOVER}; }}"
+    f"QPushButton:focus {{ border: 2px solid {FOCUS_RING_ON_FILL}; padding: 0 14px; }}"
+    f"QPushButton:disabled {{ background: {BRAND_DISABLED}; color: {DISABLED_TEXT}; }}"
 )
-
-_BTN_BLUE_AUTH = (
-    f"QPushButton {{ background-color: {BRAND_BLUE}; color: #000000;"
-    f" border: none; border-radius: 4px; {_BTN_LABEL_WEIGHT} }}"
-    f"QPushButton:hover {{ background-color: {BRAND_BLUE_HOVER}; }}"
-    f"QPushButton:disabled {{ background-color: {BRAND_DISABLED}; }}"
-    f"QPushButton:focus {{ border: 2px solid {FOCUS_RING_ON_FILL}; }}"
-)
-
-# Blue-outline secondary (canonical design-system constant, mirrored from the
-# AI Segmentation socle): a prominent secondary sitting on a screen whose one
-# filled primary is the green Generate.
-_BTN_BLUE_OUTLINE = (
-    f"QPushButton {{ background-color: transparent; color: {BRAND_BLUE};"
-    f" border: 1px solid {BRAND_BLUE}; border-radius: 4px; font-weight: 600;"
-    " padding: 6px 12px; }"
-    "QPushButton:hover { background-color: rgba(30, 136, 229, 0.12); }"
-    f"QPushButton:disabled {{ color: {DISABLED_TEXT};"
-    f" border-color: {DISABLED_TEXT}; }}"
-    f"QPushButton:focus {{ border: 2px solid {FOCUS_RING}; padding: 5px 11px; }}"
-)
-
-# Leaving a finished session is a positive act, so the button wears the CTA
-# green - but as an OUTLINE, one weight below the filled Generate beside it,
-# because continuing to iterate stays the primary action and a screen carries
-# exactly one filled primary. BTN_GREEN as ink measures 3.30:1 on white and
-# 4.28:1 on the #2b2b2b QGIS dark theme, the same band as the blue outline
-# above (3.68:1 on white).
-_BTN_GREEN_OUTLINE = (
-    f"QPushButton {{ background-color: transparent; color: {BTN_GREEN};"
-    f" border: 1px solid {BTN_GREEN}; border-radius: 4px; font-weight: 600;"
-    " padding: 6px 12px; }"
-    "QPushButton:hover { background-color: rgba(67, 160, 71, 0.12); }"
-    f"QPushButton:disabled {{ color: {DISABLED_TEXT};"
-    f" border-color: {DISABLED_TEXT}; }}"
-    f"QPushButton:focus {{ border: 2px solid {FOCUS_RING}; padding: 5px 11px; }}"
-)
-
-_BTN_GRAY = (
-    f"QPushButton {{ background-color: {BRAND_GRAY}; color: #000000;"
-    f" padding: 4px 8px; border: none; border-radius: 4px; {_BTN_LABEL_WEIGHT} }}"
-    f"QPushButton:hover {{ background-color: {BRAND_GRAY_HOVER}; color: #000000; }}"
-    f"QPushButton:disabled {{ background-color: {BRAND_DISABLED}; color: {DISABLED_TEXT}; }}"
-    f"QPushButton:focus {{ border: 2px solid {FOCUS_RING_ON_FILL};"
-    f" padding: 2px 6px; }}"
-)
-
+_BTN_BLUE_AUTH = _BTN_BLUE
+# Outlines were the old secondary; the ghost pill is the secondary now.
+_BTN_BLUE_OUTLINE = tokens.BTN_GHOST_QSS
+_BTN_GREEN_OUTLINE = tokens.BTN_GHOST_QSS
+_BTN_GRAY = tokens.BTN_GHOST_QSS
+# No red fill in the line: a destructive confirm is the danger ghost.
+_BTN_RED = tokens.BTN_DANGER_GHOST_QSS
+# A primary that cannot run yet: grey fill, muted words.
 _BTN_DISABLED = (
-    f"QPushButton {{ background-color: {BRAND_DISABLED}; color: {DISABLED_TEXT};"
-    f" padding: 8px 16px; border: none; border-radius: 4px; {_BTN_LABEL_WEIGHT} }}"
+    f"QPushButton {{ background: {BTN_GREEN_DISABLED}; color: {tokens.PRIMARY_DISABLED_INK};"
+    f" border: none; border-radius: {tokens.RADIUS_PILL_WIDE}px; padding: 0 18px;"
+    f" min-height: {tokens.BTN_PRIMARY_WIDE_PX}px; font-size: {tokens.FONT_BASE}px; font-weight: 600; }}"
 )
+_BTN_GHOST = tokens.BTN_GHOST_QSS
 
-_BTN_GHOST = (
-    "QPushButton { background-color: transparent; color: palette(text);"
-    " padding: 8px 16px; border-radius: 4px;"
-    f" border: 1px solid rgba(128, 128, 128, 0.35); {_BTN_LABEL_WEIGHT} }}"
-    "QPushButton:hover { background-color: rgba(128, 128, 128, 0.15);"
-    " border: 1px solid rgba(128, 128, 128, 0.5); }"
-    f"QPushButton:disabled {{ background-color: rgba(128, 128, 128, 0.08);"
-    f" border: 1px solid rgba(128, 128, 128, 0.15); color: {DISABLED_TEXT}; }}"
-    f"QPushButton:focus {{ border: 2px solid {FOCUS_RING}; padding: 7px 15px; }}"
-)
-
-# Compact filled buttons for the browser-handoff waiting state. Both carry a
-# soft tint (never transparent): neutral for "open again", red for "cancel".
-_BTN_PAIR_NEUTRAL = (
-    "QPushButton { background-color: rgba(128,128,128,0.16); color: palette(text);"
-    f" border: none; border-radius: 4px; {_BTN_LABEL_WEIGHT} }}"
-    "QPushButton:hover { background-color: rgba(128,128,128,0.28); }"
-    f"QPushButton:focus {{ border: 2px solid {FOCUS_RING}; }}"
-)
-_BTN_PAIR_CANCEL = (
-    f"QPushButton {{ background-color: rgba(211,47,47,0.12); color: {BRAND_RED};"
-    f" border: none; border-radius: 4px; {_BTN_LABEL_WEIGHT} }}"
-    f"QPushButton:hover {{ background-color: rgba(211,47,47,0.22); }}"
-    f"QPushButton:focus {{ border: 2px solid {FOCUS_RING}; }}"
-)
+# The browser-handoff waiting pair: open again (ghost), cancel (danger ghost).
+_BTN_PAIR_NEUTRAL = tokens.BTN_GHOST_QSS
+_BTN_PAIR_CANCEL = tokens.BTN_DANGER_GHOST_QSS
 
 # Shared height for the prompt-row chips so text-only and icon chips align.
 _CHIP_HEIGHT = 30
 
-# Footer icon buttons (swipe / vectorize / gear / question mark).
-# Hover, active and disabled states are all driven by the dynamic
-# ``hover`` / ``active`` properties + Qt's :checked pseudo-state. The
-# TerraLab leaf-green tint marks "you are inside this tool" so the user
-# always knows which AI Edit action owns the canvas. Two states exist for
-# the same reason: ``[active]`` lets us light buttons that drive modal
-# dialogs / menus (where Qt's :checked would auto-toggle on click), while
-# :checked fits the genuine toggle (swipe).
+# Footer icon buttons (swipe / vectorize / gear / help). Hover, active and
+# disabled are driven by the dynamic ``hover`` / ``active`` properties and
+# Qt's :checked. The accent tint marks "you are inside this tool".
 _FOOTER_ICON_BTN_STYLE = (
-    "QToolButton { background: transparent; border: none; padding: 6px 10px;"
-    " font-size: 22px; font-weight: 600;"
-    " color: palette(text); border-radius: 4px; }"
-    'QToolButton[hover="true"] { background: rgba(128,128,128,0.15); }'
-    'QToolButton[active="true"] { background: rgba(139, 172, 39, 0.55); }'
-    'QToolButton[active="true"][hover="true"] { background: rgba(139, 172, 39, 0.75); }'
-    "QToolButton:checked { background: rgba(139, 172, 39, 0.55); }"
-    "QToolButton:checked:hover { background: rgba(139, 172, 39, 0.75); }"
-    "QToolButton:disabled { color: rgba(128, 128, 128, 0.4); }"
-    f"QToolButton:focus {{ border: 2px solid {FOCUS_RING}; padding: 4px 8px; }}"
+    "QToolButton { background: transparent; border: 1px solid transparent; padding: 4px 7px;"
+    f" font-size: {tokens.FONT_BODY}px; font-weight: 500;"
+    f" color: {tokens.INK_2}; border-radius: {tokens.RADIUS_CONTROL}px; }}"
+    f'QToolButton[hover="true"] {{ background: {tokens.HOVER}; color: {tokens.INK}; }}'
+    f'QToolButton[active="true"] {{ background: {tokens.ACCENT_TINT_ON}; color: {tokens.INK}; }}'
+    f'QToolButton[active="true"][hover="true"] {{ background: {tokens.ACCENT_BORDER_SOFT}; }}'
+    f"QToolButton:checked {{ background: {tokens.ACCENT_TINT_ON}; color: {tokens.INK}; }}"
+    f"QToolButton:checked:hover {{ background: {tokens.ACCENT_BORDER_SOFT}; }}"
+    f"QToolButton:disabled {{ color: {tokens.INK_3}; }}"
+    f"QToolButton:focus {{ border-color: {FOCUS_RING}; }}"
     "QToolButton::menu-indicator { image: none; width: 0; }"
 )
 
-_FOOTER_MENU_STYLE = (
-    "QMenu { background: palette(base); border: 1px solid rgba(128,128,128,0.35);"
-    " border-radius: 6px; padding: 4px; }"
-    "QMenu::item { background: transparent; padding: 6px 14px; border-radius: 4px;"
-    " color: palette(text); }"
-    "QMenu::item:selected { background: rgba(128,128,128,0.18); }"
-)
+_FOOTER_MENU_STYLE = tokens.MENU_QSS
 
 _INSTRUCTION_BOX = (
     "QLabel {"
-    "  background-color: rgba(128, 128, 128, 0.12);"
-    "  border: 1px solid rgba(128, 128, 128, 0.25);"
-    "  border-radius: 4px;"
-    "  padding: 8px;"
-    "  font-size: 12px;"
-    "  color: palette(text);"
+    f"  background-color: {tokens.INSET};"
+    f"  border: 1px solid {tokens.LINE};"
+    f"  border-radius: {tokens.RADIUS_CONTROL}px;"
+    "  padding: 8px 10px;"
+    f"  font-size: {tokens.FONT_BODY}px;"
+    f"  color: {tokens.INK};"
     "}"
 )
 
@@ -306,9 +301,9 @@ def _picture_plus_icon(ink: QColor) -> QIcon:
     p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     cx, cy, r = 30.0, 10.0, 9.0
     p.setPen(Qt.PenStyle.NoPen)
-    p.setBrush(QBrush(QColor("#8BAC27")))
+    p.setBrush(QBrush(QColor(tokens.ACCENT)))
     p.drawEllipse(QPointF(cx, cy), r, r)
-    pen = QPen(QColor("#14210A"))
+    pen = QPen(QColor(tokens.ON_ACCENT))
     pen.setWidthF(2.2)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     p.setPen(pen)

@@ -245,6 +245,8 @@ class GenerateImageryAlgorithm(QgsProcessingAlgorithm):
             self.STATUS, tr("Status")))
 
     def processAlgorithm(self, parameters, context, feedback):
+        if feedback.isCanceled():
+            raise QgsProcessingException(tr("Cancelled before starting the run."))
         api = ready_edit_facade(feedback)
 
         prompt = (self.parameterAsString(parameters, self.PROMPT, context) or "").strip()
@@ -272,6 +274,8 @@ class GenerateImageryAlgorithm(QgsProcessingAlgorithm):
             "This takes 30 to 120 seconds and QGIS stays busy until it ends. Do not start it "
             "again: a second run costs money."))
 
+        if feedback.isCanceled():
+            raise QgsProcessingException(tr("Cancelled before starting the run."))
         submitted = api.generate(
             prompt=prompt,
             bbox=[extent.xMinimum(), extent.yMinimum(), extent.xMaximum(), extent.yMaximum()],
@@ -368,13 +372,17 @@ class GenerateImageryAlgorithm(QgsProcessingAlgorithm):
         poll_ms = generation_poll_milliseconds()
         status = api.generation_status()
         while True:
-            if isinstance(status, dict) and not status.get("running"):
+            raise_on_facade_error(feedback, status, "Generation status")
+            if status.get("running") is False:
+                feedback.setProgress(100)
                 return status, "finished"
 
             if feedback.isCanceled():
                 feedback.pushInfo(tr("Cancelling the run."))
-                api.cancel()
-                return api.generation_status(), "cancelled"
+                raise_on_facade_error(feedback, api.cancel(), "Cancel")
+                final_status = api.generation_status()
+                raise_on_facade_error(feedback, final_status, "Generation status")
+                return final_status, "cancelled"
 
             elapsed = time.monotonic() - started
             if elapsed >= timeout_s:
@@ -412,8 +420,12 @@ class GenerateImageryAlgorithm(QgsProcessingAlgorithm):
         """
         if not isinstance(status, dict):
             return []
-        names = [str(name) for name in (status.get("result_layers") or [])]
-        ids = [str(layer_id) for layer_id in (status.get("result_layer_ids") or [])]
+        raw_names = status.get("result_layers") or []
+        raw_ids = status.get("result_layer_ids") or []
+        if not isinstance(raw_names, (list, tuple)) or not isinstance(raw_ids, (list, tuple)):
+            return []
+        names = [str(name) for name in raw_names]
+        ids = [str(layer_id) for layer_id in raw_ids]
         if len(ids) != len(names):
             return [(name, name) for name in names]
         return list(zip(ids, names))

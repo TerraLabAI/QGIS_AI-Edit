@@ -15,7 +15,13 @@ from qgis.core import QgsLayerTree, QgsProject, QgsRasterLayer
 from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem
 
+from ..core.config_store import get_export_dial
 from ..core.qt_compat import safe_disconnect
+
+# Debounce for a layer-tree change (group visibility fires per-node).
+_REFRESH_DEBOUNCE_MS = 100
+# Debounce for a re-pick after a pan or zoom (extentsChanged fires per step).
+_VIEW_REPICK_DEBOUNCE_MS = 600
 
 
 class _IndentDelegate(QStyledItemDelegate):
@@ -216,14 +222,15 @@ class LayerTreeComboBox(QComboBox):
         for timer in (self._refresh_timer, self._view_timer):
             try:
                 timer.stop()
-            except RuntimeError:
+            except RuntimeError:  # timer already deleted with its parent
                 pass
 
     # -- internals --
 
     def _schedule_refresh(self, *_args):
         """Debounced refresh (100 ms)."""
-        self._refresh_timer.start(100)
+        self._refresh_timer.start(
+            get_export_dial("widgets.layer_tree_combobox.refresh_debounce_ms", _REFRESH_DEBOUNCE_MS))
 
     def _refresh(self):
         """Rebuild the combo items from the layer tree."""
@@ -311,8 +318,22 @@ class LayerTreeComboBox(QComboBox):
         return best_idx if best_idx is not None else pool[0]
 
     def _schedule_view_repick(self, *_args):
-        """Debounced re-pick after a pan or zoom (600 ms)."""
-        self._view_timer.start(600)
+        """Debounced re-pick after a pan or zoom (600 ms).
+
+        While the combo is hidden (dock closed) the ranking, which builds a
+        coordinate transform per raster, waits for the next show instead of
+        running on every pan."""
+        if not self.isVisible():
+            self._view_repick_pending = True
+            return
+        self._view_timer.start(
+            get_export_dial("widgets.layer_tree_combobox.view_repick_debounce_ms", _VIEW_REPICK_DEBOUNCE_MS))
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if getattr(self, "_view_repick_pending", False):
+            self._view_repick_pending = False
+            self._view_timer.start(0)
 
     def _repick_for_view(self):
         """Move the selection to the raster the new map view is showing.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .log_scrub import scrub_secrets, scrub_urls, scrub_user_paths
+
 # Import-safe without QGIS so pure-logic modules stay testable headless
 # (scripts/check.sh runs the headless pytest layer under plain python3).
 try:
@@ -18,7 +20,12 @@ def log(message, level=None):
     """Log to QGIS Log Messages panel (visible to user)."""
     if QgsMessageLog is None:
         return
-    QgsMessageLog.logMessage(message, TAG, level=_INFO if level is None else level)
+    safe_message = scrub_user_paths(scrub_urls(scrub_secrets(str(message))))
+    # A queued task can finish during QGIS teardown after its log wrapper died.
+    try:
+        QgsMessageLog.logMessage(safe_message, TAG, level=_INFO if level is None else level)
+    except RuntimeError:
+        return
 
 
 def log_warning(message):

@@ -165,7 +165,10 @@ def refuse_when_threading_unsafe(feedback) -> None:
     canExecute already refuses in the Toolbox, but a caller reaching
     processAlgorithm another way has to hit the same wall.
     """
-    if main_thread_only_flag() is not None:
+    from qgis.PyQt.QtCore import QCoreApplication, QThread
+
+    app = QCoreApplication.instance()
+    if main_thread_only_flag() is not None and (app is None or QThread.currentThread() == app.thread()):
         return
     message = main_thread_flag_missing_message()
     feedback.reportError(message, fatalError=True)
@@ -246,8 +249,8 @@ def raise_on_facade_error(feedback, result, action: str) -> dict:
         feedback.reportError(message, fatalError=True)
         raise QgsProcessingException(message)
     error = result.get("_error")
-    if error:
-        message = tr("{action} failed: {error}").format(action=action, error=error)
+    if "_error" in result:
+        message = tr("{action} failed: {error}").format(action=action, error=error or tr("Unknown error"))
         feedback.reportError(message, fatalError=True)
         raise QgsProcessingException(message)
     return result

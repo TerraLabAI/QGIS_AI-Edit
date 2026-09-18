@@ -7,25 +7,40 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from ....core import qt_compat as QtC
+from ....core.config_store import get_export_copy
 from ....core.date_format import format_smart_date
 from ....core.i18n import tr
 from ....core.prompts.prompt_presets import lookup_template_by_prompt
-from .cards import _CARD_FOCUS
+from ...dock import design_tokens as tk
+from .card_grid import add_row_height_filler, focus_neighbour_card, focus_out_of_grid
+from .cards import _CARD_FOCUS, build_card_slider
 from .common import (
     _CARD_HOVER,
     _CARD_NORMAL,
-    _CARD_PROMPT_CHARS,
-    _CARD_TITLE_H,
+    CARD_HINT_QSS,
+    CARD_PROMPT_QSS,
+    CARD_TITLE_QSS,
+    ClampedLabel,
     _build_origin_pill,
     _build_use_hint,
-    _card_prompt,
     _set_use_hint,
     _sip,
+)
+
+# The "N versions" chip on a session card's picture: a pill on the surface
+# step. Named selector so the card's own "QFrame#card QLabel" rule (no
+# border, transparent) cannot flatten it back to a square box.
+_VERSION_BADGE_QSS = (
+    f"QLabel#versionBadge {{ background: {tk.SURFACE}; color: {tk.INK};"
+    f" border: 1px solid {tk.LINE}; border-radius: {tk.CHIP_PX // 2}px;"
+    f" font-size: {tk.FONT_MICRO}px; font-weight: 600; padding: 0px 9px;"
+    f" min-height: {tk.CHIP_PX - 2}px; max-height: {tk.CHIP_PX - 2}px; }}"
 )
 
 
@@ -42,6 +57,7 @@ class _GenerationCard(QFrame):
 
     Callback: on_open(job). ``show_origin_pill`` adds a Template / Your prompt
     pill (used in the unified Favorites tab to tell card origins apart).
+    ``title`` is a name the user gave the session; it replaces the prompt.
     """
 
     CARD_WIDTH = 300
@@ -49,7 +65,7 @@ class _GenerationCard(QFrame):
     SLIDER_HEIGHT = 175
 
     def __init__(self, job, demo_loader, on_open, parent=None, *,
-                 show_origin_pill=False, version_count=1):
+                 show_origin_pill=False, version_count=1, title: str = ""):
         super().__init__(parent)
         self.setObjectName("card")
         self._job = job
@@ -60,25 +76,25 @@ class _GenerationCard(QFrame):
         self.setCursor(QtC.PointingHandCursor)
         self.setStyleSheet(_CARD_NORMAL + _CARD_FOCUS)
         # Opening a past generation is a click-only action otherwise: nothing
-        # inside the card takes focus.
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        # inside the card takes focus. Tab focus only, so a mouse click leaves
+        # no ring behind once the preview closes.
+        self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         # Size to content (like the template cards) so the footer never leaves a
         # dead gap below the title/date. The 175px image caps every card, so the
         # grid stays aligned at the image even when footers differ (1-line
         # template name vs 2-line custom prompt, optional origin pill).
         self.setMinimumWidth(200)
-        self.setSizePolicy(QtC.SizePolicyExpanding, QtC.SizePolicyFixed)
+        # Preferred height: a row shared with a taller card grows this one to
+        # match, the date staying on the bottom line.
+        self.setSizePolicy(QtC.SizePolicyExpanding, QSizePolicy.Policy.Preferred)
 
+        # 1 px inset: the picture sits inside the hairline, the top of the card.
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setContentsMargins(1, 1, 1, 1)
         outer.setSpacing(0)
 
         # Before/after wipe slider (badges hidden - keeps just the divider).
-        from ...before_after_slider import BeforeAfterSlider
-
-        self._slider = BeforeAfterSlider(
-            self, auto_loop=False, show_badges=False, handle_grab_only=True
-        )
+        self._slider = build_card_slider(self)
         self._slider.setFixedHeight(self.SLIDER_HEIGHT)
         self._slider.setSizePolicy(QtC.SizePolicyExpanding, QtC.SizePolicyFixed)
         self._slider.setCursor(QtC.PointingHandCursor)
@@ -93,8 +109,8 @@ class _GenerationCard(QFrame):
 
         footer = QWidget(self)
         footer_v = QVBoxLayout(footer)
-        footer_v.setContentsMargins(10, 6, 10, 8)
-        footer_v.setSpacing(3)
+        footer_v.setContentsMargins(12, 8, 12, 10)
+        footer_v.setSpacing(4)
 
         # A generation counts as a template only when its prompt still matches a
         # curated template verbatim (whitespace + language normalized). If the
@@ -103,8 +119,10 @@ class _GenerationCard(QFrame):
         prompt_raw = job.get("prompt") or ""
         template_match = lookup_template_by_prompt(prompt_raw)
         template_label = template_match[1] if template_match else ""
+        named = " ".join((title or "").split())
         self.setAccessibleName(
-            template_label or prompt_raw or tr("Your prompt")
+            named or template_label or prompt_raw
+            or get_export_copy("dialogs.generation_card.your_prompt_accessible_name", tr("Your prompt"))
         )
 
         # Optional origin pill (unified Favorites tab): Template vs Your prompt.
@@ -115,29 +133,13 @@ class _GenerationCard(QFrame):
             pill_row.addStretch()
             footer_v.addLayout(pill_row)
 
-        if template_label:
-            # Template: the name says it all, bold. Wraps to a second line if
-            # long; the fixed-height block below keeps it aligned with prompts.
-            title_lbl = QLabel(_card_prompt(template_label, _CARD_PROMPT_CHARS))
-            title_lbl.setWordWrap(True)
-            title_lbl.setStyleSheet(
-                "color: palette(text); font-size: 12px; font-weight: 600; "
-                "background: transparent; border: none;"
-            )
-        else:
-            # Custom or edited prompt: the prompt is the body, plain weight,
-            # cleanly truncated (never a bold clipped heading).
-            title_lbl = QLabel(_card_prompt(prompt_raw, _CARD_PROMPT_CHARS))
-            title_lbl.setWordWrap(True)
-            title_lbl.setStyleSheet(
-                "color: palette(text); font-size: 12px; font-weight: 400; "
-                "background: transparent; border: none;"
-            )
-        # Reserve two lines on every card so 1-line names and 2-line prompts are
-        # the same height (top-aligned so a short name sits at the top).
-        title_lbl.setFixedHeight(_CARD_TITLE_H)
-        title_lbl.setAlignment(QtC.AlignLeft | QtC.AlignTop)
-        title_lbl.setTextFormat(QtC.PlainText)
+        # Two lines on every card, measured with the font (the old character
+        # budget let a narrow card show a clipped third line), so 1-line
+        # names and 2-line prompts keep one height. A template name reads
+        # bold; a custom or edited prompt is the body, plain weight.
+        title_lbl = ClampedLabel(named or template_label or prompt_raw, lines=2)
+        title_lbl.setStyleSheet(
+            CARD_TITLE_QSS if (named or template_label) else CARD_PROMPT_QSS)
         footer_v.addWidget(title_lbl)
 
         bottom_row = QHBoxLayout()
@@ -146,10 +148,7 @@ class _GenerationCard(QFrame):
         date_text = format_smart_date(job.get("created_at") or "")
         if date_text:
             date_lbl = QLabel(date_text)
-            date_lbl.setStyleSheet(
-                "color: rgba(128,128,128,0.85); font-size: 10px; "
-                "background: transparent; border: none;"
-            )
+            date_lbl.setStyleSheet(CARD_HINT_QSS)
             bottom_row.addWidget(date_lbl)
         bottom_row.addStretch()
         self._use_hint = _build_use_hint(self)
@@ -157,6 +156,7 @@ class _GenerationCard(QFrame):
         footer_v.addLayout(bottom_row)
 
         outer.addWidget(footer)
+        add_row_height_filler(outer, footer)
 
         # Preview loads lazily (only when the card scrolls into view) so
         # opening Recent never downloads dozens of images at once. Prefer the
@@ -219,7 +219,7 @@ class _GenerationCard(QFrame):
         ):
             try:
                 sig.disconnect(slot)
-            except (RuntimeError, TypeError):
+            except (RuntimeError, TypeError):  # slot never connected or loader deleted
                 pass
         self._loader_connected = False
 
@@ -250,11 +250,10 @@ class _GenerationCard(QFrame):
             return
         if self._version_badge is None:
             self._version_badge = QLabel(self)
-            self._version_badge.setStyleSheet(
-                "QLabel { background: rgba(0,0,0,0.66); color: white; "
-                "font-size: 10px; font-weight: 600; border-radius: 9px; "
-                "padding: 2px 8px; }"
-            )
+            self._version_badge.setObjectName("versionBadge")
+            self._version_badge.setAlignment(QtC.AlignCenter)
+            # A chip on the picture: the surface step, a hairline, the ink.
+            self._version_badge.setStyleSheet(_VERSION_BADGE_QSS)
             # Let clicks through to the card so the badge corner isn't a dead
             # zone (the card opens on click anywhere).
             self._version_badge.setAttribute(QtC.WA_TransparentForMouseEvents)
@@ -268,7 +267,7 @@ class _GenerationCard(QFrame):
         if self._version_badge is None:
             return
         b = self._version_badge
-        b.move(max(8, self.width() - b.width() - 8), 8)
+        b.move(max(10, self.width() - b.width() - 10), 10)
 
     def resizeEvent(self, event):  # noqa: N802
         super().resizeEvent(event)
@@ -285,8 +284,18 @@ class _GenerationCard(QFrame):
 
     def leaveEvent(self, event):  # noqa: N802
         self.setStyleSheet(_CARD_NORMAL + _CARD_FOCUS)
-        _set_use_hint(self._use_hint, False)
+        _set_use_hint(self._use_hint, self.hasFocus())
         super().leaveEvent(event)
+
+    def focusInEvent(self, event):  # noqa: N802
+        # A keyboard user sees the same "Open" cue a pointer does.
+        _set_use_hint(self._use_hint, True)
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event):  # noqa: N802
+        if not self.underMouse():
+            _set_use_hint(self._use_hint, False)
+        super().focusOutEvent(event)
 
     def mousePressEvent(self, event):  # noqa: N802
         # Run the base handler first, while this card is still alive; the open
@@ -303,6 +312,11 @@ class _GenerationCard(QFrame):
         # Space and Return open the same detail popup a click does.
         if event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self._emit_open()
+            event.accept()
+            return
+        # Arrow keys walk the grid, like the GPT store, and leave it at its
+        # top and left edges.
+        if focus_neighbour_card(self, event.key()) or focus_out_of_grid(self, event.key()):
             event.accept()
             return
         # Keys we don't handle: ignore, so Tab, Escape and the dialog's own

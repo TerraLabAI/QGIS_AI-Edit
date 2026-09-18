@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .mcp_api_support import _jsonable, _never_raises, not_found_error
+from .mcp_api_support import _jsonable, _never_raises, _response_error, _whole_number, not_found_error
 
 # Fields worth handing to an integrator. The server may carry more, and the raw
 # row is available under "raw" on get_generation(), so nothing is lost by
@@ -128,8 +128,8 @@ class HistoryMixin:
         from .core.prompts.conversation_summary import filter_entries
 
         try:
-            limit = max(1, int(limit))
-        except (TypeError, ValueError):
+            limit = max(1, _whole_number(limit))
+        except (TypeError, ValueError, OverflowError):
             return {"_error": "limit must be a whole number."}
         entries = self._session_entries()
         text = str(query or "").strip()
@@ -213,8 +213,8 @@ class HistoryMixin:
         ``from_server`` and ``has_more``.
         """
         try:
-            limit = max(1, int(limit))
-        except (TypeError, ValueError):
+            limit = max(1, _whole_number(limit))
+        except (TypeError, ValueError, OverflowError):
             return {"_error": "limit must be a whole number."}
 
         if refresh:
@@ -230,8 +230,13 @@ class HistoryMixin:
                 }
             payload = client.get_generation_history(
                 header, limit=limit, favorites_only=bool(favorites_only)
-            ) or {}
-            jobs = list(payload.get("jobs") or [])
+            )
+            error = _response_error(payload, "Reading history")
+            if error:
+                return error
+            jobs = payload.get("jobs")
+            if not isinstance(jobs, list) or any(not isinstance(job, dict) for job in jobs):
+                return {"_error": "Reading history returned invalid generation records."}
             return {
                 "count": len(jobs),
                 "generations": [_job_summary(job) for job in jobs],
@@ -242,12 +247,13 @@ class HistoryMixin:
         jobs = self._cached_jobs()
         if favorites_only:
             jobs = [job for job in jobs if job.get("is_favorite")]
+        has_more = len(jobs) > limit
         jobs = jobs[:limit]
         return {
             "count": len(jobs),
             "generations": [_job_summary(job) for job in jobs],
             "from_server": False,
-            "has_more": False,
+            "has_more": has_more,
         }
 
     @_never_raises
@@ -314,6 +320,8 @@ class HistoryMixin:
                     "list_generations(refresh=True) first to bring in work done elsewhere."
                 ),
             )
+        if getattr(self, "_busy", lambda: False)():
+            return {"_error": "Wait for the current generation before reopening a session.", "busy": True}
         handler = getattr(self._plugin, "_on_history_restore", None)
         if not callable(handler):
             return {"_error": "Reopening past work is not available in this build."}
@@ -391,6 +399,9 @@ class HistoryMixin:
                 ),
             }
         payload = client.rename_generation_session(header, session_id, title) or {}
+        error = _response_error(payload, "Renaming the session")
+        if error:
+            return error
         stored = payload.get("title") or title
         handler = getattr(self._plugin, "_apply_conversation_rename", None)
         if callable(handler):
@@ -427,7 +438,10 @@ class HistoryMixin:
                     "follow action_required."
                 ),
             }
-        client.delete_generation_session(header, session_id=session_id)
+        payload = client.delete_generation_session(header, session_id=session_id)
+        error = _response_error(payload, "Deleting the session")
+        if error:
+            return error
         # The panel's own delete path, so the local copy of the history matches
         # the account. Without it list_sessions() still lists the session and
         # get_session() still reports it found.

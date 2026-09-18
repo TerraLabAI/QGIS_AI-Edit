@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 
+from ...core.config_store import get_export_copy, get_export_dial
 from ...core.i18n import tr
 from ...core.logger import log_warning
 from ...core.prompts import history_cache
@@ -26,6 +27,11 @@ from ..raster_writer import (
     extent_and_crs_from_job,
     get_output_dir,
 )
+
+# Message-bar notice durations, in seconds.
+_NOTIFY_QUICK_S = 2
+_NOTIFY_BRIEF_S = 4
+_NOTIFY_ERROR_S = 6
 
 
 class SessionBaseNoticeMixin:
@@ -96,17 +102,31 @@ class SessionBaseNoticeMixin:
         dismissed; the next restore replaces it instead of stacking. The
         button only appears when the archived input is actually producible."""
         from qgis.core import Qgis
+        from qgis.PyQt.QtCore import Qt
         from qgis.PyQt.QtWidgets import QPushButton
+
+        from ..dock import design_tokens as tokens
 
         self._dismiss_base_imagery_notice()
         try:
             bar = self._iface.messageBar()
             widget = bar.createMessage(
                 "AI Edit",
-                tr("The imagery this session was edited on is not in this project."),
+                get_export_copy(
+                    "flows.session_base_notice.missing_base_original",
+                    tr("The imagery this session was edited on is not in this project. "
+                       "Add its Original to see your edits in context."),
+                ),
             )
             if self._session_base_source_available(job):
-                button = QPushButton(tr("Add source snapshot"))
+                button = QPushButton(
+                    get_export_copy(
+                        "flows.session_base_notice.add_original", tr("Add the Original")
+                    )
+                )
+                # The message bar's one action, as a pill on the AI Agent line.
+                button.setStyleSheet(tokens.BTN_GHOST_QSS)
+                button.setCursor(Qt.CursorShape.PointingHandCursor)
                 button.clicked.connect(
                     lambda _checked=False, j=job: self._on_add_session_base(j)
                 )
@@ -128,7 +148,7 @@ class SessionBaseNoticeMixin:
         except Exception as err:  # nosec B110 - already closed by the user
             log_warning(f"base imagery notice pop failed: {err}")
 
-    # --- one-click "Add source snapshot" ----------------------------------
+    # --- one-click "Add the Original" ------------------------------------
 
     def _session_base_source_available(self, job: dict | None) -> bool:
         """True when the archived input can be produced: its before sidecar
@@ -159,11 +179,23 @@ class SessionBaseNoticeMixin:
             return
         input_url = job.get("input_url")
         if not input_url or self._client is None:
-            self._notify(tr("This generation's image is no longer available."), duration=4)
+            self._notify(
+                get_export_copy(
+                    "flows.session_base_notice.image_unavailable",
+                    tr("This generation's image is no longer available."),
+                ),
+                duration=get_export_dial("flows.session_base_notice.notify_brief_s", _NOTIFY_BRIEF_S),
+            )
             return
         geo = extent_and_crs_from_job(job)
         if geo is None:
-            self._notify(tr("Location data unavailable for this generation."), duration=4)
+            self._notify(
+                get_export_copy(
+                    "flows.session_base_notice.location_unavailable",
+                    tr("Location data unavailable for this generation."),
+                ),
+                duration=get_export_dial("flows.session_base_notice.notify_brief_s", _NOTIFY_BRIEF_S),
+            )
             return
         extent_dict, crs_wkt = geo
         rid = job.get("request_id") or ""
@@ -176,17 +208,29 @@ class SessionBaseNoticeMixin:
             path = write_geotiff(data, ed, wkt, d, prompt="session input")
             return {"path": path, "crs_wkt": wkt, "request_id": r, "source": "download"}
 
-        task = GenericRequestTask(tr("Adding session input to the map"), _work)
+        task = GenericRequestTask(
+            get_export_copy(
+                "flows.session_base_notice.adding_session_input_task",
+                tr("Adding session input to the map"),
+            ),
+            _work,
+        )
         task.succeeded.connect(self._on_session_base_ready)
         task.failed.connect(self._on_session_base_failed)
-        self._notify(tr("Adding to map..."), duration=2)
+        self._notify(
+            get_export_copy("flows.session_base_notice.adding_to_map_status", tr("Adding to map...")),
+            duration=get_export_dial("flows.session_base_notice.notify_quick_s", _NOTIFY_QUICK_S),
+        )
         self._hold_history_task(task)
 
     def _on_session_base_failed(self, msg: str, _code: str) -> None:
         """Offline or expired archive: the click no-ops with an explanation,
         same pattern as the neighbouring history downloads."""
         self._track_history_error("session_base_download_failed")
-        self._notify(tr("Could not add to map: {msg}").format(msg=msg), duration=6)
+        self._notify(
+            tr("Could not add to map: {msg}").format(msg=msg),
+            duration=get_export_dial("flows.session_base_notice.notify_error_s", _NOTIFY_ERROR_S),
+        )
 
     def _on_session_base_ready(self, result: dict) -> None:
         result = result or {}
@@ -199,7 +243,7 @@ class SessionBaseNoticeMixin:
 
     def _add_session_base_layer(self, info: dict) -> None:
         """Materialize the archived input as a normal base layer: named
-        "Session input", placed just BELOW the AI-Edit group (it is the base
+        "Original", placed just BELOW the AI-Edit group (it is the base
         the results sit on), never inside it. Outside the group it is not an
         AI Edit result layer: version visibility syncing, retry exports and
         the base check itself all leave it alone."""
@@ -211,18 +255,31 @@ class SessionBaseNoticeMixin:
             )
         except Exception as err:  # noqa: BLE001
             self._track_history_error("session_base_add_failed")
-            self._notify(tr("Could not add layer: {msg}").format(msg=err), duration=6)
+            self._notify(
+                tr("Could not add layer: {msg}").format(msg=err),
+                duration=get_export_dial("flows.session_base_notice.notify_error_s", _NOTIFY_ERROR_S),
+            )
             return
         if layer is None:
             return
-        layer.setName(tr("Session input"))
+        layer.setName(
+            get_export_copy(
+                "flows.session_base_notice.original_layer_name", tr("Original")
+            )
+        )
         self._label_session_base_metadata(layer)
         self._move_session_base_below_group(layer.id())
         try:
             self._canvas.refresh()
         except Exception as err:  # nosec B110
             log_warning(f"canvas refresh after session base add failed: {err}")
-        self._notify(tr("Added to map."), level=Qgis.MessageLevel.Success, duration=4)
+        self._notify(
+            get_export_copy(
+                "flows.session_base_notice.added_to_map_as", tr("Added to your map as {name}")
+            ).replace("{name}", layer.name()),
+            level=Qgis.MessageLevel.Success,
+            duration=get_export_dial("flows.session_base_notice.notify_brief_s", _NOTIFY_BRIEF_S),
+        )
 
     @staticmethod
     def _label_session_base_metadata(layer) -> None:

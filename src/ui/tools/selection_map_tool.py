@@ -16,9 +16,10 @@ from qgis.PyQt.QtGui import (
     QPixmap,
 )
 
-from ...core.config_store import get_export_dial_seq
+from ...core.config_store import get_export_copy, get_export_dial_seq
 from ...core.i18n import tr
-from ..dock.style import BRAND_BLUE
+from ..dock import design_tokens as tokens
+from ..dock.design_tokens import qcolor
 
 # Aspect ratios the export/generation pipeline supports. The polygon zone
 # tool (polygon_selection_tool.py) expands a drawn shape's bounding box to
@@ -69,8 +70,10 @@ class _ZoneDeleteBadge(QgsMapCanvasItem):
     """
 
     RADIUS = 12
-    _BRAND_BLUE = QColor(BRAND_BLUE)
-    _DISABLED_BG = QColor(30, 136, 229, 115)
+    # The interaction blue, and a neutral grey disc while it cannot act.
+    _BRAND_BLUE = qcolor(tokens.BRAND_BLUE)
+    _DISABLED_BG = qcolor(tokens.INK_3)
+    _GLYPH = QColor(Qt.GlobalColor.white)
 
     def __init__(self, canvas):
         super().__init__(canvas)
@@ -88,9 +91,16 @@ class _ZoneDeleteBadge(QgsMapCanvasItem):
             return
         self._enabled = enabled
         if enabled:
-            self.setToolTip(tr("Clear this zone"))
+            self.setToolTip(get_export_copy("widgets.selection_map_tool.clear_zone_tooltip", tr("Clear this zone")))
         else:
-            self.setToolTip(tr("Cancel the running generation first (close the dock)"))
+            self.setToolTip(
+                # A run cannot be stopped on purpose (its credits are booked),
+                # so the badge never sends the user to close the dock.
+                get_export_copy(
+                    "widgets.selection_map_tool.wait_generation_tooltip",
+                    tr("Wait for this edit to finish"),
+                )
+            )
         self.update()
 
     def hit_test(self, canvas_pt) -> bool:
@@ -118,10 +128,7 @@ class _ZoneDeleteBadge(QgsMapCanvasItem):
         painter.setBrush(self._BRAND_BLUE if self._enabled else self._DISABLED_BG)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(QPointF(0, 0), self.RADIUS, self.RADIUS)
-        line_color = (
-            QColor(255, 255, 255) if self._enabled else QColor(255, 255, 255, 153)
-        )
-        pen = QPen(line_color, 2)
+        pen = QPen(self._GLYPH, 2)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         painter.setPen(pen)
         d = self.RADIUS * 0.45
@@ -190,14 +197,14 @@ class _ZoneActionBadge(QgsMapCanvasItem):
     _PAD_X = 9
     _ICON = 14
     _ICON_GAP = 5
-    # Resting pills stay muted/translucent so they sit lightly on the imagery;
-    # the active (comparing) pill turns solid vivid blue with a crisp white
-    # ring so the on/off state reads at a glance. Blue matches the × badge.
-    _BLUE_ACTIVE = QColor(30, 136, 229, 255)
-    _BLUE_RESTING = QColor(30, 136, 229, 140)
-    _WHITE = QColor(255, 255, 255)
-    _OUTLINE = QColor(255, 255, 255, 235)
-    _SHADOW = QColor(0, 0, 0, 90)
+    # Resting pills are a translucent blue that sits lightly on the imagery;
+    # the active (comparing) pill turns solid with a white ring so the on/off
+    # state reads at a glance. Blue matches the × badge. No shadow.
+    _BLUE_ACTIVE = qcolor(tokens.BRAND_BLUE)
+    _REST_FILL = qcolor(tokens.BRAND_BLUE)
+    _REST_FILL.setAlpha(140)
+    _WHITE = QColor(Qt.GlobalColor.white)
+    _OUTLINE = QColor(Qt.GlobalColor.white)
 
     def __init__(self, canvas, kind: str, label: str):
         super().__init__(canvas)
@@ -208,8 +215,8 @@ class _ZoneActionBadge(QgsMapCanvasItem):
         self._active = False
         self.setZValue(10000)
         self._font = QFont()
-        self._font.setPixelSize(11)
-        self._font.setBold(True)
+        self._font.setPixelSize(tokens.FONT_HINT)
+        self._font.setWeight(QFont.Weight.DemiBold)
         self._recompute_width()
         if kind == "compare":
             self._glyph = _tinted_pixmap("swipe.svg", self._WHITE)
@@ -269,14 +276,9 @@ class _ZoneActionBadge(QgsMapCanvasItem):
         w, h = self._width, self.HEIGHT
         rect = QRectF(-w / 2, -h / 2, w, h)
         radius = h / 2.0
-        # Soft shadow so the pill stays legible over any imagery.
-        shadow = QRectF(rect)
-        shadow.translate(0, 1)
+        # Pill body: neutral when idle, blue + ring when comparing.
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(self._SHADOW)
-        painter.drawRoundedRect(shadow, radius, radius)
-        # Pill body: muted when idle, solid + ring when comparing.
-        painter.setBrush(self._BLUE_ACTIVE if self._active else self._BLUE_RESTING)
+        painter.setBrush(self._BLUE_ACTIVE if self._active else self._REST_FILL)
         painter.drawRoundedRect(rect, radius, radius)
         if self._active:
             ring = QPen(self._OUTLINE)

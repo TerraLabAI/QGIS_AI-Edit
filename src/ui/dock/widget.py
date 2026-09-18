@@ -3,35 +3,48 @@ from __future__ import annotations
 from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QKeySequence
-from qgis.PyQt.QtWidgets import QDockWidget
+from qgis.PyQt.QtWidgets import QApplication, QDockWidget
 
 from ...core import qt_compat as QtC
+from ...core.config_store import get_export_copy
 from ...core.i18n import tr
 from ...core.qt_compat import QShortcut
 from ...core.reference_image_store import ReferenceImageStore
 from ...core.resolution_labels import DEFAULT_RESOLUTION_CREDIT_COSTS
+from ..keyboard_focus import apply_keyboard_focus_policy
 from ..panel_helpers import make_section_header
 from .account import DockAccountMixin
 from .blocked_reasons import DockBlockedReasonsMixin
 from .build import build_ui
 from .chrome import DockChromeMixin
+from .dock_sizing import dock_minimum_height
 from .generation_state import DockGenerationStateMixin
 from .library import DockLibraryMixin
 from .pro_ceiling import DockProCeilingMixin
+from .pro_nudges import DockProNudgesMixin
 from .prompts import DockPromptMixin
 from .tools_footer import DockToolsFooterMixin
+from .update_banner import DockUpdateBannerMixin
 from .versions import DockVersionsMixin
+
+# Private names are listed too: other modules import them from here.
+__all__ = [
+    "_make_section_header",
+    "AIEditDockWidget",
+]
 
 _make_section_header = make_section_header  # backward-compat alias
 
 
 class AIEditDockWidget(
     DockChromeMixin,
+    DockUpdateBannerMixin,
     DockAccountMixin,
     DockBlockedReasonsMixin,
     DockLibraryMixin,
     DockGenerationStateMixin,
     DockProCeilingMixin,
+    DockProNudgesMixin,
     DockVersionsMixin,
     DockPromptMixin,
     DockToolsFooterMixin,
@@ -39,9 +52,9 @@ class AIEditDockWidget(
 ):
     """Dock widget with prompt-first flow.
 
-    The prompt view is always visible after activation. The selection tool
-    stays active so the user can draw a zone at any time. The Generate
-    button is disabled (shows "Select your zone") until a zone is drawn.
+    Entry screen (Launch), then the zone step, then the prompt with
+    Generate and Cancel. Generate is grey, with the reason under it, until
+    the zone and a long enough prompt are there.
     """
 
     stop_clicked = pyqtSignal()
@@ -56,11 +69,11 @@ class AIEditDockWidget(
     settings_clicked = pyqtSignal()
     launch_clicked = pyqtSignal()          # user clicked "Launch AI Edit" on entry screen
     try_example_requested = pyqtSignal()   # empty-canvas one-click onboarding (demo basemap only)
-    exit_clicked = pyqtSignal()            # user clicked the always-visible Exit button
+    exit_clicked = pyqtSignal()            # Cancel (zone step or prompt), or Escape back to Launch
     zone_clear_requested = pyqtSignal()    # Escape pressed while a zone was selected
-    markup_clicked = pyqtSignal()          # user picked Tools → Mark up
+    markup_clicked = pyqtSignal()          # Draw chip or its shortcut
     vectorize_clicked = pyqtSignal()       # user picked Tools → Vectorize
-    # Reference chip clicked (either prompt container): open the Reference
+    # References chip clicked (either prompt container): open the References
     # panel. Done in that panel routes back through reference_done_clicked.
     reference_panel_requested = pyqtSignal()
     reference_done_clicked = pyqtSignal()
@@ -75,8 +88,9 @@ class AIEditDockWidget(
     # swipe map tool armed, False = user wants it disarmed. The plugin
     # routes both states to the SwipeController.
     swipe_toggled = pyqtSignal(bool)
-    markup_done_clicked = pyqtSignal()     # user clicked Done in Mark up panel
-    markup_clear_clicked = pyqtSignal()    # user clicked Clear all in Mark up
+    markup_done_clicked = pyqtSignal()     # user clicked Done in the Draw panel
+    markup_clear_clicked = pyqtSignal()    # user clicked Clear all in the Draw panel
+    markup_undo_clicked = pyqtSignal()     # user clicked Undo in the Draw panel
     markup_tool_changed = pyqtSignal(str)  # 'pencil' | 'arrow' | 'circle'
     markup_color_changed = pyqtSignal(QColor)
     vectorize_done_clicked = pyqtSignal()  # user clicked Done in Vectorize panel
@@ -104,13 +118,13 @@ class AIEditDockWidget(
     # The sessions list opened on a cache that never synced (or whose last
     # sync failed): the plugin retries the history fetch.
     conversations_refresh_requested = pyqtSignal()
-    # Fired when the Help (?) menu opens (True) or closes (False). The
-    # plugin uses this to light the green active tint on the help button
-    # and to disarm the swipe map tool when the user opens another action.
+    # UNREACHABLE (2026-09-18): the header lost its Help menu (Settings holds
+    # tutorials, shortcuts, contact and report), so nothing emits this. Kept
+    # because plugin_parts/lifecycle.py still connects to it.
     help_menu_open_changed = pyqtSignal(bool)
 
     def __init__(self, parent=None, reference_store: ReferenceImageStore | None = None):
-        super().__init__(tr("AI Edit by TerraLab"), parent)
+        super().__init__(get_export_copy("dock.widget.title", tr("AI Edit by TerraLab")), parent)
         # Stable objectName lets QGIS save/restore the dock (position + visibility) across
         # sessions, like the native Layers panel.
         self.setObjectName("AIEditDockWidget")
@@ -121,6 +135,9 @@ class AIEditDockWidget(
             self.setMinimumWidth(max(300, int(char_w * 50)))
         except Exception:
             self.setMinimumWidth(300)
+        # Same idea downwards: docks stacked in one area share the height, and
+        # without a floor the neighbour above squeezes this one to its header.
+        self.setMinimumHeight(dock_minimum_height(self))
         self._reference_store = reference_store
         self._library_client = None
         self._library_auth_manager = None
@@ -150,17 +167,21 @@ class AIEditDockWidget(
         # Parented so the 12 s shot dies with the dock, not against a deleted widget.
         self._status_hide_timer: QTimer | None = None
 
-        # Global Escape: exit the flow no matter where focus is (canvas while
-        # drawing a zone, prompt textarea, progress bar, etc.). WindowShortcut
-        # context lets the shortcut fire on the parent main window's key events
-        # via ShortcutOverride, which beats the map tool's local Escape handler.
+        # Escape walks the flow back (canvas while drawing a zone, prompt
+        # textarea, progress bar, etc.). WindowShortcut context lets the
+        # shortcut fire on the main window's key events via ShortcutOverride,
+        # which beats the map tool's local Escape handler. It is the ONLY
+        # Escape owner: the Mark up and Vectorize panels route through it, since
+        # two live shortcuts on one key are ambiguous and neither fires.
+        # _refresh_dock_key_shortcuts keeps it disabled unless focus is in the
+        # dock or on the canvas under one of our tools.
         self._escape_shortcut = QShortcut(QKeySequence(QtC.Key_Escape), self)
         self._escape_shortcut.setContext(QtC.WindowShortcut)
         self._escape_shortcut.activated.connect(self._on_escape_pressed)
 
-        # Global Enter / Return: launch generation from anywhere in the dock.
-        # The prompt textarea consumes Return in its own keyPressEvent so this
-        # shortcut only fires when focus is on a non-text-input child.
+        # Enter / Return: launch generation from the dock. The prompt textarea
+        # consumes Return in its own keyPressEvent so this shortcut only fires
+        # when focus is on a non-text-input child. Same enabled gate as Escape.
         self._generate_shortcut_return = QShortcut(QKeySequence(QtC.Key_Return), self)
         self._generate_shortcut_return.setContext(QtC.WindowShortcut)
         self._generate_shortcut_return.activated.connect(self._on_generate_shortcut)
@@ -168,9 +189,19 @@ class AIEditDockWidget(
         self._generate_shortcut_enter.setContext(QtC.WindowShortcut)
         self._generate_shortcut_enter.activated.connect(self._on_generate_shortcut)
 
+        # One reused timer for the Launch gate re-check (see
+        # _schedule_layer_warning_update); the dirty flag defers it while the
+        # dock is hidden.
+        self._layer_warning_timer = QTimer(self)
+        self._layer_warning_timer.setSingleShot(True)
+        self._layer_warning_timer.timeout.connect(self._run_layer_warning_update)
+        self._layer_warning_dirty = False
+
         self._setup_title_bar()
 
         build_ui(self)
+        # Buttons take focus from Tab only: the blue ring is the keyboard's.
+        apply_keyboard_focus_policy(self)
 
         # "Guide the AI" tip: retires for good once either grounding feature
         # is used, even once (see _mark_guide_ai_touched).
@@ -222,11 +253,79 @@ class AIEditDockWidget(
         QgsProject.instance().layersAdded.connect(self._schedule_layer_warning_update)
         QgsProject.instance().layersRemoved.connect(self._schedule_layer_warning_update)
         QgsProject.instance().layerTreeRoot().visibilityChanged.connect(
-            self._update_layer_warning
+            self._schedule_layer_warning_update
         )
         QgsProject.instance().readProject.connect(self._on_project_loaded)
         QgsProject.instance().cleared.connect(self._on_project_loaded)
         self._update_layer_warning()
+
+        # Keep the Escape / Return shortcuts' enabled flag in step with focus,
+        # the active map tool and the dock's own visibility.
+        app = QApplication.instance()
+        if app is not None:
+            app.focusChanged.connect(self._refresh_dock_key_shortcuts)
+        canvas = self._map_canvas_or_none()
+        if canvas is not None:
+            canvas.mapToolSet.connect(self._refresh_dock_key_shortcuts)
+        self.visibilityChanged.connect(self._refresh_dock_key_shortcuts)
+        self._refresh_dock_key_shortcuts()
+
+    def showEvent(self, event):  # noqa: N802
+        super().showEvent(event)
+        # Buttons built after the first sweep (result rows, cards) join it.
+        apply_keyboard_focus_policy(self)
+        # Layer changes that landed while the dock was hidden skipped the
+        # tree walk; run it once now.
+        if self._layer_warning_dirty:
+            self._schedule_layer_warning_update()
+        # Hidden generations keep running, but their UI timers sleep while the
+        # dock is away. Resume only the animation work that was still pending.
+        prep_ticker = getattr(self, "_prep_ticker", None)
+        if getattr(self, "_resume_prep_ticker_on_show", False) and prep_ticker is not None:
+            prep_ticker.start()
+        self._resume_prep_ticker_on_show = False
+        progress_timer = getattr(self, "_progress_timer", None)
+        if (
+            progress_timer is not None
+            and self._progress_widget.isVisibleTo(self)
+            and self._progress_bar.value() < getattr(
+                self, "_progress_target", self._progress_bar.value()
+            )
+        ):
+            progress_timer.start()
+
+    def hideEvent(self, event):  # noqa: N802
+        prep_ticker = getattr(self, "_prep_ticker", None)
+        self._resume_prep_ticker_on_show = bool(
+            prep_ticker is not None and prep_ticker.isActive()
+        )
+        self._stop_prep_ticker()
+        self._stop_progress_animation()
+        super().hideEvent(event)
+
+    @staticmethod
+    def _map_canvas_or_none():
+        try:
+            from qgis.utils import iface as _iface
+            return _iface.mapCanvas() if _iface is not None else None
+        except Exception:
+            return None
+
+    def _refresh_dock_key_shortcuts(self, *_args) -> None:
+        """Enable the dock's Escape and Return keys only while they belong to
+        AI Edit. A WindowShortcut eats its key even when the slot then does
+        nothing, so the gate is the enabled flag: Escape must reach the QGIS
+        locator or attribute table, and Return typed there must never start
+        a paid generation."""
+        try:
+            ours = self.isVisible() and self._is_escape_for_us()
+            vectorize_open = self._vectorize_panel.isVisible()
+            self._escape_shortcut.setEnabled(ours)
+            # The Vectorize panel binds Return / Enter to Run itself.
+            for shortcut in (self._generate_shortcut_return, self._generate_shortcut_enter):
+                shortcut.setEnabled(ours and not vectorize_open)
+        except (RuntimeError, AttributeError):
+            pass
 
     def _on_escape_pressed(self):
         """Escape walks the flow back one step at a time.
@@ -243,8 +342,8 @@ class AIEditDockWidget(
         handle it directly).
         ZONE_SELECTED → SELECTING_ZONE (drop the zone, keep the panel open).
         SELECTING_ZONE / LAUNCH / RESULT → exit to LAUNCH.
-        A generation in progress is never cancelable by Escape - credits are
-        already booked; only the Stop button can cancel.
+        A generation in progress is never cancelable by Escape: credits are
+        already booked, and the panel has no Stop on purpose.
         """
         if not self.isVisible():
             return
@@ -276,6 +375,13 @@ class AIEditDockWidget(
             line_tool.escape_step()
             return
         if not self._main_widget.isVisible():
+            # A tool panel is open. Escape means its Done: the panels carry
+            # no Escape shortcut of their own (see __init__).
+            for name in ("_markup_panel", "_vectorize_panel", "_reference_panel"):
+                panel = getattr(self, name, None)
+                if panel is not None and panel.isVisible():
+                    panel.done_clicked.emit()
+                    return
             return
         draw_tool = self._active_polygon_draw_tool()
         if draw_tool is not None:
@@ -289,24 +395,26 @@ class AIEditDockWidget(
     def _is_escape_for_us(self) -> bool:
         """Decide whether an Escape keypress should drive AI Edit's flow.
 
-        True when focus is inside the dock, OR the canvas currently runs
-        one of our map tools (polygon zone selection / Mark up pencil/arrow/
-        circle). Anywhere else, Escape belongs to the active QGIS tool.
+        True when focus is inside the dock, OR the canvas runs one of our
+        map tools (polygon zone selection / Mark up pencil/arrow/circle /
+        swipe) and holds focus. Anywhere else (another QGIS panel, the
+        locator), the key belongs to QGIS. Also gates Return / Enter.
         """
-        from qgis.PyQt.QtWidgets import QApplication
+        def inside(widget, ancestor) -> bool:
+            while widget is not None:
+                if widget is ancestor:
+                    return True
+                widget = widget.parent()
+            return False
 
         focus = QApplication.focusWidget()
-        if focus is not None:
-            w = focus
-            while w is not None:
-                if w is self:
-                    return True
-                w = w.parent()
+        if focus is not None and inside(focus, self):
+            return True
+        canvas = self._map_canvas_or_none()
+        if canvas is None:
+            return False
         try:
-            from qgis.utils import iface as _iface
-            if _iface is None:
-                return False
-            tool = _iface.mapCanvas().mapTool()
+            tool = canvas.mapTool()
         except Exception:
             return False
         if tool is None:
@@ -314,9 +422,11 @@ class AIEditDockWidget(
         from ..panels.swipe_panel import _SwipeMapTool
         from ..tools.markup_tools import _MarkupBaseMapTool
         from ..tools.polygon_selection_tool import PolygonSelectionTool
-        return isinstance(
+        if not isinstance(
             tool, (PolygonSelectionTool, _MarkupBaseMapTool, _SwipeMapTool)
-        )
+        ):
+            return False
+        return focus is None or inside(focus, canvas)
 
     def _active_polygon_draw_tool(self):
         """The active canvas map tool, if it is AI Edit's polygon zone tool
@@ -363,15 +473,21 @@ class AIEditDockWidget(
         return None
 
     def closeEvent(self, event):
-        """Visibility-only teardown. Persistent disconnects live in cleanup()."""
+        """Visibility-only teardown. Persistent disconnects live in cleanup().
+
+        A running generation is never stopped here: the header X is a hide
+        like any other (the plugin's visibility handler says "still
+        generating" and the result lands on the map), and its credits are
+        already booked. ``stop_clicked`` used to fire from here, so the X
+        cancelled a paid run while the toolbar toggle kept it."""
         self._stop_progress_animation()
-        if self._progress_widget.isVisible():
-            self.stop_clicked.emit()
         self._vectorize_panel.deactivate()
         super().closeEvent(event)
 
     def cleanup(self):
         """Called once from plugin.unload() before the dock is removed."""
+        self.cleanup_account_check()
+        self.disconnect_update_refresh()
         # removeDockWidget() + deleteLater() never fire closeEvent, so nothing
         # else stops the Vectorize panel: unloading mid-run left a QgsTask
         # grinding on a project the plugin no longer owns, with succeeded /
@@ -386,25 +502,40 @@ class AIEditDockWidget(
             pass
         try:
             QgsProject.instance().layersAdded.disconnect(self._schedule_layer_warning_update)
-        except (TypeError, RuntimeError):
+        except (TypeError, RuntimeError):  # never connected or project already gone
             pass
         try:
             QgsProject.instance().layersRemoved.disconnect(self._schedule_layer_warning_update)
-        except (TypeError, RuntimeError):
+        except (TypeError, RuntimeError):  # never connected or project already gone
             pass
         try:
             QgsProject.instance().layerTreeRoot().visibilityChanged.disconnect(
-                self._update_layer_warning
+                self._schedule_layer_warning_update
             )
+        except (TypeError, RuntimeError):  # never connected or layer tree already gone
+            pass
+        self._layer_warning_timer.stop()
+        # focusChanged is application-wide: a slot left on it would fire into
+        # a deleted dock after unload.
+        try:
+            app = QApplication.instance()
+            if app is not None:
+                app.focusChanged.disconnect(self._refresh_dock_key_shortcuts)
+        except (TypeError, RuntimeError):
+            pass
+        try:
+            canvas = self._map_canvas_or_none()
+            if canvas is not None:
+                canvas.mapToolSet.disconnect(self._refresh_dock_key_shortcuts)
         except (TypeError, RuntimeError):
             pass
         try:
             QgsProject.instance().readProject.disconnect(self._on_project_loaded)
-        except (TypeError, RuntimeError):
+        except (TypeError, RuntimeError):  # never connected or project already gone
             pass
         try:
             QgsProject.instance().cleared.disconnect(self._on_project_loaded)
-        except (TypeError, RuntimeError):
+        except (TypeError, RuntimeError):  # never connected or project already gone
             pass
         # LayerTreeComboBox hooks its own QgsProject signals; nothing else cleans it.
         for combo in (

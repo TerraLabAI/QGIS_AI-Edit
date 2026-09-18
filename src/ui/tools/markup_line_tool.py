@@ -1,4 +1,4 @@
-"""Mark up - LineMapTool: click-per-vertex straight polyline drawing.
+"""Draw panel - LineMapTool: click-per-vertex straight polyline drawing.
 
 Split out of ``markup_tools.py`` (which still owns MarkupLayerManager,
 _MarkupBaseMapTool, and the Pencil/Arrow/Circle tools) to keep both files in
@@ -17,12 +17,18 @@ from qgis.PyQt.QtGui import QColor, QKeySequence
 
 from ...core import qt_compat as QtC
 from .click_thresholds import is_near_point, is_step_too_small
-from .markup_tools import MarkupLayerManager, _MarkupBaseMapTool
+from .markup_tools import (
+    MarkupLayerManager,
+    _MarkupBaseMapTool,
+    _shift_held,
+    snap_to_angle,
+)
+from .polygon_selection_tool import _CLOSE_GREEN
 
 # "Click here to close" highlight for the first vertex of an in-progress Line,
 # matching AI Segmentation's PolygonZoneMapTool close affordance (CLOSE_DOT_OK
 # in its canvas_palette.py) so both plugins share one drawing grammar.
-_LINE_CLOSE_COLOR = QColor(34, 197, 94)
+_LINE_CLOSE_COLOR = _CLOSE_GREEN
 
 
 class LineMapTool(_MarkupBaseMapTool):
@@ -41,9 +47,14 @@ class LineMapTool(_MarkupBaseMapTool):
     * Click within CLOSE_PX of the first vertex closes the shape as a ring
       (min MIN_VERTICES_CLOSE points). Double-click or Enter commits an open
       polyline (min MIN_VERTICES_OPEN points).
-    * Backspace, Delete and Ctrl+Z remove the last vertex.
+    * Shift keeps the next segment on a 45 degree step from the last vertex.
+    * Backspace, Delete and Ctrl+Z remove the last vertex; with no line
+      under way Ctrl+Z undoes the last stroke, as the other tools do.
     * Escape clears the in-progress vertices and stays armed. Escape again,
       with nothing left to clear, deactivates the tool (two-stage escape).
+    * Leaving the tool any other way (Done, another tool) keeps a line that
+      already has two vertices, as a drawing app does: only Escape throws
+      the vertices away.
     * Right click is inert and consumed, same as AI Segmentation.
     """
 
@@ -62,15 +73,26 @@ class LineMapTool(_MarkupBaseMapTool):
         self._edges_band: QgsRubberBand | None = None
         self._preview_band: QgsRubberBand | None = None
         self._can_close = False
+        # Qt sends a double-click as press, release, double-click, release:
+        # the last release arrives after the line is finished and would start
+        # a new line with a stray first vertex under the cursor.
+        self._swallow_release = False
 
     # -- Mouse -------------------------------------------------------
+
+    def canvasPressEvent(self, event):  # noqa: N802
+        # The second press of a double-click arrives as the double-click
+        # event, never here, so any press here starts a fresh click and a
+        # tail that never came (released off the canvas) is forgotten.
+        if event.button() == QtC.LeftButton:
+            self._swallow_release = False
 
     def canvasMoveEvent(self, event):  # noqa: N802
         if not self._points:
             return
         pos = QtC.event_pos(event)
         self._can_close = self._near_first(pos)
-        cursor = self._points[0] if self._can_close else self.toMapCoordinates(pos)
+        cursor = self._points[0] if self._can_close else self._cursor_point(event)
         if self._preview_band is not None:
             self._preview_band.setToGeometry(
                 QgsGeometry.fromPolylineXY([self._points[-1], cursor]), None
@@ -85,18 +107,44 @@ class LineMapTool(_MarkupBaseMapTool):
             return
         if event.button() != QtC.LeftButton:
             return
+        if self._swallow_release:
+            self._swallow_release = False
+            return
         if self._can_close and len(self._points) >= self.MIN_VERTICES_CLOSE:
             self._finish(closed=True)
             return
-        pos = QtC.event_pos(event)
-        self._add_point(self.toMapCoordinates(pos), pos)
+        map_pt = self._cursor_point(event)
+        self._add_point(map_pt, self.toCanvasCoordinates(map_pt))
 
     def canvasDoubleClickEvent(self, event):  # noqa: N802
         # The two single clicks of the double-click are deduped by
         # MIN_STEP_PX in canvasReleaseEvent, so by here the real vertices are
         # already in place, so just finish as an open polyline.
         if event.button() == QtC.LeftButton:
+            self._swallow_release = True
             self._finish(closed=False)
+
+    def _cursor_point(self, event) -> QgsPointXY:
+        """The next vertex under the cursor; Shift snaps it to 45 degrees
+        from the last one."""
+        pt = self.toMapCoordinates(QtC.event_pos(event))
+        if self._points and _shift_held(event):
+            return snap_to_angle(self._points[-1], pt)
+        return pt
+
+    def set_color(self, color: QColor) -> None:
+        """A colour picked mid-line recolours the line being drawn too, not
+        only the next one: the preview must show what will be committed."""
+        super().set_color(color)
+        for band in (self._edges_band, self._preview_band):
+            if band is None:
+                continue
+            try:
+                band.setStrokeColor(QColor(self._color))
+                band.setColor(QColor(self._color))
+            except RuntimeError:  # band already deleted by Qt
+                pass
+        self._restyle_markers()
 
     # -- Keyboard ------------------------------------------------------
 
@@ -108,6 +156,12 @@ class LineMapTool(_MarkupBaseMapTool):
             return
         if key in (QtC.Key_Return, QtC.Key_Enter):
             self._finish(closed=False)
+            event.accept()
+            return
+        if event.matches(QKeySequence.StandardKey.Undo) and not self._points:
+            # No line under way: undo the last stroke, as Pencil, Arrow and
+            # Circle do. It used to do nothing with Line armed.
+            self._manager.undo_last()
             event.accept()
             return
         if key in (QtC.Key_Backspace, QtC.Key_Delete) or event.matches(
@@ -181,7 +235,7 @@ class LineMapTool(_MarkupBaseMapTool):
             marker.setIconType(QtC.VertexIconCircle)
         marker.setColor(self._color)
         try:
-            marker.setFillColor(QColor(255, 255, 255))
+            marker.setFillColor(QColor(Qt.GlobalColor.white))
         except (AttributeError, TypeError):
             pass  # older builds: outline-only marker is still clearly visible
         marker.setPenWidth(3)
@@ -192,8 +246,11 @@ class LineMapTool(_MarkupBaseMapTool):
 
     def _restyle_markers(self) -> None:
         for i, marker in enumerate(self._markers):
-            marker.setIconSize(13 if i == 0 else 10)
-            marker.setColor(self._color)
+            try:
+                marker.setIconSize(13 if i == 0 else 10)
+                marker.setColor(self._color)
+            except RuntimeError:  # marker already deleted by Qt
+                pass
 
     def _highlight_first(self, hot: bool) -> None:
         if not self._markers or len(self._points) < self.MIN_VERTICES_CLOSE:
@@ -220,7 +277,7 @@ class LineMapTool(_MarkupBaseMapTool):
             marker = self._markers.pop()
             try:
                 self._canvas.scene().removeItem(marker)
-            except RuntimeError:
+            except RuntimeError:  # marker or scene already deleted by Qt
                 pass
         self._restyle_markers()
         self._draw_edges()
@@ -258,19 +315,26 @@ class LineMapTool(_MarkupBaseMapTool):
                 continue
             try:
                 self._canvas.scene().removeItem(band)
-            except RuntimeError:
+            except RuntimeError:  # band or scene already deleted by Qt
                 pass
         self._edges_band = None
         self._preview_band = None
         for marker in self._markers:
             try:
                 self._canvas.scene().removeItem(marker)
-            except RuntimeError:
+            except RuntimeError:  # marker or scene already deleted by Qt
                 pass
         self._markers = []
         self._can_close = False
 
     def deactivate(self):  # noqa: D401
+        # Done or another tool while a line is under way: keep it once it is
+        # a line (two vertices), instead of silently dropping the clicks.
+        if len(self._points) >= self.MIN_VERTICES_OPEN:
+            try:
+                self._finish(closed=False)
+            except RuntimeError:  # canvas or layer torn down (unload)
+                pass
         self._reset_visuals()
         self._points = []
         super().deactivate()

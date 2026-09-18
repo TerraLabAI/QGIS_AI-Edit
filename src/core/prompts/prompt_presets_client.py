@@ -1,7 +1,8 @@
 """Server-side template catalog fetcher.
 
-Pulls `GET /api/ai-edit/presets` once per plugin session (cached 24h in
-QSettings) and hands the parsed catalog to the prompt library dialog.
+Pulls `GET /api/ai-edit/presets` once per plugin session (cached in a file
+in the QGIS profile, see cache_blob_file) and hands the parsed catalog to the
+prompt library dialog.
 The server is the single source of truth for templates; when the cache
 is missing and the network is down (first install offline), themed tabs
 render empty until a fetch succeeds.
@@ -38,16 +39,20 @@ from __future__ import annotations
 
 import json
 import threading
-import time
 from typing import Any
+from urllib.parse import urlsplit
 
 from ..config_store import get_export_dial
 from ..logger import log_debug, log_warning
+from . import cache_blob_file
 
-# Namespaced under AIEdit/ like every other plugin QSettings key (was under the
-# shared TerraLab/ root).
+# The QSettings keys the catalog lived under before it moved to a file. The
+# first read of a session moves a value still there into the file (keeping
+# its age through the file time) and removes both keys.
 _CACHE_KEY = "AIEdit/server_catalog_v2"
 _CACHE_TS_KEY = "AIEdit/server_catalog_v2_ts"
+# The file that holds the catalog now; its modification time is the cache age.
+_CACHE_FILE = "server_catalog_v2.json"
 
 # Where the catalog lived before the rename. The old copy was NOT harmless: the
 # QSettings ini backend has no partial write, so a 274 KB value nothing reads
@@ -66,13 +71,18 @@ _CACHE_TS_KEY = "AIEdit/server_catalog_v2_ts"
 # carry the older copy.
 _LEGACY_CACHE_KEY = "TerraLab/ai_edit/server_catalog_v2"
 _LEGACY_CACHE_TS_KEY = "TerraLab/ai_edit/server_catalog_v2_ts"
-_legacy_cache_checked = False
+_legacy_cache = {"checked": False}
 # 1h. The cache is now primarily an instant-render + offline fallback under a
 # stale-while-revalidate strategy: every plugin start fires force_refresh=True
 # on a background thread, so the catalog stays fresh without blocking the UI.
 # Older 24h TTL meant pushed server changes took up to a day to surface even
 # after a QGIS restart - actively painful during catalog iteration.
 _PRESETS_CACHE_TTL_SECONDS = 60 * 60
+
+# Network budget for the /presets fetch itself (distinct from the cache TTL
+# above): short enough that a stalled connection never blocks dialog open for
+# long, the cached/local catalog covers the fallback.
+_CATALOG_FETCH_TIMEOUT_MS = 5_000
 
 
 def _presets_cache_ttl() -> int:
@@ -87,9 +97,9 @@ def _is_polyglot_or_string(value: Any) -> bool:
     `_pick_label` falls back to 'en' so we don't force its presence here,
     but the dict must contain at least one usable variant."""
     if isinstance(value, str):
-        return bool(value)
+        return bool(value.strip())
     if isinstance(value, dict):
-        return any(isinstance(v, str) and v for v in value.values())
+        return any(isinstance(v, str) and v.strip() for v in value.values())
     return False
 
 
@@ -111,7 +121,7 @@ def _validate_catalog(payload: Any) -> dict | None:
     for cat in categories:
         if not isinstance(cat, dict):
             return None
-        if not isinstance(cat.get("key"), str):
+        if not isinstance(cat.get("key"), str) or not cat["key"].strip():
             return None
         presets = cat.get("presets")
         if not isinstance(presets, list):
@@ -119,7 +129,7 @@ def _validate_catalog(payload: Any) -> dict | None:
         for p in presets:
             if not isinstance(p, dict):
                 return None
-            if not isinstance(p.get("id"), str):
+            if not isinstance(p.get("id"), str) or not p["id"].strip():
                 return None
             if not _is_polyglot_or_string(p.get("prompt")):
                 return None
@@ -134,10 +144,9 @@ def _drop_legacy_cache_key(settings) -> None:
     settings and makes the next sync rewrite the whole ini for nothing. On an
     install that still carries it, this one removal hands 274 KB back and every
     later write in the profile gets that much cheaper."""
-    global _legacy_cache_checked
-    if _legacy_cache_checked:
+    if _legacy_cache["checked"]:
         return
-    _legacy_cache_checked = True
+    _legacy_cache["checked"] = True
     try:
         if settings.contains(_LEGACY_CACHE_KEY):
             settings.remove(_LEGACY_CACHE_KEY)
@@ -192,29 +201,27 @@ def _clear_prompt_presets_memo() -> None:
 
 def _read_cache_raw() -> tuple[dict | None, float | None]:
     """Return (catalog, age_seconds) regardless of TTL - caller decides freshness."""
-    from qgis.PyQt.QtCore import QSettings
-    settings = QSettings()
     # First catalog read of the session is the plugin's own startup read, so it
-    # is where the one-off cleanup rides along.
-    _drop_legacy_cache_key(settings)
-    raw = settings.value(_CACHE_KEY, None)
+    # is where the one-off cleanups ride along.
+    if not _legacy_cache["checked"]:
+        try:
+            from qgis.PyQt.QtCore import QSettings
+
+            _drop_legacy_cache_key(QSettings())
+        except Exception as err:  # noqa: BLE001 - QSettings IO errors aren't fatal.
+            log_warning(f"Legacy preset cache check failed: {err}")
+    cache_blob_file.migrate_settings_key(_CACHE_FILE, _CACHE_KEY, (_CACHE_TS_KEY,))
+    raw = cache_blob_file.read_cache_text(_CACHE_FILE)
     if not raw:
         return None, None
     try:
         parsed = json.loads(raw)
-    except (TypeError, ValueError, json.JSONDecodeError):
+    except (TypeError, ValueError, RecursionError):
         return None, None
     catalog = _validate_catalog(parsed)
     if catalog is None:
         return None, None
-    ts_raw = settings.value(_CACHE_TS_KEY, None)
-    age: float | None = None
-    if ts_raw is not None:
-        try:
-            age = time.time() - float(ts_raw)
-        except (TypeError, ValueError):
-            age = None
-    return catalog, age
+    return catalog, cache_blob_file.cache_file_age_s(_CACHE_FILE)
 
 
 def _read_cache() -> dict | None:
@@ -231,7 +238,7 @@ def read_cached_catalog_stale_ok() -> dict | None:
 
     Seeds `prompt_presets`' session memo with what it parsed. The startup path
     calls this first (a deferred read off initGui) and the memo used to stay
-    empty, so the first accessor pulled the 274 KB blob out of QSettings and
+    empty, so the first accessor pulled the 274 KB blob off disk and
     json.loads'd it a second time for the same content.
 
     The seed is conditional on the generation this call started from: a
@@ -245,16 +252,20 @@ def read_cached_catalog_stale_ok() -> dict | None:
 
 
 def _write_cache(catalog: dict) -> None:
-    """Persist the validated catalog. Best-effort, swallows write errors."""
+    """Persist the validated catalog. Best-effort, swallows write errors.
+
+    Runs on a worker thread too, so it stays off QSettings. An unchanged
+    catalog (the usual startup case) is not rewritten; its file only gets a
+    fresh time, which restarts the TTL."""
     try:
-        from qgis.PyQt.QtCore import QSettings
-        settings = QSettings()
-        settings.setValue(_CACHE_KEY, json.dumps(catalog))
-        settings.setValue(_CACHE_TS_KEY, str(time.time()))
-    except Exception as err:  # noqa: BLE001 - QSettings IO errors aren't fatal.
+        cache_blob_file.migrate_settings_key(_CACHE_FILE, _CACHE_KEY, (_CACHE_TS_KEY,))
+        cache_blob_file.write_cache_text(
+            _CACHE_FILE, json.dumps(catalog), touch_if_unchanged=True
+        )
+    except Exception as err:  # noqa: BLE001 - cache IO errors aren't fatal.
         log_warning(f"Failed to persist preset cache: {err}")
     # Hand the memo the dict we just wrote instead of clearing it. Clearing made
-    # the next reader load the 274 KB blob back off QSettings and json.loads it
+    # the next reader load the 274 KB blob back off disk and json.loads it
     # again for a catalog already in hand. Unconditional: this is the freshest
     # catalog there is, so it outranks any read already in flight.
     _seed_prompt_presets_memo(catalog)
@@ -268,11 +279,13 @@ def invalidate_cache() -> None:
     QGIS_AI_Edit_Team.src.core.prompts.prompt_presets_client import invalidate_cache;
     invalidate_cache()`)."""
     try:
+        cache_blob_file.remove_cache_file(_CACHE_FILE)
         from qgis.PyQt.QtCore import QSettings
         settings = QSettings()
-        settings.remove(_CACHE_KEY)
-        settings.remove(_CACHE_TS_KEY)
-    except Exception as err:  # noqa: BLE001 - QSettings IO errors aren't fatal.
+        if settings.contains(_CACHE_KEY):
+            settings.remove(_CACHE_KEY)
+            settings.remove(_CACHE_TS_KEY)
+    except Exception as err:  # noqa: BLE001 - cache IO errors aren't fatal.
         log_warning(f"Failed to clear preset cache: {err}")
     _clear_prompt_presets_memo()
 
@@ -292,16 +305,19 @@ def fetch_server_catalog(client, force_refresh: bool = False) -> dict | None:
             return cached
 
     try:
-        resp = client._request("GET", "/api/ai-edit/presets", timeout_ms=5_000)
+        resp = client._request(
+            "GET",
+            "/api/ai-edit/presets",
+            timeout_ms=get_export_dial(
+                "pipeline.prompt_presets_client.catalog_fetch_timeout_ms", _CATALOG_FETCH_TIMEOUT_MS
+            ),
+        )
     except Exception as err:  # noqa: BLE001 - fall back to local on any client error.
-        log_warning(f"Failed to fetch server catalog: {err}")
+        log_warning(f"Failed to fetch server catalog: {type(err).__name__}")
         return None
 
     if not isinstance(resp, dict) or "error" in resp:
-        log_warning(
-            f"Server catalog fetch returned error: "
-            f"{resp.get('error') if isinstance(resp, dict) else resp!r}"
-        )
+        log_warning("Server catalog fetch returned an unsuccessful response")
         return None
 
     catalog = _validate_catalog(resp)
@@ -334,11 +350,19 @@ def absolute_demo_url(client, relative: str) -> str:
 
     Idempotent on absolute URLs - short-circuits when ``relative`` already
     has a scheme so the same callable works for signed-URL history payloads."""
-    if not relative:
+    if not isinstance(relative, str) or not relative:
         return ""
-    if relative.startswith("http://") or relative.startswith("https://"):
-        return relative
+    if any(ord(char) < 32 or ord(char) == 127 for char in relative):
+        return ""
+    try:
+        parsed = urlsplit(relative)
+        if parsed.scheme:
+            if parsed.scheme.lower() not in ("http", "https") or not parsed.hostname or parsed.username:
+                return ""
+            return relative
+        if parsed.netloc or relative.startswith("\\"):
+            return ""
+    except ValueError:
+        return ""
     base = client.base_url.rstrip("/")
-    if not relative.startswith("/"):
-        relative = "/" + relative
-    return base + relative
+    return base + (relative if relative.startswith("/") else "/" + relative)

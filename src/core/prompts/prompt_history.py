@@ -2,12 +2,12 @@
 
 Stores the user's successfully generated prompts (Recent) and any prompts
 they've starred (Favorites). Both lists are local-only - nothing leaves the
-machine. Recent is uncapped (per design D4); Qt handles thousands of entries
-fine in a scroll area.
+machine. Recent keeps a bounded window; Favorites remain user-managed.
 """
 from __future__ import annotations
 
 import json
+import threading
 import time
 
 from ..auth.activation_manager import SETTINGS_PREFIX
@@ -21,6 +21,7 @@ _FAVORITES_KEY = f"{SETTINGS_PREFIX}favorite_prompts"
 # uncapped list balloons settings I/O and slows the library open. 500 is
 # well past anyone's "recently used" memory and still loads instantly.
 _RECENT_CAP = 500
+_history_lock = threading.RLock()
 
 
 def _now_iso() -> str:
@@ -29,7 +30,7 @@ def _now_iso() -> str:
 
 def _normalize(prompt: str) -> str:
     """Dedupe key. Whitespace-trim only; case is preserved."""
-    return (prompt or "").strip()
+    return prompt.strip() if isinstance(prompt, str) else ""
 
 
 def _settings():
@@ -49,16 +50,38 @@ def _load_entries(key: str) -> list[dict]:
         return []
     try:
         data = json.loads(raw)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, RecursionError):
         return []
-    return data if isinstance(data, list) else []
+    if not isinstance(data, list):
+        return []
+    cap = get_export_dial("history.recent_cap", _RECENT_CAP) if key == _RECENT_KEY else None
+    entries = []
+    seen = set()
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        prompt = _normalize(item.get("prompt"))
+        if not prompt or prompt in seen:
+            continue
+        seen.add(prompt)
+        entry = dict(item)
+        entry["prompt"] = prompt
+        for field in ("label", "source_category", "ts"):
+            if field in entry and not isinstance(entry[field], str):
+                entry[field] = None if field != "ts" else ""
+        entries.append(entry)
+        if cap is not None and len(entries) >= cap:
+            break
+    return entries
 
 
 def _save_entries(key: str, entries: list[dict]) -> None:
     settings = _settings()
     if settings is None:
         return
-    settings.setValue(key, json.dumps(entries, ensure_ascii=False))
+    text = json.dumps(entries, ensure_ascii=False)
+    if settings.value(key, "") != text:
+        settings.setValue(key, text)
 
 
 # ---------------------------------------------------------------------------
@@ -72,15 +95,16 @@ def get_recent() -> list[dict]:
 
 def add_recent(prompt: str) -> None:
     """Append a prompt to Recent, deduped + newest-first, capped to _RECENT_CAP."""
-    text = _normalize(prompt)
-    if not text:
-        return
-    entries = [e for e in get_recent() if _normalize(e.get("prompt", "")) != text]
-    entries.insert(0, {"prompt": text, "ts": _now_iso()})
-    cap = get_export_dial("history.recent_cap", _RECENT_CAP)
-    if len(entries) > cap:
-        entries = entries[:cap]
-    _save_entries(_RECENT_KEY, entries)
+    with _history_lock:
+        text = _normalize(prompt)
+        if not text:
+            return
+        entries = [e for e in get_recent() if _normalize(e.get("prompt", "")) != text]
+        entries.insert(0, {"prompt": text, "ts": _now_iso()})
+        cap = get_export_dial("history.recent_cap", _RECENT_CAP)
+        if len(entries) > cap:
+            entries = entries[:cap]
+        _save_entries(_RECENT_KEY, entries)
 
 
 # ---------------------------------------------------------------------------
@@ -105,23 +129,24 @@ def toggle_favorite(
     source_category: str | None = None,
 ) -> bool:
     """Star/unstar a prompt. Returns the new favorite state (True = now favorited)."""
-    text = _normalize(prompt)
-    if not text:
-        return False
-    entries = get_favorites()
-    existing_idx = next(
-        (i for i, e in enumerate(entries) if _normalize(e.get("prompt", "")) == text),
-        None,
-    )
-    if existing_idx is not None:
-        entries.pop(existing_idx)
+    with _history_lock:
+        text = _normalize(prompt)
+        if not text:
+            return False
+        entries = get_favorites()
+        existing_idx = next(
+            (i for i, e in enumerate(entries) if _normalize(e.get("prompt", "")) == text),
+            None,
+        )
+        if existing_idx is not None:
+            entries.pop(existing_idx)
+            _save_entries(_FAVORITES_KEY, entries)
+            return False
+        entries.insert(0, {
+            "prompt": text,
+            "label": label or None,
+            "source_category": source_category or None,
+            "ts": _now_iso(),
+        })
         _save_entries(_FAVORITES_KEY, entries)
-        return False
-    entries.insert(0, {
-        "prompt": text,
-        "label": label or None,
-        "source_category": source_category or None,
-        "ts": _now_iso(),
-    })
-    _save_entries(_FAVORITES_KEY, entries)
-    return True
+        return True

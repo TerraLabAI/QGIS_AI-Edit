@@ -6,6 +6,7 @@ import os
 from qgis.core import QgsApplication
 from qgis.PyQt.QtWidgets import QFileDialog
 
+from ....core.config_store import get_export_copy
 from ....core.i18n import tr
 from ....core.logger import log_warning
 from ....workers.generic_request_task import GenericRequestTask
@@ -35,8 +36,16 @@ class ImageLoadMixin:
 
     def _load_generation_images(self) -> None:
         if self._demo_loader is None or not self._thumb_key:
+            # Nothing will ever arrive: say so rather than leave the slider
+            # on "Loading..." for as long as the window stays open.
+            self._mark_no_preview()
             return
+        # Same settle tracking as a template: a run whose images all fail
+        # (expired links, offline) says "No preview" instead of spinning.
+        self._demo_pairs_pending = set()
+        self._demo_sides_ok = set()
         self._demo_loader.loaded.connect(self._on_image_loaded)
+        self._demo_loader.failed.connect(self._on_image_failed)
         # Thumb first (instant - the card already cached it), then the 2048px
         # preview upgrades it (sharp on any screen, fast on slow links). Each
         # tier falls back to the full URL on rows that predate it. The full
@@ -46,16 +55,21 @@ class ImageLoadMixin:
         full_before = self._job.get("input_preview_url") or self._job.get("input_url")
         full_after = self._job.get("output_preview_url") or self._job.get("output_url")
         if thumb_before:
+            self._demo_pairs_pending.add((self._thumb_key, "before"))
             self._demo_loader.request(self._thumb_key, "before", thumb_before)
         if thumb_after:
+            self._demo_pairs_pending.add((self._thumb_key, "after"))
             self._demo_loader.request(self._thumb_key, "after", thumb_after)
         if full_before:
+            self._demo_pairs_pending.add((self._full_key, "before"))
             self._demo_loader.request(self._full_key, "before", full_before)
         if full_after:
+            self._demo_pairs_pending.add((self._full_key, "after"))
             self._demo_loader.request(self._full_key, "after", full_after)
 
     def _load_template_images(self) -> None:
         if self._demo_loader is None or self._absolute_url is None:
+            self._mark_no_preview()
             return
         # Track every request in flight so a template whose demo is not seeded
         # yet (all four fetches 404) says "No preview" instead of leaving the
@@ -134,10 +148,15 @@ class ImageLoadMixin:
             self._mark_no_preview()
 
     def _mark_no_preview(self) -> None:
+        # Nothing to enlarge: the fullscreen button goes with the picture.
+        fs_btn = getattr(self, "_fs_btn", None)
+        if fs_btn is not None:
+            fs_btn.setVisible(False)
         if self._slider is not None:
             try:
-                self._slider.set_placeholder_text(tr("No preview"))
-            except (RuntimeError, AttributeError):
+                self._slider.set_placeholder_text(get_export_copy(
+                    "dialogs.images.no_preview_placeholder", tr("No preview")))
+            except (RuntimeError, AttributeError):  # slider deleted or without placeholder support
                 pass
 
     def _adopt_aspect(self, pixmap) -> None:
@@ -167,7 +186,8 @@ class ImageLoadMixin:
             return
         box = _ImageLightbox(
             pm,
-            tr("Reference image {n}").format(n=index + 1),
+            get_export_copy("dialogs.images.reference_n_title", tr("Reference {n}"))
+            .replace("{n}", str(index + 1)),
             on_download=lambda: self._download_reference(index),
             parent=self,
         )
@@ -189,7 +209,9 @@ class ImageLoadMixin:
         # is the read-only bin/ folder under Program Files.
         suggested = os.path.join(get_output_dir(), f"reference_{index + 1}{ext}")
         dest, _sel = QFileDialog.getSaveFileName(
-            self, tr("Save reference image"), suggested
+            self,
+            get_export_copy("dialogs.images.save_reference_title", tr("Save reference")),
+            suggested,
         )
         if not dest:
             return
@@ -208,7 +230,10 @@ class ImageLoadMixin:
             replace_staged_file(tmp, path)
             return {"path": path}
 
-        task = GenericRequestTask(tr("Downloading reference image"), _work)
+        task = GenericRequestTask(
+            get_export_copy("dialogs.images.downloading_reference", tr("Downloading reference")),
+            _work,
+        )
         task.succeeded.connect(lambda _res, t=task: self._release_ref_download(t))
         task.failed.connect(lambda msg, _code, t=task: self._on_ref_download_failed(t, msg))
         # Hard ref until the task settles: a QgsTask GC'd mid-run aborts QGIS.
@@ -231,13 +256,13 @@ class ImageLoadMixin:
             return  # dialog destroyed while the download was in flight
         if not visible:
             return
-        from qgis.PyQt.QtWidgets import QMessageBox
+        from ..confirm_dialog import warning_box
 
         # The worker's own sentence (already translated, and the only place
         # that says whether the file was locked, the disk full or the link
         # dead) goes under the generic line instead of being dropped.
-        body = tr("Could not download the reference image.")
-        detail = (msg or "").strip()
-        if detail:
-            body = f"{body}\n\n{detail}"
-        QMessageBox.warning(self, tr("Download failed"), body)
+        body = get_export_copy(
+            "dialogs.images.reference_download_failed_body", tr("Could not download the reference."))
+        warning_box(
+            self, get_export_copy("dialogs.images.download_failed_title", tr("Download failed")),
+            body, detail=(msg or "").strip())

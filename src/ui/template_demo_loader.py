@@ -10,8 +10,10 @@ remembered so we don't refetch them.
 """
 from __future__ import annotations
 
-import os
+import hashlib
+import tempfile
 import time
+from collections import deque
 from pathlib import Path
 
 from qgis.core import QgsNetworkAccessManager
@@ -19,8 +21,10 @@ from qgis.PyQt.QtCore import QByteArray, QObject, QStandardPaths, QUrl, pyqtSign
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 
+from ..api.network_response import transfer_timeout, valid_http_url
 from ..core.config_store import get_export_dial
 from ..core.logger import log_debug, log_warning
+from ..core.output_paths import replace_with_retry
 from ..core.qt_compat import (
     CacheLocation,
     HttpStatusCodeAttribute,
@@ -34,7 +38,7 @@ from ..core.qt_compat import (
 # Demos the server returned 404 for (not yet seeded). Module-level so the
 # knowledge survives reopening the library dialog within a QGIS session and we
 # don't re-issue doomed requests (each burns a concurrency slot + 15s timeout).
-_KNOWN_MISSING: set[tuple[str, str]] = set()
+_KNOWN_MISSING: dict[str, float] = {}
 
 # Cache version: server-bumpable via demo_cache_version in /api/plugin/config
 # (a re-seed that must invalidate every client's cache is now a website deploy,
@@ -42,6 +46,17 @@ _KNOWN_MISSING: set[tuple[str, str]] = set()
 # version used when no server config is cached.
 _CACHE_DIR_PREFIX = "ai-edit-template-demos-v"
 _CACHE_DIR_FALLBACK_VERSION = "4"
+
+# Per-request network timeout for a demo image fetch (no-op before Qt 5.15).
+_FETCH_TIMEOUT_MS = 15_000
+# A decoded reply shorter than this cannot be a real image; treated as unusable.
+_MIN_IMAGE_BYTES = 256
+# Cap simultaneous fetches so opening the library (or a popup with bigger
+# preview images) doesn't fire dozens of requests at once and choke a slow
+# link. Excess requests queue and start as in-flight ones finish. Kept low
+# so a thin pipe isn't split too many ways (each split is likelier to hit
+# the per-request transfer timeout).
+_MAX_CONCURRENT_FETCHES = 3
 
 
 def _cache_dir_name() -> str:
@@ -60,6 +75,7 @@ def _cache_dir_name() -> str:
     if (
         not isinstance(version, str)
         or not version.strip()
+        or len(version) > 64
         or not all(c.isalnum() or c in "._-" for c in version.strip())
     ):
         version = _CACHE_DIR_FALLBACK_VERSION
@@ -92,6 +108,7 @@ def _cleanup_stale_cache_dirs(active: Path) -> None:
             if (
                 child.name.startswith(_CACHE_DIR_PREFIX)
                 and child.name != active.name
+                and not child.is_symlink()
                 and child.is_dir()
             ):
                 shutil.rmtree(child, ignore_errors=True)
@@ -100,8 +117,17 @@ def _cleanup_stale_cache_dirs(active: Path) -> None:
 
 
 def _cache_path(template_id: str, which: str) -> Path:
-    safe_id = "".join(c for c in template_id if c.isalnum() or c in "-_")
-    return _cache_root() / safe_id / f"{which}.jpg"
+    def component(value):
+        # Preserve existing safe cache names; hash unsafe/long names so distinct
+        # ids cannot collide after sanitization or escape the cache directory.
+        if (value and len(value) <= 100 and value.isascii()
+                and all(c.isalnum() or c in "-_" for c in value)
+                and value.upper() not in {"CON", "PRN", "AUX", "NUL"}
+                and not (len(value) == 4 and value[:3].upper() in {"COM", "LPT"} and value[-1].isdigit())):
+            return value
+        return "key-" + hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+    return _cache_root() / component(template_id) / f"{component(which)}.jpg"
 
 
 # Demos rarely change, but a curated demo can be re-seeded server-side. Without
@@ -120,13 +146,14 @@ def _demo_cache_ttl() -> int:
 def read_cached_pixmap(template_id: str, which: str) -> QPixmap | None:
     """Return a QPixmap from the on-disk cache, or None if absent or stale."""
     path = _cache_path(template_id, which)
-    if not path.is_file():
-        return None
     try:
-        if (time.time() - path.stat().st_mtime) > _demo_cache_ttl():
+        if not path.is_file() or path.is_symlink():
+            return None
+        age = time.time() - path.stat().st_mtime
+        if age < 0 or age > _demo_cache_ttl():
             return None
         pm = QPixmap(str(path))
-        if pm.isNull() or pm.width() < 2:
+        if pm.isNull() or pm.width() < 2 or pm.height() < 2:
             return None
         return pm
     except Exception as err:  # noqa: BLE001
@@ -148,16 +175,11 @@ class TemplateDemoLoader(QObject):
     loaded = pyqtSignal(str, str, QPixmap)
     failed = pyqtSignal(str, str)
 
-    # Cap simultaneous fetches so opening the library (or a popup with bigger
-    # preview images) doesn't fire dozens of requests at once and choke a slow
-    # link. Excess requests queue and start as in-flight ones finish. Kept low
-    # so a thin pipe isn't split too many ways (each split is likelier to hit
-    # the per-request transfer timeout).
-    _MAX_CONCURRENT = 3
-
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
-        self._queue: list[tuple[str, str, str]] = []
+        self._queue: deque[tuple[str, str, str]] = deque()
+        self._pending: dict[tuple[str, str], str] = {}
+        self._waiting: dict[str, list[tuple[str, str]]] = {}
         self._in_flight = 0
         # The cache only saves a refetch, so a locked or over-long cache path
         # must not raise inside the Prompt Library dialog's constructor.
@@ -174,12 +196,25 @@ class TemplateDemoLoader(QObject):
         ``which`` is normally "before"/"after" for card sliders; the detail
         popup also passes "ref0", "ref1", ... for reference thumbnails. Any
         non-empty token works as the on-disk cache filename."""
-        if not template_id or not which or not url:
+        if not isinstance(template_id, str) or not isinstance(which, str) or not template_id or not which:
             return
         key = (template_id, which)
-        if key in _KNOWN_MISSING:
-            self.failed.emit(template_id, which)
+        if not valid_http_url(url):
+            safe_single_shot(0, self, lambda: self.failed.emit(template_id, which))
             return
+        if self._pending.get(key) == url:
+            return
+        now = time.monotonic()
+        for missing, recorded in list(_KNOWN_MISSING.items()):
+            if now - recorded >= _demo_cache_ttl():
+                _KNOWN_MISSING.pop(missing, None)
+        # A 404 belongs to the resource URL, not to one card's cache key.
+        # Several cards can legitimately alias the same server image, and a
+        # failed seed should not make each alias spend another timeout.
+        if url in _KNOWN_MISSING:
+            safe_single_shot(0, self, lambda: self.failed.emit(template_id, which))
+            return
+        self._pending[key] = url
         # Defer the disk read + decode to the next event-loop turn so a burst of
         # cached cards built in one synchronous loop doesn't block the dialog's
         # first paint. Parented to self, so it can't fire after the loader dies.
@@ -189,19 +224,41 @@ class TemplateDemoLoader(QObject):
         )
 
     def _load_cached_or_fetch(self, template_id: str, which: str, url: str) -> None:
+        key = (template_id, which)
+        if self._pending.get(key) != url:
+            return
         pm = read_cached_pixmap(template_id, which)
         if pm is not None:
+            self._pending.pop(key, None)
             self.loaded.emit(template_id, which, pm)
             return
+        if url in self._waiting:
+            self._waiting[url].append(key)
+            return
+        self._waiting[url] = [key]
         self._queue.append((template_id, which, url))
         self._pump()
 
     def _pump(self) -> None:
         """Start queued fetches up to the concurrency cap."""
-        while self._in_flight < self._MAX_CONCURRENT and self._queue:
-            template_id, which, url = self._queue.pop(0)
+        max_concurrent = get_export_dial(
+            "widgets.template_demo_loader.max_concurrent_fetches", _MAX_CONCURRENT_FETCHES)
+        max_concurrent = max(1, max_concurrent)
+        while self._in_flight < max_concurrent and self._queue:
+            template_id, which, url = self._queue.popleft()
+            keys = self._waiting.get(url, [])
+            if not any(self._pending.get(key) == url for key in keys):
+                self._waiting.pop(url, None)
+                continue
             self._in_flight += 1
-            self._start(template_id, which, url)
+            try:
+                self._start(template_id, which, url)
+            except (RuntimeError, ValueError, TypeError):
+                self._in_flight = max(0, self._in_flight - 1)
+                for key in self._waiting.pop(url, []):
+                    if self._pending.get(key) == url:
+                        self._pending.pop(key, None)
+                        self.failed.emit(*key)
 
     def _start(self, template_id: str, which: str, url: str) -> None:
         req = QNetworkRequest(QUrl(url))
@@ -209,7 +266,10 @@ class TemplateDemoLoader(QObject):
         # PyQt5 on some QGIS 3 builds exposes these enums flat, not scoped.
         req.setAttribute(RedirectPolicyAttribute, NoLessSafeRedirectPolicy)
         req.setRawHeader(b"Accept", b"image/jpeg, image/png, image/webp, image/*")
-        set_transfer_timeout(req, 15_000)  # no-op before Qt 5.15
+        set_transfer_timeout(
+            req, transfer_timeout(
+                get_export_dial("widgets.template_demo_loader.fetch_timeout_ms", _FETCH_TIMEOUT_MS),
+                _FETCH_TIMEOUT_MS))
         # Route through QGIS's network manager so the fetch inherits its SSL CA
         # bundle, proxy, and auth config. A bare QNetworkAccessManager fails
         # silently on some CDN hosts. Parent the reply to this loader so it dies
@@ -217,10 +277,10 @@ class TemplateDemoLoader(QObject):
         reply = QgsNetworkAccessManager.instance().get(req)
         reply.setParent(self)
         reply.finished.connect(
-            lambda r=reply, t=template_id, w=which: self._on_finished(r, t, w)
+            lambda r=reply, t=template_id, w=which, u=url: self._on_finished(r, t, w, u)
         )
 
-    def _on_finished(self, reply: QNetworkReply, template_id: str, which: str) -> None:
+    def _on_finished(self, reply: QNetworkReply, template_id: str, which: str, url: str) -> None:
         """Resolve exactly one card, whatever happened.
 
         This runs inside a ``QNetworkReply.finished`` slot, where a raise has
@@ -234,9 +294,10 @@ class TemplateDemoLoader(QObject):
         reason: it used to sit in a ``finally``, which runs BEFORE the emits,
         so a ``deleteLater`` on a dead wrapper or a raise inside ``_pump``
         skipped the card's answer entirely."""
+        keys = [key for key in self._waiting.pop(url, []) if self._pending.get(key) == url]
         pixmap = None
         try:
-            pixmap = self._pixmap_from_reply(reply, template_id, which)
+            pixmap = self._pixmap_from_reply(reply, template_id, which, url, keys)
         except Exception as err:  # noqa: BLE001
             log_warning(f"Demo fetch handling failed for {template_id}/{which}: {err}")
         try:
@@ -250,13 +311,17 @@ class TemplateDemoLoader(QObject):
             self._pump()
         except Exception as err:  # noqa: BLE001
             log_warning(f"Demo queue pump failed after {template_id}/{which}: {err}")
-        if pixmap is None:
-            self.failed.emit(template_id, which)
-        else:
-            self.loaded.emit(template_id, which, pixmap)
+        for key in keys:
+            if self._pending.get(key) != url:
+                continue
+            self._pending.pop(key, None)
+            if pixmap is None:
+                self.failed.emit(*key)
+            else:
+                self.loaded.emit(*key, pixmap)
 
     def _pixmap_from_reply(
-        self, reply: QNetworkReply, template_id: str, which: str
+        self, reply: QNetworkReply, template_id: str, which: str, url: str, keys: list
     ) -> QPixmap | None:
         """Decode the finished reply and cache its bytes. None means unusable."""
         err_code = reply.error()
@@ -266,9 +331,9 @@ class TemplateDemoLoader(QObject):
             http_int = int(http_status) if http_status is not None else 0
         except (TypeError, ValueError):
             http_int = 0
-        if err_code != no_err or http_int >= 400:
+        if err_code != no_err or http_int != 200:
             if http_int == 404:
-                _KNOWN_MISSING.add((template_id, which))
+                _KNOWN_MISSING[url] = time.monotonic()
             else:
                 log_debug(
                     f"Demo fetch failed for {template_id}/{which}: "
@@ -277,30 +342,33 @@ class TemplateDemoLoader(QObject):
             return None
         data: QByteArray = reply.readAll()
         buf = bytes(data)
-        if len(buf) < 256:
+        if len(buf) < get_export_dial("widgets.template_demo_loader.min_image_bytes", _MIN_IMAGE_BYTES):
             return None
         pm = QPixmap()
-        if not pm.loadFromData(buf):
+        if not pm.loadFromData(buf) or pm.width() < 2 or pm.height() < 2:
             log_debug(f"Demo bytes did not decode for {template_id}/{which}")
             return None
-        self._write_cache(template_id, which, buf)
+        for key in keys:
+            self._write_cache(*key, buf)
         return pm
 
     @staticmethod
     def _write_cache(template_id: str, which: str, buf: bytes) -> None:
         path = _cache_path(template_id, which)
-        tmp = path.with_suffix(".jpg.tmp")
+        tmp = None
         try:
             # mkdir belongs INSIDE the guard: on Windows a long path or a
             # locked cache dir raises OSError, and letting that escape would
             # skip the caller's loaded.emit and hang the card on "Loading...".
             path.parent.mkdir(parents=True, exist_ok=True)
-            with open(tmp, "wb") as f:
+            with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".demo-", suffix=".tmp", delete=False) as f:
+                tmp = Path(f.name)
                 f.write(buf)
-            os.replace(tmp, path)
+            replace_with_retry(str(tmp), str(path))
         except OSError as err:
             log_warning(f"Failed to write demo cache {path}: {err}")
             try:
-                tmp.unlink(missing_ok=True)
+                if tmp is not None:
+                    tmp.unlink(missing_ok=True)
             except OSError:
                 pass  # nosec B110

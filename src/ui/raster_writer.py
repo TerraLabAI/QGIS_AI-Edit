@@ -10,16 +10,14 @@ from __future__ import annotations
 import os
 import re
 import shutil
-import tempfile
 import time
 
-from osgeo import gdal
 from qgis.core import QgsProject, QgsRasterLayer
 
 from ..core.i18n import tr
 from ..core.logger import log_warning
 from ..core.prompts.prompt_presets import lookup_template_by_prompt
-from ..core.raster_writer import (  # noqa: F401
+from ..core.raster_writer import (
     _FALLBACK_EXT,
     _FOREIGN_PROJ_MARKERS,
     _GDAL_SAFE_FORMATS,
@@ -39,14 +37,45 @@ from ..core.raster_writer import (  # noqa: F401
     ascii_safe_dir,
     before_file_base,
     extent_and_crs_from_job,
+    fallback_output_dir,
     get_output_dir,
     read_crop_polygon_wkt,
     replace_staged_file,
     set_output_dir,
     write_geotiff,
 )
-from ..core.slug import slugify as _slugify  # noqa: F401
+from ..core.slug import slugify as _slugify
 from .layer_groups import add_layer_to_ai_edit_top
+
+# Public surface, re-exports included, so they read as used.
+__all__ = [
+    "_create_gtiff",
+    "_detect_image_format",
+    "_documents_default_dir",
+    "_FALLBACK_EXT",
+    "_FOREIGN_PROJ_MARKERS",
+    "_GDAL_SAFE_FORMATS",
+    "_GTIFF_CREATION_OPTIONS",
+    "_image_dimensions",
+    "_output_file_base",
+    "_rescue_plain_image",
+    "_restore_qgis_proj_paths",
+    "_safe_projection_wkt",
+    "_slugify",
+    "_unique_output_path",
+    "_write_geotiff_gdal",
+    "add_geotiff_to_project",
+    "ascii_safe_dir",
+    "before_file_base",
+    "BEFORE_PATH_PROPERTY",
+    "extent_and_crs_from_job",
+    "get_output_dir",
+    "OUTPUT_DIR_SETTING",
+    "read_crop_polygon_wkt",
+    "replace_staged_file",
+    "set_output_dir",
+    "write_geotiff",
+]
 
 
 def _humanize_prompt(prompt: str, max_chars: int = 30) -> str:
@@ -70,20 +99,22 @@ def _build_layer_name(prompt: str) -> str:
 def _reload_from_ascii_copy(src_path: str, display_name: str) -> QgsRasterLayer | None:
     """Last-ditch recovery when a GeoTIFF loads as an invalid layer.
 
-    Copies the file to an ASCII-safe temp path under a plain ASCII filename and
+    Copies the file to an ASCII-safe path under a plain ASCII filename and
     retries the load. This rescues files written to an accented directory
     (older builds, or volumes where 8.3 short names are disabled), where the
-    QGIS GDAL provider refuses the original path.
+    QGIS GDAL provider refuses the original path. The copy goes to the
+    Documents fallback folder, not the temp folder: Storage Sense empties the
+    latter, and a saved project would then show the layer as broken.
     """
     try:
-        base = tempfile.mkdtemp(prefix="terralab_ai_edit_")
-        safe_dir = ascii_safe_dir(base)
-        # Keep the original (ASCII, _slugify-guaranteed) name so two recoveries
-        # don't collide; only synthesize one if the basename isn't ASCII.
-        name = os.path.basename(src_path)
-        if not name.isascii():
-            name = f"ai_edit_{int(time.time())}.tif"
-        safe_path = os.path.join(safe_dir, name)
+        safe_dir = ascii_safe_dir(fallback_output_dir())
+        # Keep the original (ASCII, _slugify-guaranteed) name where possible;
+        # only synthesize one if the basename isn't ASCII. The unique path
+        # never overwrites an earlier recovery of the same name.
+        stem, ext = os.path.splitext(os.path.basename(src_path))
+        if not (stem + ext).isascii():
+            stem, ext = f"ai_edit_{int(time.time())}", ".tif"
+        safe_path = _unique_output_path(safe_dir, stem, ext.lstrip(".") or "tif")
         shutil.copyfile(src_path, safe_path)
         layer = QgsRasterLayer(safe_path, display_name)
         if layer.isValid():
@@ -159,6 +190,8 @@ def _read_model_tag(geotiff_path: str) -> str:
     """Read the AI_EDIT_MODEL tag back from the written GeoTIFF (the single
     source of truth). Empty string when absent or unreadable."""
     try:
+        from osgeo import gdal
+
         ds = gdal.Open(geotiff_path)
         if ds is not None:
             return ds.GetMetadataItem("AI_EDIT_MODEL") or ""

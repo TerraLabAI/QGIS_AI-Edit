@@ -8,6 +8,7 @@ so the raw machine id never leaves the user's computer.
 from __future__ import annotations
 
 import hashlib
+import threading
 import uuid
 
 from qgis.core import QgsSettings
@@ -20,6 +21,7 @@ _SETTINGS_KEY = "AIEdit/device_seed"
 _HASH_LEN = 16
 
 _cached: str | None = None
+_cache_lock = threading.Lock()
 
 
 def _machine_seed(settings) -> bytes:
@@ -48,13 +50,13 @@ def get_device_hash(settings=None) -> str:
     Irreversible (SHA256). Cached for the process lifetime.
     """
     global _cached
-    if _cached is not None:
+    with _cache_lock:
+        if _cached is not None:
+            return _cached
+        s = settings if settings is not None else QgsSettings()
+        digest = hashlib.sha256(_machine_seed(s)).hexdigest()
+        _cached = digest[:_HASH_LEN]
         return _cached
-
-    s = settings or QgsSettings()
-    digest = hashlib.sha256(_machine_seed(s)).hexdigest()
-    _cached = digest[:_HASH_LEN]
-    return _cached
 
 
 # Max length the server stores for the platform label; keep payload tiny.
@@ -71,4 +73,6 @@ def get_device_platform() -> str:
         name = QSysInfo.prettyProductName() or ""
     except Exception:  # nosec B110
         name = ""
-    return name.strip()[:_PLATFORM_MAX_LEN]
+    if not isinstance(name, str):
+        return ""
+    return " ".join(name.split())[:_PLATFORM_MAX_LEN]

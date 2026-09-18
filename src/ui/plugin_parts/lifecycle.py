@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import os
+import sys
 from contextlib import contextmanager
 
 from qgis.core import QgsApplication, QgsProject
-from qgis.PyQt.QtCore import QSettings, QTimer
+from qgis.PyQt.QtCore import QSettings
 from qgis.PyQt.QtGui import QIcon, QKeySequence
 
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.auth.activation_manager import clear_config_cache, migrate_legacy_key
-from ...core.config_store import set_store
+from ...core.config_store import get_export_copy, set_store
 from ...core.errors import build_failure_props
 from ...core.i18n import tr
 from ...core.logger import log, log_warning
@@ -26,7 +27,7 @@ LAUNCH_SHORTCUT = "Ctrl+Alt+E"
 # teardown; an argument-less task.disconnect() would also sever the
 # QgsTaskManager hookups made by addTask() and orphan the task.
 GENERATION_TASK_SIGNALS = ("succeeded", "progress", "failed", "taskTerminated")
-EXPORT_TASK_SIGNALS = ("completed", "failed")
+EXPORT_TASK_SIGNALS = ("completed", "failed", "taskTerminated")
 REQUEST_TASK_SIGNALS = ("succeeded", "failed")  # GenericRequestTask
 PAIRING_TASK_SIGNALS = (  # PairingPollTask
     "pairing_succeeded",
@@ -34,6 +35,8 @@ PAIRING_TASK_SIGNALS = (  # PairingPollTask
     "pairing_timeout",
     "pairing_browser_seen",
     "pairing_stalled",
+    "pairing_network_problem",
+    "taskTerminated",
 )
 # Single source for the background-loader teardown: drives both the drain
 # and the null-out so the two can never drift.
@@ -45,7 +48,23 @@ LOADER_SIGNALS = {
     "_catalog_loader": REQUEST_TASK_SIGNALS,
     "_bootstrap_task": REQUEST_TASK_SIGNALS,
     "_activation_config_loader": REQUEST_TASK_SIGNALS,
+    # Demo-scene IGN probe (onboarding.py); its slots touch the dock.
+    "_basemap_probe_task": REQUEST_TASK_SIGNALS,
 }
+
+_PROMPT_LIBRARY_WORKERS_MODULE = (
+    __name__.rsplit(".plugin_parts", 1)[0] + ".dialogs.prompt_templates.workers"
+)
+
+
+def drain_prompt_library_if_loaded() -> None:
+    """Join the Prompt Library threads, importing nothing: that package pulls
+    in 16 modules, and if it was never imported no thread can exist."""
+    module = sys.modules.get(_PROMPT_LIBRARY_WORKERS_MODULE)
+    if module is not None:
+        module.drain_prompt_library_workers()
+
+
 # Selection map tool signals connected in initGui.
 MAP_TOOL_SIGNALS = (
     "selection_made",
@@ -72,7 +91,7 @@ def disconnect_signals(obj, signal_names):
             if sig is None:
                 continue
             sig.disconnect()
-        except (RuntimeError, TypeError):
+        except (RuntimeError, TypeError):  # object deleted or signal had no connections
             pass
 
 
@@ -160,6 +179,28 @@ def report_teardown_failure(label: str, err: BaseException, stage: str = "unload
         )
     except Exception:  # nosec B110 - telemetry must never break teardown
         pass
+
+
+def release_dock_widget(iface, dock) -> None:
+    """Take the dock out of QGIS for good: off the main window, then deleted.
+
+    ``removeDockWidget`` only unhooks the dock from the layout; the widget
+    stays a child of the main window until its deferred delete runs. A plugin
+    reload loads the new copy before that happens, so the main window briefly
+    held two ``AIEditDockWidget`` and Plugin Reloader warned about a widget
+    "not cleaned up by the plugin during unload". Unparenting it now takes it
+    out of the main window's children at once; ``deleteLater`` frees it.
+    """
+    if dock is None:
+        return
+    try:
+        iface.removeDockWidget(dock)
+    finally:
+        try:
+            dock.hide()
+            dock.setParent(None)
+        finally:
+            dock.deleteLater()
 
 
 @contextmanager
@@ -271,7 +312,10 @@ class PluginLifecycleMixin:
 
         # Add "Settings" to the TerraLab menu utility section
         settings_icon = QIcon(":/images/themes/default/mActionOptions.svg")
-        self._settings_action = QAction(settings_icon, tr("Settings"), main_window)
+        # Named for the plugin: three TerraLab plugins share this menu, and a
+        # bare "Settings" did not say whose settings it opened.
+        self._settings_action = QAction(settings_icon, get_export_copy(
+            "widgets.terralab_menu.ai_edit_settings", tr("AI Edit Settings...")), main_window)
         self._settings_action.setObjectName("_terralab_settings_action")
         # Prevent macOS from moving this to the app menu (Cocoa treats "Settings" as Preferences)
         self._settings_action.setMenuRole(QAction.MenuRole.NoRole)
@@ -306,9 +350,12 @@ class PluginLifecycleMixin:
                     self._dock_widget.set_server_catalog(read_cached_catalog_stale_ok())
             except Exception as err:  # noqa: BLE001
                 log_warning(f"Server catalog stale read failed: {err}")
-                if self._dock_widget is not None:
-                    self._dock_widget.set_server_catalog(None)
-        QTimer.singleShot(0, _load_stale_catalog)
+                try:
+                    if self._dock_widget is not None:
+                        self._dock_widget.set_server_catalog(None)
+                except RuntimeError:  # nosec B110 - the dock's C++ half is gone
+                    pass
+        QtC.safe_single_shot(0, self._dock_widget, _load_stale_catalog)
         # Fresh catalog arrives via the startup bootstrap bundle (initGui);
         # library opens trigger _load_server_catalog refetches afterwards.
         self._iface.addDockWidget(QtC.RightDockWidgetArea, self._dock_widget)
@@ -354,6 +401,7 @@ class PluginLifecycleMixin:
         self._dock_widget.markup_clicked.connect(self._on_markup_clicked)
         self._dock_widget.markup_done_clicked.connect(self._on_markup_done_clicked)
         self._dock_widget.markup_clear_clicked.connect(self._on_markup_clear_clicked)
+        self._dock_widget.markup_undo_clicked.connect(self._on_markup_undo)
         self._dock_widget.markup_tool_changed.connect(self._on_markup_tool_changed)
         self._dock_widget.markup_color_changed.connect(self._on_markup_color_changed)
         self._dock_widget.vectorize_clicked.connect(self._on_vectorize_clicked)
@@ -420,7 +468,7 @@ class PluginLifecycleMixin:
             self._iface.mainWindow(),
         )
         self._launch_shortcut.setContext(QtC.WindowShortcut)
-        self._launch_shortcut.activated.connect(self._on_launch_shortcut)
+        self._launch_shortcut.activated.connect(self._on_launch_shortcut_key)
 
         # Create map tool
         self._map_tool = PolygonSelectionTool(self._canvas)
@@ -445,11 +493,9 @@ class PluginLifecycleMixin:
         # unload() does not run on every QGIS exit path, and Qt aborts the
         # process when it destroys a QThread still inside run(). Join the
         # detached Prompt Library threads on the way out too.
-        from ..dialogs.prompt_templates.workers import drain_prompt_library_workers
-
-        self._prompt_library_drain = drain_prompt_library_workers
+        self._prompt_library_drain = drain_prompt_library_if_loaded
         try:
-            QgsApplication.instance().aboutToQuit.connect(drain_prompt_library_workers)
+            QgsApplication.instance().aboutToQuit.connect(drain_prompt_library_if_loaded)
         except (AttributeError, TypeError, RuntimeError) as err:
             self._prompt_library_drain = None
             log_warning(f"Prompt Library drain not hooked to aboutToQuit: {err}")
@@ -458,12 +504,19 @@ class PluginLifecycleMixin:
         telemetry.init_telemetry(
             self._client, self._auth_manager, self._read_plugin_version()
         )
+        # QGIS does not guarantee unload() on application exit. Drain the last
+        # in-memory telemetry batch while the blocking network stack is still
+        # alive instead of leaving it to a task manager that is shutting down.
+        try:
+            QgsApplication.instance().aboutToQuit.connect(
+                telemetry.shutdown_telemetry
+            )
+        except (AttributeError, TypeError, RuntimeError) as err:
+            log_warning(f"Telemetry drain not hooked to aboutToQuit: {err}")
         # Dock auto-opened on install/upgrade never went through _toggle_dock,
         # so emit the open here to stop undercounting sessions.
-        if auto_open_source is not None and not self._plugin_opened_emitted:
-            self._plugin_opened_emitted = True
-            telemetry.track(te.PLUGIN_OPENED, {"open_source": auto_open_source})
-            telemetry.flush()
+        if auto_open_source is not None:
+            self._emit_plugin_opened(auto_open_source)
 
         # Startup network is deferred until the dock is actually shown (see
         # _maybe_bootstrap_on_show), so a user who never opens AI Edit makes no
@@ -613,16 +666,27 @@ class PluginLifecycleMixin:
                 self._swipe_controller.cleanup()
             self._swipe_controller = None
 
+        # A privacy notice still on screen would outlive its parent's plugin.
+        if self._privacy_notice_dialog is not None:
+            with teardown_step("privacy notice"):
+                self._privacy_notice_dialog.reject()
+            self._privacy_notice_dialog = None
+
         if self._dock_widget:
             # Disconnect QgsProject signals before the dock is destroyed.
             # closeEvent used to do this but firing on every hide also broke
             # the dock when the user re-opened it from the Panels menu.
             with teardown_step("dock cleanup"):
                 self._dock_widget.cleanup()
+            # Off first: removing the dock hides it, and the hide handler
+            # would otherwise run the panel-exit path into a plugin that is
+            # half torn down.
+            try:
+                self._dock_widget.visibilityChanged.disconnect(self._on_dock_visibility_changed)
+            except Exception:  # nosec B110 - never connected, or dock already gone
+                pass
             with teardown_step("dock removal"):
-                self._iface.removeDockWidget(self._dock_widget)
-            with teardown_step("dock delete"):
-                self._dock_widget.deleteLater()
+                release_dock_widget(self._iface, self._dock_widget)
             self._dock_widget = None
 
         # Wipe session-scoped reference images from disk.
@@ -694,7 +758,7 @@ class PluginLifecycleMixin:
             with teardown_step("plugin action"):
                 try:
                     action.triggered.disconnect()
-                except (RuntimeError, TypeError):
+                except (RuntimeError, TypeError):  # action deleted or had no connections
                     pass
                 action.deleteLater()
         self._settings_action = None
@@ -729,9 +793,7 @@ class PluginLifecycleMixin:
         # Join the detached Prompt Library threads last, once the visible UI is
         # gone: Qt aborts the process when it destroys a QThread still in run().
         with teardown_step("prompt library workers"):
-            from ..dialogs.prompt_templates.workers import drain_prompt_library_workers
-
-            drain_prompt_library_workers()
+            drain_prompt_library_if_loaded()
         drain_hook = getattr(self, "_prompt_library_drain", None)
         if drain_hook is not None:
             with teardown_step("about-to-quit hook"):
@@ -740,6 +802,10 @@ class PluginLifecycleMixin:
 
         with teardown_step("config cache"):
             clear_config_cache()
+        with teardown_step("telemetry about-to-quit hook"):
+            QgsApplication.instance().aboutToQuit.disconnect(
+                telemetry.shutdown_telemetry
+            )
         # Cancel any in-flight telemetry flush tasks before tearing down the
         # store so QgsTaskManager doesn't outlive the collector.
         with teardown_step("telemetry"):
@@ -749,56 +815,3 @@ class PluginLifecycleMixin:
                 self._config_store.clear()
             set_store(None)
         log("AI Edit plugin unloaded")
-
-    def _register_processing_provider(self):
-        """Add the AI Edit provider to the Processing registry.
-
-        Imported here rather than at module level so plugin load stays light,
-        and so a QGIS build without the Processing plugin enabled fails on this
-        one call instead of on the import of the whole controller.
-        """
-        from ...processing.edit_provider import TerraEditProcessingProvider
-
-        provider = TerraEditProcessingProvider()
-        provider_id = provider.id()
-        # addProvider returns False AND deletes the provider it was given when
-        # the id is already taken, which leaves a Python wrapper around a dead
-        # C++ object. Holding that would make the matching removeProvider raise
-        # on unload, so drop the reference instead of keeping a corpse.
-        registry = QgsApplication.processingRegistry()
-        if not registry.addProvider(provider):
-            # Reloading the plugin can leave the previous provider behind with
-            # its Python half collected: it answers to no id and lists no
-            # algorithm, and it holds the name against us. Whoever reloaded
-            # would have no algorithms until they restart QGIS, so take the id
-            # back rather than stopping here. By id, never by object: the
-            # object overload calls provider->id(), the pure virtual whose
-            # Python override is exactly what a half-collected provider has
-            # lost. A fresh instance is needed because the one above is
-            # already deleted.
-            registry.removeProvider(provider_id)
-            provider = TerraEditProcessingProvider()
-            if not registry.addProvider(provider):
-                self._processing_provider = None
-                log_warning(
-                    f"Processing provider '{provider_id}' was not registered: "
-                    "the id is already taken."
-                )
-                return
-        self._processing_provider = provider
-
-    def _unregister_processing_provider(self):
-        """Remove the provider, so a reload does not leave two of them registered."""
-        provider = getattr(self, "_processing_provider", None)
-        # Dropped before the call, never after: a raise on an already-deleted
-        # provider would otherwise leave the attribute set and the next unload
-        # would retry the same dead object.
-        self._processing_provider = None
-        if provider is None:
-            return
-        from ...processing.edit_provider import TERRAEDIT_PROVIDER_ID
-
-        # By id, never by object: the object overload calls provider->id() in
-        # C++, and that override is gone the moment the Python half is
-        # collected. The id is a constant, so it survives.
-        QgsApplication.processingRegistry().removeProvider(TERRAEDIT_PROVIDER_ID)

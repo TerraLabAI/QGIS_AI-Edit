@@ -2,7 +2,7 @@
 
 Avoids QGIS Processing chaining (TEMPORARY_OUTPUT references can vanish
 between gdal:* steps on macOS). Everything runs in-memory via GDAL MEM /
-OGR Memory drivers; filtering + simplification happen in Python on
+OGR in-memory drivers; filtering + simplification happen in Python on
 QgsGeometry objects.
 
 Multi-class runs paint every class mask into ONE label raster and polygonize
@@ -18,6 +18,7 @@ and class naming live in ``vectorize_palette``.
 """
 from __future__ import annotations
 
+import math
 import os
 
 # numpy is guarded: a broken numpy ABI (common on Windows OSGeo4W after an
@@ -43,11 +44,15 @@ from .. import qt_compat as QtC
 from ..errors import AIEditError, ErrorCode
 from ..i18n import tr
 from ..logger import log_debug
-from ..raster_writer import read_crop_polygon_wkt
+from ..raster_writer import (
+    _safe_projection_wkt,
+    memory_vector_driver,
+)
 
 # Back-compat re-exports: callers and tests historically found the whole
 # Vectorize surface on this module before it was split.
-from .vectorize_layer import (  # noqa: F401
+from .vectorize_geometry import _clip_feats_to_crop, _make_measurer
+from .vectorize_layer import (
     AI_EDIT_GPKG_FILENAME,
     apply_class_style,
     build_vector_layer,
@@ -56,7 +61,97 @@ from .vectorize_layer import (  # noqa: F401
     set_layer_provenance,
     transplant_features,
 )
-from .vectorize_palette import detect_classes, dominant_palette  # noqa: F401
+from .vectorize_masks import _numpy_fill_holes, _numpy_morphology, _refine_mask  # noqa: F401
+from .vectorize_palette import detect_classes, dominant_palette
+
+# Public surface, re-exports included, so they read as used.
+__all__ = [
+    "AI_EDIT_GPKG_FILENAME",
+    "apply_class_style",
+    "build_vector_layer",
+    "compute_class_features",
+    "detect_classes",
+    "dominant_palette",
+    "friendly_vector_layer_name",
+    "make_layer_permanent",
+    "np",
+    "set_layer_provenance",
+    "transplant_features",
+    "vectorize_by_color",
+]
+
+# Peak bytes per pixel while vectorizing: three int16 bands, the int16
+# distance buffers, the best-index and mask arrays, and the GDAL read copies.
+_VECTORIZE_BYTES_PER_PIXEL = 24.0
+_VECTORIZE_MEMORY_CEILING_BYTES = 1_000_000_000
+
+
+def _read_rgb_bands(src):
+    """Validate an open dataset and read its first three bands.
+
+    Returns ``(r, g, b, geotransform, projection_wkt, width, height)``."""
+    if src.RasterCount < 3:
+        raise AIEditError(
+            ErrorCode.INVALID_RASTER,
+            tr("Raster must have at least 3 bands (RGB)"),
+        )
+    width, height = src.RasterXSize, src.RasterYSize
+    if width <= 0 or height <= 0:
+        raise AIEditError(
+                        ErrorCode.INVALID_RASTER,
+                        tr("Could not read raster pixels (the file may be incomplete)."),
+                    )
+    # Defensive memory ceiling, refused early with a clear localized message
+    # rather than letting the QGIS process run out of memory. At 24 bytes per
+    # pixel the 1 GB ceiling sits near 40 megapixels.
+    est_bytes = float(width) * float(height) * _VECTORIZE_BYTES_PER_PIXEL
+    if est_bytes > _VECTORIZE_MEMORY_CEILING_BYTES:
+        raise AIEditError(
+            ErrorCode.RASTER_TOO_LARGE,
+            tr(
+                "Raster is too large for in-memory vectorize ({mp:.0f} megapixels). "
+                "Crop the layer first or run a tiled workflow."
+            ).format(mp=(width * height) / 1_000_000),
+        )
+    gt = src.GetGeoTransform()
+    proj = src.GetProjection()
+    if not proj:
+        raise AIEditError(ErrorCode.INVALID_RASTER, tr("Raster has no CRS"))
+    # A degenerate geotransform (no real pixel size) would make min_area and
+    # simplify_tol collapse to 0 and emit thousands of single-pixel polygons.
+    if (not gt or len(gt) != 6 or not all(math.isfinite(v) for v in gt)
+            or abs(gt[1] * gt[5] - gt[2] * gt[4]) == 0):
+        raise AIEditError(
+            ErrorCode.INVALID_RASTER, tr("Raster has no usable georeferencing.")
+        )
+    r = src.GetRasterBand(1).ReadAsArray()
+    g = src.GetRasterBand(2).ReadAsArray()
+    b = src.GetRasterBand(3).ReadAsArray()
+    # GDAL returns None (it does not raise) when a band read fails on a corrupt
+    # or truncated file; guard so we surface a clean error, not an AttributeError.
+    if r is None or g is None or b is None:
+        raise AIEditError(
+            ErrorCode.INVALID_RASTER,
+            tr("Could not read raster pixels (the file may be incomplete)."),
+        )
+    return r, g, b, gt, proj, width, height
+
+
+def _polygon_spatial_ref(proj: str):
+    """SpatialReference for the in-memory polygon layer, or None.
+
+    The polygon step needs no CRS (features take the raster's CRS later), so
+    a PROJ setup that rejects the WKT must not fail the run."""
+    wkt = _safe_projection_wkt(proj)
+    if wkt is None:
+        return None
+    spatial_ref = osr.SpatialReference()
+    try:
+        if spatial_ref.ImportFromWkt(wkt) == 0:
+            return spatial_ref
+    except RuntimeError as err:
+        log_debug(f"Vectorize: polygon layer left without CRS ({err})")
+    return None
 
 
 def _open_rgb(raster_path: str):
@@ -74,129 +169,57 @@ def _open_rgb(raster_path: str):
             ErrorCode.INVALID_RASTER,
             tr("Raster layer has no on-disk source file"),
         )
-    src = gdal.Open(raster_path)
+    try:
+        src = gdal.Open(raster_path)
+    except RuntimeError:
+        src = None
     if src is None:
         raise AIEditError(ErrorCode.INVALID_RASTER, tr("Could not open raster"))
-    if src.RasterCount < 3:
-        raise AIEditError(
-            ErrorCode.INVALID_RASTER,
-            tr("Raster must have at least 3 bands (RGB)"),
-        )
-    width, height = src.RasterXSize, src.RasterYSize
-    # Defensive memory ceiling. We read 3 bands and build int16 + mask transients,
-    # so peak RAM is roughly width*height*12 bytes. Refuse above ~1 GB of that
-    # estimate (~83 megapixels) early, with a clear localized message, rather
-    # than OOM the QGIS process.
-    est_bytes = float(width) * float(height) * 3.0 * 4.0
-    if est_bytes > 1_000_000_000:
-        raise AIEditError(
-            ErrorCode.RASTER_TOO_LARGE,
-            tr(
-                "Raster is too large for in-memory vectorize ({mp:.0f} megapixels). "
-                "Crop the layer first or run a tiled workflow."
-            ).format(mp=(width * height) / 1_000_000),
-        )
-    gt = src.GetGeoTransform()
-    proj = src.GetProjection()
-    if not proj:
-        raise AIEditError(ErrorCode.INVALID_RASTER, tr("Raster has no CRS"))
-    # A degenerate geotransform (no real pixel size) would make min_area and
-    # simplify_tol collapse to 0 and emit thousands of single-pixel polygons.
-    if not gt or gt[1] == 0 or gt[5] == 0:
-        raise AIEditError(
-            ErrorCode.INVALID_RASTER, tr("Raster has no usable georeferencing.")
-        )
-    r = src.GetRasterBand(1).ReadAsArray()
-    g = src.GetRasterBand(2).ReadAsArray()
-    b = src.GetRasterBand(3).ReadAsArray()
+    try:
+        r, g, b, gt, proj, width, height = _read_rgb_bands(src)
+        # Preserve alpha/nodata semantics without changing the reader's tuple.
+        valid = np.ones((height, width), dtype=bool)
+        for index in range(1, src.RasterCount + 1):
+            band = src.GetRasterBand(index)
+            if band.GetColorInterpretation() == gdal.GCI_AlphaBand:
+                alpha = band.ReadAsArray()
+                if alpha is None:
+                    raise AIEditError(
+                        ErrorCode.INVALID_RASTER,
+                        tr("Could not read raster pixels (the file may be incomplete)."),
+                    )
+                valid &= alpha > 0
+        mask_band = src.GetRasterBand(1).GetMaskBand()
+        if mask_band is not None and src.GetRasterBand(1).GetMaskFlags() != gdal.GMF_ALL_VALID:
+            mask = mask_band.ReadAsArray()
+            if mask is None:
+                raise AIEditError(
+                        ErrorCode.INVALID_RASTER,
+                        tr("Could not read raster pixels (the file may be incomplete)."),
+                    )
+            valid &= mask > 0
+        rgb = []
+        for values in (r, g, b):
+            valid &= np.isfinite(values) & (values >= 0) & (values <= 255)
+            rgb.append(values.astype(np.int16))
+        for values in rgb:
+            values[~valid] = -1024
+        r, g, b = rgb
+    except Exception as err:
+        # The traceback would hold the dataset alive through the reader's
+        # frame, and Windows keeps the GeoTIFF locked for as long as it lives.
+        src = None
+        raise err.with_traceback(None) from None
     src = None
-    # GDAL returns None (it does not raise) when a band read fails on a corrupt
-    # or truncated file; guard so we surface a clean error, not an AttributeError.
-    if r is None or g is None or b is None:
-        raise AIEditError(
-            ErrorCode.INVALID_RASTER,
-            tr("Could not read raster pixels (the file may be incomplete)."),
-        )
     return (
-        r.astype(np.int16),
-        g.astype(np.int16),
-        b.astype(np.int16),
+        r,
+        g,
+        b,
         gt,
         proj,
         width,
         height,
     )
-
-
-def _make_measurer(raster_crs, transform_context, ellipsoid: str) -> QgsDistanceArea:
-    """Geodesic measurer: true metres even when the layer CRS is in degrees.
-    Built from the passed-in project context so this stays off-thread safe."""
-    measurer = QgsDistanceArea()
-    if raster_crs is not None and raster_crs.isValid():
-        measurer.setSourceCrs(raster_crs, transform_context)
-    # QgsProject.ellipsoid() returns "NONE" (truthy) when no measurement
-    # ellipsoid is set; treat it like empty so area_m2 stays geodesic metres.
-    if not ellipsoid or ellipsoid == "NONE":
-        ellipsoid = "EPSG:7030"
-    measurer.setEllipsoid(ellipsoid)
-    return measurer
-
-
-def _clip_feats_to_crop(
-    feats: list,
-    raster_path: str,
-    raster_crs,
-    transform_context,
-    ellipsoid: str,
-) -> list:
-    """Clip vectorize output to the P3 alpha-crop polygon (spec section 5):
-    Vectorize matches exact pixel colors on the mosaic, so a traced feature
-    that straddles the crop edge must stop at the polygon, not the pixel.
-
-    No-op (returns ``feats`` unchanged) when the raster carries no crop tag
-    (old generations, MCP/dev extents). A feature split by the crop into
-    several parts becomes one feature per part, same as the bowtie-split
-    path in :func:`_trace_mask`; ``area_m2`` is recomputed geodesically on
-    the clipped geometry.
-    """
-    crop_wkt = read_crop_polygon_wkt(raster_path)
-    if not crop_wkt:
-        return feats
-    crop_geom = QgsGeometry.fromWkt(crop_wkt)
-    if crop_geom is None or crop_geom.isEmpty():
-        return feats
-    if not crop_geom.isGeosValid():
-        fixed = crop_geom.makeValid()
-        if fixed is not None and not fixed.isEmpty():
-            crop_geom = fixed
-
-    measurer = _make_measurer(raster_crs, transform_context, ellipsoid)
-    clipped: list[QgsFeature] = []
-    next_fid = 1
-    for feat in feats:
-        geom = feat.geometry().intersection(crop_geom)
-        if geom is None or geom.isEmpty():
-            continue
-        if not geom.isGeosValid():
-            fixed = geom.makeValid()
-            if fixed is not None and not fixed.isEmpty():
-                geom = fixed
-        parts = geom.asGeometryCollection() if geom.isMultipart() else [geom]
-        attrs = feat.attributes()
-        for part in parts:
-            if part.isEmpty() or part.type() != QtC.PolygonGeometry:
-                continue
-            if part.area() <= 0:
-                continue
-            new_feat = QgsFeature()
-            new_feat.setGeometry(part)
-            new_attrs = list(attrs)
-            new_attrs[0] = next_fid  # feature_id
-            new_attrs[3] = float(measurer.measureArea(part))  # area_m2
-            new_feat.setAttributes(new_attrs)
-            clipped.append(new_feat)
-            next_fid += 1
-    return clipped
 
 
 def _inset_border(mask, expand_value: int) -> None:
@@ -239,6 +262,8 @@ def _emit_traced_polygon(
     # Simplify/smooth can self-intersect; downstream tools and GeoPackage
     # expect valid rings. makeValid may split a bowtie into several
     # polygons: emit one feature per part.
+    if geom.isEmpty() or geom.type() != QtC.PolygonGeometry or geom.area() < min_area:
+        return next_fid
     geoms = [geom]
     if not geom.isGeosValid():
         fixed = geom.makeValid()
@@ -249,9 +274,11 @@ def _emit_traced_polygon(
                 continue
             if part.type() == QtC.PolygonGeometry and part.area() >= min_area:
                 parts.append(part)
-        geoms = parts or [geom]
+        geoms = parts
     for part in geoms:
         area_m2 = float(measurer.measureArea(part))
+        if not math.isfinite(area_m2) or area_m2 <= 0:
+            continue
         feat = QgsFeature()
         feat.setGeometry(part)
         feat.setAttributes([
@@ -303,28 +330,27 @@ def _trace_mask(
             connectedness=8,
         )
 
-    spatial_ref = osr.SpatialReference()
-    spatial_ref.ImportFromWkt(proj)
+    spatial_ref = _polygon_spatial_ref(proj)
 
-    ogr_driver = ogr.GetDriverByName("Memory")
+    ogr_driver = memory_vector_driver()
     ogr_ds = ogr_driver.CreateDataSource("vec")
     ogr_layer = ogr_ds.CreateLayer("polys", spatial_ref, ogr.wkbPolygon)
     ogr_layer.CreateField(ogr.FieldDefn("value", ogr.OFTInteger))
 
-    gdal.Polygonize(mask_band, None, ogr_layer, 0, ["8CONNECTED=8"])
+    gdal.Polygonize(mask_band, mask_band, ogr_layer, 0, ["8CONNECTED=8"])
 
     # Cancellation checkpoint after the expensive GDAL polygonize.
     if is_cancelled is not None and is_cancelled():
         return None
 
-    pixel_area = abs(gt[1] * gt[5])
+    pixel_area = abs(gt[1] * gt[5] - gt[2] * gt[4])
     min_area = pixel_area * float(min_pixels)
     simplify_tol = (pixel_area ** 0.5) * simplify_factor
 
     feats: list[QgsFeature] = []
     ogr_layer.ResetReading()
-    for ogr_feat in ogr_layer:
-        if next_fid % 256 == 0 and is_cancelled is not None and is_cancelled():
+    for seen, ogr_feat in enumerate(ogr_layer):
+        if seen % 256 == 0 and is_cancelled is not None and is_cancelled():
             return None
         if ogr_feat.GetField("value") != 1:
             continue
@@ -346,24 +372,24 @@ def _trace_mask(
             feats=feats,
         )
 
-    mask_ds = None
-    ogr_ds = None
+    del mask_ds
+    del ogr_ds
     return feats, next_fid
 
 
 def _class_mask(best_idx, assigned, class_idx: int, expand_value: int, fill_holes: bool):
     """One class's refined, border-inset uint8 mask, or None when empty."""
     mask = ((best_idx == class_idx) & assigned).astype(np.uint8)
-    if int(mask.sum()) == 0:
+    if not np.any(mask):
         return None
     # Mask-level morphological refinement (expand/contract then fill holes).
     # Same order as AI Segmentation's apply_mask_refinement.
     if expand_value != 0 or fill_holes:
         mask = _refine_mask(mask, expand_value=expand_value, fill_holes=fill_holes)
-        if int(mask.sum()) == 0:
+        if not np.any(mask):
             return None
     _inset_border(mask, expand_value)
-    return mask
+    return mask if np.any(mask) else None
 
 
 # uint8 label raster: labels 1..254 plus 0 for background. More classes than
@@ -442,7 +468,7 @@ def _trace_classes_batched(
         # class over another. One raster cannot hold two labels on a pixel,
         # so overlap sends the whole run down the per-class path unchanged.
         if bool(np.any(label_array[stamp])):
-            work_ds = None
+            del work_ds
             return False, None
         label_value = len(label_classes) + 1
         np.copyto(label_array, np.uint8(label_value), where=stamp)
@@ -450,9 +476,11 @@ def _trace_classes_batched(
             cls.get("label", ""),
             "#{:02X}{:02X}{:02X}".format(*cls["rgb"]),
         )
-    work_band = None
-    work_ds = None
+    del work_band
+    del work_ds
 
+    if not label_classes:
+        return True, []
     label_ds = mem_raster_driver.Create("", width, height, 1, gdal.GDT_Byte)
     label_ds.SetGeoTransform(gt)
     label_ds.SetProjection(proj)
@@ -460,9 +488,8 @@ def _trace_classes_batched(
     label_band.WriteArray(label_array)
     label_band.FlushCache()
 
-    spatial_ref = osr.SpatialReference()
-    spatial_ref.ImportFromWkt(proj)
-    ogr_driver = ogr.GetDriverByName("Memory")
+    spatial_ref = _polygon_spatial_ref(proj)
+    ogr_driver = memory_vector_driver()
     ogr_ds = ogr_driver.CreateDataSource("vec")
     ogr_layer = ogr_ds.CreateLayer("polys", spatial_ref, ogr.wkbPolygon)
     ogr_layer.CreateField(ogr.FieldDefn("value", ogr.OFTInteger))
@@ -474,7 +501,7 @@ def _trace_classes_batched(
     if is_cancelled is not None and is_cancelled():
         return True, None
 
-    pixel_area = abs(gt[1] * gt[5])
+    pixel_area = abs(gt[1] * gt[5] - gt[2] * gt[4])
     min_area = pixel_area * float(min_pixels)
     simplify_tol = (pixel_area ** 0.5) * simplify_factor
 
@@ -517,8 +544,8 @@ def _trace_classes_batched(
                 feats=feats,
             )
 
-    label_ds = None
-    ogr_ds = None
+    del label_ds
+    del ogr_ds
     return True, feats
 
 
@@ -555,6 +582,8 @@ def compute_class_features(
     classes), or ``None`` if ``is_cancelled()`` fired. Raises ``AIEditError``
     on invalid input or an all-empty result.
     """
+    if is_cancelled is not None and is_cancelled():
+        return None
     if not classes:
         raise AIEditError(
             ErrorCode.NO_PIXELS_MATCHED,
@@ -568,17 +597,34 @@ def compute_class_features(
 
     palette = [tuple(c["rgb"]) for c in classes] + [tuple(c) for c in competitors]
     best_dist = np.full(ri.shape, 32767, dtype=np.int16)
-    best_idx = np.full(ri.shape, 255, dtype=np.uint8)
+    # Competitor palettes can exceed a byte even with few traced classes.
+    index_dtype = np.uint8 if len(palette) <= 255 else np.uint32
+    best_idx = np.full(ri.shape, np.iinfo(index_dtype).max, dtype=index_dtype)
+    # Reused buffers: fresh temporaries per palette color would double the
+    # peak memory on a large raster. Same int16 arithmetic as before.
+    d = np.empty(ri.shape, dtype=np.int16)
+    channel = np.empty(ri.shape, dtype=np.int16)
+    better = np.empty(ri.shape, dtype=bool)
     for idx, (cr, cg, cb) in enumerate(palette):
-        d = np.abs(ri - cr) + np.abs(gi - cg) + np.abs(bi - cb)
-        better = d < best_dist
-        best_dist[better] = d[better]
+        np.subtract(ri, cr, out=d)
+        np.abs(d, out=d)
+        np.subtract(gi, cg, out=channel)
+        np.abs(channel, out=channel)
+        np.add(d, channel, out=d)
+        np.subtract(bi, cb, out=channel)
+        np.abs(channel, out=channel)
+        np.add(d, channel, out=d)
+        np.less(d, best_dist, out=better)
+        np.copyto(best_dist, d, where=better)
         best_idx[better] = idx
         if is_cancelled is not None and is_cancelled():
             return None
     # Guard scaled to the summed-channel distance; pixels farther than this
     # from every palette color stay unassigned (photo textures, gradients).
-    assigned = best_dist <= int(tolerance) * 3
+    assigned = (best_dist <= int(tolerance) * 3) & (ri >= 0)
+    # Polygonization does not use the RGB/distance scratch buffers. Free them
+    # before GDAL allocates its label raster and geometries.
+    del ri, gi, bi, best_dist, d, channel, better
 
     measurer = _make_measurer(raster_crs, transform_context, ellipsoid)
 
@@ -690,14 +736,14 @@ def _compute_vector_features(
     mask_g = np.abs(gi - tg_g) <= tolerance
     mask_b = np.abs(bi - tb_b) <= tolerance
     mask = (mask_r & mask_g & mask_b).astype(np.uint8)
-    if int(mask.sum()) == 0:
+    if not np.any(mask):
         raise AIEditError(
             ErrorCode.NO_PIXELS_MATCHED,
             tr("No pixels matched the selected color"),
         )
     if expand_value != 0 or fill_holes:
         mask = _refine_mask(mask, expand_value=expand_value, fill_holes=fill_holes)
-        if int(mask.sum()) == 0:
+        if not np.any(mask):
             raise AIEditError(
                 ErrorCode.NO_PIXELS_MATCHED,
                 tr("No pixels matched the selected color"),
@@ -781,83 +827,3 @@ def vectorize_by_color(
         [{"rgb": output_rgb or target_rgb, "label": class_label}],
         source_raster_name=raster_layer.name() or "",
     )
-
-
-def _refine_mask(
-    mask,
-    expand_value: int = 0,
-    fill_holes: bool = False,
-):
-    """Dilate/erode then optionally fill interior holes. scipy fast-path,
-    pure-numpy fallback. Same order as AI Segmentation's apply_mask_refinement.
-    """
-    result = mask.astype(np.uint8).copy()
-    if expand_value != 0:
-        iterations = abs(int(expand_value))
-        try:
-            from scipy import ndimage
-            structure = ndimage.generate_binary_structure(2, 1)
-            if expand_value > 0:
-                result = ndimage.binary_dilation(
-                    result, structure=structure, iterations=iterations
-                ).astype(np.uint8)
-            else:
-                result = ndimage.binary_erosion(
-                    result, structure=structure, iterations=iterations
-                ).astype(np.uint8)
-        except ImportError:
-            result = _numpy_morphology(result, iterations, expand=expand_value > 0)
-    if fill_holes:
-        try:
-            from scipy import ndimage
-            result = ndimage.binary_fill_holes(result).astype(np.uint8)
-        except ImportError:
-            result = _numpy_fill_holes(result)
-    return result
-
-
-def _numpy_morphology(mask, iterations: int, expand: bool):
-    """Pure-numpy 4-connected dilation/erosion fallback when scipy missing."""
-    result = mask.copy()
-    for _ in range(iterations):
-        shifted = result.copy()
-        shifted[1:, :] |= result[:-1, :]
-        shifted[:-1, :] |= result[1:, :]
-        shifted[:, 1:] |= result[:, :-1]
-        shifted[:, :-1] |= result[:, 1:]
-        if expand:
-            result = shifted
-        else:
-            shrunk = result.copy()
-            shrunk[1:, :] &= result[:-1, :]
-            shrunk[:-1, :] &= result[1:, :]
-            shrunk[:, 1:] &= result[:, :-1]
-            shrunk[:, :-1] &= result[:, 1:]
-            result = shrunk
-    return result
-
-
-def _numpy_fill_holes(mask):
-    """Pure-numpy flood-fill from borders to mark exterior, invert for holes."""
-    h, w = mask.shape
-    padded = np.zeros((h + 2, w + 2), dtype=np.uint8)
-    padded[1:-1, 1:-1] = mask
-    exterior = np.zeros_like(padded, dtype=bool)
-    exterior[0, :] = padded[0, :] == 0
-    exterior[-1, :] = padded[-1, :] == 0
-    exterior[:, 0] = padded[:, 0] == 0
-    exterior[:, -1] = padded[:, -1] == 0
-    background = padded == 0
-    for _ in range(min(max(h, w), 2048)):
-        expanded = exterior.copy()
-        expanded[1:, :] |= exterior[:-1, :]
-        expanded[:-1, :] |= exterior[1:, :]
-        expanded[:, 1:] |= exterior[:, :-1]
-        expanded[:, :-1] |= exterior[:, 1:]
-        expanded &= background
-        if np.array_equal(expanded, exterior):
-            break
-        exterior = expanded
-    result = padded.copy()
-    result[(padded == 0) & (~exterior)] = 1
-    return result[1:-1, 1:-1]

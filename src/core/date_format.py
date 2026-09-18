@@ -19,6 +19,7 @@ import datetime as dt
 
 from qgis.PyQt.QtCore import QDate, QLocale
 
+from .config_store import get_export_copy
 from .i18n import tr
 
 
@@ -44,7 +45,7 @@ def format_smart_date(iso_ts: str) -> str:
 
     seconds = max(0, int((now - parsed).total_seconds()))
     if seconds < 60:
-        return tr("just now")
+        return get_export_copy("pipeline.date_format.just_now", tr("just now"))
     if seconds < 3600:
         return tr("{n} min ago").format(n=seconds // 60)
     if seconds < 86400:
@@ -54,7 +55,7 @@ def format_smart_date(iso_ts: str) -> str:
     now_local = now.astimezone()
     days_ago = (now_local.date() - parsed_local.date()).days
     if days_ago == 1:
-        return tr("yesterday")
+        return get_export_copy("pipeline.date_format.yesterday", tr("yesterday"))
     if days_ago <= 6:
         return tr("{n} d ago").format(n=days_ago)
 
@@ -78,25 +79,3 @@ def format_reset_date(iso_ts: str) -> str:
     local = parsed.astimezone()
     qdate = QDate(local.year, local.month, local.day)
     return QLocale().toString(qdate, "d MMMM yyyy")
-
-
-def format_group_label(iso_ts: str) -> str:
-    """Time bucket for history lists: Today, This week, else the month
-    (plus the year once it is not the current one). Month names come from
-    QLocale, same as format_smart_date."""
-    parsed = _parse_iso(iso_ts)
-    if parsed is None:
-        return ""
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=dt.timezone.utc)
-    local = parsed.astimezone()
-    today = dt.datetime.now().astimezone().date()
-    days_ago = (today - local.date()).days
-    if days_ago <= 0:
-        return tr("Today")
-    if days_ago <= 6:
-        return tr("This week")
-    month = QLocale().standaloneMonthName(local.month)
-    if local.year == today.year:
-        return month
-    return f"{month} {local.year}"

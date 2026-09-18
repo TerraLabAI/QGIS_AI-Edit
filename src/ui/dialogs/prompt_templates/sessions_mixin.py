@@ -2,11 +2,12 @@
 
 The rail's Sessions row opens the Sessions page (its internal target stays
 "user_favorites": that key is what server copy overrides and anchors point
-at, only the user-facing label moved). Top to bottom: a pinned search box,
-then the sessions grouped by month (newest first, unparseable dates under a
-final "Earlier" bucket). The rail's Starred row ("user_starred") opens the
-Starred page: the user's pinned prompts + generations as one card gallery,
-promoted out of this page's old secondary shelf.
+at, only the user-facing label moved). The window's one search field filters
+it (the dialog switches the field's scope while this page is on screen);
+below the header, the sessions grouped by month (newest first, unparseable
+dates under a final "Earlier" bucket). The rail's Favorites row
+("user_starred") opens the Favorites page: the user's starred prompts +
+generations as one card gallery, the same grid as every other page.
 
 The Sessions page is a pure view over the cached recent jobs. Each session renders as
 one before/after card (the shared generation-card gallery, one gallery per
@@ -19,7 +20,6 @@ from __future__ import annotations
 
 import datetime as _dt
 
-from qgis.gui import QgsFilterLineEdit
 from qgis.PyQt.QtCore import QLocale, QTimer
 from qgis.PyQt.QtWidgets import (
     QLabel,
@@ -28,32 +28,33 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from ....core import qt_compat as QtC
-from ....core.config_store import get_export_copy
+from ....core.config_store import get_export_copy, get_export_dial
 from ....core.i18n import tr
 from ....core.prompts.conversation_summary import conversation_entries, filter_entries
 from .common import (
-    _EMPTY_MSG,
-    _SEARCH_BOX,
+    _HALL_SECTION_TITLE,
     _is_alive,
+    style_library_scroll,
 )
 from .generation_card import _GenerationCard
+from .library_empty_state import build_library_empty_state
 
-# Starred page gallery: smaller cards in 4 columns, like the old hall.
-_STARRED_GALLERY_COLUMNS = 4
-_STARRED_GALLERY_SLIDER_H = 130
-
-# Month bucket header over a month's session cards. Normal case (the design
-# system bans uppercase section titles); the month name itself comes from
-# QLocale, so it localizes without tr().
-_SESSION_GROUP_LABEL = (
-    "QLabel { font-size: 11px; font-weight: 700; color: rgba(128,128,128,0.95);"
-    " background: transparent; border: none; padding: 10px 4px 2px 4px; }"
-)
+# Month bucket header over a month's session cards: the same title, inset and
+# gap as a family page's section (normal case, the design system bans
+# uppercase section titles); the month name itself comes from QLocale, so it
+# localizes without tr(). The first month sits flush under the page header.
+# Gap between a month's title and its cards, px (the hall section's).
+_SESSION_GROUP_TITLE_GAP = 10
+# Space above every month header but the first, px (the hall's section gap).
+_SESSION_GROUP_GAP = 24
 
 # Gallery keys of the month sections, namespaced so a rebuild retires exactly
 # its own galleries and never touches Recent / Favorites / starred.
 _SESSION_GALLERY_PREFIX = "sessions:"
+
+# Typing in the sessions search box coalesces into one rebuild after this
+# quiet period, instead of rebuilding the card galleries on every keystroke.
+_SEARCH_DEBOUNCE_MS = 180
 
 
 def _session_month_bucket(iso_ts: str) -> tuple[int, int] | None:
@@ -80,10 +81,41 @@ def _session_month_label(bucket: tuple[int, int]) -> str:
     return f"{QLocale().standaloneMonthName(month)} {year}"
 
 
+def _session_given_name(entry: dict) -> str:
+    """The name the user gave a session (a rename on any of its versions),
+    or "" when its title is still the server's cut of its first prompt."""
+    for job in entry.get("members") or []:
+        name = " ".join(str(job.get("session_title") or "").split())
+        if name:
+            return " ".join(str(entry.get("title") or name).split())
+    return ""
+
+
+def _session_with_readable_title(entry: dict) -> dict:
+    """The session as its preview window titles it. An unnamed session's
+    title is its first prompt cut at a fixed length, often mid-word ("...three
+    green parasols alo"); the preview ends it on a whole word with an
+    ellipsis. A renamed session keeps its name. A copy: the signals carry the
+    original entry."""
+    title = " ".join(str(entry.get("title") or "").split())
+    if not title or _session_given_name(entry):
+        return entry
+    prompts = [
+        " ".join(str(job.get("prompt") or "").split())
+        for job in (entry.get("members") or [])
+    ]
+    source = next((p for p in prompts if p.startswith(title) and len(p) > len(title)), "")
+    if not source:
+        return entry
+    cut = title if source[len(title)] == " " else title.rsplit(" ", 1)[0]
+    return dict(entry, title=(cut or title).rstrip(" ,.;:-") + "…")
+
+
 class SessionsMixin:
     """Builds and drives the Sessions and Starred pages. Requires the host to
     provide `_recent_jobs`, `_pinned_entries`, `_feed_all_pages`, `_stack`,
-    `_build_back_header`, `_build_card_gallery`, `_retire_gallery`,
+    `_build_page_header`, `_build_card_gallery`, `_retire_gallery`,
+    `_search_input`,
     `_build_empty_state`,
     `_feed_meta`, the detail-popup collaborators (`_client`, `_demo_loader`,
     `_absolute_demo_url`, `_on_generation_action`, `_on_generation_favorite`)
@@ -142,36 +174,31 @@ class SessionsMixin:
         title, tagline = self._feed_meta()["work"]
         page = QWidget()
         outer = QVBoxLayout(page)
-        outer.setContentsMargins(6, 4, 6, 4)
-        outer.setSpacing(8)
-        outer.addWidget(self._build_back_header(title, tagline))
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(14)
+        outer.addWidget(self._build_page_header(title, tagline))
 
-        # Pinned above the scroll area, so it stays visible however long the
-        # list grows. QgsFilterLineEdit ships the clear button. Debounced:
-        # every keystroke rebuilds card galleries now (heavier than the old
-        # text rows), so coalesce typing into one rebuild.
-        search = QgsFilterLineEdit()
-        search.setPlaceholderText(tr("Search your sessions"))
-        search.setStyleSheet(_SEARCH_BOX)
+        # The window's search field filters this page (the dialog routes its
+        # keystrokes here while the page is on screen). Debounced: every
+        # keystroke rebuilds card galleries, so coalesce typing into one
+        # rebuild.
         debounce = QTimer(page)
         debounce.setSingleShot(True)
-        debounce.setInterval(180)
+        debounce.setInterval(
+            get_export_dial("dialogs.sessions_mixin.search_debounce_ms", _SEARCH_DEBOUNCE_MS))
         debounce.timeout.connect(self._rebuild_session_list)
-        search.valueChanged.connect(lambda _v: debounce.start())
-        outer.addWidget(search)
-        self._sessions_search = search
+        self._sessions_debounce = debounce
+        self._sessions_search = self._search_input
 
         scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QtC.FrameNoFrame)
-        scroll.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
+        style_library_scroll(scroll)
         # The month galleries wire their lazy thumbnail loading to this
         # scroll area on every rebuild.
         self._sessions_scroll = scroll
         content = QWidget()
         content_box = QVBoxLayout(content)
-        content_box.setContentsMargins(0, 2, 6, 8)
-        content_box.setSpacing(10)
+        content_box.setContentsMargins(0, 0, 12, 20)
+        content_box.setSpacing(0)
 
         list_host = QWidget()
         self._sessions_list_box = QVBoxLayout(list_host)
@@ -186,12 +213,12 @@ class SessionsMixin:
         self._rebuild_session_list()
         return page
 
-    # -- Starred page -----------------------------------------------------
+    # -- Favorites page ---------------------------------------------------
 
     def _open_starred_page(self) -> None:
-        """Rebuild + show the Starred page (the rail's Starred row,
+        """Rebuild + show the Favorites page (the rail's Favorites row,
         "user_starred"). Rebuilt on every open, like the Sessions page, so it
-        always reflects the current pinned entries."""
+        always reflects the current starred entries."""
         old = self._feed_all_pages.pop("starred", None)
         if old is not None:
             self._stack.removeWidget(old)
@@ -209,33 +236,32 @@ class SessionsMixin:
 
     def _build_starred_page(self) -> QWidget:
         """The user's starred prompts + starred generations as one card
-        gallery (origin pills tell the two kinds apart), exactly what the old
-        Sessions-page shelf held, now a page of its own. The gallery keeps its
+        gallery (origin pills tell the two kinds apart), in the same 3-column
+        grid and card size as every other page. The gallery keeps its
         "work_favorites" key so the origin-pill rule and the star-refresh
         registry carry over unchanged."""
         page = QWidget()
         outer = QVBoxLayout(page)
-        outer.setContentsMargins(6, 4, 6, 4)
-        outer.setSpacing(8)
-        title = get_export_copy("library.starred_title", tr("Your starred prompts"))
-        outer.addWidget(self._build_back_header(title))
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(14)
+        title = get_export_copy("library.favorites_title", tr("Favorites"))
+        # A tagline like every other page, so the header block has one shape.
+        outer.addWidget(self._build_page_header(title, get_export_copy(
+            "library.favorites_subtitle",
+            tr("Prompts and edits you starred."),
+        )))
 
         scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QtC.FrameNoFrame)
-        scroll.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
+        style_library_scroll(scroll)
         content = QWidget()
         content_box = QVBoxLayout(content)
-        content_box.setContentsMargins(0, 2, 6, 8)
+        content_box.setContentsMargins(0, 0, 12, 20)
         content_box.setSpacing(8)
 
         pinned = self._pinned_entries()
         if pinned:
             self._build_card_gallery(
-                "work_favorites", pinned, content_box, scroll,
-                columns=_STARRED_GALLERY_COLUMNS,
-                slider_h=_STARRED_GALLERY_SLIDER_H,
-                paginate=False,
+                "work_favorites", pinned, content_box, scroll, paginate=False,
             )
         else:
             # Same empty state as the legacy Favorites tab: star icon + the
@@ -297,20 +323,34 @@ class SessionsMixin:
         entries = self._session_entries()
         query = ""
         if _is_alive(getattr(self, "_sessions_search", None)):
-            query = self._sessions_search.value() or ""
+            query = self._sessions_search.text() or ""
         shown = filter_entries(entries, text=query)
 
         if not shown:
             if entries:
-                message = tr("No session matches.")
-            else:
-                message = get_export_copy(
-                    "library.empty_work",
-                    tr("Your generations will live here. Run a Top pick to get started."),
+                empty = build_library_empty_state(
+                    get_export_copy(
+                        "dialogs.sessions_mixin.no_matches_message", tr("No sessions match")),
+                    suggestions=[(
+                        "close",
+                        get_export_copy(
+                            "dialogs.search_mixin.clear_search", tr("Clear the search")),
+                        self._clear_sessions_search,
+                    )],
+                    top_margin=40,
+                    glyph="search",
                 )
-            empty = QLabel(message)
-            empty.setStyleSheet(_EMPTY_MSG)
-            empty.setWordWrap(True)
+            else:
+                empty = build_library_empty_state(
+                    get_export_copy(
+                        "library.empty_work_title", tr("What will you edit first?")),
+                    get_export_copy(
+                        "library.empty_work",
+                        tr("Every edit you run lands here, grouped by place, ready to pick up again."),
+                    ),
+                    [self._suggest_top_picks()],
+                    glyph="clock",
+                )
             box.addWidget(empty)
             return
 
@@ -329,14 +369,21 @@ class SessionsMixin:
             month_groups[key][1].append(entry)
         if undated:
             month_groups[_SESSION_GALLERY_PREFIX + "earlier"] = (
-                tr("Earlier"), undated
+                get_export_copy("dialogs.sessions_mixin.earlier_bucket_label", tr("Earlier")),
+                undated,
             )
 
         scroll = getattr(self, "_sessions_scroll", None)
-        for key, (label, group) in month_groups.items():
+        for index, (key, (label, group)) in enumerate(month_groups.items()):
+            if index:
+                box.addSpacing(_SESSION_GROUP_GAP)
             header = QLabel(label)
-            header.setStyleSheet(_SESSION_GROUP_LABEL)
+            header.setStyleSheet(_HALL_SECTION_TITLE)
+            # The hall's 2 px inset: the old padding sat 4 px right of the
+            # page title above it.
+            header.setContentsMargins(2, 0, 0, 0)
             box.addWidget(header)
+            box.addSpacing(_SESSION_GROUP_TITLE_GAP)
             section = QWidget()
             section_v = QVBoxLayout(section)
             section_v.setContentsMargins(0, 0, 0, 0)
@@ -346,6 +393,11 @@ class SessionsMixin:
                 paginate=False,
             )
             box.addWidget(section)
+
+    def _clear_sessions_search(self) -> None:
+        search = getattr(self, "_sessions_search", None)
+        if _is_alive(search):
+            search.clear()
 
     def _session_card_entries(self, group: list[dict]) -> list[dict]:
         """Gallery entries for one month of sessions: one card per session,
@@ -370,6 +422,9 @@ class SessionsMixin:
             self._demo_loader,
             on_open=lambda _j, s=session: self._open_session_detail(s),
             version_count=int(entry.get("count") or 1),
+            # A renamed session shows its name, as its preview window does;
+            # an unnamed one keeps its prompt.
+            title=_session_given_name(session),
         )
 
     # -- Actions ---------------------------------------------------------
@@ -396,7 +451,7 @@ class SessionsMixin:
             on_action=self._on_generation_action,
             on_favorite=self._on_generation_favorite,
             browse_only=self._browse_only,
-            session_entry=entry,
+            session_entry=_session_with_readable_title(entry),
         )
         try:
             detail.exec()

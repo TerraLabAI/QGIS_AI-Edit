@@ -5,14 +5,16 @@ The panel is pure dock UI and owns no map tool, so the canvas side lives
 here, next to the zone tool: arm the native extent tool, remember the tool
 it replaced, render the visible canvas at the dragged rectangle, hand the
 image to the shared reference strip (which applies the free-tier and cap
-gates), and restore the previous tool on capture, Esc, a second click on the
-chip, or Done. A run in progress, or any other tool panel, never arms it.
+gates), and restore the previous tool on capture, Esc, a right click, a
+second click on "Map view", or Done. A run in progress, or any other tool
+panel, never arms it.
 """
 from __future__ import annotations
 
 from qgis.core import QgsRectangle
 
 from ...core.canvas_export.render_set import expand_render_set
+from ...core.config_store import get_export_copy
 from ...core.i18n import tr
 from ...core.logger import log_warning
 from ..layer_renderer import render_layers_at_extent
@@ -69,10 +71,15 @@ class ReferenceCaptureMixin:
                 pass
         self._canvas.setMapTool(tool)
         self._dock_widget.set_reference_capture_armed(True)
-        self._iface.messageBar().pushInfo(
-            "AI Edit",
-            tr("Drag a rectangle on the map to capture it as a reference. Esc cancels."),
-        )
+        # The panel's own line says "Drag a box on the map. Esc cancels."
+        # (one place per piece of information: the message bar said it a
+        # second time). The key has to reach the capture tool for that to be
+        # true: with focus left on the "Map view" button, Esc went to the
+        # dock and closed the whole panel instead.
+        try:
+            self._canvas.setFocus()
+        except RuntimeError:  # nosec B110 - canvas already gone
+            pass
 
     def _restore_tool_after_capture(self) -> None:
         tool = getattr(self, "_reference_capture_tool", None)
@@ -127,7 +134,25 @@ class ReferenceCaptureMixin:
         except Exception as err:  # noqa: BLE001 - a capture must never break the flow
             log_warning(f"map capture render failed: {err}")
             image = None
-        widget.add_captured_image(image, tr("Map capture"))
+        widget.add_captured_image(image, self._next_map_capture_name())
+
+    def _next_map_capture_name(self) -> str:
+        """"Map capture", then "Map capture 2", "Map capture 3": five cards
+        all called "Map capture" left the prompt no way to tell them apart."""
+        base = get_export_copy("flows.reference_capture.map_capture_label", tr("Map capture"))
+        store = getattr(self._dock_widget, "_reference_store", None)
+        try:
+            taken = {
+                r.source_filename for r in store.list() if r.source_kind == "map"
+            } if store is not None else set()
+        except (AttributeError, RuntimeError):
+            taken = set()
+        if base not in taken:
+            return base
+        number = 2
+        while f"{base} {number}" in taken:
+            number += 1
+        return f"{base} {number}"
 
     def _teardown_reference_capture(self) -> None:
         self._cancel_reference_capture()

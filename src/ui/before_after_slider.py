@@ -8,12 +8,23 @@ Cross-version: works on PyQt5 (QGIS 3 / Qt 5) and PyQt6 (QGIS 4 / Qt 6).
 from __future__ import annotations
 
 from qgis.PyQt.QtCore import QT_VERSION, QPointF, QRectF, QSize, Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen, QPixmap
+from qgis.PyQt.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen, QPixmap
 from qgis.PyQt.QtWidgets import QWidget
 
 from ..core import qt_compat as QtC
+from ..core.config_store import get_export_copy, get_export_dial, get_export_dial_ratio
 from ..core.i18n import tr
-from .dock.style import FOCUS_RING
+from .dock.design_tokens import (
+    ACCENT_BORDER,
+    BRAND_BLUE,
+    FIELD,
+    FONT_HINT,
+    INK,
+    INK_3,
+    RADIUS_CARD,
+    RADIUS_CHIP,
+    qcolor,
+)
 
 QT6 = QT_VERSION >= 0x060000
 
@@ -27,16 +38,32 @@ _FRAME_INTERVAL_MS = 33
 _KEY_STEP = 0.02
 _KEY_STEP_LARGE = 0.10
 _FOCUS_RING_PX = 2
-# Divider visuals.
-_DIVIDER_COLOR = QColor("#FFFFFF")
-_DIVIDER_SHADOW = QColor(0, 0, 0, 64)
+# Divider visuals: a paper line, and a round blue handle on a paper ring
+# (the AI Agent slider handle). No shadow: the blue handle is what the eye
+# finds on a bright picture.
+# Paper white on both themes: the line sits on the photograph, not on the
+# panel, so it never follows the theme. Named colour, no literal.
+_DIVIDER_COLOR = QColor(Qt.GlobalColor.white)
+_HANDLE_FILL = qcolor(BRAND_BLUE)
 _HANDLE_RADIUS_PX = 14
+_HANDLE_RING_PX = 2
 _DIVIDER_LINE_PX = 2
-_BADGE_BG_BEFORE = QColor(20, 20, 20, 200)
-_BADGE_BG_AFTER = QColor(139, 172, 39, 230)
-_BADGE_TEXT = QColor("#FFFFFF")
-_PLACEHOLDER_BG = QColor("#1E2A35")
-_PLACEHOLDER_TEXT = QColor("#557080")
+# Before / After tags: field chips, opaque so they read over any picture.
+_BADGE_BG = qcolor(FIELD)
+_BADGE_TEXT = qcolor(INK)
+_BADGE_H_PX = 20
+_BADGE_PAD_PX = 8
+_BADGE_INSET_PX = 8
+_PLACEHOLDER_BG = qcolor(FIELD)
+_PLACEHOLDER_TEXT = qcolor(INK_3)
+_FOCUS_RING = qcolor(ACCENT_BORDER)
+# Focus reasons that mean the keyboard moved focus here (Tab, Shift+Tab, a
+# shortcut). A mouse click or a window opening shows no ring.
+_KEYBOARD_FOCUS_REASONS = (
+    Qt.FocusReason.TabFocusReason,
+    Qt.FocusReason.BacktabFocusReason,
+    Qt.FocusReason.ShortcutFocusReason,
+)
 
 
 def _ease_in_out(t: float) -> float:
@@ -63,8 +90,13 @@ class BeforeAfterSlider(QWidget):
         show_badges: bool = True,
         example_badge: str | None = None,
         handle_grab_only: bool = False,
+        square_bottom: bool = False,
     ):
         super().__init__(parent)
+        # A picture that is the top of a card takes the card's curve on its
+        # top corners and squares the bottom against the card's footer
+        # (DESIGN-SYSTEM.md, "A card with a picture").
+        self._square_bottom = square_bottom
         self._show_badges = show_badges
         # Library cards open a detail popup on click, so a press on the image
         # must NOT move the divider: only a press on/near the handle drags it.
@@ -75,13 +107,15 @@ class BeforeAfterSlider(QWidget):
         self._example_badge = example_badge or None
         # Text shown over the tinted backdrop while the slider has no images.
         # Owners flip it to "No preview" for cards that will never get one.
-        self._placeholder_text = tr("Loading...")
+        self._placeholder_text = get_export_copy(
+            "widgets.before_after_slider.loading_placeholder", tr("Loading..."))
         self.setMinimumHeight(140)
         self.setMouseTracking(False)
         # The result view of the whole plugin: it has to be reachable and
         # movable from the keyboard, not by drag alone.
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setAccessibleName(tr("Before and after comparison"))
+        self.setAccessibleName(
+            get_export_copy("widgets.before_after_slider.accessible_name", tr("Before and after comparison")))
         self._before: QPixmap | None = None
         self._after: QPixmap | None = None
         # Divider position 0..1 (0 = fully before visible, 1 = fully after).
@@ -102,7 +136,8 @@ class BeforeAfterSlider(QWidget):
         # user drags it or moves it with the arrow keys.
         self._auto_loop = auto_loop
         self._timer = QTimer(self)
-        self._timer.setInterval(_FRAME_INTERVAL_MS)
+        self._timer.setInterval(
+            get_export_dial("widgets.before_after_slider.frame_interval_ms", _FRAME_INTERVAL_MS))
         self._timer.timeout.connect(self._on_tick)
         # The timer is started from showEvent and stopped on hide, so an
         # auto-loop slider scrolled off-screen or on a hidden tab does not keep
@@ -167,7 +202,11 @@ class BeforeAfterSlider(QWidget):
 
     def keyPressEvent(self, ev):  # noqa: N802 - Qt signature
         key = ev.key()
-        step = _KEY_STEP_LARGE if ev.modifiers() & QtC.ShiftModifier else _KEY_STEP
+        step = (
+            get_export_dial_ratio("widgets.before_after_slider.key_step_large", _KEY_STEP_LARGE)
+            if ev.modifiers() & QtC.ShiftModifier
+            else get_export_dial_ratio("widgets.before_after_slider.key_step", _KEY_STEP)
+        )
         if key == Qt.Key.Key_Left:
             self._set_pos(self._pos - step)
         elif key == Qt.Key.Key_Right:
@@ -181,9 +220,16 @@ class BeforeAfterSlider(QWidget):
             # own Space/Return activation keep working.
             ev.ignore()
             return
+        # A handled key is keyboard use: show where the focus is from now on.
+        if not getattr(self, "_keyboard_focus", False):
+            self._keyboard_focus = True
+            self.update()
         ev.accept()
 
     def focusInEvent(self, ev):  # noqa: N802 - Qt signature
+        # The ring marks keyboard focus only. A dialog hands its first focus
+        # to the slider on open, and a ring there read as a selected picture.
+        self._keyboard_focus = ev.reason() in _KEYBOARD_FOCUS_REASONS
         self.update()
         super().focusInEvent(ev)
 
@@ -287,11 +333,15 @@ class BeforeAfterSlider(QWidget):
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
 
         rect = self.rect()
-        radius = 10.0
+        radius = float(RADIUS_CARD)
 
         # Clip the whole widget to a rounded rect for a soft card look.
         path = QPainterPath()
         path.addRoundedRect(QRectF(rect), radius, radius)
+        if self._square_bottom:
+            lower = QPainterPath()
+            lower.addRect(QRectF(rect).adjusted(0, rect.height() / 2.0, 0, 0))
+            path = path.united(lower)
         painter.setClipPath(path)
 
         # --- backdrop ----------------------------------------------------
@@ -329,41 +379,39 @@ class BeforeAfterSlider(QWidget):
             painter.restore()
 
         # --- divider line + handle ---------------------------------------
-        pen_shadow = QPen(_DIVIDER_SHADOW)
-        pen_shadow.setWidth(_DIVIDER_LINE_PX + 2)
-        painter.setPen(pen_shadow)
-        painter.drawLine(split_x, 0, split_x, rect.height())
         pen = QPen(_DIVIDER_COLOR)
         pen.setWidth(_DIVIDER_LINE_PX)
         painter.setPen(pen)
         painter.drawLine(split_x, 0, split_x, rect.height())
 
-        # Handle circle in the middle.
+        # Round handle in the middle: blue on a paper ring.
         handle_y = rect.height() // 2
-        painter.setPen(QPen(_DIVIDER_SHADOW, 1))
-        painter.setBrush(QBrush(_DIVIDER_COLOR))
+        ring = QPen(_DIVIDER_COLOR)
+        ring.setWidth(_HANDLE_RING_PX)
+        painter.setPen(ring)
+        painter.setBrush(QBrush(_HANDLE_FILL))
         painter.drawEllipse(
             QPointF(split_x, handle_y),
             _HANDLE_RADIUS_PX,
             _HANDLE_RADIUS_PX,
         )
-        # Twin arrows inside handle (drawn as a simple ASCII-glyph approx).
-        painter.setPen(QPen(QColor("#202020"), 2))
+        # Twin chevrons inside the handle, in paper.
+        arrows = QPen(_DIVIDER_COLOR, 2)
+        arrows.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(arrows)
         ay = handle_y
-        painter.drawLine(split_x - 5, ay, split_x - 1, ay - 4)
-        painter.drawLine(split_x - 5, ay, split_x - 1, ay + 4)
-        painter.drawLine(split_x + 5, ay, split_x + 1, ay - 4)
-        painter.drawLine(split_x + 5, ay, split_x + 1, ay + 4)
+        painter.drawLine(split_x - 6, ay, split_x - 2, ay - 4)
+        painter.drawLine(split_x - 6, ay, split_x - 2, ay + 4)
+        painter.drawLine(split_x + 6, ay, split_x + 2, ay - 4)
+        painter.drawLine(split_x + 6, ay, split_x + 2, ay + 4)
 
         # --- badges ------------------------------------------------------
         if self._show_badges:
-            self._draw_badge(painter, "BEFORE", x=8, y=8, bg=_BADGE_BG_BEFORE)
+            before = get_export_copy("widgets.before_after_slider.before_badge", tr("Before"))
+            after = get_export_copy("widgets.before_after_slider.after_badge", tr("After"))
+            self._draw_badge(painter, before, x=_BADGE_INSET_PX, y=_BADGE_INSET_PX)
             self._draw_badge(
-                painter,
-                "AFTER",
-                x=rect.width() - 60,
-                y=8,
-                bg=_BADGE_BG_AFTER,
+                painter, after, x=rect.width() - _BADGE_INSET_PX, y=_BADGE_INSET_PX, align_right=True
             )
 
         if self._example_badge:
@@ -375,12 +423,12 @@ class BeforeAfterSlider(QWidget):
     def _draw_focus_ring(self, painter: QPainter, rect, radius: float) -> None:
         """Keyboard focus marker. Painted by hand because the widget draws all
         of itself: no stylesheet and no platform focus rect ever shows here.
-        Same FOCUS_RING as every other focusable control; against a photograph
+        Same focus blue as every other focusable control; against a photograph
         no single colour has a contrast figure, so consistency is what is
         left to pick on."""
-        if not self.hasFocus():
+        if not self.hasFocus() or not getattr(self, "_keyboard_focus", False):
             return
-        pen = QPen(QColor(FOCUS_RING))
+        pen = QPen(_FOCUS_RING)
         pen.setWidth(_FOCUS_RING_PX)
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -413,39 +461,42 @@ class BeforeAfterSlider(QWidget):
             target = QRectF(0, -offset_y, rect.width(), scaled_h)
         painter.drawPixmap(target, pm, QRectF(0, 0, pw, ph))
 
-    def _draw_example_badge(self, painter: QPainter, rect, text: str) -> None:
-        """Small centered pill at the top marking the preview as a demo."""
+    def _badge_font(self, painter: QPainter) -> None:
         f = painter.font()
-        f.setPointSize(8)
-        f.setBold(True)
+        # Pixels, not points: 8 pt drew 8 px on macOS, under the 11 px floor.
+        f.setPixelSize(FONT_HINT)
+        f.setWeight(QFont.Weight.DemiBold)
         painter.setFont(f)
-        tw = painter.fontMetrics().horizontalAdvance(text)
-        bw = tw + 20
-        bh = 20
+
+    def _draw_example_badge(self, painter: QPainter, rect, text: str) -> None:
+        """Small centered field chip at the top marking the preview as a demo."""
+        self._badge_font(painter)
+        bw = painter.fontMetrics().horizontalAdvance(text) + 2 * _BADGE_PAD_PX
         bx = (rect.width() - bw) / 2.0
-        badge = QRectF(bx, 8, bw, bh)
+        badge = QRectF(bx, _BADGE_INSET_PX, bw, _BADGE_H_PX)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QBrush(QColor(0, 0, 0, 180)))
-        painter.drawRoundedRect(badge, 10, 10)
+        painter.setBrush(QBrush(_BADGE_BG))
+        painter.drawRoundedRect(badge, RADIUS_CHIP, RADIUS_CHIP)
         painter.setPen(QPen(_BADGE_TEXT))
         painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, text)
 
-    def _draw_badge(self, painter: QPainter, text: str, x: int, y: int, bg: QColor) -> None:
+    def _draw_badge(self, painter: QPainter, text: str, x: int, y: int, align_right: bool = False) -> None:
+        """A field chip sized to its text; ``x`` is its right edge when
+        ``align_right``."""
+        self._badge_font(painter)
+        bw = painter.fontMetrics().horizontalAdvance(text) + 2 * _BADGE_PAD_PX
+        left = x - bw if align_right else x
+        rect = QRectF(left, y, bw, _BADGE_H_PX)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QBrush(bg))
-        rect = QRectF(x, y, 52, 18)
-        painter.drawRoundedRect(rect, 4, 4)
+        painter.setBrush(QBrush(_BADGE_BG))
+        painter.drawRoundedRect(rect, RADIUS_CHIP, RADIUS_CHIP)
         painter.setPen(QPen(_BADGE_TEXT))
-        f = painter.font()
-        f.setPointSize(8)
-        f.setBold(True)
-        painter.setFont(f)
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
 
     def _paint_placeholder(self, painter: QPainter, rect) -> None:
         painter.fillRect(rect, _PLACEHOLDER_BG)
         painter.setPen(QPen(_PLACEHOLDER_TEXT))
         f = painter.font()
-        f.setPointSize(9)
+        f.setPixelSize(FONT_HINT)
         painter.setFont(f)
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self._placeholder_text)

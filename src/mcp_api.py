@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import copy
 import html
+import math
 import re
 from typing import Any
 
@@ -64,6 +65,7 @@ from .mcp_api_support import (
     _never_raises,
     _project_layer_names,
     _usage_fields,
+    _whole_number,
     not_found_error,
 )
 from .mcp_api_zone import ZoneMixin
@@ -517,8 +519,10 @@ class EditMCPAPI(
         if not (isinstance(target_rgb, (list, tuple)) and len(target_rgb) == 3):
             return {"_error": "target_rgb must be [r, g, b] with values from 0 to 255."}
         try:
-            rgb = tuple(max(0, min(255, int(channel))) for channel in target_rgb)
-        except (TypeError, ValueError):
+            rgb = tuple(_whole_number(channel) for channel in target_rgb)
+            if any(channel < 0 or channel > 255 for channel in rgb):
+                raise ValueError("RGB channel out of range")
+        except (TypeError, ValueError, OverflowError):
             return {"_error": "target_rgb values must be whole numbers from 0 to 255."}
 
         source_means = (
@@ -560,13 +564,17 @@ class EditMCPAPI(
         options: dict[str, Any] = {}
         if tolerance is not None:
             try:
-                options["tolerance"] = int(tolerance)
-            except (TypeError, ValueError):
+                options["tolerance"] = _whole_number(tolerance)
+                if not 0 <= options["tolerance"] <= 255:
+                    return {"_error": "tolerance must be between 0 and 255."}
+            except (TypeError, ValueError, OverflowError):
                 return {"_error": "tolerance must be a whole number."}
         if simplify_factor is not None:
             try:
                 options["simplify_factor"] = float(simplify_factor)
-            except (TypeError, ValueError):
+                if not math.isfinite(options["simplify_factor"]) or options["simplify_factor"] < 0:
+                    return {"_error": "simplify_factor must be a finite non-negative number."}
+            except (TypeError, ValueError, OverflowError):
                 return {"_error": "simplify_factor must be a number."}
 
         try:

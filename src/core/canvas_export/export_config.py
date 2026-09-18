@@ -95,8 +95,13 @@ def chosen_input_format() -> tuple[str, str, int]:
     cfg = _get_server_config() or {}
     pref = str(cfg.get("input_format") or _DEFAULT_INPUT_FORMAT).lower()
     try:
-        quality = int(cfg.get("input_quality") or _DEFAULT_INPUT_QUALITY)
-    except (TypeError, ValueError):
+        quality_value = cfg.get("input_quality")
+        quality = (
+            int(quality_value)
+            if quality_value is not None and not isinstance(quality_value, bool)
+            else _DEFAULT_INPUT_QUALITY
+        )
+    except (TypeError, ValueError, OverflowError):
         quality = _DEFAULT_INPUT_QUALITY
     quality = max(1, min(100, quality))
 

@@ -10,11 +10,18 @@ except ImportError:  # pragma: no cover - defensive only
 
 from qgis.PyQt.QtCore import QCoreApplication, QThread, pyqtSignal
 
+from ....core.config_store import get_export_dial
 from ....core.logger import log_warning
 
 # ---------------------------------------------------------------------------
 # Sync workers
 # ---------------------------------------------------------------------------
+
+# Rows fetched per generation-history page (initial Recent/Favorites load and
+# each older "Load more" page). A full page implies more may exist server-side.
+# Not a server dial: the history route caps limit at 50, so a larger value
+# would read every full page as the last one.
+_RECENT_PAGE_SIZE = 50
 
 
 class _LibrarySyncWorker(QThread):
@@ -40,15 +47,16 @@ class _LibrarySyncWorker(QThread):
         # can actually shorten this worker instead of waiting it out.
         if self.isInterruptionRequested():
             return
+        page_size = _RECENT_PAGE_SIZE
         try:
-            hist = self._client.get_generation_history(self._auth, limit=50)
+            hist = self._client.get_generation_history(self._auth, limit=page_size)
         except Exception as e:
             self.failed.emit(f"history: {e}")
             return
         if isinstance(hist, dict) and "error" not in hist:
             jobs = hist.get("jobs", []) or []
             # Older servers don't send has_more; a full page implies more.
-            self.recent_jobs_fetched.emit(jobs, bool(hist.get("has_more", len(jobs) >= 50)))
+            self.recent_jobs_fetched.emit(jobs, bool(hist.get("has_more", len(jobs) >= page_size)))
         else:
             self.failed.emit(
                 f"history: {hist.get('error', 'unknown') if isinstance(hist, dict) else 'parse_error'}"
@@ -58,7 +66,7 @@ class _LibrarySyncWorker(QThread):
             return
         try:
             favs = self._client.get_generation_history(
-                self._auth, limit=50, favorites_only=True
+                self._auth, limit=page_size, favorites_only=True
             )
         except Exception as e:
             self.failed.emit(f"favorites: {e}")
@@ -90,7 +98,9 @@ class _HistoryPageWorker(QThread):
             return
         try:
             resp = self._client.get_generation_history(
-                self._auth, limit=50, before=self._before
+                self._auth,
+                limit=_RECENT_PAGE_SIZE,
+                before=self._before,
             )
         except Exception as e:
             self.failed.emit(f"history page: {e}")
@@ -177,7 +187,9 @@ def _detach_worker(worker: QThread) -> None:
 # worker: one star click starts one fire-and-forget worker, so five stalled
 # toggles on a bad network used to freeze QGIS for five times this budget, on
 # the main thread, with no UI to say why.
-DRAIN_WAIT_MS = 4000
+# 1.5 s: past that the stranding path keeps the thread objects alive safely,
+# and a longer wait only makes QGIS look hung while it closes.
+DRAIN_WAIT_MS = 1500
 
 # Signals the Prompt Library dialogs connect to. The drain cuts these by name
 # rather than blockSignals(True), which would also block `finished` - the
@@ -241,7 +253,7 @@ def _strand_worker(worker: QThread) -> None:
     log_warning("Prompt Library worker outlived the shutdown drain and could not be detached")
 
 
-def drain_prompt_library_workers(wait_ms: int = DRAIN_WAIT_MS) -> None:
+def drain_prompt_library_workers(wait_ms: int | None = None) -> None:
     """Join the detached Prompt Library threads before Qt destroys them.
 
     Qt calls qFatal("QThread: Destroyed while thread is still running") and
@@ -249,7 +261,10 @@ def drain_prompt_library_workers(wait_ms: int = DRAIN_WAIT_MS) -> None:
     what quitting QGIS during a library sync used to do. Call from unload()
     and from aboutToQuit.
 
-    ``wait_ms`` is the budget for the WHOLE drain, not for each worker.
+    ``wait_ms`` is the budget for the WHOLE drain, not for each worker. None
+    (the default, and what both callers pass) reads the served dial at call
+    time rather than at import time, so a deploy can retune the budget without
+    a plugin release.
 
     A request already in flight cannot be aborted from here: the blocking
     request object is created and owned inside the API client, so the only
@@ -258,6 +273,9 @@ def drain_prompt_library_workers(wait_ms: int = DRAIN_WAIT_MS) -> None:
     inside a request when the budget runs out is STRANDED, not stopped (see
     _strand_worker): the process keeps a live thread until it exits.
     """
+    if wait_ms is None:
+        # Capped: this blocks the main thread while QGIS unloads the plugin.
+        wait_ms = min(get_export_dial("dialogs.workers.drain_wait_ms", DRAIN_WAIT_MS), DRAIN_WAIT_MS * 2)
     deadline = time.monotonic() + max(0, wait_ms) / 1000.0
     for worker in list(_INFLIGHT_WORKERS):
         _mute_worker(worker)

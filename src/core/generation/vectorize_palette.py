@@ -7,6 +7,7 @@ no QGIS layer objects, safe on the main thread (decimated read).
 """
 from __future__ import annotations
 
+import math
 import os
 
 try:
@@ -16,7 +17,7 @@ except ImportError:  # pragma: no cover
 
 from osgeo import gdal
 
-from ..config_store import get_export_dial
+from ..config_store import get_export_copy, get_export_dial
 from ..i18n import tr
 
 # Colors that name themselves. The ESA WorldCover palette is the one users
@@ -57,15 +58,15 @@ def suggest_class_label(rgb: tuple[int, int, int]) -> str:
             return ""  # near-white: background OR buildings; detect_classes decides
         if mx <= 40:
             return ""  # near-black: roads on some maps, void on others
-        return tr("paved")
+        return get_export_copy("pipeline.vectorize_palette.label_paved", tr("paved"))
     match_l1 = get_export_dial("vectorize.known_match_l1", _KNOWN_MATCH_L1)
     for known_rgb, label in _KNOWN_CLASS_COLORS:
         if abs(known_rgb[0] - r) + abs(known_rgb[1] - g) + abs(known_rgb[2] - b) <= match_l1:
             return tr(label)
     if b > r + 30 and b > g + 20:
-        return tr("water")
+        return get_export_copy("pipeline.vectorize_palette.label_water", tr("water"))
     if g > r + 25 and g > b + 25:
-        return tr("vegetation")
+        return get_export_copy("pipeline.vectorize_palette.label_vegetation", tr("vegetation"))
     return ""
 
 
@@ -104,7 +105,11 @@ def detect_classes(raster_path: str) -> list[dict]:
             {
                 "rgb": rgb,
                 "fraction": fraction,
-                "label": tr("background") if is_bg else suggest_class_label(rgb),
+                "label": (
+                    get_export_copy("pipeline.vectorize_palette.label_background", tr("background"))
+                    if is_bg
+                    else suggest_class_label(rgb)
+                ),
                 "is_background": is_bg,
             }
         )
@@ -136,22 +141,36 @@ def dominant_palette(
     """
     if np is None or not raster_path or not os.path.exists(raster_path):
         return []
-    ds = gdal.Open(raster_path)
+    if max_colors <= 0 or quant <= 0 or sample_max <= 0:
+        return []
+    try:
+        ds = gdal.Open(raster_path)
+    except RuntimeError:
+        return []
     if ds is None or ds.RasterCount < 3:
         return []
     width, height = ds.RasterXSize, ds.RasterYSize
     # The palette is scale-invariant, so read a decimated buffer (at most
     # ~sample_max px) to keep detection near-instant even on a 4K output.
-    scale = max(1, int((width * height / float(sample_max)) ** 0.5))
-    bw, bh = max(1, width // scale), max(1, height // scale)
+    bw, bh = _sample_dimensions(width, height, sample_max)
     r = ds.GetRasterBand(1).ReadAsArray(buf_xsize=bw, buf_ysize=bh)
     g = ds.GetRasterBand(2).ReadAsArray(buf_xsize=bw, buf_ysize=bh)
     b = ds.GetRasterBand(3).ReadAsArray(buf_xsize=bw, buf_ysize=bh)
-    ds = None
+    valid = None
+    mask_band = ds.GetRasterBand(1).GetMaskBand()
+    if mask_band is not None and ds.GetRasterBand(1).GetMaskFlags() != gdal.GMF_ALL_VALID:
+        valid = mask_band.ReadAsArray(buf_xsize=bw, buf_ysize=bh)
+        if valid is None:
+            return []
+    del ds
     if r is None or g is None or b is None:
         return []
     a = np.stack([r, g, b], axis=-1).reshape(-1, 3).astype(np.int32)
-    q = (a // quant) * quant + quant // 2
+    if valid is not None:
+        a = a[valid.reshape(-1) > 0]
+    if not a.size:
+        return []
+    q = np.clip((a // quant) * quant + quant // 2, 0, 255)
     keys = (q[:, 0] << 16) | (q[:, 1] << 8) | q[:, 2]
     vals, counts = np.unique(keys, return_counts=True)
     order = np.argsort(-counts)
@@ -174,4 +193,24 @@ def dominant_palette(
             break
     out = [(rgb, c / total) for rgb, c in kept if c / total >= min_fraction]
     out.sort(key=lambda t: -t[1])
-    return out
+    return out[:max_colors]
+
+
+def _sample_dimensions(width: int, height: int, sample_max: int) -> tuple[int, int]:
+    """Choose aspect-preserving read dimensions without exceeding sample_max.
+
+    Integer floor division of one global scale can still overshoot badly for
+    very thin rasters: a one-pixel width rounds up to one while the long side
+    remains almost unscaled. Solve the two dimensions from the aspect ratio,
+    then reserve the remaining budget for the second dimension.
+    """
+    if width <= 0 or height <= 0 or sample_max <= 0:
+        return (0, 0)
+    if width * height <= sample_max:
+        return (width, height)
+    aspect = width / float(height)
+    bw = max(1, min(width, int(math.sqrt(sample_max * aspect))))
+    bh = max(1, min(height, sample_max // bw))
+    if bw * bh > sample_max:
+        bh = max(1, sample_max // bw)
+    return (bw, bh)

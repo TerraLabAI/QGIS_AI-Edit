@@ -7,6 +7,7 @@ shape is what the result is cut to once it comes back.
 """
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from qgis.core import (
@@ -54,8 +55,15 @@ class ZoneMixin:
         else:
             return {"_error": "bbox must be 4 numbers [xmin, ymin, xmax, ymax], or the same 4 as a dict."}
         try:
-            return QgsRectangle(*[float(value) for value in corners])
-        except (TypeError, ValueError):
+            if any(isinstance(value, bool) for value in corners):
+                raise ValueError("Boolean coordinate")
+            values = [float(value) for value in corners]
+            if not all(math.isfinite(value) for value in values):
+                return {"_error": "bbox values must be finite numbers."}
+            if values[0] >= values[2] or values[1] >= values[3]:
+                return {"_error": "bbox must have xmin < xmax and ymin < ymax."}
+            return QgsRectangle(*values)
+        except (TypeError, ValueError, OverflowError):
             return {"_error": "bbox values must all be numbers."}
 
     def _reproject_to_canvas(self, geometry, crs_authid: str | None):
@@ -138,7 +146,7 @@ class ZoneMixin:
             from .core.errors import AIEditError
             from .ui.canvas_exporter import validate_zone
         except ImportError:
-            return None
+            return {"_error": "Zone validation is unavailable in this QGIS session."}
         try:
             canvas = iface.mapCanvas()
             validate_zone(extent, canvas.mapSettings().destinationCrs(), canvas.rotation())
@@ -147,8 +155,8 @@ class ZoneMixin:
                 "_error": err.message or "This zone cannot be used.",
                 "code": getattr(err.code, "value", None),
             }
-        except Exception:  # nosec B110 - only a real refusal stops the caller.
-            return None
+        except Exception:
+            return {"_error": "The map zone could not be validated. Check the canvas CRS and try again."}
         return None
 
     def _install_zone(self, extent, polygon=None) -> bool:
@@ -211,6 +219,10 @@ class ZoneMixin:
         A shape with no real area, or one the plugin refuses, comes back under
         ``_error`` and nothing changes.
         """
+        if getattr(self, "_busy", lambda: False)():
+            return {"_error": "Wait for the current generation before changing its zone.", "busy": True}
+        if bbox is not None and polygon_wkt:
+            return {"_error": "Pass bbox or polygon_wkt, not both."}
         polygon = None
         if polygon_wkt:
             resolved = self._resolve_polygon(polygon_wkt, crs)
@@ -266,6 +278,8 @@ class ZoneMixin:
         The layers already produced stay in the project. Returns ``ok`` and
         ``has_zone``, which is False afterwards.
         """
+        if getattr(self, "_busy", lambda: False)():
+            return {"_error": "Wait for the current generation or cancel it before clearing its zone.", "busy": True}
         handler = getattr(self._plugin, "_on_zone_delete_requested", None)
         if callable(handler):
             handler()

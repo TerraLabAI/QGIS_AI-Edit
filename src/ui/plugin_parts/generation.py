@@ -12,7 +12,6 @@ from ...core import telemetry_events as te
 from ...core.auth.activation_manager import has_consent, save_consent
 from ...core.entitlements import coerce_tier
 from ...core.errors import build_failure_props
-from ...core.generation.pipeline_context import PipelineContext
 from ...core.i18n import tr
 from ...core.logger import log, log_debug, log_warning
 from ...core.prompts.prompt_presets import (
@@ -22,8 +21,12 @@ from ...core.prompts.prompt_presets import (
     lookup_template_by_prompt,
 )
 from ...workers.export_worker import ExportWorker
-from ...workers.generation_worker import GenerationWorker
-from ..canvas_exporter import apply_export_context, has_server_config, prepare_export
+from ..canvas_exporter import (
+    apply_export_context,
+    build_input_render_set,
+    has_server_config,
+    prepare_export,
+)
 from ..raster_writer import get_output_dir
 from .lifecycle import teardown_step
 
@@ -79,6 +82,7 @@ class GenerationMixin:
         if self._map_tool:
             self._map_tool.set_locked(False)
         self._dock_widget.set_generating(False)
+        self._restore_failed_iteration()
         self._cleanup_worker()
         self._clear_markup_layer()
 
@@ -136,10 +140,11 @@ class GenerationMixin:
             pass
 
     def _on_retry(self, prompt: str):
-        """Retry on same zone: re-export the current canvas view (includes generated layers)."""
+        """Run the next edit on the same zone, from the version picked in the
+        strip (the export leaves the other AI Edit results out)."""
         if not self._selected_extent:
             self._dock_widget.set_status(
-                tr("Cannot retry: no zone selected."), is_error=True
+                tr("No zone selected"), is_error=True
             )
             return
         # Carry the retry flag through the export hand-off so
@@ -153,10 +158,10 @@ class GenerationMixin:
         telemetry.track(te.MARKUP_HIDDEN_WARNED, {})
         bar = self._iface.messageBar()
         widget = bar.createMessage(
-            tr("Your marks won't be used"), tr("The markup layer is hidden.")
+            tr("Your drawing won't be used"), tr("The AI Edit drawing layer is hidden.")
         )
-        show_button = QPushButton(tr("Show and generate"))
-        without_button = QPushButton(tr("Generate without"))
+        show_button = QPushButton(tr("Show it and generate"))
+        without_button = QPushButton(tr("Generate without it"))
         widget.layout().addWidget(show_button)
         widget.layout().addWidget(without_button)
 
@@ -190,6 +195,14 @@ class GenerationMixin:
         if not self._selected_extent:
             self._dock_widget.set_status(tr("No zone selected"), is_error=True)
             return
+        # Last moment before anything about this map leaves the machine: the
+        # first generation on a profile that has not read the privacy notice
+        # gets it here, not at startup. Pressing Continue runs this very call
+        # again, so the user never clicks Generate twice.
+        if not self._require_privacy_notice(
+            lambda: self._on_generate(prompt, is_retry=is_retry)
+        ):
+            return
         # Launching a new generation is a clear "I am done comparing"
         # signal: drop the swipe overlay so the canvas renders fresh.
         self._disarm_swipe()
@@ -213,6 +226,10 @@ class GenerationMixin:
                 is_error=True
             )
             return
+
+        # Imported here, not at module level: the pipeline modules pull in
+        # GDAL, and plugin start should not pay for it before a generation.
+        from ...core.generation.pipeline_context import PipelineContext
 
         ctx = PipelineContext()
         # Base picked in the version strip. Index 0 (Original) rebuilds from the
@@ -273,7 +290,26 @@ class GenerationMixin:
             self._show_markup_hidden_bar(prompt, is_retry)
             return
 
+        # The model sees ONE layer: the version picked in the strip, or, for
+        # Original, the layer picked in the dock's "Image to edit" field. The
+        # layers drawn above it went in as references when the zone landed, so
+        # nothing else on the canvas is painted into the input. Resolved before
+        # the UI locks, so a missing layer is one line, not a spinner.
+        from qgis.core import QgsProject
+
+        base_layer = None
+        if base_layer_id:
+            base_layer = QgsProject.instance().mapLayer(base_layer_id)
+        if base_layer is None:
+            base_layer = self._dock_widget.selected_input_layer()
+        if base_layer is None:
+            self._dock_widget.set_status(
+                tr("Pick the layer to edit first."), is_error=True
+            )
+            return
+
         # Lock UI; prep ticker animates while export+upload run off-thread.
+        self._generation_started_from_result = bool(is_retry and self._versions)
         self._dock_widget.set_generating(True)
         self._dock_widget.set_status("")
         # One auto-opened error report per attempt, from here on. Reset at the
@@ -291,31 +327,13 @@ class GenerationMixin:
         self._last_generation_error = ""
         self._last_generation_error_code = ""
 
-        # The model sees ONE raster: the version picked in the strip, or, for
-        # Original, the layer chosen in the dock's layer header. Nothing else
-        # on the canvas reaches the export. The active Mark up layer rides on
-        # top (user guidance, not an AI edit): prepare_export lifts it into
-        # the overlay and drops it from the clean base. prepare_export works
-        # on a clone, so on-screen layers are never touched.
-        from qgis.core import QgsProject
-
-        base_layer = None
-        if base_layer_id:
-            base_layer = QgsProject.instance().mapLayer(base_layer_id)
-        if base_layer is None:
-            base_layer = self._dock_widget.selected_input_layer()
-        if base_layer is None:
-            self._dock_widget.set_generating(False)
-            self._dock_widget.set_status(
-                tr("Pick a raster layer to edit first."), is_error=True
-            )
-            return
-        render_layers = [base_layer]
-        if markup_layer is not None:
-            render_layers.insert(0, markup_layer)
-
+        # The active Mark up layer rides on top of the input (user guidance, not
+        # an AI edit): prepare_export lifts it into the overlay and drops it
+        # from the clean base. prepare_export works on a clone, so on-screen
+        # layers are never touched.
         try:
             map_settings = self._canvas.mapSettings()
+            render_layers = build_input_render_set(base_layer, markup_layer)
             # Always export the input at the chosen resolution (1K/2K/4K). The
             # model only ever works at those sizes, so sending the full native
             # zone is pointless: a big Google Satellite selection would balloon
@@ -329,7 +347,8 @@ class GenerationMixin:
             )
         except Exception as e:
             self._dock_widget.set_generating(False)
-            msg = tr("Export error: {error}").format(error=e)
+            self._restore_failed_iteration()
+            msg = tr("Could not capture your zone: {error}").format(error=e)
             self._dock_widget.set_status(msg, is_error=True)
             telemetry.track(
                 te.EXPORT_FAILED,
@@ -361,12 +380,46 @@ class GenerationMixin:
         # alive until the next generation.
         worker.completed.connect(lambda *_a, w=worker: self._cleanup_export_worker(w))
         worker.failed.connect(lambda *_a, w=worker: self._cleanup_export_worker(w))
+        # The QGIS Task Manager Cancel button ends the task without either
+        # signal above; recover the dock the way Stop would.
+        worker.taskTerminated.connect(
+            lambda w=worker: self._on_export_task_terminated(w)
+        )
         self._export_worker = worker
         QgsApplication.taskManager().addTask(worker)
 
     def _cleanup_export_worker(self, worker):
         if self._export_worker is worker:
             self._export_worker = None
+
+    def _on_export_task_terminated(self, worker):
+        """Unlock the dock when the canvas export is cancelled from the QGIS
+        Task Manager. taskTerminated also fires after a plain failure, which
+        ``failed`` has already handled (it clears the pending hand-off), and
+        Stop/Exit clear both references before cancelling, so either case
+        returns here without touching the UI."""
+        if self._export_worker is not worker or self._pending_generation is None:
+            return
+        try:
+            cancelled = worker.isCanceled()
+        except RuntimeError:
+            cancelled = True
+        if not cancelled:
+            return
+        pending = self._pending_generation
+        self._pending_generation = None
+        self._export_worker = None
+        with teardown_step("export cancel dock unlock", stage="generation"):
+            self._dock_widget.set_generating(False)
+            self._restore_failed_iteration()
+            self._dock_widget.set_status(tr("Generation cancelled"))
+        with teardown_step("export cancel telemetry", stage="generation"):
+            telemetry.track(te.GENERATION_CANCELLED, self._enrich_generation_props({
+                "duration_ms": 0,
+                "resolution": pending.get("suggested_res", ""),
+                "phase": "export",
+            }))
+            telemetry.flush()
 
     def _on_export_failed(self, error_msg: str):
         if self._pending_generation is None:
@@ -375,7 +428,8 @@ class GenerationMixin:
             return
         self._pending_generation = None
         self._dock_widget.set_generating(False)
-        msg = tr("Export error: {error}").format(error=error_msg)
+        self._restore_failed_iteration()
+        msg = tr("Could not capture your zone: {error}").format(error=error_msg)
         self._dock_widget.set_status(msg, is_error=True)
         telemetry.track(
             te.EXPORT_FAILED,
@@ -436,6 +490,7 @@ class GenerationMixin:
                 self._map_tool.set_locked(False)
         with teardown_step("hand-off dock unlock", stage="generation"):
             self._dock_widget.set_generating(False)
+            self._restore_failed_iteration()
         msg = tr("Could not start the generation: {error}").format(error=detail)
         with teardown_step("hand-off status", stage="generation"):
             self._dock_widget.set_status(msg, is_error=True)
@@ -520,11 +575,6 @@ class GenerationMixin:
         self._last_image_b64 = image_b64
         self._last_guidance_b64 = guidance_b64 or None
         self._last_guidance_format = guidance_format or None
-        self._last_input_format = input_format
-        self._last_input_bytes = size_bytes
-        self._last_extent_dict = extent_dict
-        self._last_crs_wkt = crs_wkt
-        self._last_aspect_ratio = aspect_ratio
         self._last_suggested_res = suggested_res
 
         # Seed the version strip's Original tile from the very first export of
@@ -545,7 +595,7 @@ class GenerationMixin:
                 conversation_thumbs.save_thumb(f"in-{self._session_id}", pixmap)
             try:
                 self._dock_widget.seed_version_strip(pixmap)
-            except AttributeError:
+            except AttributeError:  # dock without a version strip: nothing to seed
                 pass
 
         # Keep the markup layer alive through the generation so the marks stay
@@ -565,6 +615,7 @@ class GenerationMixin:
         log(f"Generation started: prompt_len={len(prompt)}, resolution={suggested_res}, zone={img_w}x{img_h}px")
 
         plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        from ...workers.generation_worker import GenerationWorker
 
         self._worker = GenerationWorker(
             client=self._client,

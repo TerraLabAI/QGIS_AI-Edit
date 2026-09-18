@@ -2,19 +2,20 @@
 from __future__ import annotations
 
 import base64
-import random
+import copy
+import math
 import time
 
-from qgis.core import QgsTask
+from qgis.core import QgsFeedback, QgsTask
 from qgis.PyQt.QtCore import pyqtSignal
 
-from ..core.config_store import get_export_dial
+from ..api.network_error_classifier import request_feedback
+from ..core.config_store import get_export_copy, get_export_dial
 from ..core.errors import ErrorCode
 from ..core.generation.pipeline_context import save_debug_artifacts
 from ..core.i18n import tr
 from ..core.log_scrub import scrub_user_paths
 from ..core.logger import log_debug
-from ..core.prompts.loading_messages import get_phase_messages
 from ..core.raster_writer import write_geotiff
 from ..core.reference_image_store import (
     encode_references_b64,
@@ -26,9 +27,16 @@ DEFAULT_ESTIMATED_TIME = 25
 # server's (p75-ish) estimate, so it shows for the genuinely slow tail rather
 # than on every run. Measured against the UNCAPPED elapsed/estimate ratio.
 _LONGER_THAN_USUAL_RATIO = 1.5
-# Loading-phase boundaries as a fraction of the estimate (early/mid/late copy).
-_PHASE_EARLY_RATIO = 0.3
-_PHASE_LATE_RATIO = 0.75
+# Waits before each download retry. Long enough in total (about 23 s) for a
+# Wi-Fi resume or a VPN reconnect; the sleep checks for Cancel every 0.2 s.
+_DOWNLOAD_RETRY_DELAYS_S = (2, 6, 15)
+
+# Result-image download retries: some networks drop the redirect but keep the
+# API host reachable, so a few retries (with the stream=1 fallback) recover
+# most transient failures.
+_DOWNLOAD_RETRY_ATTEMPTS = 4
+# Upper bound on a served count: the last backoff repeats on every attempt.
+_MAX_DOWNLOAD_RETRY_ATTEMPTS = 5
 
 
 def _ctx_snapshot(ctx) -> dict:
@@ -37,11 +45,12 @@ def _ctx_snapshot(ctx) -> dict:
         return {}
     return {
         "request_id": getattr(ctx, "request_id", None),
+        "crs_authid": getattr(ctx, "crs_authid", None),
         "template_id": getattr(ctx, "template_id", None),
         "template_name": getattr(ctx, "template_name", None),
-        "vector_color": getattr(ctx, "vector_color", None),
-        "vector_classes": getattr(ctx, "vector_classes", None),
-        "flat_classes": getattr(ctx, "flat_classes", None),
+        "vector_color": copy.deepcopy(getattr(ctx, "vector_color", None)),
+        "vector_classes": copy.deepcopy(getattr(ctx, "vector_classes", None)),
+        "flat_classes": copy.deepcopy(getattr(ctx, "flat_classes", None)),
         "output_rescued": bool(getattr(ctx, "output_rescued", False)),
     }
 
@@ -79,7 +88,7 @@ class GenerationTask(QgsTask):
         self._image_b64 = image_b64
         self._prompt = prompt
         self._aspect_ratio = aspect_ratio
-        self._extent_dict = extent_dict
+        self._extent_dict = dict(extent_dict)
         self._crs_wkt = crs_wkt
         self._output_dir = output_dir
         self._ctx = ctx
@@ -97,6 +106,23 @@ class GenerationTask(QgsTask):
 
         self._success_payload: dict | None = None
         self._failure_payload: tuple[str, str, dict] | None = None
+        # Set when the run ended on a cancel the service saw first, so
+        # finished() stays silent instead of reporting a failure.
+        self._ended_on_cancel = False
+        # Aborts the request in flight on cancel. Shared with the service so
+        # its own cancel() (Stop, Exit, unload) reaches the request too.
+        self._feedback = QgsFeedback()
+        try:
+            service.set_feedback(self._feedback)
+        except AttributeError:
+            pass
+
+    def cancel(self) -> None:
+        try:
+            self._feedback.cancel()
+        except Exception:  # nosec B110
+            pass
+        super().cancel()
 
     @property
     def ctx(self):
@@ -118,6 +144,7 @@ class GenerationTask(QgsTask):
             # A cancel is never a failure: the cancel path emits
             # generation_cancelled and recovers the dock itself. Covers the
             # race where the service was cancelled before task.cancel() landed.
+            self._ended_on_cancel = True
             return False
         self._failure_payload = (message, code_str, _ctx_snapshot(self._ctx))
         return False
@@ -155,16 +182,17 @@ class GenerationTask(QgsTask):
             log_debug(f"Refund requested for {request_id} ({reason}): {response}")
             if self._ctx is not None:
                 self._ctx.refund_emitted = True
-            if isinstance(response, dict) and "error" in response:
+            if not isinstance(response, dict) or "error" in response or response.get("refunded") is not True:
                 # Server accepted the call but rejected the refund. Most
                 # common: WRONG_STATUS (job not 'completed') or RATE_LIMITED.
+                refused = response if isinstance(response, dict) else {}
                 self._track_refund_event(
                     "generation_refund_failed",
                     {
                         "reason": reason,
                         "request_id": request_id,
-                        "error_code": str(response.get("code", "")),
-                        "error_message": scrub_user_paths(str(response.get("error", "")))[:200],
+                        "error_code": str(refused.get("code", "")),
+                        "error_message": scrub_user_paths(str(refused.get("error") or "Refund not confirmed"))[:200],
                     },
                 )
                 return False
@@ -202,10 +230,11 @@ class GenerationTask(QgsTask):
     def _sleep_cancellable(self, seconds: float) -> bool:
         """Sleep in 0.2s slices so Cancel is honored during a retry backoff.
         Returns True if cancellation was requested during the wait."""
-        for _ in range(int(seconds / 0.2)):
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
             if self.isCanceled():
                 return True
-            time.sleep(0.2)
+            time.sleep(min(0.2, max(0.0, deadline - time.monotonic())))
         return self.isCanceled()
 
     def run(self) -> bool:
@@ -216,13 +245,14 @@ class GenerationTask(QgsTask):
         # never wedges on the generating view. Cancel keeps its own semantics:
         # a cancelled run returns False and finished() stays silent.
         try:
-            return self._run_pipeline()
+            with request_feedback(self._feedback):
+                return self._run_pipeline()
         except Exception as unexpected:
             if self.isCanceled():
                 return False
             log_debug(f"Generation worker crashed unexpectedly: {unexpected}")
             return self._mark_failed(
-                tr("Generation failed"),
+                get_export_copy("pipeline.generation_worker.generation_failed", tr("Generation failed")),
                 ErrorCode.GENERATION_FAILED.value,
             )
 
@@ -230,7 +260,7 @@ class GenerationTask(QgsTask):
         if self.isCanceled():
             return False
 
-        self.progress.emit(tr("Preparing..."), 0)
+        self.progress.emit(get_export_copy("pipeline.generation_worker.preparing", tr("Preparing...")), 0)
 
         # Reads up to 12 files; tolerates any that vanished since dispatch.
         # When notes ride along, the paired encoder drops a skipped file's
@@ -250,6 +280,9 @@ class GenerationTask(QgsTask):
                 self._context_image_notes = []
             self._context_images = encode_references_b64(self._context_image_paths)
 
+        if self.isCanceled():
+            return False
+
         if not self._skip_trial_check:
             try:
                 allowed, reason, code = self._auth_manager.check_can_generate()
@@ -258,7 +291,10 @@ class GenerationTask(QgsTask):
                 # errors); log it, show the friendly line the code maps to.
                 log_debug(f"Pre-generation check raised: {e}")
                 return self._mark_failed(
-                    tr("No internet connection. Check your network and try again."),
+                    get_export_copy(
+                        "pipeline.generation_worker.no_network",
+                        tr("No internet connection. Check your network and try again."),
+                    ),
                     ErrorCode.NO_NETWORK,
                 )
             if not allowed:
@@ -267,18 +303,17 @@ class GenerationTask(QgsTask):
         if self.isCanceled():
             return False
 
-        self.progress.emit(tr("Sending your image to the AI..."), 5)
+        self.progress.emit(
+            get_export_copy("pipeline.generation_worker.sending_image", tr("Sending your image to the AI...")), 5
+        )
 
-        early = get_phase_messages("early")
-        mid = get_phase_messages("mid")
-        late = get_phase_messages("late")
-        random.shuffle(early)
-        random.shuffle(mid)
-        random.shuffle(late)
-        self._phase_messages = (early, mid, late)
-        self._phase_indices = [0, 0, 0]
+        # One factual line while the server works (Yvann, 2026-09-18: no more
+        # rotating jokes); the dock's dots, clock and percent carry the motion.
+        generating_msg = get_export_copy(
+            "pipeline.generation_worker.generating_image", tr("Generating your image...")
+        )
         self._poll_count = 0
-        self._start_time = time.time()
+        self._start_time = time.monotonic()
         self._last_pct = 5
 
         def _on_progress(status, current, total, estimated_time=None, elapsed=None):
@@ -289,17 +324,20 @@ class GenerationTask(QgsTask):
                 est = estimated_time or get_export_dial(
                     "loading.default_estimated_time_s", DEFAULT_ESTIMATED_TIME
                 )
-                t_elapsed = elapsed if elapsed is not None else (time.time() - self._start_time)
-                raw_ratio = (t_elapsed / est) if est > 0 else 0
+                t_elapsed = elapsed if elapsed is not None else (time.monotonic() - self._start_time)
+                try:
+                    est = float(est)
+                    t_elapsed = float(t_elapsed)
+                    if not math.isfinite(est) or est <= 0:
+                        est = DEFAULT_ESTIMATED_TIME
+                    if not math.isfinite(t_elapsed) or t_elapsed < 0:
+                        t_elapsed = max(0.0, time.monotonic() - self._start_time)
+                except (TypeError, ValueError, OverflowError):
+                    est = DEFAULT_ESTIMATED_TIME
+                    t_elapsed = max(0.0, time.monotonic() - self._start_time)
+                raw_ratio = t_elapsed / est
                 t = min(raw_ratio, 1.0)
-
-                early_r = get_export_dial("loading.phase_early_ratio", _PHASE_EARLY_RATIO)
-                late_r = get_export_dial("loading.phase_late_ratio", _PHASE_LATE_RATIO)
-                phase = 0 if t < early_r else (1 if t < late_r else 2)
-                msgs = self._phase_messages[phase]
-                idx = self._phase_indices[phase]
-                msg = msgs[idx % len(msgs)]
-                self._phase_indices[phase] = idx + 1
+                msg = generating_msg
 
                 target_pct = min(92, int(95 * (1 - (1 - t) ** 2)))
                 pct = min(target_pct, self._last_pct + 8)
@@ -310,7 +348,10 @@ class GenerationTask(QgsTask):
                 if raw_ratio >= get_export_dial(
                     "loading.longer_than_usual_ratio", _LONGER_THAN_USUAL_RATIO
                 ):
-                    msg = tr("Taking a bit longer than usual...")
+                    msg = get_export_copy(
+                        "pipeline.generation_worker.taking_longer",
+                        tr("Taking a bit longer than usual..."),
+                    )
 
                 self.progress.emit(msg, pct)
                 try:
@@ -343,16 +384,24 @@ class GenerationTask(QgsTask):
             # the sole authority and refunds only genuine server-side failures.
             # We only refund when delivery fails on our side (download path).
             return self._mark_failed(
-                result.error or tr("Generation failed"),
+                result.error
+                or get_export_copy("pipeline.generation_worker.generation_failed", tr("Generation failed")),
                 result.error_code or ErrorCode.GENERATION_FAILED.value,
             )
 
-        self.progress.emit(tr("Grabbing your masterpiece..."), 93)
+        self.progress.emit(
+            get_export_copy("pipeline.generation_worker.grabbing_masterpiece", tr("Grabbing your masterpiece...")),
+            93,
+        )
 
         image_data = None
         last_download_err: Exception | None = None
         stream_fallback_used = False
-        for attempt in range(1, 4):
+        download_attempts = min(
+            get_export_dial("pipeline.generation_worker.download_retry_attempts", _DOWNLOAD_RETRY_ATTEMPTS),
+            _MAX_DOWNLOAD_RETRY_ATTEMPTS,
+        )
+        for attempt in range(1, download_attempts + 1):
             if self.isCanceled():
                 return False
             url = result.image_url
@@ -365,17 +414,30 @@ class GenerationTask(QgsTask):
                 stream_fallback_used = True
             try:
                 image_data = self._client.download_image(url)
+                if not isinstance(image_data, (bytes, bytearray)) or not image_data:
+                    image_data = None
+                    raise ValueError("Empty or invalid image response")
                 log_debug(f"Downloaded image (attempt {attempt}): {len(image_data)} bytes")
                 break
             except Exception as e:
                 last_download_err = e
-                if attempt < 3:
-                    backoff = 2 ** (attempt - 1)
+                # The service's cancel aborts the download before task.cancel()
+                # lands: stop here, never retry into a refund.
+                if self.isCanceled() or getattr(e, "code", "") == ErrorCode.GENERATION_CANCELLED.value:
+                    self._ended_on_cancel = True
+                    return False
+                if attempt < download_attempts:
+                    backoff = _DOWNLOAD_RETRY_DELAYS_S[
+                        min(attempt - 1, len(_DOWNLOAD_RETRY_DELAYS_S) - 1)
+                    ]
                     log_debug(f"Download attempt {attempt} failed: {e}; retry in {backoff}s")
                     if self._sleep_cancellable(backoff):
                         return False
 
         if image_data is None:
+            # A cancel during the last attempt is the user's, never a refund.
+            if self.isCanceled():
+                return False
             request_id = getattr(result, "request_id", None) or (
                 self._ctx.request_id if self._ctx is not None else None
             )
@@ -388,14 +450,17 @@ class GenerationTask(QgsTask):
             )
             # Only promise a refund the server actually confirmed.
             credit_note = (
-                tr("Credit refunded.")
+                get_export_copy("pipeline.generation_worker.credit_refunded", tr("Credit refunded."))
                 if refunded
-                else tr("If a credit was charged, it will be refunded.")
+                else get_export_copy(
+                    "pipeline.generation_worker.credit_refund_pending",
+                    tr("If a credit was charged, it will be refunded."),
+                )
             )
             return self._mark_failed(
                 tr(
-                    "Failed to download result image after 3 attempts: {err}."
-                ).format(err=last_download_err) + " " + credit_note,
+                    "Failed to download result image after {attempts} attempts: {err}."
+                ).format(attempts=download_attempts, err=last_download_err) + " " + credit_note,
                 ErrorCode.DOWNLOAD_FAILED.value,
             )
 
@@ -419,7 +484,9 @@ class GenerationTask(QgsTask):
             except Exception:  # nosec B110
                 self._ctx.flat_classes = None
 
-        self.progress.emit(tr("Dropping it on the map..."), 97)
+        self.progress.emit(
+            get_export_copy("pipeline.generation_worker.dropping_on_map", tr("Dropping it on the map...")), 97
+        )
 
         try:
             geotiff_path = write_geotiff(
@@ -464,10 +531,15 @@ class GenerationTask(QgsTask):
                 ErrorCode.WRITE_ERROR.value,
             )
 
+        if self.isCanceled():
+            return False
         if self._ctx is not None:
-            for w in self._ctx.validate():
-                log_debug(f"Pipeline: {w}")
-            log_debug(f"Pipeline: {self._ctx.safe_log_summary()}")
+            try:
+                for w in self._ctx.validate():
+                    log_debug(f"Pipeline: {w}")
+                log_debug(f"Pipeline: {self._ctx.safe_log_summary()}")
+            except Exception:  # nosec B110 - diagnostics cannot discard a saved result.
+                pass
 
         # Run before emit so unload can't race a half-written .debug/ tree.
         if self._debug_mode and self._ctx is not None:
@@ -526,6 +598,14 @@ class GenerationTask(QgsTask):
             self.succeeded.emit(self._success_payload)
         elif self._failure_payload is not None:
             self.failed.emit(*self._failure_payload)
+        elif not self._ended_on_cancel:
+            # No slot filled and no cancel: answer anyway, or the dock stays on
+            # the generating view for good.
+            self.failed.emit(
+                tr("Generation failed"),
+                ErrorCode.GENERATION_FAILED.value,
+                _ctx_snapshot(self._ctx),
+            )
 
 
 GenerationWorker = GenerationTask

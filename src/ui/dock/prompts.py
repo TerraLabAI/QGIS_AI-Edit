@@ -9,6 +9,7 @@ from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.config_store import get_export_copy, get_export_dial
 from ...core.i18n import tr
+from ...core.number_format import format_count
 from ...core.prompts.prompt_presets import detect_prompt_guidance
 from ..onboarding_hint import (
     BLUE_TINT,
@@ -22,7 +23,8 @@ from .blocked_reasons import (
     GENERATE_BLOCK_PROMPT_EMPTY,
     GENERATE_BLOCK_PROMPT_TOO_SHORT,
 )
-from .style import _BTN_DISABLED, _BTN_GREEN, MAX_PROMPT_CHARS
+from .design_tokens import BTN_GHOST_WIDE_QSS, BTN_PRIMARY_WIDE_QSS
+from .style import MAX_PROMPT_CHARS
 
 # Fallbacks for the server-tunable prompt-guard dials.
 _MIN_PROMPT_CHARS = 10
@@ -133,8 +135,7 @@ class DockPromptMixin:
         if not msg:
             label.setVisible(False)
             return
-        # Glyph kept outside tr() so translators see clean text.
-        label.setText("ⓘ  " + msg)
+        label.setText(msg)
         label.setVisible(True)
 
     def _on_guidance_link_activated(self, href: str) -> None:
@@ -155,9 +156,14 @@ class DockPromptMixin:
         `prompt` is the already-stripped box text when the caller has it."""
         if prompt is None:
             prompt = self.get_prompt()
-        self._apply_guidance_hint(
-            self._prompt_guidance_hint, self._guidance_message_for(prompt)
-        )
+        message = self._guidance_message_for(prompt)
+        self._apply_guidance_hint(self._prompt_guidance_hint, message)
+        # One card under the prompt at a time: an off-rails hint is about the
+        # sentence being typed, so the general "Get better results" tip steps
+        # aside for it and comes back by its own gate once the hint goes.
+        tip = getattr(self, "_guide_ai_hint", None)
+        if tip is not None and self._prompt_section.isVisibleTo(self):
+            tip.setVisible(not message and self._guide_ai_tip_visible())
 
     def _update_result_guidance_hint(self, prompt: str | None = None) -> None:
         """Same hint under the result/retry prompt, so iterating on a v1/v2
@@ -185,9 +191,10 @@ class DockPromptMixin:
             )
             # A served sentence can reuse {km2}. Plain replace, never
             # format(), so a stray brace cannot raise on the draw path.
-            value = f"{area_km2:.0f}" if area_km2 >= 10 else f"{area_km2:.1f}"
+            # Digit groups, one decimal only under 10 (AI Segmentation's rule).
+            value = format_count(round(area_km2)) if area_km2 >= 10 else f"{area_km2:.1f}"
             msg = get_export_copy("guidance.large_zone", shipped).replace("{km2}", value)
-            self._zone_guidance_hint.setText("ⓘ  " + msg)
+            self._zone_guidance_hint.setText(msg)
             self._zone_guidance_hint.setVisible(True)
             return
         threshold = get_export_dial("guidance.coarse_zone_m_per_px", _COARSE_ZONE_M_PER_PX)
@@ -201,7 +208,7 @@ class DockPromptMixin:
             "Zoomed out: the AI won't see small features (buildings, cars, "
             "trees) at this scale. Zoom in for object-level detail."
         ))
-        self._zone_guidance_hint.setText("ⓘ  " + msg)
+        self._zone_guidance_hint.setText(msg)
         self._zone_guidance_hint.setVisible(True)
 
     # --- Mark up prompt tip -------------------------------------------
@@ -350,7 +357,7 @@ class DockPromptMixin:
     _PROMPT_MAX_HEIGHT = 400
 
     def _adjust_prompt_height(self):
-        """Auto-expand prompt input (60px min, 200px max). When the cap
+        """Auto-expand prompt input (60 px min, _PROMPT_MAX_HEIGHT max). When the cap
         kicks in, snap height to a whole number of text lines so the last
         visible line isn't half-cut at the viewport bottom."""
         self._prompt_input.setFixedHeight(
@@ -358,7 +365,7 @@ class DockPromptMixin:
         )
 
     def _adjust_result_prompt_height(self):
-        """Auto-expand result prompt input (50px min, 200px max, line-snapped)."""
+        """Auto-expand result prompt input (50 px min, _PROMPT_MAX_HEIGHT max, line-snapped)."""
         self._result_prompt_input.setFixedHeight(
             self._snapped_prompt_height(self._result_prompt_input, min_h=50)
         )
@@ -390,12 +397,17 @@ class DockPromptMixin:
             return
         # Transfer prompt to main input for the generation flow
         self._prompt_input.setPlainText(prompt)
-        self._result_section.setVisible(False)
         self._hide_status_box()
         self._dismiss_markup_prompt_tip()
         self.retry_clicked.emit(prompt)
 
     def _on_generate_clicked(self):
+        # Enter in the prompt box lands here without the button: it must obey
+        # the same gate, or Enter started a run while the example imagery was
+        # still loading (a blank input) or while the button was grey.
+        button = getattr(self, "_generate_btn", None)
+        if button is not None and (button.isHidden() or not button.isEnabled()):
+            return
         prompt = self.get_prompt()
         if not prompt:
             return
@@ -429,7 +441,19 @@ class DockPromptMixin:
         if draw_tool is not None:
             draw_tool.close_now()
             return
-        if not self._generate_btn.isVisible() or not self._generate_btn.isEnabled():
+        if not self._generate_btn.isVisible():
+            # The entry screen: Enter is its primary too, as it is Generate's
+            # on the prompt screen (a greyed Launch stays a no-op).
+            launch = getattr(self, "_launch_btn", None)
+            if (
+                launch is not None
+                and launch.isVisible()
+                and launch.isEnabled()
+                and self._launch_section.isVisible()
+            ):
+                launch.click()
+            return
+        if not self._generate_btn.isEnabled():
             return
         self._on_generate_clicked()
 
@@ -453,9 +477,9 @@ class DockPromptMixin:
     def _generate_block_reason(self, prompt: str) -> str | None:
         """What still stands between this panel and a run, or None.
 
-        The button stays clickable on a short prompt (the click-time guard
-        answers that one), so the line is a live preview of the refusal rather
-        than a second gate.
+        Any reason greys the button (_update_generate_enabled), and the line
+        under it names that reason. An empty prompt is a reason with no line:
+        the placeholder already asks for the sentence (generate_block_text).
         """
         if not self._zone_selected:
             return GENERATE_BLOCK_NO_ZONE
@@ -474,16 +498,38 @@ class DockPromptMixin:
         self._imagery_loading = bool(loading)
         self._update_generate_enabled()
         self._update_generate_button_text()
+        # Launch reads the same flag through the layer gate. Without a re-run
+        # the entry screen kept "Loading imagery..." and a grey Launch after
+        # the tiles had settled, until some layer happened to change.
+        schedule = getattr(self, "_schedule_layer_warning_update", None)
+        if schedule is not None:
+            schedule()
 
     def _update_generate_style(self):
         # Qt re-parses and re-applies an identical stylesheet (~23 us a call),
         # so the guard is on us. State: the enabled flag the sheet was last
         # written for, absent until the first call.
-        enabled = self._generate_btn.isEnabled()
-        if getattr(self, "_generate_style_state", None) is enabled:
+        # While the free wall shows, its "Keep editing with Pro" is the one
+        # filled button on screen and Generate steps down to an outline.
+        wall = getattr(self, "_trial_info_box", None)
+        wall_up = wall is not None and wall.isVisible()
+        state = (self._generate_btn.isEnabled(), wall_up)
+        if getattr(self, "_generate_style_state", None) == state:
             return
-        self._generate_style_state = enabled
-        self._generate_btn.setStyleSheet(_BTN_GREEN if enabled else _BTN_DISABLED)
+        self._generate_style_state = state
+        self._generate_btn.setStyleSheet(BTN_GHOST_WIDE_QSS if wall_up else BTN_PRIMARY_WIDE_QSS)
+
+    def _update_launch_style(self) -> None:
+        """Launch steps down to an outline while the free wall shows, like
+        Generate: the wall's "Keep editing with Pro" is the screen's one filled
+        button. Launch still works (the server answers a spent quota), so it
+        is not greyed."""
+        wall = getattr(self, "_trial_info_box", None)
+        wall_up = wall is not None and wall.isVisible()
+        if getattr(self, "_launch_style_wall", None) is wall_up:
+            return
+        self._launch_style_wall = wall_up
+        self._launch_btn.setStyleSheet(BTN_GHOST_WIDE_QSS if wall_up else BTN_PRIMARY_WIDE_QSS)
 
     def _update_result_generate_enabled(self, prompt: str | None = None):
         """Gate the result-section Generate button on a non-empty prompt.
@@ -499,4 +545,4 @@ class DockPromptMixin:
         if getattr(self, "_result_generate_style_state", None) is enabled:
             return
         self._result_generate_style_state = enabled
-        self._result_regenerate_btn.setStyleSheet(_BTN_GREEN if enabled else _BTN_DISABLED)
+        self._result_regenerate_btn.setStyleSheet(BTN_PRIMARY_WIDE_QSS)

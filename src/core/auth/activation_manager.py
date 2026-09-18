@@ -7,6 +7,7 @@ from __future__ import annotations
 import re
 from urllib.parse import urlsplit
 
+from ..config_store import get_export_copy
 from ..i18n import tr
 
 _KEY_RE = re.compile(r"^tl_[0-9a-f]{32}$")
@@ -55,11 +56,13 @@ def _is_safe_link(value) -> bool:
     try:
         parts = urlsplit(value)
         host = parts.hostname or ""
+        port = parts.port
     except ValueError:
         return False
     # A dot in the host keeps out "https://localhost" and bare single labels,
     # which cannot be a TerraLab page.
-    return parts.scheme == "https" and "." in host
+    return (parts.scheme == "https" and "." in host and not parts.username
+            and not parts.password and (port is None or 1 <= port <= 65535))
 
 
 def _server_url(key: str, fallback: str) -> str:
@@ -152,11 +155,13 @@ def parse_version(text) -> tuple[int, ...] | None:
     """'1.6.9' -> (1, 6, 9); None on anything that is not dotted ints."""
     if not isinstance(text, str):
         return None
+    if len(text) > 100:
+        return None
     parts = text.strip().lstrip("vV").split(".")
     out = []
     for part in parts:
         part = part.strip()
-        if not part.isdigit():
+        if not part.isascii() or not part.isdigit():
             return None
         out.append(int(part))
     return tuple(out) if out else None
@@ -343,7 +348,7 @@ def migrate_legacy_key(settings=None) -> bool:
     return _impl(settings)
 
 
-def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
+def validate_key_with_server(client, key: str) -> tuple[bool, str, str, dict | None]:
     """Validate an activation key against the server.
 
     Returns (success, message, error_code, usage). ``usage`` is the raw
@@ -351,15 +356,25 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
     callers can reuse it instead of fetching credits a second time); None
     on failure.
     """
-    key = key.strip()
+    key = key.strip() if isinstance(key, str) else ""
     if not key:
-        return False, tr("Please enter your activation key."), "NO_KEY", None
+        return (
+            False,
+            get_export_copy(
+                "pipeline.activation_manager.enter_key", tr("Please enter your activation key.")
+            ),
+            "NO_KEY",
+            None,
+        )
 
     if not _KEY_RE.match(key):
-        return False, tr(
-            "That does not look like an activation key. Most people do not need "
-            "one: just use the Sign in button. A key starts with tl_ and is only "
-            "for admin-issued or offline activation."
+        return False, get_export_copy(
+            "pipeline.activation_manager.invalid_key_format",
+            tr(
+                "That does not look like an activation key. Most people do not need "
+                "one: just use the Sign in button. A key starts with tl_ and is only "
+                "for admin-issued or offline activation."
+            ),
         ), "INVALID_FORMAT", None
 
     # Call /api/plugin/usage with the key as Bearer token
@@ -372,14 +387,22 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
     except Exception:
         return (
             False,
-            tr("Cannot reach server. Check your internet connection."),
+            get_export_copy(
+                "pipeline.activation_manager.no_connection",
+                tr("Cannot reach server. Check your internet connection."),
+            ),
             "NO_CONNECTION",
             None,
         )
 
+    if not isinstance(result, dict):
+        return False, tr("Unexpected response from the server. Please try again."), "VALIDATION_FAILED", None
+
     if "error" in result:
-        code = (result.get("code", "") or "").strip().upper()
-        error_msg = result.get("error", tr("Validation failed."))
+        code = str(result.get("code") or "").strip().upper()
+        error_msg = str(result.get("error") or get_export_copy(
+            "pipeline.activation_manager.validation_failed", tr("Validation failed.")
+        ))
 
         if code == "TRIAL_EXHAUSTED":
             return False, error_msg, "TRIAL_EXHAUSTED", None
@@ -395,15 +418,21 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
         if code == "INVALID_KEY":
             return (
                 False,
-                tr("Invalid activation key. Check your key and try again."),
+                get_export_copy(
+                    "pipeline.activation_manager.invalid_key",
+                    tr("Invalid activation key. Check your key and try again."),
+                ),
                 code,
                 None,
             )
         if code == "SUBSCRIPTION_INACTIVE":
             return (
                 False,
-                tr(
-                    "Your subscription has expired or been canceled. Renew at terra-lab.ai/dashboard"  # noqa: E501
+                get_export_copy(
+                    "pipeline.activation_manager.subscription_inactive",
+                    tr(
+                        "Your subscription has expired or been canceled. Renew at terra-lab.ai/dashboard"  # noqa: E501
+                    ),
                 ),
                 code,
                 None,
@@ -414,12 +443,15 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str]:
     if server_product and server_product != "ai-edit":
         return (
             False,
-            tr("This key belongs to a different product. Use your AI Edit key."),
+            get_export_copy(
+                "pipeline.activation_manager.wrong_product",
+                tr("This key belongs to a different product. Use your AI Edit key."),
+            ),
             "WRONG_PRODUCT",
             None,
         )
 
-    return True, tr("Activation key verified!"), "", result
+    return True, get_export_copy("pipeline.activation_manager.key_verified", tr("Activation key verified!")), "", result
 
 
 def get_subscribe_url() -> str:

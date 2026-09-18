@@ -12,6 +12,8 @@ returns a preset dict.
 """
 from __future__ import annotations
 
+import math
+from copy import deepcopy
 from typing import Any
 
 from ..i18n import _read_user_locale
@@ -31,7 +33,11 @@ def _pick_label(label_field: Any, fallback: str = "") -> str:
         return label_field
     if isinstance(label_field, dict):
         lang = _current_lang()
-        return label_field.get(lang) or label_field.get("en") or fallback
+        for code in (lang, "en"):
+            value = label_field.get(code)
+            if isinstance(value, str) and value.strip():
+                return value
+        return fallback if isinstance(fallback, str) else ""
     return fallback
 
 
@@ -76,7 +82,9 @@ def _is_json_shaped(value: Any, depth: int = 0) -> bool:
     (callables, any other exotic object, anything oversized) is refused."""
     if isinstance(value, str):
         return len(value) <= _MAX_EXTRA_CHARS
-    if value is None or isinstance(value, (bool, int, float)):
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if value is None or isinstance(value, (bool, int)):
         return True
     if depth >= _MAX_EXTRA_DEPTH:
         return False
@@ -106,7 +114,7 @@ def _preset_extras(preset: dict) -> dict:
     """
     extras: dict = {}
     try:
-        items = list(preset.items())
+        items = preset.items()
     except Exception:  # nosec B110
         return extras
     for key, value in items:
@@ -118,7 +126,7 @@ def _preset_extras(preset: dict) -> dict:
             continue
         try:
             if _is_json_shaped(value):
-                extras[key] = value
+                extras[key] = deepcopy(value)
         except Exception:  # nosec B112 - continue, so B112 not B110
             continue
     return extras
@@ -136,9 +144,11 @@ def _normalize_preset(preset: dict, source_category: str) -> dict:
     Older string-only payloads still work via `_pick_label`'s str fallback.
     """
     normalized = _preset_extras(preset)
+    preset_id = preset.get("id")
+    preset_id = preset_id if isinstance(preset_id, str) else ""
     normalized.update({
-        "id": preset.get("id", ""),
-        "label": _pick_label(preset.get("label"), preset.get("id", "")),
+        "id": preset_id,
+        "label": _pick_label(preset.get("label"), preset_id),
         "prompt": _pick_label(preset.get("prompt"), ""),
         "source_category": source_category,
         "top_pick": bool(preset.get("top_pick", False)),

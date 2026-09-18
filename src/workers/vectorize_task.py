@@ -9,9 +9,12 @@ is captured by the caller on the main thread and passed in.
 """
 from __future__ import annotations
 
+import copy
+
 from qgis.core import QgsTask
 from qgis.PyQt.QtCore import pyqtSignal
 
+from ..core.config_store import get_export_copy
 from ..core.errors import AIEditError, ErrorCode
 from ..core.generation.vectorization_service import compute_class_features
 from ..core.i18n import tr
@@ -29,8 +32,10 @@ class VectorizeTask(QgsTask):
 
     def __init__(self, compute_kwargs: dict, params: dict):
         super().__init__("AI Edit vectorize", QgsTask.Flag.CanCancel)
-        self._compute_kwargs = compute_kwargs
-        self._params = params
+        # Qt value objects in compute_kwargs have their own copy semantics; only
+        # containers are detached here and their scalar values stay intact.
+        self._compute_kwargs = dict(compute_kwargs)
+        self._params = copy.deepcopy(params)
         self._features: list | None = None
         self._failure: tuple[str, str] | None = None
 
@@ -51,7 +56,10 @@ class VectorizeTask(QgsTask):
         A stable code plus a translated, user-safe line: the raw exception text
         (GDAL/numpy internals) must never reach the UI, only the log."""
         return (
-            tr("Vectorize failed unexpectedly. Please try again, or report the problem if it persists."),
+            get_export_copy(
+                "pipeline.vectorize_task.unexpected_failure",
+                tr("Vectorize failed unexpectedly. Please try again, or report the problem if it persists."),
+            ),
             ErrorCode.VECTORIZE_INTERNAL_ERROR.value,
         )
 

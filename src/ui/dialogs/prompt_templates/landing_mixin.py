@@ -8,7 +8,7 @@ gone. What remains here:
   community picks, shown as equal before/after cards that carry the prompt
   text.
 - `_pinned_entries`: the user's starred prompts + starred generations, feeding
-  the Starred page (`sessions_mixin.py`) and its rail count.
+  the Favorites page (`sessions_mixin.py`) and its rail count.
 
 Mixed into PromptTemplatesDialog; reuses the existing card builders and the
 detail popup in `pages_mixin.py`.
@@ -16,20 +16,15 @@ detail popup in `pages_mixin.py`.
 from __future__ import annotations
 
 from qgis.PyQt.QtWidgets import (
-    QLabel,
     QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
-from ....core import qt_compat as QtC
 from ....core.config_store import get_export_copy, get_export_dial
 from ....core.i18n import tr
-from .common import (
-    _EMPTY_MSG,
-    _FEED_SUBTITLE,
-    _LANDING_HEADING,
-)
+from .common import style_library_scroll
+from .library_empty_state import build_library_empty_state
 
 # Top picks: nine picks in a 3-column grid (3x3), built with the same card
 # grid as the category pages so every page reads identically (same card size,
@@ -64,13 +59,13 @@ class LandingMixin:
                 # the order is actually driven by usage.
                 get_export_copy(
                     "library.picks_subtitle",
-                    tr("Our hand-picked selection to get you started."),
+                    tr("Proven prompts to start from. Open one to see it before and after."),
                 ),
             ),
             "work": (
                 get_export_copy("library.work_title", tr("Sessions")),
                 # Sessions only since the starred shelf moved to its own
-                # Starred page; the fallback stopped mentioning stars.
+                # Favorites page; the fallback stopped mentioning stars.
                 get_export_copy(
                     "library.work_subtitle",
                     tr("Your work sessions, newest first."),
@@ -86,37 +81,30 @@ class LandingMixin:
         self._spot_slot: QVBoxLayout | None = None
         self._feed_all_pages: dict[str, QWidget] = {}
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QtC.FrameNoFrame)
-        scroll.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
+        # Header above the scroll area, cards inside it: the same build as the
+        # family, Sessions and Favorites pages, so the title stays put while
+        # the grid scrolls, and sits at the same place on every page.
+        page = QWidget()
+        page_box = QVBoxLayout(page)
+        page_box.setContentsMargins(0, 0, 0, 0)
+        page_box.setSpacing(14)
+        title, tagline = self._feed_meta()["popular"]
+        page_box.addWidget(self._build_page_header(title, tagline))
 
+        scroll = QScrollArea()
+        style_library_scroll(scroll)
         content = QWidget()
         outer = QVBoxLayout(content)
-        outer.setContentsMargins(6, 4, 6, 8)
-        outer.setSpacing(8)
+        outer.setContentsMargins(0, 0, 12, 20)
+        outer.setSpacing(14)
         outer.addWidget(self._build_spotlight_block())
         outer.addStretch()
-
         scroll.setWidget(content)
-        self._landing_page = scroll
-        self._refresh_shelves()
-        return scroll
+        page_box.addWidget(scroll, 1)
 
-    @staticmethod
-    def _make_section_heading(title: str, subtitle: str) -> QWidget:
-        """Section heading with its explainer visible (not a tooltip)."""
-        host = QWidget()
-        box = QVBoxLayout(host)
-        box.setContentsMargins(0, 0, 0, 0)
-        box.setSpacing(1)
-        title_lbl = QLabel(title)
-        title_lbl.setStyleSheet(_LANDING_HEADING)
-        box.addWidget(title_lbl)
-        sub_lbl = QLabel(subtitle)
-        sub_lbl.setStyleSheet(_FEED_SUBTITLE)
-        box.addWidget(sub_lbl)
-        return host
+        self._landing_page = page
+        self._refresh_shelves()
+        return page
 
     # -- personal entries (also feed the rail counts) -------------------
 
@@ -156,10 +144,7 @@ class LandingMixin:
         block = QWidget()
         box = QVBoxLayout(block)
         box.setContentsMargins(0, 0, 0, 0)
-        box.setSpacing(8)
-
-        title, tagline = self._feed_meta()["popular"]
-        box.addWidget(self._make_section_heading(title, tagline))
+        box.setSpacing(14)
 
         # The cards sit directly on the page (no tinted band), so Top picks
         # reads like every other page. The slot is a plain container.
@@ -176,9 +161,18 @@ class LandingMixin:
         # never accumulates dead widgets across rebuilds.
         self._card_widgets = [(c, k) for (c, k) in self._card_widgets if k != "favorites"]
         if not picks:
-            empty = QLabel(get_export_copy("library.empty_picks", tr("Nothing here yet.")))
-            empty.setStyleSheet(_EMPTY_MSG)
-            self._spot_slot.addWidget(empty)
+            # Top picks come from the server catalog, so an empty page means
+            # it has not arrived: say that, not "Nothing here yet".
+            self._spot_slot.addWidget(build_library_empty_state(
+                get_export_copy(
+                    "library.empty_picks_offline", tr("The prompts could not load")),
+                get_export_copy(
+                    "library.empty_picks_offline_hint",
+                    tr("Check your connection, then reopen the library."),
+                ),
+                suggestions=[self._suggest_sessions()],
+                glyph="sparkles",
+            ))
             return
 
         # Same grid + card builder as the category pages, so Top picks reads

@@ -1,13 +1,50 @@
-"""Telemetry batched in memory, flushed once per generation cycle. Fails silently."""
+"""Telemetry batched in memory, flushed once per generation cycle. Fails silently.
+
+Every event is linked to the account (the batch is posted with the activation
+header), so nothing here is anonymous. Two switches sit in front of the send:
+the first-run privacy notice (core/privacy_notice.py), which must have been
+accepted once, and the "usage statistics" toggle in Account Settings, which
+the user can turn off at any time.
+"""
 
 from __future__ import annotations
 
-import platform
+import os
+import sys
 import threading
 from datetime import datetime, timezone
 
 from qgis.core import QgsApplication, QgsTask
 from qgis.PyQt.QtCore import QThread
+
+from .privacy_notice import has_accepted_privacy_notice
+
+
+def _os_props() -> dict:
+    """os / os_version / arch with the values platform.system(), release()
+    and machine() used to send, without their cost.
+
+    On Windows with Python 3.12, platform.uname() runs WMI queries: 30 to
+    90 ms on the main thread at every QGIS start. Windows gets the same three
+    values from Qt and the environment ("Windows", "10"/"11", "AMD64"/"ARM64");
+    elsewhere os.uname() is what platform reads anyway."""
+    if sys.platform == "win32":
+        try:
+            from qgis.PyQt.QtCore import QSysInfo
+
+            os_version = QSysInfo.productVersion()
+        except Exception:
+            os_version = ""
+        arch = (
+            os.environ.get("PROCESSOR_ARCHITEW6432")
+            or os.environ.get("PROCESSOR_ARCHITECTURE", "")
+        )
+        return {"os": "Windows", "os_version": os_version, "arch": arch}
+    try:
+        uname = os.uname()
+        return {"os": uname.sysname, "os_version": uname.release, "arch": uname.machine}
+    except Exception:
+        return {"os": "", "os_version": "", "arch": ""}
 
 
 def _on_main_thread() -> bool:
@@ -46,7 +83,7 @@ def _read_telemetry_enabled() -> bool:
 
 
 def is_telemetry_enabled() -> bool:
-    """Whether anonymous usage telemetry is enabled. Opt-out: defaults to True.
+    """Whether usage telemetry is enabled. Opt-out: defaults to True.
 
     Answers from the session memo (see above); `refresh_telemetry_enabled` is
     what goes back to the shared TerraLab/telemetry_enabled QSettings key."""
@@ -78,8 +115,9 @@ def set_telemetry_enabled(enabled: bool) -> None:
     _telemetry_enabled_memo = bool(enabled)
 
 
-# Anonymous events with no user-generated content; they need no gate beyond the
-# global opt-out. plugin_error stays additionally gated (raw exception text can
+# Events with no user-generated content; they need no gate beyond the privacy
+# notice and the global opt-out (the terms consent recorded on Generate gates
+# the rest). plugin_error stays additionally gated (raw exception text can
 # include path fragments).
 _NO_CONTENT_EVENTS = frozenset({
     "plugin_opened",
@@ -142,6 +180,8 @@ class _TelemetryFlushTask(QgsTask):
         self._client = client
         self._events = events
         self._auth = auth
+        from qgis.core import QgsFeedback
+        self._feedback = QgsFeedback()
 
     def run(self) -> bool:
         if self.isCanceled():
@@ -150,11 +190,23 @@ class _TelemetryFlushTask(QgsTask):
         # a disk queue; a hard-offline session still loses the batch (accepted).
         if not self._post() and not self.isCanceled():
             import time
-            time.sleep(2)
+            # 2 s in short steps, so unload is never held up by the backoff.
+            for _ in range(8):
+                if self.isCanceled():
+                    return False
+                time.sleep(0.25)
             if self.isCanceled():
                 return False
             self._post()
         return True
+
+    def cancel(self) -> None:
+        # Abort a post in flight too, instead of waiting out its timeout.
+        try:
+            self._feedback.cancel()
+        except Exception:  # nosec B110
+            pass
+        super().cancel()
 
     def _post(self) -> bool:
         """Send the batch; True only on a successful post. The client returns an
@@ -162,7 +214,9 @@ class _TelemetryFlushTask(QgsTask):
         the RESULT. Ignoring it made run()'s retry dead code: a failed batch
         returned True and was silently dropped."""
         try:
-            result = self._client.send_telemetry_batch(self._events, self._auth)
+            from ..api.network_error_classifier import request_feedback
+            with request_feedback(self._feedback):
+                result = self._client.send_telemetry_batch(self._events, self._auth)
         except Exception:  # nosec B110 - telemetry must never break the plugin
             return False
         return not (isinstance(result, dict) and result.get("error"))
@@ -182,14 +236,12 @@ class TelemetryCollector:
         self._lock = threading.Lock()
         self._batch: list = []
         # Pre-auth lifecycle events parked here until the first authenticated
-        # flush drains them, so early anonymous events are not lost. Capped to 50.
+        # flush drains them, so early lifecycle events are not lost. Capped to 50.
         self._pending_pre_auth: list = []
         self._inflight: list[_TelemetryFlushTask] = []
         self._session_props = self._build_session_props()
 
     def _build_session_props(self) -> dict:
-        import sys
-
         try:
             from qgis.core import Qgis
             qgis_version = Qgis.version()
@@ -198,13 +250,11 @@ class TelemetryCollector:
 
         props = {
             "plugin_version": self._plugin_version,
-            "os": platform.system(),
-            "os_version": platform.release(),
-            "arch": platform.machine(),
+            **_os_props(),
             "python_version": sys.version.split()[0],
             "qgis_version": qgis_version,
         }
-        # Anonymous per-machine hash: lets the backend count distinct machines per
+        # Per-machine hash: lets the backend count distinct machines per
         # activation key (measurement only). Best-effort; never break telemetry.
         try:
             from .device_id import get_device_hash
@@ -228,8 +278,9 @@ class TelemetryCollector:
         )
 
     def track(self, event: str, properties: dict | None = None):
-        # Global opt-out: when disabled, nothing is even queued.
-        if not is_telemetry_enabled():
+        # Nothing is even queued before the first-run privacy notice has been
+        # accepted, or when the user switched usage statistics off.
+        if not has_accepted_privacy_notice() or not is_telemetry_enabled():
             return
         evt = {
             "event": event,
@@ -243,19 +294,29 @@ class TelemetryCollector:
             self._batch.append(evt)
 
     def flush(self):
-        """Non-blocking. Lifecycle events ship pre-consent; everything else
-        requires consent. Pre-auth events queue in _pending_pre_auth.
+        """Non-blocking. Nothing ships before the privacy notice is accepted.
+        Lifecycle events ship before the terms consent; everything else
+        requires it. Pre-auth events queue in _pending_pre_auth.
 
         MAIN THREAD ONLY: it ends in QgsApplication.taskManager().addTask(),
         which is main-thread-only. Worker threads must only telemetry.track()
         and let the next main-thread flush ship the batch (see generation_worker).
         A stray off-thread call is now a safe no-op rather than a hard crash."""
+        self._flush(synchronous=False)
+
+    def _flush(self, *, synchronous: bool) -> None:
+        """Build and send the eligible batch.
+
+        Normal flushes stay task-backed. Shutdown uses the synchronous path so
+        QGIS cannot destroy its task manager before the final queued events get
+        their send attempt.
+        """
         if not _on_main_thread():
             return
         # One QSettings read per flush (not per event) is what keeps the memo
         # honest: whoever turned telemetry off, nothing queued before that
         # leaves the machine.
-        if not refresh_telemetry_enabled():
+        if not has_accepted_privacy_notice() or not refresh_telemetry_enabled():
             with self._lock:
                 self._batch.clear()
                 self._pending_pre_auth.clear()
@@ -290,6 +351,13 @@ class TelemetryCollector:
             # cancel everything cleanly on shutdown().
             self._inflight.append(task)
 
+        if synchronous:
+            try:
+                task.run()
+            finally:
+                self._drop_inflight(task)
+            return
+
         # Outside the lock: connect signals + hand to the task manager (Qt calls).
         try:
             task.taskCompleted.connect(lambda t=task: self._drop_inflight(t))
@@ -302,28 +370,26 @@ class TelemetryCollector:
         with self._lock:
             try:
                 self._inflight.remove(task)
-            except ValueError:
+            except ValueError:  # task already dropped by shutdown
                 pass
 
     def shutdown(self):
-        # Best-effort final drain of the in-memory batch BEFORE cancelling
-        # anything. flush() (main-thread only, a safe no-op off it) appends one
-        # fresh QgsTask the task manager owns; on unload it may not run to
-        # completion, so this is a last attempt, never a guarantee. We snapshot
-        # the tasks already in flight and cancel ONLY those, so this final batch
-        # is not cancelled out from under itself. Never let telemetry break
-        # unload.
+        # Drain the in-memory batch synchronously BEFORE cancelling anything:
+        # QGIS may emit aboutToQuit without calling plugin unload(), and its
+        # task manager can already be stopping. We snapshot the tasks already
+        # in flight and cancel ONLY those, so the final batch is not cancelled
+        # out from under itself. Never let telemetry break unload.
         with self._lock:
             stale = list(self._inflight)
         try:
-            self.flush()
+            self._flush(synchronous=True)
         except Exception:  # nosec B110 - telemetry must never break unload
             pass
         with self._lock:
             for task in stale:
                 try:
                     self._inflight.remove(task)
-                except ValueError:
+                except ValueError:  # task already dropped by its finished callback
                     pass
         for task in stale:
             try:

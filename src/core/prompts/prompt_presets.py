@@ -17,7 +17,7 @@ from ..i18n import tr
 
 # Re-exports: the format/detect/normalize logic moved to sibling modules;
 # callers keep importing everything through this facade.
-from .preset_normalize import (  # noqa: F401
+from .preset_normalize import (
     _CLIENT_PRESET_FIELDS,
     _KNOWN_PRESET_FIELDS,
     _MAX_EXTRA_CHARS,
@@ -30,12 +30,42 @@ from .preset_normalize import (  # noqa: F401
     _pick_label,
     _preset_extras,
 )
-from .prompt_detect import (  # noqa: F401
+from .prompt_detect import (
     detect_freeform_vector_intent,
     detect_prompt_guidance,
     detect_seg_context,
 )
-from .prompt_format import format_template_prompt  # noqa: F401
+from .prompt_format import format_template_prompt
+
+# Public surface, re-exports included, so they read as used.
+__all__ = [
+    "_CATEGORY_ORDER",
+    "_CLIENT_PRESET_FIELDS",
+    "_current_lang",
+    "_is_json_shaped",
+    "_KNOWN_PRESET_FIELDS",
+    "_MAX_EXTRA_CHARS",
+    "_MAX_EXTRA_DEPTH",
+    "_MAX_EXTRA_ITEMS",
+    "_MAX_EXTRA_KEYS",
+    "_normalize_preset",
+    "_pick_label",
+    "_preset_extras",
+    "detect_freeform_vector_intent",
+    "detect_prompt_guidance",
+    "detect_seg_context",
+    "format_template_prompt",
+    "get_all_categories",
+    "get_need_groups",
+    "get_need_page",
+    "get_need_tiles",
+    "get_preset_by_id",
+    "get_top_picks",
+    "get_vector_hints",
+    "invalidate_catalog_memo",
+    "lookup_template_by_prompt",
+    "seed_catalog_memo",
+]
 
 
 def _normalize_for_match(s: str) -> str:
@@ -123,29 +153,26 @@ _CATEGORY_ORDER = [
 # parse the same JSON blob from QSettings. The memo is invalidated by
 # `prompt_presets_client._write_cache` whenever a fresh server catalog
 # lands on disk, so stale-after-refresh isn't a worry.
-_CATALOG_MEMO: dict | None = None
-_CATALOG_MEMO_LOADED = False
+# One mutable holder, so the memo is updated in place instead of rebinding globals.
+_catalog_memo: dict[str, Any] = {"catalog": None, "loaded": False}
 
 
 def _cached_catalog() -> dict | None:
     """Lazy + memoized read of the locally-cached server catalog."""
-    global _CATALOG_MEMO, _CATALOG_MEMO_LOADED
-    if _CATALOG_MEMO_LOADED:
-        return _CATALOG_MEMO
+    if _catalog_memo["loaded"]:
+        return _catalog_memo["catalog"]
     from .prompt_presets_client import read_cached_catalog_stale_ok
 
-    _CATALOG_MEMO = read_cached_catalog_stale_ok()
-    _CATALOG_MEMO_LOADED = True
-    return _CATALOG_MEMO
+    read_cached_catalog_stale_ok()
+    return _catalog_memo["catalog"]
 
 
 def invalidate_catalog_memo() -> None:
     """Clear the session memo. Called from prompt_presets_client when the
     persisted catalog is wiped so the next read goes back to disk.
     """
-    global _CATALOG_MEMO, _CATALOG_MEMO_LOADED
-    _CATALOG_MEMO = None
-    _CATALOG_MEMO_LOADED = False
+    _catalog_memo["catalog"] = None
+    _catalog_memo["loaded"] = False
     _clear_match_indexes()
 
 
@@ -157,9 +184,8 @@ def seed_catalog_memo(catalog: dict | None) -> None:
     the session read the 274 KB blob, json.loads'd it and re-validated it three
     times per start (stale read, first memo fill, post-fetch invalidation).
     """
-    global _CATALOG_MEMO, _CATALOG_MEMO_LOADED
-    _CATALOG_MEMO = catalog
-    _CATALOG_MEMO_LOADED = True
+    _catalog_memo["catalog"] = catalog
+    _catalog_memo["loaded"] = True
     _clear_match_indexes()
 
 
@@ -180,7 +206,7 @@ def _read_show_experimental_flag() -> bool:
     if not os.path.isfile(env_path):
         return False
     try:
-        with open(env_path, encoding="utf-8") as f:
+        with open(env_path, encoding="utf-8-sig", errors="replace") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#"):
@@ -257,18 +283,15 @@ def _iter_prompt_variants(prompt_field: Any):
 # Invalidation rule: the indexes belong to one catalog OBJECT. They are rebuilt
 # whenever the catalog handed in is not the one they were built from (identity,
 # not equality), and dropped outright by `invalidate_catalog_memo` /
-# `seed_catalog_memo`. `_MATCH_SOURCE` holds a strong reference to that catalog,
+# `seed_catalog_memo`. `_match_index["source"]` holds a strong reference to that catalog,
 # so its id can never be recycled under a stale index while the memo lives.
-_MATCH_SOURCE: dict | None = None
-_MATCH_BY_PROMPT: dict[str, tuple[str, str]] | None = None
-_MATCH_BY_ID: dict[str, tuple[str | None, list[dict] | None]] | None = None
+# "by_prompt": dict[str, tuple[str, str]] | None,
+# "by_id": dict[str, tuple[str | None, list[dict] | None]] | None.
+_match_index: dict[str, Any] = {"source": None, "by_prompt": None, "by_id": None}
 
 
 def _clear_match_indexes() -> None:
-    global _MATCH_SOURCE, _MATCH_BY_PROMPT, _MATCH_BY_ID
-    _MATCH_SOURCE = None
-    _MATCH_BY_PROMPT = None
-    _MATCH_BY_ID = None
+    _match_index.update(source=None, by_prompt=None, by_id=None, language=None)
 
 
 def _match_indexes(catalog: dict | None) -> tuple[dict, dict]:
@@ -277,8 +300,12 @@ def _match_indexes(catalog: dict | None) -> tuple[dict, dict]:
     Experimental presets are indexed on purpose: these two matchers are the R3
     masking exception (see `_iter_server_presets`). First preset in catalog
     order wins a key, which is the order the linear walks resolved in."""
-    global _MATCH_SOURCE, _MATCH_BY_PROMPT, _MATCH_BY_ID
-    if _MATCH_BY_PROMPT is None or catalog is not _MATCH_SOURCE:
+    language = _current_lang()
+    current = dict(_match_index)
+    if (
+        current["by_prompt"] is None or catalog is not current["source"]
+        or current.get("language") != language
+    ):
         by_prompt: dict[str, tuple[str, str]] = {}
         by_id: dict[str, tuple[str | None, list[dict] | None]] = {}
         for _cat_key, p in _iter_server_presets(catalog):
@@ -296,10 +323,9 @@ def _match_indexes(catalog: dict | None) -> tuple[dict, dict]:
                 if not isinstance(color, str) or not color:
                     color = None
                 by_id[preset_id] = (color, classes)
-        _MATCH_BY_PROMPT = by_prompt
-        _MATCH_BY_ID = by_id
-        _MATCH_SOURCE = catalog
-    return _MATCH_BY_PROMPT, _MATCH_BY_ID
+        _match_index.update(by_prompt=by_prompt, by_id=by_id, source=catalog, language=language)
+        return by_prompt, by_id
+    return current["by_prompt"], current["by_id"]
 
 
 def lookup_template_by_prompt(prompt_text: str) -> tuple[str, str] | None:
@@ -498,7 +524,7 @@ def _served_top_pick_order(catalog: dict | None) -> list[str]:
     raw = catalog.get("top_picks")
     if not isinstance(raw, list):
         return []
-    return [pid for pid in raw if isinstance(pid, str) and pid]
+    return list(dict.fromkeys(pid for pid in raw if isinstance(pid, str) and pid))
 
 
 def _find_server_category(catalog: dict | None, cat_key: str) -> dict | None:
@@ -622,9 +648,9 @@ def _presets_by_need(server_catalog: dict | None) -> dict[str, list[dict]]:
     """Every themed preset bucketed by its EFFECTIVE need (per-preset `need`
     override wins over the category's need)."""
     buckets: dict[str, list[dict]] = {k: [] for k in _NEED_ORDER}
-    for cat in get_all_categories(server_catalog):
-        if cat["key"] in _PERSONAL_CATEGORY_KEYS:
-            continue
+    if server_catalog is None:
+        server_catalog = _cached_catalog()
+    for cat in _themed_categories(server_catalog):
         for preset in cat["presets"]:
             buckets.setdefault(_preset_need(preset, server_catalog), []).append(preset)
     return buckets
@@ -663,15 +689,15 @@ def get_need_page(need_key: str, server_catalog: dict | None = None) -> dict:
     ``{key, label, presets}`` - only presets whose EFFECTIVE need matches, so a
     prompt moved via a per-preset `need` override shows under the right family.
     Empty shell if `need_key` is unknown."""
+    if server_catalog is None:
+        server_catalog = _cached_catalog()
     group = next(
         (g for g in get_need_groups(server_catalog) if g["key"] == need_key), None
     )
     if group is None:
         return {"key": need_key, "label": "", "tagline": "", "categories": []}
     categories: list[dict] = []
-    for cat in get_all_categories(server_catalog):
-        if cat["key"] in _PERSONAL_CATEGORY_KEYS:
-            continue
+    for cat in _themed_categories(server_catalog):
         matching = [
             p for p in cat["presets"] if _preset_need(p, server_catalog) == need_key
         ]
@@ -716,11 +742,17 @@ def get_all_categories(server_catalog: dict | None = None) -> list[dict]:
         "presets": get_top_picks(server_catalog),
     })
 
-    for cat_key in _all_category_keys(server_catalog):
-        result.append({
-            "key": cat_key,
-            "label": _themed_category_label(cat_key, server_catalog),
-            "presets": _build_themed_category(cat_key, server_catalog),
-        })
-
+    result.extend(_themed_categories(server_catalog))
     return result
+
+
+def _themed_categories(catalog: dict | None) -> list[dict]:
+    """Normalize each live preset once when assembling category pages."""
+    by_category: dict[str, list[dict]] = {}
+    for category, preset in _iter_live_presets(catalog):
+        by_category.setdefault(category, []).append(_normalize_preset(preset, category))
+    return [{
+        "key": key,
+        "label": _themed_category_label(key, catalog),
+        "presets": by_category.get(key, []),
+    } for key in _all_category_keys(catalog)]

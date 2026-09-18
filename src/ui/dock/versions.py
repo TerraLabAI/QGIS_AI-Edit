@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from qgis.PyQt.QtCore import QTimer
 
-from ...core.auth.activation_manager import get_subscribe_url
-from ...core.config_store import get_export_copy
+from ...core.config_store import get_export_copy, get_export_dial
 from ...core.entitlements import coerce_tier, is_tier_allowed
 from ...core.i18n import tr
 from ..reference_images_widget import free_tier_max_references
-from .style import BRAND_BLUE
+
+_SUBSCRIBE_BANNER_MS = 12000
 
 
 def _reference_cap_message(cap: int) -> str:
@@ -17,11 +17,13 @@ def _reference_cap_message(cap: int) -> str:
     show was already wrong ("limited to 3 reference image"). Both readings are
     sentences the plugin already ships, so both stay translated, and a served
     entry can replace either."""
+    # "References", the word of the chip and the panel, in one sentence
+    # shape for both numbers (the plural used to read as a bare error).
     if cap == 1:
-        shipped = tr("Free plan is limited to {n} reference image.").format(n=cap)
+        shipped = tr("The Free plan takes {n} reference.").format(n=cap)
     else:
-        shipped = tr("Maximum {n} reference images reached").format(n=cap)
-    return get_export_copy("upsell.reference_cap", shipped, escape=True)
+        shipped = tr("The Free plan takes up to {n} references.").format(n=cap)
+    return get_export_copy("upsell.reference_cap_v2", shipped, escape=True)
 
 
 class DockVersionsMixin:
@@ -31,7 +33,15 @@ class DockVersionsMixin:
     def seed_version_strip(self, original_pixmap, prompt: str = "", meta: dict | None = None) -> None:
         """Seed the strip with the Original tile (selected). Called once per
         lineage when the clean base capture becomes available."""
+        # A new lineage has saved nothing yet, so the details card must not
+        # name the layer an earlier lineage (or a restored session) wrote.
+        self._saved_layer_id = ""
         self._version_strip.reset(original_pixmap, prompt, meta)
+        # Seeded mid-run (the first export of a zone): a row holding the
+        # Original alone under the progress card offers nothing to pick. It
+        # shows with the first result, next to what that result came from.
+        if self._progress_widget.isVisibleTo(self):
+            self._version_strip.setVisible(False)
         self._update_result_generate_label()
 
     def add_version_thumb(self, pixmap, prompt: str = "", meta: dict | None = None) -> int:
@@ -55,18 +65,42 @@ class DockVersionsMixin:
         self._version_strip.set_readonly(locked)
 
     def set_result_prompt_text(self, text: str) -> None:
-        """Mirror the selected version's prompt into the iterate box, so the
-        user edits from what actually produced that version (Original clears
-        the box, it has no prompt)."""
-        self._result_prompt_input.blockSignals(True)
-        self._result_prompt_input.setPlainText(text or "")
-        self._result_prompt_input.blockSignals(False)
-        # Blocked signals skip the star's textChanged debounce: re-sync it so
-        # a mirrored version prompt shows its star like a typed one.
-        self._result_prompt_container.refresh_favorite_star()
+        """No longer mirrors the version's prompt into the iterate box.
+
+        The box used to be refilled with the prompt that produced the picked
+        version, which read as "press Generate to make the same thing again"
+        (Yvann, 2026-09-17). The next change is a new sentence, so the box
+        stays as the user left it: empty after a generation, or holding what
+        they have started typing. The prompt that produced a version is one
+        click away, in that version's details card, with Copy prompt.
+
+        ``text`` is kept in the signature because the plugin still calls this
+        on every version pick; the prompt it passes is what the card shows."""
+        del text
+
+    def saved_layer_probe(self):
+        """``(layer name, reveal callback)`` for the layer the last generation
+        wrote, or None when there is none in the project any more.
+
+        The result screen used to spend a whole row on "Saved as <layer>",
+        which Yvann read as noise (2026-09-17). The fact now shows inside the
+        newest version's details card, and its name still selects the layer in
+        the QGIS Layers panel."""
+        layer_id = getattr(self, "_saved_layer_id", "")
+        if not layer_id:
+            return None
+        try:
+            from qgis.core import QgsProject
+
+            layer = QgsProject.instance().mapLayer(layer_id)
+        except Exception:  # noqa: BLE001 - no project reads as no saved layer
+            return None
+        if layer is None:
+            return None
+        return (layer.name(), lambda: self._on_layer_saved_link_clicked(""))
 
     def reveal_version_strip(self) -> None:
-        """Keep the restored lineage in its iterate home (above the Generate
+        """Keep the restored lineage in its iterate home (under the Generate
         row). Restoring already entered the iterate state; this just re-asserts
         the strip's placement once its thumbnails arrive."""
         self._place_version_strip("result")
@@ -98,29 +132,38 @@ class DockVersionsMixin:
                 self._is_free_tier,
             )
 
-    def _show_subscribe_banner(self, message: str) -> None:
-        """Show a 12 s warning banner with a Subscribe link appended.
+    def _show_subscribe_banner(self, message: str, surface: str) -> None:
+        """Show a 12 s warning banner with an "Upgrade to Pro" action.
 
         Shared by the free-tier resolution gate and the reference-image gate so
-        the upsell copy/styling stays in one place.
+        the upsell copy/styling stays in one place. The action goes through
+        the signed-in door, named after ``surface``, and the view is counted.
         """
-        subscribe_url = get_subscribe_url()
-        link_style = f"color: {BRAND_BLUE}; font-weight: bold;"
-        link = f'<a href="{subscribe_url}" style="{link_style}">{tr("Subscribe")}</a>'
-        self._show_status_box(f"{message} {link}", "warning")
+        self._show_status_box(message, "warning")
+        self.set_status_action(
+            get_export_copy("upsell.upgrade_button", tr("Upgrade to Pro")),
+            lambda: self._open_pro_from(surface),
+        )
+        self._track_upsell_view(surface)
         # 12 s banner; parented timer dies with the dock.
         if self._status_hide_timer is not None:
             self._status_hide_timer.stop()
+
+        def _hide_unchanged_banner(expected: str = message) -> None:
+            if self._status_label.text() == expected:
+                self._hide_status_box()
+
         timer = QTimer(self)
         timer.setSingleShot(True)
-        timer.timeout.connect(self._hide_status_box)
-        timer.start(12000)
+        timer.timeout.connect(_hide_unchanged_banner)
+        timer.start(get_export_dial("dock.versions.subscribe_banner_ms", _SUBSCRIBE_BANNER_MS))
         self._status_hide_timer = timer
 
     def _show_reference_upsell(self) -> None:
         """Free-tier user hit the reference-image cap: nudge to subscribe
         instead of adding another one."""
-        self._show_subscribe_banner(_reference_cap_message(free_tier_max_references()))
+        self._show_subscribe_banner(
+            _reference_cap_message(free_tier_max_references()), "reference_limit")
 
     def _on_resolution_selected(self, label: str):
         """Handle a click inside the resolution dropdown of either container."""
@@ -129,7 +172,7 @@ class DockVersionsMixin:
             served = get_export_copy("upsell.resolution", shipped, escape=True)
             # A served sentence can name the tier with {tier}. A plain replace,
             # never format(), so a stray brace cannot raise on the click path.
-            self._show_subscribe_banner(served.replace("{tier}", label))
+            self._show_subscribe_banner(served.replace("{tier}", label), "resolution_lock")
             return
 
         # Clear any existing status message if switching resolutions
@@ -154,19 +197,28 @@ class DockVersionsMixin:
         if getattr(self, "_generate_label_loading", None) is not loading:
             self._generate_label_loading = loading
             if loading:
-                self._generate_btn.setText(tr("Loading imagery..."))
-                self._generate_btn.setToolTip(tr(
-                    "Waiting for the example basemap to finish loading before you generate"
+                self._generate_btn.setText(
+                    get_export_copy("dock.versions.imagery_loading", tr("Loading imagery..."))
+                )
+                self._generate_btn.setToolTip(get_export_copy(
+                    "dock.versions.imagery_loading_tooltip",
+                    tr("Waiting for the example basemap to finish loading before you generate"),
                 ))
             else:
-                self._generate_btn.setText(tr("Generate"))
-                self._generate_btn.setToolTip(tr("Run the AI edit on your selected zone"))
+                self._generate_btn.setText(get_export_copy("dock.versions.generate", tr("Generate")))
+                self._generate_btn.setToolTip(
+                    get_export_copy("dock.versions.generate_zone_tooltip", tr("Generate the edit on your zone"))
+                )
         self._update_result_generate_label()
 
     def _update_result_generate_label(self):
-        """Result button + prompt placeholder both name the selected base, so the
-        user sees that what they type generates FROM the selected version
-        ('Generate from Original' / 'Generate from V2').
+        """Button and placeholder both name the picked version, so the screen
+        says what the next run does: it edits THAT version.
+
+        One wording for every base ('Generate from V2', 'Generate from
+        Original'). "Edit this result" was true only on the newest version and
+        never said which one, so the two halves of the screen disagreed about
+        what the button would run on (Yvann, 2026-09-17).
 
         State: the base name the two strings were last written for. Nothing
         else writes either of them, so an unchanged base means unchanged text."""
@@ -174,17 +226,18 @@ class DockVersionsMixin:
         if getattr(self, "_result_generate_base", None) == base:
             return
         self._result_generate_base = base
-        # On the version this run just produced (the default), the prompt is
-        # still in the field, so the button says what the click does. Picking an
-        # older base is a different job and keeps naming it.
-        strip = self._version_strip
-        on_latest = strip.selected_index() >= strip.count() - 1
+        # A served sentence can reuse {base}: a plain replace, never format(),
+        # so a stray brace in served copy cannot raise on this path.
         self._result_regenerate_btn.setText(
-            tr("Generate again") if on_latest
-            else tr("Generate from {base}").format(base=base)
+            get_export_copy(
+                "dock.versions.generate_from_base", tr("Generate from {base}")
+            ).replace("{base}", base)
         )
         self._result_prompt_input.setPlaceholderText(
-            tr("Type a prompt to edit {base}...").format(base=base)
+            get_export_copy(
+                "dock.versions.next_change_placeholder",
+                tr("Describe the next change to {base}"),
+            ).replace("{base}", base)
         )
 
     def _on_version_selected(self, index: int):
@@ -214,6 +267,13 @@ class DockVersionsMixin:
         """Inject reloaded reference images (QImage, name) into the strip."""
         if self._reference_widget is not None:
             self._reference_widget.add_qimages(items)
+
+    def set_reference_layers_above(self, layers: list) -> int:
+        """Attach the layers drawn above the picked layer as references,
+        replacing the ones attached for the previous zone. Returns the count."""
+        if self._reference_widget is None:
+            return 0
+        return self._reference_widget.set_layers_above(layers)
 
     def clear_markup_reference(self) -> None:
         """Drop the Mark up reference (e.g. strokes cleared)."""

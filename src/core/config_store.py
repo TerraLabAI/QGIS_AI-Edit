@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import html
+import math
 import re
+from copy import deepcopy
 from typing import Any
 
 
@@ -14,7 +16,8 @@ class ConfigStore:
         self._telemetry_collector: Any = None
 
     def set_server_export_config(self, config: dict) -> None:
-        self._server_export_config = config
+        if isinstance(config, dict):
+            self._server_export_config = deepcopy(config)
 
     def get_server_export_config(self) -> dict | None:
         return self._server_export_config
@@ -22,15 +25,12 @@ class ConfigStore:
     def has_server_export_config(self) -> bool:
         return self._server_export_config is not None
 
-    def clear_server_export_config(self) -> None:
-        self._server_export_config = None
-
     def set_activation_config(self, config: dict) -> None:
         """Publish the config a live fetch returned. An empty or non-dict answer
         is ignored, so the last good one keeps serving the session."""
         if not isinstance(config, dict) or not config:
             return
-        self._activation_config = config
+        self._activation_config = deepcopy(config)
 
     def get_activation_config(self) -> dict | None:
         """The config in force, or None when nothing has been fetched yet.
@@ -53,14 +53,13 @@ class ConfigStore:
     def set_telemetry_collector(self, collector: Any) -> None:
         self._telemetry_collector = collector
 
-    def get_telemetry_collector(self) -> Any:
-        return self._telemetry_collector
-
     def clear(self) -> None:
         self._server_export_config = None
         self._activation_config = None
-        if self._telemetry_collector is not None:
-            shutdown = getattr(self._telemetry_collector, "shutdown", None)
+        collector = self._telemetry_collector
+        self._telemetry_collector = None
+        if collector is not None:
+            shutdown = getattr(collector, "shutdown", None)
             if callable(shutdown):
                 try:
                     shutdown()
@@ -116,9 +115,19 @@ def get_export_dial(path: str, fallback):
     kind (int fallback -> int). Anything else returns the shipped constant."""
     try:
         val = _read_export_value(path)
-        if isinstance(val, bool) or not isinstance(val, (int, float)) or val <= 0:
+        if (
+            isinstance(val, bool)
+            or not isinstance(val, (int, float))
+            or not math.isfinite(val)
+            or val <= 0
+        ):
             return fallback
-        return type(fallback)(val)
+        coerced = type(fallback)(val)
+        # A served 0.5 for an int dial truncates to 0, which would silently
+        # skip every retry or loop the dial counts; keep the shipped value.
+        if coerced <= 0:
+            return fallback
+        return coerced
     except Exception:  # nosec B110
         return fallback
 
@@ -135,6 +144,8 @@ def get_export_dial_pair(path: str, fallback: tuple[float, float]) -> tuple[floa
                 and not isinstance(hi, bool)
                 and isinstance(lo, (int, float))
                 and isinstance(hi, (int, float))
+                and math.isfinite(lo)
+                and math.isfinite(hi)
                 and 0 < lo <= hi
             ):
                 return (float(lo), float(hi))
@@ -152,9 +163,9 @@ def get_export_dial_list(path: str, base=(), extra_only: bool = True, normalize=
     ``normalize`` (e.g. str.lower) applies to server entries only, so casing
     drift in the config can't defeat a match. ``extra_only=False`` disables
     the server merge (shipped base only); replace semantics do not exist."""
-    merged = frozenset(base)
+    merged = set(base)
     if not extra_only:
-        return merged
+        return frozenset(merged)
     try:
         val = _read_export_value(path)
         if isinstance(val, (list, tuple)):
@@ -163,10 +174,10 @@ def get_export_dial_list(path: str, base=(), extra_only: bool = True, normalize=
                     continue
                 entry = item[:_MAX_DIAL_ENTRY_CHARS].strip()
                 if entry:
-                    merged |= {normalize(entry) if normalize else entry}
+                    merged.add(normalize(entry) if normalize else entry)
     except Exception:  # nosec B110
         pass
-    return merged
+    return frozenset(merged)
 
 
 def get_export_dial_seq(
@@ -399,6 +410,28 @@ class ServerDialSet(frozenset):
             return True
         return item in get_export_dial_list(self._cfg_key, (), normalize=self._normalize)
 
+    def __eq__(self, other):
+        """The base members plus the dial key and normalizer decide.
+
+        Two views over different keys serve different extras, so they are not
+        interchangeable and must not compare equal. Against a plain frozenset
+        the inherited member comparison still applies.
+        """
+        if isinstance(other, ServerDialSet):
+            return (
+                self._cfg_key == other._cfg_key
+                and self._normalize == other._normalize
+                and frozenset.__eq__(self, other)
+            )
+        return NotImplemented
+
+    def __ne__(self, other):
+        # The inherited set and dict __ne__ ignore the key, so mirror __eq__.
+        result = self.__eq__(other)
+        return result if result is NotImplemented else not result
+
+    __hash__ = frozenset.__hash__
+
 
 class ServerDialMap(dict):
     """Read-through dict: ``[]``/``get`` prefer the matching server entry
@@ -408,6 +441,22 @@ class ServerDialMap(dict):
     def __init__(self, cfg_key: str, defaults: dict):
         super().__init__(defaults)
         self._cfg_key = cfg_key
+
+    def __eq__(self, other):
+        """The shipped entries plus the dial key decide.
+
+        Two maps over different keys serve different values, so they are not
+        interchangeable and must not compare equal. Against a plain mapping
+        the inherited entry comparison still applies.
+        """
+        if isinstance(other, ServerDialMap):
+            return self._cfg_key == other._cfg_key and dict.__eq__(self, other)
+        return NotImplemented
+
+    def __ne__(self, other):
+        # The inherited set and dict __ne__ ignore the key, so mirror __eq__.
+        result = self.__eq__(other)
+        return result if result is NotImplemented else not result
 
     def __getitem__(self, key):
         return get_export_dial(f"{self._cfg_key}.{key}", dict.__getitem__(self, key))

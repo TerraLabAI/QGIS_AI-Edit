@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from qgis.core import QgsProject
-from qgis.PyQt.QtCore import QPoint, QSize, Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QIcon, QPalette
+from qgis.PyQt.QtCore import QEvent, QPoint, QSize, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QFrame,
-    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -19,6 +18,7 @@ from qgis.PyQt.QtWidgets import (
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
+from ...core.config_store import get_export_copy, get_export_dial
 from ...core.entitlements import is_tier_allowed
 from ...core.i18n import tr
 from ...core.logger import log_debug
@@ -29,16 +29,35 @@ from ...core.resolution_labels import (
     resolution_quality_name,
     resolution_tiers,
 )
+from ..icons import icon_for
+from . import design_tokens as tokens
 from .mime import _file_paths_from_mime, _layers_from_mime, _mime_has_droppable
-from .style import (
-    _BTN_LABEL_WEIGHT,
-    _CHIP_HEIGHT,
-    FAVORITE_STAR_COLOR,
-    FOCUS_RING,
-    _pencil_icon,
-    _picture_plus_icon,
+from .resolution_visuals import (
+    RESOLUTION_CHIP_GLYPH_PX,
+    resolution_visual,
 )
-from .widgets import _FooterIconButton, _ResolutionMenuItem, _SubmitTextEdit
+from .style import FAVORITE_STAR_COLOR, _tinted_svg_icon
+from .widgets import (
+    CHIP_CHEVRON_INSET,
+    CHIP_CHEVRON_PX,
+    _FooterIconButton,
+    _ResolutionChipButton,
+    _ResolutionMenuItem,
+    _SubmitTextEdit,
+)
+
+# Debounce before is_favorite is re-read from QSettings after a keystroke.
+_FAV_REFRESH_MS = 250
+# The composer's chips: 28 px pills, AI Agent's small control height.
+_PROMPT_CHIP_PX = tokens.BTN_SMALL_PX
+# 8 px, AI Agent's select buttons (``style._BTN_MODE``), not a pill: four pills
+# in a row read as four buttons shouting, and the composer's own corner is 14.
+_PROMPT_CHIP_RADIUS = tokens.RADIUS_CONTROL
+_PROMPT_CHIP_GLYPH_PX = 14
+
+
+# The narrowest the composer asks for: the footer in its icon-only form.
+_MIN_FIT_WIDTH = 240
 
 
 class _PromptContainer(QFrame):
@@ -46,7 +65,7 @@ class _PromptContainer(QFrame):
 
     Footer layout (bottom row):
 
-        [Prompt library]                   [ 1K ⌄ ]  [ ✎ ]  [ +img Reference ]
+        [Library]                   [ Standard ⌄ ]  [ Draw ]  [ References ]
 
     The whole frame is the drop target so dragging a file or layer anywhere
     over it lights up a single coherent area.
@@ -64,43 +83,60 @@ class _PromptContainer(QFrame):
     resolution_changed = pyqtSignal(str)
     markup_clicked = pyqtSignal()
 
+    # AI Agent's composer: surface on the strong hairline, 14 px corners, the
+    # focus border in the interaction blue while the caret is inside, the same
+    # border plus the blue wash while a file or layer is dragged over it.
     _NORMAL_STYLE = (
-        "QFrame#promptContainer { border: 1px solid rgba(128,128,128,0.3);"
-        " border-radius: 4px; background-color: rgba(128,128,128,0.06); }"
+        f"QFrame#promptContainer {{ background: {tokens.SURFACE};"
+        f" border: 1px solid {tokens.LINE_STRONG};"
+        f" border-radius: {tokens.RADIUS_COMPOSER}px; }}"
+        f'QFrame#promptContainer[focused="true"] {{ border-color: {tokens.ACCENT_BORDER}; }}'
+        f'QFrame#promptContainer[dragging="true"] {{ border-color: {tokens.ACCENT_BORDER};'
+        f" background: {tokens.ACCENT_TINT}; }}"
     )
     _READONLY_STYLE = (
-        "QFrame#promptContainer { border: 1px solid rgba(128,128,128,0.3);"
-        " border-radius: 4px; background-color: rgba(128,128,128,0.10); }"
+        f"QFrame#promptContainer {{ background: {tokens.INSET};"
+        f" border: 1px solid {tokens.LINE};"
+        f" border-radius: {tokens.RADIUS_COMPOSER}px; }}"
     )
-    # Unified footer chip: one look for the whole prompt row (Prompt library,
-    # resolution, markup, Reference). Neutral outlined pill at rest (no green),
-    # leaf-green tint on hover, stronger green when pressed/active - the same
-    # TerraLab-green interaction language as the bottom footer icons. The label
-    # carries the shared button weight, like every other labelled button.
+    # One chip for the whole prompt row (Library, size, Mark up, Reference),
+    # AI Agent's composer select (``style._BTN_MODE`` plus
+    # ``permission_chip.select_qss``): quiet at rest, no hairline and the second
+    # ink, the hover step and the full ink under the pointer, one step more
+    # while it is held. Four outlined pills made the row the loudest thing on
+    # the panel; the words are the row now, and the box arrives with the
+    # pointer. The blue tint stays for "this chip's tool is open", which the
+    # panel has and the chat composer does not. The focus ring only recolours
+    # the border, so a focused chip keeps the width the footer-fit measured.
     _CHIP_REST = (
-        "QToolButton { background: rgba(128,128,128,0.08);"
-        " border: 1px solid rgba(128,128,128,0.40); border-radius: 6px;"
-        f" padding: 4px 10px; font-size: 12px; color: palette(text);"
-        f" {_BTN_LABEL_WEIGHT} }}"
+        "QToolButton { background: transparent;"
+        f" border: 1px solid transparent; border-radius: {_PROMPT_CHIP_RADIUS}px;"
+        f" padding: 0 8px; font-size: {tokens.FONT_BODY}px; font-weight: 500;"
+        f" color: {tokens.INK_2}; }}"
     )
-    _CHIP_HOVER = "background: rgba(139,172,39,0.18); border-color: rgba(139,172,39,0.65);"
-    _CHIP_PRESSED = "background: rgba(139,172,39,0.32); border-color: rgba(139,172,39,0.85);"
-    # Keyboard focus ring. The padding drops by the extra border width so a
-    # focused chip keeps the width the footer-fit measurement gave it.
-    _CHIP_FOCUS = (
-        f"QToolButton:focus {{ border: 2px solid {FOCUS_RING};"
-        " padding: 3px 9px; }"
+    _CHIP_HOVER = (
+        f"background: {tokens.HOVER}; border-color: {tokens.LINE_STRONG};"
+        f" color: {tokens.INK};"
     )
+    _CHIP_HELD = (
+        f"background: {tokens.HOVER_ON}; border-color: {tokens.LINE_STRONG};"
+        f" color: {tokens.INK};"
+    )
+    _CHIP_OPEN = (
+        f"background: {tokens.ACCENT_TINT_ON}; border-color: {tokens.ACCENT_BORDER};"
+        f" color: {tokens.INK};"
+    )
+    _CHIP_FOCUS = f"QToolButton:focus {{ border-color: {tokens.ACCENT_BORDER}; }}"
     _CHIP_TAIL = (
-        "QToolButton:disabled { color: rgba(128,128,128,0.40);"
-        " background: transparent; border-color: rgba(128,128,128,0.20); }"
+        f"QToolButton:disabled {{ color: {tokens.INK_3};"
+        " background: transparent; border-color: transparent; }"
         "QToolButton::menu-indicator { image: none; width: 0; }"
     )
     _CHIP_BTN_STYLE = "".join((
         _CHIP_REST,
         f"QToolButton:hover {{ {_CHIP_HOVER} }}",
-        f"QToolButton:pressed {{ {_CHIP_PRESSED} }}",
-        f'QToolButton[active="true"] {{ {_CHIP_PRESSED} }}',
+        f"QToolButton:pressed {{ {_CHIP_HELD} }}",
+        f'QToolButton[active="true"] {{ {_CHIP_OPEN} }}',
         _CHIP_TAIL,
         _CHIP_FOCUS,
     ))
@@ -110,48 +146,28 @@ class _PromptContainer(QFrame):
     _CHIP_BTN_HOVERPROP_STYLE = "".join((
         _CHIP_REST,
         f'QToolButton[hover="true"] {{ {_CHIP_HOVER} }}',
-        f'QToolButton[active="true"] {{ {_CHIP_PRESSED} }}',
+        f'QToolButton[active="true"] {{ {_CHIP_OPEN} }}',
         _CHIP_TAIL,
         _CHIP_FOCUS,
     ))
-    _MENU_STYLE = (
-        "QMenu { background: palette(base); border: 1px solid rgba(128,128,128,0.35);"
-        " border-radius: 6px; padding: 4px; }"
-        "QMenu::item { background: transparent; padding: 0; }"
-        "QMenu::item:selected { background: rgba(128,128,128,0.18); border-radius: 4px; }"
+    # The size chip keeps the chevron it paints itself out of the words:
+    # 12 px of glyph, 6 px to the edge, 4 px after the label.
+    _RESOLUTION_CHIP_STYLE = _CHIP_BTN_HOVERPROP_STYLE.replace(
+        "padding: 0 8px",
+        f"padding: 0 {CHIP_CHEVRON_PX + CHIP_CHEVRON_INSET + 4}px 0 8px",
     )
-    # The Reference menu uses plain text QActions (not QWidgetAction rows like
-    # the resolution menu), so items need real padding; hover keeps the
-    # leaf-green chip language.
-    _ATTACH_MENU_STYLE = (
-        "QMenu { background: palette(base); border: 1px solid rgba(128,128,128,0.35);"
-        " border-radius: 6px; padding: 4px; }"
-        "QMenu::item { background: transparent; padding: 6px 12px;"
-        " border-radius: 4px; color: palette(text); }"
-        "QMenu::item:selected { background: rgba(139,172,39,0.18); }"
-        "QMenu::item:disabled { color: rgba(128,128,128,0.55); }"
-        "QMenu::separator { height: 1px; background: rgba(128,128,128,0.25);"
-        " margin: 4px 8px; }"
-    )
+    # The resolution rows are QWidgetAction widgets that paint their own hover,
+    # so the menu items carry no padding of their own.
+    _MENU_STYLE = tokens.MENU_QSS + "QMenu::item { padding: 0; }"
+    # The Reference panel's layer menu: plain text QActions, the shared menu.
+    _ATTACH_MENU_STYLE = tokens.MENU_QSS
     # Favorite star, browser-address-bar pattern: a frameless glyph floating in
-    # the text area's top-right corner, ghost-gray until starred.
-    # The resting rule keeps 1px of padding purely so the focus rule can give
-    # it back to the border. Without it the ring grows the hint 48x18 -> 50x20
-    # inside a setFixedSize(20, 20) and squeezes the 15px glyph.
-    _FAV_STAR_FOCUS = (
-        f"QToolButton:focus {{ border: 1px solid {FOCUS_RING};"
-        " border-radius: 4px; padding: 0; }"
-    )
-    _FAV_STAR_REST_STYLE = (
-        "QToolButton { border: none; background: transparent; padding: 1px;"
-        " font-size: 15px; color: rgba(128,128,128,0.60); }"
-        "QToolButton:hover { color: palette(text); }"
-        + _FAV_STAR_FOCUS
-    )
-    _FAV_STAR_FILLED_STYLE = (
-        "QToolButton { border: none; background: transparent; padding: 1px;"
-        " font-size: 15px; color: " + FAVORITE_STAR_COLOR + "; }"
-        + _FAV_STAR_FOCUS
+    # the text area's top-right corner, third ink until starred.
+    _FAV_STAR_STYLE = (
+        "QToolButton { border: 1px solid transparent; background: transparent; padding: 0;"
+        f" border-radius: {tokens.RADIUS_CHIP}px; }}"
+        f"QToolButton:hover {{ background: {tokens.HOVER}; }}"
+        f"QToolButton:focus {{ border-color: {tokens.ACCENT_BORDER}; }}"
     )
 
     def __init__(self, text_edit: _SubmitTextEdit, parent=None):
@@ -177,15 +193,17 @@ class _PromptContainer(QFrame):
         # both firing for one pick (see _on_menu_item_clicked).
         self._resolution_pick_taken = False
 
-        # No graphics effect attached at init: applying QGraphicsDropShadowEffect
-        # to a parent of a QTextEdit silently breaks the text-insertion caret
-        # (the effect pipeline intercepts the QTextEdit's blink timer paint).
-        # The drag-over glow is attached on dragEnterEvent and detached on
-        # dragLeave / drop - see _set_glow.
+        # Drag-over feedback is a property the stylesheet reads (_set_glow).
+
+        self.setProperty("focused", False)
+        self.setProperty("dragging", False)
+        # The border follows the caret (AI Agent's composer). An event filter
+        # on the text edit itself, never on the application.
+        text_edit.installEventFilter(self)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 6, 6, 4)
-        layout.setSpacing(4)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
 
         # Slot index 0 is reserved for the refs strip when injected.
         layout.addWidget(text_edit)
@@ -194,31 +212,50 @@ class _PromptContainer(QFrame):
         # QSettings store as the library's Favorites tab so both stay in sync.
         # Hidden while the box is empty; glyphs stay literal (outside tr()).
         self._fav_btn = QToolButton(self)
-        self._fav_btn.setFixedSize(20, 20)
+        self._fav_btn.setFixedSize(22, 22)
+        self._fav_btn.setIconSize(QSize(15, 15))
+        self._fav_btn.setStyleSheet(self._FAV_STAR_STYLE)
+        # Keep typed text clear of the floating star (22 px) instead of
+        # running under it.
+        text_edit.setViewportMargins(0, 0, 24, 0)
         self._fav_btn.setCursor(QtC.PointingHandCursor)
-        # Checkable so a screen reader announces the on/off state; the ★/☆ swap
-        # is the sighted half of the same signal.
+        # Checkable so a screen reader announces the on/off state; the outline
+        # and filled stars are the sighted half of the same signal.
         self._fav_btn.setCheckable(True)
-        self._fav_btn.setAccessibleName(tr("Favorite"))
+        self._fav_btn.setAccessibleName(
+            get_export_copy("dock.prompt_container.favorite_accessible_name", tr("Favorite"))
+        )
         self._fav_btn.clicked.connect(self._on_favorite_clicked)
         self._fav_btn.hide()
         # Debounced: is_favorite re-reads QSettings, no need to run it per key.
         self._fav_refresh_timer = QTimer(self)
         self._fav_refresh_timer.setSingleShot(True)
-        self._fav_refresh_timer.setInterval(250)
+        self._fav_refresh_timer.setInterval(
+            get_export_dial("dock.prompt_container.fav_refresh_ms", _FAV_REFRESH_MS)
+        )
         self._fav_refresh_timer.timeout.connect(self._refresh_favorite_star)
         text_edit.textChanged.connect(self._fav_refresh_timer.start)
 
         footer_row = QHBoxLayout()
         footer_row.setContentsMargins(0, 0, 0, 0)
-        footer_row.setSpacing(6)
+        footer_row.setSpacing(4)
 
-        self._templates_btn = QToolButton(self)
-        self._templates_btn.setText(tr("Library"))
-        self._templates_btn.setToolTip(tr("Browse templates, your recent prompts, and favorites."))
+        self._templates_btn = _FooterIconButton(self)
+        self._templates_btn.setText(get_export_copy("dock.prompt_container.library_btn", tr("Library")))
+        # Named in bold like the Draw and References tips: at a narrow width
+        # the chip shows its book alone, and the tip is where its name stays.
+        self._templates_btn.setToolTip(get_export_copy(
+            "dock.prompt_container.library_btn_tooltip_v2",
+            tr("<b>Library</b><br>Ready-made prompts, your recent prompts and "
+               "your favorites."),
+        ))
+        self._templates_btn.setAccessibleName(
+            get_export_copy("dock.prompt_container.library_btn", tr("Library")))
         self._templates_btn.setCursor(QtC.PointingHandCursor)
-        self._templates_btn.setStyleSheet(self._CHIP_BTN_STYLE)
-        self._templates_btn.setFixedHeight(_CHIP_HEIGHT)
+        self._templates_btn.setStyleSheet(self._CHIP_BTN_HOVERPROP_STYLE)
+        self._templates_btn.setFixedHeight(_PROMPT_CHIP_PX)
+        self._chip_glyph(self._templates_btn, "book")
+        self._templates_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self._templates_btn.clicked.connect(self.templates_clicked.emit)
         footer_row.addWidget(self._templates_btn)
 
@@ -228,15 +265,20 @@ class _PromptContainer(QFrame):
         self._resolution_menu.setStyleSheet(self._MENU_STYLE)
         # Allow per-action tooltips (Qt swallows them by default in QMenu).
         self._resolution_menu.setToolTipsVisible(True)
-        self._resolution_btn = _FooterIconButton(self)
-        self._resolution_btn.setToolTip(
-            tr("<b>Output detail</b><br>Higher detail gives a sharper, "
-               "more precise result. Standard (1K), Detailed (2K), "
-               "Maximum (4K).")
-        )
+        self._resolution_btn = _ResolutionChipButton(self)
+        self._resolution_btn.setToolTip(get_export_copy(
+            "dock.prompt_container.quality_tooltip",
+            tr("<b>Quality</b><br>Higher quality is sharper and more "
+               "precise, and costs more credits. Standard (1K), Detailed (2K), "
+               "Maximum (4K)."),
+        ))
         self._resolution_btn.setCursor(QtC.PointingHandCursor)
-        self._resolution_btn.setStyleSheet(self._CHIP_BTN_HOVERPROP_STYLE)
-        self._resolution_btn.setFixedHeight(_CHIP_HEIGHT)
+        self._resolution_btn.setStyleSheet(self._RESOLUTION_CHIP_STYLE)
+        self._resolution_btn.setFixedHeight(_PROMPT_CHIP_PX)
+        # The icon slot carries the picked tier's own glyph, so the level shows
+        # with the menu closed; the chevron is painted into the right padding
+        # by the button itself (_ResolutionChipButton).
+        self._resolution_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self._resolution_btn.clicked.connect(self._show_resolution_menu)
         # Force the hover tint off when the popup closes - Qt does not
         # synthesise a Leave event in this case (same fix as the help menu).
@@ -247,73 +289,77 @@ class _PromptContainer(QFrame):
         self._rebuild_resolution_menu()
         self._update_resolution_label()
 
-        # Markup chip: outlined pill, same boxed weight as resolution and
-        # Reference so the whole footer reads as a row of clear controls. A
-        # visible label (mirroring Reference) replaces the icon-only button -
-        # a bare pencil glyph was the weakest signifier in the row.
-        ink = self.palette().color(QPalette.ColorRole.WindowText)
-        self._markup_chip = QToolButton(self)
-        self._markup_chip.setIcon(_pencil_icon(ink))
-        self._markup_chip.setIconSize(QSize(18, 18))
-        self._markup_chip.setText(tr("Mark up"))
+        # Draw chip: a visible label (like References) instead of a bare
+        # pencil, the weakest signifier the row had.
+        self._markup_chip = _FooterIconButton(self)
+        self._chip_glyph(self._markup_chip, "pencil")
+        self._markup_chip.setText(
+            get_export_copy("dock.prompt_container.markup_chip_draw", tr("Draw"))
+        )
         self._markup_chip.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         )
         self._markup_chip.setCursor(QtC.PointingHandCursor)
-        self._markup_chip.setStyleSheet(self._CHIP_BTN_STYLE)
-        self._markup_chip.setFixedHeight(_CHIP_HEIGHT)
-        self._markup_chip.setToolTip(
-            tr("<b>Mark up</b><br>Draw arrows, shapes, or labels on the map to "
-               "show the AI what to change and where. Your sketch is sent with "
-               "the prompt as visual guidance.")
-        )
+        self._markup_chip.setStyleSheet(self._CHIP_BTN_HOVERPROP_STYLE)
+        self._markup_chip.setFixedHeight(_PROMPT_CHIP_PX)
+        # Served under a new key: the old tooltip promised "labels", which
+        # the Draw panel has no tool for (pencil, line, arrow, circle).
+        self._markup_chip.setToolTip(get_export_copy(
+            "dock.prompt_container.draw_chip_tooltip",
+            tr("<b>Draw</b><br>Draw lines, arrows or circles on the map to "
+               "show the AI what to change and where. Your drawing is sent with "
+               "the prompt as visual guidance."),
+        ))
         self._markup_chip.clicked.connect(self.markup_clicked.emit)
         footer_row.addWidget(self._markup_chip)
 
-        # Reference: a labelled, outlined pill (Krea-style) so users discover
-        # they can feed an image or a project layer as guidance. The icon
-        # carries a "+" badge. Clicking opens a small menu: a file from disk,
-        # or one of the project's layers - the layer path used to exist only
-        # as an undiscoverable drag-and-drop documented in this tooltip.
+        # References: a labelled chip so users discover they can feed an
+        # image or a project layer as guidance. A click opens the References
+        # panel (file from disk, a project layer, or a capture of the map).
         self._attach_btn = _FooterIconButton(self)
-        self._attach_btn.setIcon(_picture_plus_icon(ink))
-        self._attach_btn.setIconSize(QSize(18, 18))
-        self._attach_btn.setText(tr("Reference"))
+        self._chip_glyph(self._attach_btn, "image")
+        self._attach_btn.setText(
+            get_export_copy(
+                "dock.prompt_container.reference_chip_plural", tr("References")
+            )
+        )
         self._attach_btn.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         )
-        self._attach_btn.setToolTip(
-            tr("<b>Reference</b><br>Add an image or data file from disk, or one "
+        # The head names the chip's own word, References (2026-09-18).
+        self._attach_btn.setToolTip(get_export_copy(
+            "dock.prompt_container.references_chip_tooltip",
+            tr("<b>References</b><br>Add an image or data file from disk, or one "
                "of your project's layers, as guidance for the AI. You can also "
                "drag a layer from the Layers panel straight into the prompt box. "
-               "Everything is cropped to your zone.")
-        )
+               "Everything is cropped to your zone."),
+        ))
         self._attach_btn.setCursor(QtC.PointingHandCursor)
         self._attach_btn.setStyleSheet(self._CHIP_BTN_HOVERPROP_STYLE)
-        self._attach_btn.setFixedHeight(_CHIP_HEIGHT)
+        self._attach_btn.setFixedHeight(_PROMPT_CHIP_PX)
         self._attach_btn.clicked.connect(self.reference_clicked.emit)
         footer_row.addWidget(self._attach_btn)
 
-        # Reference counter: a small lime badge tucked INSIDE the right edge of
+        # Reference counter: a small green badge tucked INSIDE the right edge of
         # the Reference button (parented to the button so it reads as part of
         # it, not a detached pill). Shown only when references are attached; the
         # button then reserves extra right padding so the badge never overlaps
-        # the label. Dark text on the lime fill reads on both light and dark
-        # themes. Hidden with the button when it collapses at capacity.
-        # Both paddings are widened: the resting one and the focus ring's, or a
-        # focused button would re-centre its label under the badge.
+        # the label. Black text on the primary green reads on both themes.
+        # Hidden with the button when it collapses at capacity.
         self._attach_style_badged = (
             self._CHIP_BTN_HOVERPROP_STYLE
-            .replace("padding: 4px 10px", "padding: 4px 22px 4px 10px")
-            .replace("padding: 3px 9px", "padding: 3px 21px 3px 9px")
+            .replace("padding: 0 8px", "padding: 0 26px 0 8px")
         )
         self._ref_count = QLabel("", self._attach_btn)
         self._ref_count.setAttribute(QtC.WA_TransparentForMouseEvents)
         self._ref_count.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._ref_count.setFixedHeight(14)
+        # 10px: 8px was unreadable with Segoe UI at Windows scaling.
+        self._ref_count.setFixedHeight(16)
+        self._ref_count.setMinimumWidth(16)
         self._ref_count.setStyleSheet(
-            "QLabel { background: #8bac27; color: #14210a; font-size: 8px;"
-            " font-weight: 800; border-radius: 7px; padding: 0 3px; }"
+            f"QLabel {{ background: {tokens.ACCENT}; color: {tokens.ON_ACCENT};"
+            f" font-size: {tokens.FONT_MICRO}px; font-weight: 700;"
+            " border-radius: 8px; padding: 0 4px; }"
         )
         self._ref_count.hide()
 
@@ -323,12 +369,39 @@ class _PromptContainer(QFrame):
 
     # -- public API --------------------------------------------------------
 
+    def _chip_icon(self, name: str, size: int = _PROMPT_CHIP_GLYPH_PX) -> QIcon:
+        """A chip glyph in the second ink, the third while disabled."""
+        return icon_for(
+            self, name, size, tokens.qcolor(tokens.INK_2),
+            disabled_color=tokens.qcolor(tokens.INK_3),
+        )
+
+    @staticmethod
+    def _chip_glyph(button: _FooterIconButton, name: str) -> None:
+        """Give a footer chip its glyph, raised to the full ink under the
+        pointer so the picture and the word step up together."""
+        button.set_chip_glyph(
+            name, _PROMPT_CHIP_GLYPH_PX, tokens.INK_2, hover_color=tokens.INK)
+
+    def eventFilter(self, watched, event):  # noqa: N802
+        if watched is self._text_edit and event.type() in (
+            QEvent.Type.FocusIn, QEvent.Type.FocusOut
+        ):
+            self._set_state_property("focused", event.type() == QEvent.Type.FocusIn)
+        return super().eventFilter(watched, event)
+
+    def _set_state_property(self, name: str, value: bool) -> None:
+        if bool(self.property(name)) == value:
+            return
+        self.setProperty(name, value)
+        tokens.repolish_widget(self)
+
     def _apply_footer_fit(self) -> None:
         """Collapse footer labels when the dock is too narrow for the full row,
         so it never forces a horizontal scrollbar. Priority: the Resolution
-        chip drops its quality word for the bare code first (Library has no
-        shorter form left to give); the two guidance chips (Mark up,
-        Reference) keep their labels the longest, since a bare pencil/picture icon
+        chip drops its quality word for the bare code first, then Library
+        drops to its book; the two guidance chips (Draw, References) keep
+        their labels the longest, since a bare pencil/picture icon
         is the weakest signifier in the row, and only collapse together at the
         narrowest width. Measured, not threshold-based, so it stays correct
         across font/DPI."""
@@ -342,12 +415,8 @@ class _PromptContainer(QFrame):
 
         # Start from the fullest state, then collapse by priority.
         self._update_resolution_label()
-        self._markup_chip.setToolButtonStyle(
-            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-        )
-        self._attach_btn.setToolButtonStyle(
-            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-        )
+        for chip in (self._templates_btn, self._markup_chip, self._attach_btn):
+            chip.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         if fits():
             return
 
@@ -356,7 +425,16 @@ class _PromptContainer(QFrame):
         if fits():
             return
 
-        # Tier 2 (narrowest): the two guidance chips drop to icon-only
+        # Tier 2: Library goes to its book, so Draw and References keep their
+        # words. At a common 400 px dock the row missed by one pixel and the
+        # two guidance chips went bare while the tip above them named them.
+        self._templates_btn.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonIconOnly
+        )
+        if fits():
+            return
+
+        # Tier 3 (narrowest): the two guidance chips drop to icon-only
         # together - their tooltip still explains what each does.
         self._markup_chip.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonIconOnly
@@ -365,6 +443,13 @@ class _PromptContainer(QFrame):
             Qt.ToolButtonStyle.ToolButtonIconOnly
         )
         fits()
+
+    def minimumSizeHint(self):  # noqa: N802 - Qt override
+        # The footer collapses its labels to fit, so the full row is not a
+        # floor: without this the container keeps the width of its longest
+        # labels and pushes the whole dock column past the right edge.
+        hint = super().minimumSizeHint()
+        return QSize(min(hint.width(), _MIN_FIT_WIDTH), hint.height())
 
     def resizeEvent(self, event):  # noqa: N802
         super().resizeEvent(event)
@@ -382,7 +467,7 @@ class _PromptContainer(QFrame):
         widget.setParent(self)
         self.layout().insertWidget(0, widget)
         # The refs strip shifts the text area down; re-anchor the star to it.
-        QTimer.singleShot(0, self._position_fav_star)
+        QtC.safe_single_shot(0, self, self._position_fav_star)
 
     def set_readonly(self, readonly: bool) -> None:
         self._readonly = readonly
@@ -395,9 +480,15 @@ class _PromptContainer(QFrame):
         # mid-generation; the dialog itself opens in view-only mode.
         self._templates_btn.setEnabled(True)
         self._templates_btn.setToolTip(
-            tr("Browse the library (view only while generating).")
+            get_export_copy(
+                "dock.prompt_container.library_btn_tooltip_readonly",
+                tr("Browse the library (view only while generating)."),
+            )
             if readonly
-            else tr("Browse templates, your recent prompts, and favorites.")
+            else get_export_copy(
+                "dock.prompt_container.library_btn_tooltip",
+                tr("Browse templates, your recent prompts, and favorites."),
+            )
         )
         self._resolution_btn.setEnabled(not readonly)
         self._markup_chip.setEnabled(not readonly)
@@ -440,24 +531,29 @@ class _PromptContainer(QFrame):
             self._position_fav_star()
 
     def _set_favorite_visual(self, favorited: bool) -> None:
-        self._fav_btn.setText("★" if favorited else "☆")
+        self._fav_btn.setIcon(
+            _tinted_svg_icon("star-filled.svg", tokens.qcolor(FAVORITE_STAR_COLOR))
+            if favorited
+            else _tinted_svg_icon("star.svg", tokens.qcolor(tokens.INK_3))
+        )
         # The click already toggled the checked state; realign it with the
         # store, which is what refuses an empty prompt.
         self._fav_btn.setChecked(favorited)
-        self._fav_btn.setStyleSheet(
-            self._FAV_STAR_FILLED_STYLE if favorited else self._FAV_STAR_REST_STYLE
-        )
         self._fav_btn.setToolTip(
-            tr("Remove this prompt from your favorites.")
+            get_export_copy(
+                "dock.prompt_container.favorite_remove_tooltip", tr("Remove this prompt from your favorites.")
+            )
             if favorited
-            else tr("Save this prompt to your favorites.")
+            else get_export_copy(
+                "dock.prompt_container.favorite_save_tooltip", tr("Save this prompt to your favorites.")
+            )
         )
 
     def _position_fav_star(self) -> None:
         """Anchor the star inside the text area's top-right corner (the refs
         strip above can shift the text edit down, so anchor to its geometry)."""
         geo = self._text_edit.geometry()
-        self._fav_btn.move(geo.right() - self._fav_btn.width() - 2, geo.top() + 2)
+        self._fav_btn.move(geo.right() - self._fav_btn.width(), geo.top())
         self._fav_btn.raise_()
 
     def is_readonly(self) -> bool:
@@ -492,7 +588,7 @@ class _PromptContainer(QFrame):
             self._ref_count.show()
             self._ref_count.raise_()
             # Defer so the button has taken its padded width before we anchor.
-            QTimer.singleShot(0, self._position_ref_badge)
+            QtC.safe_single_shot(0, self, self._position_ref_badge)
         else:
             self._ref_count.hide()
             self._attach_btn.setStyleSheet(self._CHIP_BTN_HOVERPROP_STYLE)
@@ -554,43 +650,51 @@ class _PromptContainer(QFrame):
             self._resolution_costs = costs
         self._free_tier = free_tier
         self._rebuild_resolution_menu()
-        self._update_resolution_label()
+        # The label can grow ("2K" to "Detailed"), so the row is fitted again.
+        self._apply_footer_fit()
 
     # -- resolution menu internals ----------------------------------------
 
     def _update_resolution_label(self) -> None:
         self._resolution_btn.setText(self._resolution_label_text(short=False))
+        self._update_resolution_glyph()
+
+    def _update_resolution_glyph(self) -> None:
+        """The chip wears the picked tier's own glyph, in that tier's hue: the
+        same pair the open menu puts on its tile, so the level is readable
+        with the menu shut."""
+        glyph, hue = resolution_visual(self._selected_resolution)
+        self._resolution_btn.set_chip_glyph(
+            glyph, RESOLUTION_CHIP_GLYPH_PX, tokens.category_ink(hue))
 
     def _resolution_label_text(self, short: bool) -> str:
-        # ▾ (U+25BE) sits on the text baseline; ⌄ (U+2304) renders too low
-        # in most system fonts and breaks the visual alignment.
-        label = (
+        # The tier glyph is the button's icon and the chevron is painted after
+        # the label, so this is the word between them and nothing else.
+        return (
             self._selected_resolution
             if short
             else resolution_chip_label(self._selected_resolution)
-        )
-        return f"{label}  ▾"
+        ) or ""
 
     def _rebuild_resolution_menu(self) -> None:
         self._resolution_menu.clear()
-        # Title so it reads as "this picks the output resolution", not as
-        # another selectable row. Disabled action = non-clickable header.
-        header = QLabel(tr("Output detail"))
+        # Title so it reads as "this picks the quality", not as another
+        # selectable row. Disabled action = non-clickable header.
+        # "Quality": one short word that fits the chip's world and makes the
+        # higher tiers read as worth paying for (Yvann, 2026-09-18). Every row
+        # prints its 1K/2K/4K and its cost. Sentence case, no letter-spacing.
+        header = QLabel(get_export_copy(
+            "dock.prompt_container.quality_header", tr("Quality")))
         header.setStyleSheet(
-            "color: palette(text); font-size: 12px; font-weight: 600; "
-            "padding: 9px 14px 7px 14px; background: transparent;"
+            f"color: {tokens.INK_2}; font-size: {tokens.FONT_HINT}px; font-weight: 600;"
+            " padding: 6px 10px 4px 10px; background: transparent;"
         )
         header_action = QWidgetAction(self._resolution_menu)
         header_action.setDefaultWidget(header)
         header_action.setEnabled(False)
         self._resolution_menu.addAction(header_action)
-        sep = QFrame(self._resolution_menu)
-        sep.setFrameShape(QtC.FrameHLine)
-        sep.setStyleSheet("color: rgba(128,128,128,0.25); margin: 0 8px;")
-        sep_action = QWidgetAction(self._resolution_menu)
-        sep_action.setDefaultWidget(sep)
-        sep_action.setEnabled(False)
-        self._resolution_menu.addAction(sep_action)
+        # No rule under the header: the rows carry their own shape now, and a
+        # hairline over three tinted cards was one line too many.
         # The tier list is served, so a new tier reaches users without a
         # release. An added tier with no label of its own renders under its
         # own key (resolution_quality_name passes an unknown key through).
@@ -611,7 +715,10 @@ class _PromptContainer(QFrame):
                 lambda _checked=False, r=res: self._on_menu_item_clicked(r)
             )
             if locked:
-                action.setToolTip(tr("Pro gives you 2K and 4K, for printing and zooming in"))
+                action.setToolTip(get_export_copy(
+                    "dock.prompt_container.quality_pro_tooltip",
+                    tr("Pro unlocks Detailed and Maximum, for printing and zooming in"),
+                ))
             self._resolution_menu.addAction(action)
 
     def _on_menu_item_clicked(self, label: str) -> None:
@@ -636,16 +743,9 @@ class _PromptContainer(QFrame):
     # -- drag and drop -----------------------------------------------------
 
     def _set_glow(self, active: bool) -> None:
-        if active:
-            effect = QGraphicsDropShadowEffect(self)
-            effect.setBlurRadius(14)
-            effect.setOffset(0, 0)
-            effect.setColor(QColor(25, 118, 210, 200))
-            self.setGraphicsEffect(effect)
-        else:
-            # Detaching the effect restores native QTextEdit rendering and the
-            # accent-blue caret blink.
-            self.setGraphicsEffect(None)
+        # A border and a wash, never a graphics effect: a shadow effect on a
+        # QTextEdit's parent breaks the text caret, and the line has no shadows.
+        self._set_state_property("dragging", active)
 
     def dragEnterEvent(self, event):  # noqa: N802
         if self._readonly:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import math
 
 from qgis.core import (
     QgsMapLayer,
@@ -85,7 +86,8 @@ def prepare_export(
     ``layers`` is the render set the model sees, top first, and it replaces
     the canvas render set entirely: the edit starts from ONE chosen raster
     (plus the markup layer riding on top of it), never from whatever happens
-    to be drawn on screen. ``exclude_layer_ids`` is the older contract, kept
+    to be drawn on screen; the layers drawn above it travel as references
+    (``input_render_set``). ``exclude_layer_ids`` is the older contract, kept
     for callers that still filter the canvas set, and is ignored when
     ``layers`` is given.
 
@@ -99,7 +101,8 @@ def prepare_export(
     output size, so the clean base registers pixel-for-pixel and the model
     restores the pixels under each mark, leaving no stroke in the result.
     """
-    if extent.width() <= 0 or extent.height() <= 0:
+    bounds = (extent.xMinimum(), extent.yMinimum(), extent.xMaximum(), extent.yMaximum())
+    if extent.width() <= 0 or extent.height() <= 0 or not all(math.isfinite(v) for v in bounds):
         raise ValueError("Invalid extent: width and height must be positive")
 
     # Work on a CLONE so the live canvas's own settings (and on-screen layer
@@ -124,6 +127,8 @@ def prepare_export(
             "Check your internet connection and restart QGIS."
         )
 
+    if align > max_dim:
+        raise ValueError("Pixel alignment exceeds maximum export dimension")
     map_crs = map_settings.destinationCrs()
     if target_resolution and target_resolution in _RESOLUTION_TARGET_PX:
         # Size by the tier's PIXEL BUDGET, not its longest side. The model
@@ -230,6 +235,8 @@ def _render_settings_to_image(
     if image is None or image.isNull():
         # CustomPainter fallback for layer providers ParallelJob can't handle.
         image = QImage(QSize(out_w, out_h), QtC.FormatARGB32)
+        if image.isNull():
+            raise RuntimeError("Could not allocate export image")
         image.fill(background_color)
         painter = QPainter(image)
         try:
@@ -270,9 +277,12 @@ def _render_markup_overlay(
 
 def _encode_image(image: QImage, out_w: int, out_h: int) -> tuple[str, int, str]:
     """Encode a rendered QImage to ``(b64, raw_bytes, format_token)``."""
+    if image is None or image.isNull() or image.width() != out_w or image.height() != out_h:
+        raise ValueError("Export image dimensions do not match the prepared extent")
     fmt_qt, fmt_token, quality = chosen_input_format()
     buffer = QBuffer()
-    buffer.open(QtC.WriteOnly)
+    if not buffer.open(QtC.WriteOnly):
+        raise RuntimeError("Could not open image encoding buffer")
     ok = image.save(buffer, fmt_qt, quality)
     if not ok and fmt_qt != "PNG":
         # Encoder failed despite a positive capability check (rare). PNG is
@@ -281,10 +291,14 @@ def _encode_image(image: QImage, out_w: int, out_h: int) -> tuple[str, int, str]
         log_warning(f"{fmt_token} encode failed; falling back to PNG")
         buffer.close()
         buffer = QBuffer()
-        buffer.open(QtC.WriteOnly)
-        image.save(buffer, "PNG")
+        if not buffer.open(QtC.WriteOnly):
+            raise RuntimeError("Could not open image encoding buffer")
+        ok = image.save(buffer, "PNG")
         fmt_token = "png"  # nosec B105 - format token, not a credential
     raw = buffer.data().data()
+    buffer.close()
+    if not ok or not raw:
+        raise RuntimeError("Could not encode the export image")
     b64 = base64.b64encode(raw).decode("ascii")
     # Diagnostic, production-safe (dimensions + sizes only). Always logged so a
     # bloated input is visible in the Log Messages panel without DEBUG.
@@ -317,6 +331,7 @@ def render_export(
     encoded here, before the marks go on, and stashed on ``prep`` for
     render_clean_base to pick up.
     """
+    prep.clean_base_encoded = None
     image = _render_settings_to_image(
         prep.settings, prep.out_w, prep.out_h, prep.background_color, progress_cb
     )
@@ -364,12 +379,20 @@ def render_clean_base(prep: ExportPrep) -> tuple[str, str] | None:
     image = _render_settings_to_image(
         prep.clean_base_settings, prep.out_w, prep.out_h, prep.background_color
     )
-    return _encode_clean_base(image, prep)
+    prep.clean_base_encoded = _encode_clean_base(image, prep)
+    return prep.clean_base_encoded
 
 
 def _clone_map_settings(src: QgsMapSettings) -> QgsMapSettings:
     """Copy enough of ``src`` to preserve canvas render state for off-screen export."""
-    dst = QgsMapSettings()
+    # The copy constructor also preserves expression context, labeling,
+    # clipping, temporal mode and custom render flags introduced by QGIS.
+    try:
+        dst = QgsMapSettings(src)
+        dst.setDevicePixelRatio(1.0)
+        return dst
+    except (TypeError, AttributeError):
+        dst = QgsMapSettings()
     dst.setLayers(src.layers())
     dst.setDestinationCrs(src.destinationCrs())
     dst.setBackgroundColor(src.backgroundColor())

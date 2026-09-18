@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from qgis.core import QgsMimeDataUtils, QgsProject, QgsRasterLayer, QgsVectorLayer
+from qgis.PyQt.QtCore import QFileInfo
 
 from ...core.logger import log_warning
 
@@ -25,6 +26,10 @@ def _file_paths_from_mime(mime) -> list[str]:
         if not url.isLocalFile():
             continue
         path = url.toLocalFile()
+        if path.lower().endswith(".lnk"):
+            # A Windows shortcut dropped from the desktop: follow it to the
+            # file it points at, then apply the usual checks.
+            path = QFileInfo(path).symLinkTarget() or path
         ext = os.path.splitext(path)[1].lower()
         if ext in _IMAGE_DROP_EXTS or ext in _GEODATA_DROP_EXTS:
             out.append(path)

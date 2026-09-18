@@ -3489,5 +3489,1713 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <source>Later</source>
         <translation>Später</translation>
     </message>
+    <message>
+        <source>(no email)</source>
+        <translation>(keine E-Mail-Adresse)</translation>
+    </message>
+    <message>
+        <source>1 polygon</source>
+        <translation>1 Polygon</translation>
+    </message>
+    <message>
+        <source>1 prompt</source>
+        <translation>1 prompt</translation>
+    </message>
+    <message>
+        <source>1 stroke</source>
+        <translation>1 Strich</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Draw&lt;/b&gt;&lt;br&gt;Draw lines, arrows or circles on the map to show the AI what to change and where. Your drawing is sent with the prompt as visual guidance.</source>
+        <translation>&lt;b&gt;Zeichnen&lt;/b&gt;&lt;br&gt;Zeichnen Sie Linien, Pfeile oder Kreise auf der Karte, um der KI zu zeigen, was und wo sie ändern soll. Ihre Zeichnung wird zusammen mit dem prompt als visuelle Orientierung gesendet.</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Library&lt;/b&gt;&lt;br&gt;Ready-made prompts, your recent prompts and your favorites.</source>
+        <translation>&lt;b&gt;Bibliothek&lt;/b&gt;&lt;br&gt;Fertige Prompts, Ihre letzten Prompts und Ihre Favoriten.</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Higher quality is sharper and more precise, and costs more credits. Standard (1K), Detailed (2K), Maximum (4K).</source>
+        <translation>&lt;b&gt;Qualität&lt;/b&gt;&lt;br&gt;Höhere Qualität ist schärfer und präziser und kostet mehr Credits. Standard (1K), Detailliert (2K), Maximum (4K).</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;References&lt;/b&gt;&lt;br&gt;Add an image or data file from disk, or one of your project's layers, as guidance for the AI. You can also drag a layer from the Layers panel straight into the prompt box. Everything is cropped to your zone.</source>
+        <translation>&lt;b&gt;Referenzen&lt;/b&gt;&lt;br&gt;Fügen Sie ein Bild oder eine Datendatei von der Festplatte oder einen layer Ihres Projekts als Orientierung für die KI hinzu. Sie können auch einen layer aus dem Layers panel direkt in das prompt-Feld ziehen. Alles wird auf Ihre Zone zugeschnitten.</translation>
+    </message>
+    <message>
+        <source>A newer version is ready. Opens the QGIS plugin manager on it.</source>
+        <translation>Eine neue Version ist verfügbar. Öffnet dafür den QGIS-Plugin-Manager.</translation>
+    </message>
+    <message>
+        <source>AI Edit Pro</source>
+        <translation>AI Edit Pro</translation>
+    </message>
+    <message>
+        <source>AI Edit Settings</source>
+        <translation>AI Edit-Einstellungen</translation>
+    </message>
+    <message>
+        <source>AI Edit Settings...</source>
+        <translation>AI Edit-Einstellungen...</translation>
+    </message>
+    <message>
+        <source>AI Edit and your data</source>
+        <translation>AI Edit und Ihre Daten</translation>
+    </message>
+    <message>
+        <source>About 150 edits a month and higher-resolution results. Cancel anytime.</source>
+        <translation>Etwa 150 Bearbeitungen pro Monat und Ergebnisse mit höherer Auflösung. Jederzeit kündbar.</translation>
+    </message>
+    <message>
+        <source>Above 0 grows every shape outward, below 0 shrinks it inward.</source>
+        <translation>Werte über 0 vergrößern jede Form nach außen, Werte unter 0 verkleinern sie nach innen.</translation>
+    </message>
+    <message>
+        <source>Account</source>
+        <translation>Konto</translation>
+    </message>
+    <message>
+        <source>Account created. Outline an area on the example map to make your first edit.</source>
+        <translation>Konto erstellt. Zeichnen Sie auf der Beispielkarte einen Bereich um Ihre erste Bearbeitung vorzunehmen.</translation>
+    </message>
+    <message>
+        <source>Account deletion scheduled</source>
+        <translation>Kontolöschung geplant</translation>
+    </message>
+    <message>
+        <source>Account not deleted.</source>
+        <translation>Konto nicht gelöscht.</translation>
+    </message>
+    <message>
+        <source>Account not loaded</source>
+        <translation>Konto nicht geladen</translation>
+    </message>
+    <message>
+        <source>Add a layer first</source>
+        <translation>Fügen Sie zuerst einen layer hinzu</translation>
+    </message>
+    <message>
+        <source>Add a layer, or start with a sample.</source>
+        <translation>Fügen Sie einen layer hinzu oder beginnen Sie mit einem Beispiel.</translation>
+    </message>
+    <message>
+        <source>Add the Original</source>
+        <translation>Original hinzufügen</translation>
+    </message>
+    <message>
+        <source>Added</source>
+        <translation>Hinzugefügt</translation>
+    </message>
+    <message>
+        <source>Added to your map as</source>
+        <translation>Ihrer Karte hinzugefügt als</translation>
+    </message>
+    <message>
+        <source>Added to your map as {name}</source>
+        <translation>Als {name} zu Ihrer Karte hinzugefügt</translation>
+    </message>
+    <message>
+        <source>Added {added} of {total}. The limit is {n} references.</source>
+        <translation>{added} von {total} hinzugefügt. Das Limit liegt bei {n} Referenzen.</translation>
+    </message>
+    <message>
+        <source>Added {hex} to the classes.</source>
+        <translation>{hex} zu den Klassen hinzugefügt.</translation>
+    </message>
+    <message>
+        <source>Address copied, paste it in your mail</source>
+        <translation>Adresse kopiert, fügen Sie sie in Ihre E-Mail ein</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Erweitert</translation>
+    </message>
+    <message>
+        <source>After</source>
+        <translation>Nachher</translation>
+    </message>
+    <message>
+        <source>All TerraLab plugins are signed out. To cancel, sign in on terra-lab.ai.</source>
+        <translation>Sie sind von allen TerraLab plugins abgemeldet. Um abzubrechen, melden Sie sich auf terra-lab.ai an.</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>Bernstein</translation>
+    </message>
+    <message>
+        <source>An AI edit of your map zone</source>
+        <translation>Eine AI Edit-Bearbeitung Ihres Kartenausschnitts</translation>
+    </message>
+    <message>
+        <source>Another quality level</source>
+        <translation>Eine andere Qualitätsstufe</translation>
+    </message>
+    <message>
+        <source>Any subscription stops renewing.</source>
+        <translation>Alle Abonnements werden nicht mehr verlängert.</translation>
+    </message>
+    <message>
+        <source>Apply the next change to the picked version, on the same zone</source>
+        <translation>Wenden Sie die nächste Änderung auf die ausgewählte Version in derselben Zone an</translation>
+    </message>
+    <message>
+        <source>Ask your IT team to allow terra-lab.ai, or import your company root certificate in Settings &gt; Options &gt; Authentication</source>
+        <translation>Bitten Sie Ihr IT-Team, terra-lab.ai zu erlauben, oder importieren Sie Ihr Unternehmensstammzertifikat unter Einstellungen &gt; Optionen &gt; Authentifizierung.</translation>
+    </message>
+    <message>
+        <source>Ask your IT team to allow terra-lab.ai.</source>
+        <translation>Bitten Sie Ihr IT-Team, terra-lab.ai zu erlauben.</translation>
+    </message>
+    <message>
+        <source>Back to the classes: check, rename or recolor, then vectorize again.</source>
+        <translation>Zurück zu den Klassen: prüfen, umbenennen oder neu einfärben und anschließend erneut vektorisieren.</translation>
+    </message>
+    <message>
+        <source>Before</source>
+        <translation>Vorher</translation>
+    </message>
+    <message>
+        <source>Before you start</source>
+        <translation>Bevor Sie beginnen</translation>
+    </message>
+    <message>
+        <source>Best quality, crisp when zoomed or printed</source>
+        <translation>Beste Qualität, gestochen scharf beim Zoomen oder Drucken</translation>
+    </message>
+    <message>
+        <source>Billing</source>
+        <translation>Abrechnung</translation>
+    </message>
+    <message>
+        <source>Blog</source>
+        <translation>Blog</translation>
+    </message>
+    <message>
+        <source>Bring back the tips you closed</source>
+        <translation>Geschlossene Tipps wieder anzeigen</translation>
+    </message>
+    <message>
+        <source>Browse the top picks</source>
+        <translation>Top-Empfehlungen durchsuchen</translation>
+    </message>
+    <message>
+        <source>Bug, question or idea? Write to us.</source>
+        <translation>Fehler, Frage oder Idee? Schreiben Sie uns.</translation>
+    </message>
+    <message>
+        <source>Cancel on terra-lab.ai during the grace period. After that, it is final.</source>
+        <translation>Kündigen Sie auf terra-lab.ai während des Kulanzzeitraums. Danach ist es endgültig.</translation>
+    </message>
+    <message>
+        <source>Cancel the zone</source>
+        <translation>Zone abbrechen</translation>
+    </message>
+    <message>
+        <source>Cannot reach the server. Check your internet connection.</source>
+        <translation>Server nicht erreichbar. Überprüfen Sie Ihre Internetverbindung.</translation>
+    </message>
+    <message>
+        <source>Check your connection, then reopen the library.</source>
+        <translation>Überprüfen Sie Ihre Verbindung und öffnen Sie die Bibliothek erneut.</translation>
+    </message>
+    <message>
+        <source>Check your connection, then retry.</source>
+        <translation>Überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.</translation>
+    </message>
+    <message>
+        <source>Checkout on terra-lab.ai</source>
+        <translation>Auf terra-lab.ai zur Kasse</translation>
+    </message>
+    <message>
+        <source>Clear the search</source>
+        <translation>Suche löschen</translation>
+    </message>
+    <message>
+        <source>Click a color on the map to add it as a class.</source>
+        <translation>Klicken Sie auf eine Farbe in der Karte, um sie als Klasse hinzuzufügen.</translation>
+    </message>
+    <message>
+        <source>Click a color on the map. Esc cancels.</source>
+        <translation>Klicken Sie auf eine Farbe in der Karte. Mit Esc abbrechen.</translation>
+    </message>
+    <message>
+        <source>Click each point, double-click to finish.</source>
+        <translation>Klicken Sie auf jeden Punkt, doppelklicken Sie zum Beenden.</translation>
+    </message>
+    <message>
+        <source>Click to end the comparison</source>
+        <translation>Klicken Sie, um den Vergleich zu beenden</translation>
+    </message>
+    <message>
+        <source>Close Vectorize</source>
+        <translation>Vectorize schließen</translation>
+    </message>
+    <message>
+        <source>Close the panel</source>
+        <translation>Panel schließen</translation>
+    </message>
+    <message>
+        <source>Close the zone</source>
+        <translation>Zone schließen</translation>
+    </message>
+    <message>
+        <source>Commercial use</source>
+        <translation>Kommerzielle Nutzung</translation>
+    </message>
+    <message>
+        <source>Complete guide</source>
+        <translation>Vollständiger Leitfaden</translation>
+    </message>
+    <message>
+        <source>Confirm with your email. Cancel on terra-lab.ai during the grace period.</source>
+        <translation>Bestätigen Sie mit Ihrer E-Mail-Adresse. Kündigen Sie auf terra-lab.ai während des Kulanzzeitraums.</translation>
+    </message>
+    <message>
+        <source>Confirmation refused. Close and try again.</source>
+        <translation>Bestätigung abgelehnt. Schließen Sie das Fenster und versuchen Sie es erneut.</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>Fortfahren</translation>
+    </message>
+    <message>
+        <source>Continuing accepts the {terms} and the {privacy}.</source>
+        <translation>Wenn Sie fortfahren, akzeptieren Sie die {terms} und die {privacy}.</translation>
+    </message>
+    <message>
+        <source>Contracting by {n} px erased every shape. Set “Expand/Contract” closer to 0.</source>
+        <translation>Das Verkleinern um {n} px hat alle Formen gelöscht. Stellen Sie „Erweitern/Verkleinern“ näher an 0.</translation>
+    </message>
+    <message>
+        <source>Copy your logs and send them to us. We will look into it.</source>
+        <translation>Kopieren Sie Ihre Protokolle und senden Sie sie an uns. Wir sehen uns das an.</translation>
+    </message>
+    <message>
+        <source>Could not add {name}. {reason}</source>
+        <translation>{name} konnte nicht hinzugefügt werden. {reason}</translation>
+    </message>
+    <message>
+        <source>Could not capture your zone: {error}</source>
+        <translation>Ihre Zone konnte nicht erfasst werden: {error}</translation>
+    </message>
+    <message>
+        <source>Could not download the reference.</source>
+        <translation>Die Referenz konnte nicht heruntergeladen werden.</translation>
+    </message>
+    <message>
+        <source>Could not reach TerraLab</source>
+        <translation>TerraLab nicht erreichbar</translation>
+    </message>
+    <message>
+        <source>Credit count not available</source>
+        <translation>Anzahl der Credits nicht verfügbar</translation>
+    </message>
+    <message>
+        <source>Credits left and reset date</source>
+        <translation>Verbleibende Credits und Zurücksetzungsdatum</translation>
+    </message>
+    <message>
+        <source>Custom color {hex}</source>
+        <translation>Benutzerdefinierte Farbe {hex}</translation>
+    </message>
+    <message>
+        <source>Custom needs</source>
+        <translation>Benutzerdefinierte Anforderungen</translation>
+    </message>
+    <message>
+        <source>Cyan</source>
+        <translation>Cyan</translation>
+    </message>
+    <message>
+        <source>Danger zone</source>
+        <translation>Gefahrenbereich</translation>
+    </message>
+    <message>
+        <source>Data erased after the grace period.</source>
+        <translation>Daten nach Ablauf der Kulanzfrist gelöscht.</translation>
+    </message>
+    <message>
+        <source>Data erased on {date}.</source>
+        <translation>Daten am {date} gelöscht.</translation>
+    </message>
+    <message>
+        <source>Date</source>
+        <translation>Datum</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>Standard</translation>
+    </message>
+    <message>
+        <source>Delete account</source>
+        <translation>Konto löschen</translation>
+    </message>
+    <message>
+        <source>Delete your account?</source>
+        <translation>Konto löschen?</translation>
+    </message>
+    <message>
+        <source>Deleting account</source>
+        <translation>Konto wird gelöscht</translation>
+    </message>
+    <message>
+        <source>Deleting...</source>
+        <translation>Wird gelöscht...</translation>
+    </message>
+    <message>
+        <source>Deletion already scheduled. Cancel on terra-lab.ai.</source>
+        <translation>Löschung bereits geplant. Auf terra-lab.ai abbrechen.</translation>
+    </message>
+    <message>
+        <source>Deletion already set for {date}. Cancel on terra-lab.ai.</source>
+        <translation>Löschung bereits für {date} festgelegt. Auf terra-lab.ai abbrechen.</translation>
+    </message>
+    <message>
+        <source>Describe the change, e.g. turn the fields into a forest</source>
+        <translation>Beschreibe die Änderung, z. B. verwandle die Felder in einen Wald</translation>
+    </message>
+    <message>
+        <source>Describe the next change</source>
+        <translation>Beschreibe die nächste Änderung</translation>
+    </message>
+    <message>
+        <source>Describe the next change to {base}</source>
+        <translation>Beschreibe die nächste Änderung an {base}</translation>
+    </message>
+    <message>
+        <source>Detailed and Maximum quality</source>
+        <translation>Detaillierte und Maximale Qualität</translation>
+    </message>
+    <message>
+        <source>Download Original as a georeferenced GeoTIFF (.tif)</source>
+        <translation>Original als georeferenziertes GeoTIFF (.tif) herunterladen</translation>
+    </message>
+    <message>
+        <source>Download as GeoTIFF</source>
+        <translation>Als GeoTIFF herunterladen</translation>
+    </message>
+    <message>
+        <source>Downloading reference</source>
+        <translation>Referenz wird heruntergeladen</translation>
+    </message>
+    <message>
+        <source>Drag a box on the map. Esc cancels.</source>
+        <translation>Ziehe auf der Karte ein Rechteck. Esc bricht ab.</translation>
+    </message>
+    <message>
+        <source>Drag across an area. Shift draws a true circle.</source>
+        <translation>Ziehe über einen Bereich. Mit Shift zeichnest du einen echten Kreis.</translation>
+    </message>
+    <message>
+        <source>Drag across the area to circle it.</source>
+        <translation>Ziehe über den Bereich, um ihn einzukreisen.</translation>
+    </message>
+    <message>
+        <source>Drag from the start to the tip.</source>
+        <translation>Ziehe vom Anfang bis zur Spitze.</translation>
+    </message>
+    <message>
+        <source>Drag from the start to the tip. Shift keeps 45 degree angles.</source>
+        <translation>Ziehe vom Anfang bis zur Spitze. Mit Shift bleiben Winkel von 45 Grad erhalten.</translation>
+    </message>
+    <message>
+        <source>Drag on the map to draw freely.</source>
+        <translation>Ziehe auf der Karte, um frei zu zeichnen.</translation>
+    </message>
+    <message>
+        <source>Drag the line or use the arrow keys. Esc stops.</source>
+        <translation>Ziehe die Linie oder verwende die Pfeiltasten. Esc beendet den Vorgang.</translation>
+    </message>
+    <message>
+        <source>Draw</source>
+        <translation>Zeichnen</translation>
+    </message>
+    <message>
+        <source>Drawing a zone</source>
+        <translation>Bereich wird gezeichnet</translation>
+    </message>
+    <message>
+        <source>Drop polygons smaller than this after tracing.</source>
+        <translation>Polygone, die kleiner als dieser Wert sind, nach dem Nachzeichnen verwerfen.</translation>
+    </message>
+    <message>
+        <source>Drop this zone and go back to the start</source>
+        <translation>Diesen Bereich verwerfen und zum Anfang zurückkehren</translation>
+    </message>
+    <message>
+        <source>Duration</source>
+        <translation>Dauer</translation>
+    </message>
+    <message>
+        <source>Each change updates the same layer.</source>
+        <translation>Jede Änderung aktualisiert denselben layer.</translation>
+    </message>
+    <message>
+        <source>Edit the selected area with AI (Enter)</source>
+        <translation>Ausgewählten Bereich mit AI bearbeiten (Enter)</translation>
+    </message>
+    <message>
+        <source>Erases all data, stops every TerraLab plugin</source>
+        <translation>Löscht alle Daten und stoppt jedes TerraLab-Plugin</translation>
+    </message>
+    <message>
+        <source>Errors, versions and features used, linked to your account. Never your imagery, layers or coordinates. On Pro, counts only.</source>
+        <translation>Fehler, Versionen und verwendete Funktionen, mit deinem Konto verknüpft. Niemals deine Bilddaten, layer oder Koordinaten. Im Pro-Tarif nur Zählwerte.</translation>
+    </message>
+    <message>
+        <source>Every TerraLab plugin stops, on all computers.</source>
+        <translation>Jedes TerraLab-Plugin wird auf allen Computern gestoppt.</translation>
+    </message>
+    <message>
+        <source>Every edit you run lands here, grouped by place, ready to pick up again.</source>
+        <translation>Jede von dir ausgeführte Bearbeitung landet hier, nach Ort gruppiert und kann jederzeit wieder aufgenommen werden.</translation>
+    </message>
+    <message>
+        <source>Everything we make</source>
+        <translation>Alles, was wir erstellen</translation>
+    </message>
+    <message>
+        <source>Failed to download result image after {attempts} attempts: {err}.</source>
+        <translation>Ergebnisbild konnte nach {attempts} Versuchen nicht heruntergeladen werden: {err}.</translation>
+    </message>
+    <message>
+        <source>Fill the holes inside each shape.</source>
+        <translation>Löcher innerhalb jeder Form füllen.</translation>
+    </message>
+    <message>
+        <source>Finish signing in on the page that just opened</source>
+        <translation>Schließe die Anmeldung auf der gerade geöffneten Seite ab</translation>
+    </message>
+    <message>
+        <source>For a team?</source>
+        <translation>Für ein Team?</translation>
+    </message>
+    <message>
+        <source>Free credits used up this month</source>
+        <translation>Kostenlose Credits für diesen Monat aufgebraucht</translation>
+    </message>
+    <message>
+        <source>Free plan</source>
+        <translation>Kostenloser Tarif</translation>
+    </message>
+    <message>
+        <source>Free plan limit reached.</source>
+        <translation>Limit des kostenlosen Tarifs erreicht.</translation>
+    </message>
+    <message>
+        <source>From zone to finished edit</source>
+        <translation>Vom Bereich zur fertigen Bearbeitung</translation>
+    </message>
+    <message>
+        <source>Generate a flat-color map first, then come back.</source>
+        <translation>Erstelle zuerst eine Karte mit flachen Farben und komme dann zurück.</translation>
+    </message>
+    <message>
+        <source>Generate the edit on your zone</source>
+        <translation>Erstelle die Bearbeitung für deinen Bereich</translation>
+    </message>
+    <message>
+        <source>Generate without it</source>
+        <translation>Ohne es erstellen</translation>
+    </message>
+    <message>
+        <source>Generated in the USA.</source>
+        <translation>In den USA erstellt.</translation>
+    </message>
+    <message>
+        <source>Get Pro</source>
+        <translation>Pro erhalten</translation>
+    </message>
+    <message>
+        <source>Get better results</source>
+        <translation>Bessere Ergebnisse erzielen</translation>
+    </message>
+    <message>
+        <source>Go back one step</source>
+        <translation>Einen Schritt zurück</translation>
+    </message>
+    <message>
+        <source>Good for a quick test</source>
+        <translation>Gut für einen schnellen Test</translation>
+    </message>
+    <message>
+        <source>Guide</source>
+        <translation>Anleitung</translation>
+    </message>
+    <message>
+        <source>Hide this tip</source>
+        <translation>Diesen Tipp ausblenden</translation>
+    </message>
+    <message>
+        <source>Hints you closed in the panel</source>
+        <translation>Hinweise, die du im Panel geschlossen hast</translation>
+    </message>
+    <message>
+        <source>How far a pixel's color may drift from its class. Higher takes in noisy shades.</source>
+        <translation>Wie stark die Farbe eines Pixels von seiner Klasse abweichen darf. Höhere Werte berücksichtigen verrauschte Farbtöne.</translation>
+    </message>
+    <message>
+        <source>Ideas and workflows</source>
+        <translation>Ideen und Arbeitsabläufe</translation>
+    </message>
+    <message>
+        <source>If your browser works, turn on Settings &gt; Options &gt; Network &gt; Use proxy for web access.</source>
+        <translation>Wenn dein Browser funktioniert, aktiviere Einstellungen &gt; Optionen &gt; Netzwerk &gt; Proxy für den Webzugriff verwenden.</translation>
+    </message>
+    <message>
+        <source>Image too large. Draw a smaller zone or pick a lower Quality.</source>
+        <translation>Bild zu groß. Zeichne einen kleineren Bereich oder wähle eine niedrigere Qualität.</translation>
+    </message>
+    <message>
+        <source>In your prompt, say what to take from each: "roof colours from reference 1".</source>
+        <translation>Gib in deinem prompt an, was aus welcher Quelle übernommen werden soll: "Dachfarben aus Referenz 1".</translation>
+    </message>
+    <message>
+        <source>Install in QGIS</source>
+        <translation>In QGIS installieren</translation>
+    </message>
+    <message>
+        <source>Installed</source>
+        <translation>Installiert</translation>
+    </message>
+    <message>
+        <source>It is installed but did not start. Restart QGIS to use it.</source>
+        <translation>Es ist installiert, wurde aber nicht gestartet. Starte QGIS neu, um es zu verwenden.</translation>
+    </message>
+    <message>
+        <source>It is installed but switched off. Turns it on and opens it.</source>
+        <translation>Es ist installiert, aber deaktiviert. Aktiviere es und öffne es.</translation>
+    </message>
+    <message>
+        <source>Its companion files are missing ({missing}). Drop the whole set together.</source>
+        <translation>Die zugehörigen Dateien fehlen ({missing}). Ziehe den vollständigen Satz gemeinsam hinein.</translation>
+    </message>
+    <message>
+        <source>Keep editing with Pro</source>
+        <translation>Mit Pro weiterbearbeiten</translation>
+    </message>
+    <message>
+        <source>Keep the polygons on your map and close this panel</source>
+        <translation>Polygone auf deiner Karte behalten und dieses Panel schließen</translation>
+    </message>
+    <message>
+        <source>Keep this result on your map and start over on a new zone. The session stays in Sessions.</source>
+        <translation>Dieses Ergebnis auf deiner Karte behalten und in einem neuen Bereich von vorn beginnen. Die Sitzung bleibt unter Sitzungen.</translation>
+    </message>
+    <message>
+        <source>Keep your strokes to guide the edit. They are removed from the result.</source>
+        <translation>Behalte deine Striche, um die Bearbeitung zu leiten. Sie werden aus dem Ergebnis entfernt.</translation>
+    </message>
+    <message>
+        <source>Kept in France.</source>
+        <translation>In Frankreich gespeichert.</translation>
+    </message>
+    <message>
+        <source>Keyboard shortcuts</source>
+        <translation>Tastenkürzel</translation>
+    </message>
+    <message>
+        <source>Last free edit this month.</source>
+        <translation>Letzte kostenlose Bearbeitung diesen Monat.</translation>
+    </message>
+    <message>
+        <source>Leave empty for the default folder</source>
+        <translation>Für den Standardordner leer lassen</translation>
+    </message>
+    <message>
+        <source>Leave fullscreen</source>
+        <translation>Vollbildmodus verlassen</translation>
+    </message>
+    <message>
+        <source>Library (view only)</source>
+        <translation>Bibliothek (nur Ansicht)</translation>
+    </message>
+    <message>
+        <source>Like it? Pro adds Detailed and Maximum quality, and commercial use.</source>
+        <translation>Gefällt es dir? Pro bietet Detaillierte und Maximale Qualität sowie kommerzielle Nutzung.</translation>
+    </message>
+    <message>
+        <source>Limit reached. Remove one to add another.</source>
+        <translation>Limit erreicht. Entferne eines, um ein weiteres hinzuzufügen.</translation>
+    </message>
+    <message>
+        <source>Linked to your account, no imagery</source>
+        <translation>Mit deinem Konto verknüpft, keine Bilddaten</translation>
+    </message>
+    <message>
+        <source>Load this prompt, its references and the same map zone back into AI Edit, replacing what you have now.</source>
+        <translation>Diesen prompt, seine Referenzen und denselben Kartenbereich wieder in AI Edit laden und damit den aktuellen Inhalt ersetzen.</translation>
+    </message>
+    <message>
+        <source>Locked while the AI generates</source>
+        <translation>Gesperrt, während die AI generiert</translation>
+    </message>
+    <message>
+        <source>Made from</source>
+        <translation>Erstellt mit</translation>
+    </message>
+    <message>
+        <source>Magenta</source>
+        <translation>Magenta</translation>
+    </message>
+    <message>
+        <source>Manage</source>
+        <translation>Verwalten</translation>
+    </message>
+    <message>
+        <source>Map view</source>
+        <translation>Kartenansicht</translation>
+    </message>
+    <message>
+        <source>More edits, commercial use</source>
+        <translation>Mehr Edits, kommerzielle Nutzung</translation>
+    </message>
+    <message>
+        <source>More from TerraLab</source>
+        <translation>Mehr von TerraLab</translation>
+    </message>
+    <message>
+        <source>More plugins</source>
+        <translation>Mehr Plugins</translation>
+    </message>
+    <message>
+        <source>Need more?</source>
+        <translation>Brauchst du mehr?</translation>
+    </message>
+    <message>
+        <source>Needs a restart</source>
+        <translation>Benötigt einen Neustart</translation>
+    </message>
+    <message>
+        <source>Network error. Check your internet connection.</source>
+        <translation>Netzwerkfehler. Prüfe deine Internetverbindung.</translation>
+    </message>
+    <message>
+        <source>New edit</source>
+        <translation>Neuer Edit</translation>
+    </message>
+    <message>
+        <source>No account linked to this key.</source>
+        <translation>Mit diesem Schlüssel ist kein Konto verknüpft.</translation>
+    </message>
+    <message>
+        <source>No edits yet</source>
+        <translation>Noch keine Edits</translation>
+    </message>
+    <message>
+        <source>No favorites yet</source>
+        <translation>Noch keine Favoriten</translation>
+    </message>
+    <message>
+        <source>No map to vectorize yet</source>
+        <translation>Noch keine Karte zum Vektorisieren</translation>
+    </message>
+    <message>
+        <source>No matches found</source>
+        <translation>Keine Treffer gefunden</translation>
+    </message>
+    <message>
+        <source>No pixel matches the checked colors. Adjust a color, or add one with “Add color from map”.</source>
+        <translation>Kein Pixel entspricht den markierten Farben. Passe eine Farbe an oder füge eine mit „Farbe aus Karte hinzufügen“ hinzu.</translation>
+    </message>
+    <message>
+        <source>No prompt was saved for this version.</source>
+        <translation>Für diese Version wurde kein Prompt gespeichert.</translation>
+    </message>
+    <message>
+        <source>No prompts in this section yet</source>
+        <translation>Noch keine Prompts in diesem Abschnitt</translation>
+    </message>
+    <message>
+        <source>No sessions match</source>
+        <translation>Keine passenden Sitzungen</translation>
+    </message>
+    <message>
+        <source>No shape reaches {n} px. Lower “Min polygon size”.</source>
+        <translation>Keine Form erreicht {n} px. Verringere „Min. Polygongröße“.</translation>
+    </message>
+    <message>
+        <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size” or “Remove speckle”, or raise “Color tolerance”.</source>
+        <translation>Mit diesen Einstellungen bleiben keine Formen übrig. Setze „Erweitern/Verengen“ näher an 0, verringere „Min. Polygongröße“ oder „Störpixel entfernen“ oder erhöhe „Farbtoleranz“.</translation>
+    </message>
+    <message>
+        <source>No strokes yet</source>
+        <translation>Noch keine Striche</translation>
+    </message>
+    <message>
+        <source>Not an image or a map file QGIS can open.</source>
+        <translation>Kein Bild und keine Kartendatei, die QGIS öffnen kann.</translation>
+    </message>
+    <message>
+        <source>Not signed in</source>
+        <translation>Nicht angemeldet</translation>
+    </message>
+    <message>
+        <source>Nothing was sent. Press Generate again to read the notice.</source>
+        <translation>Es wurde nichts gesendet. Drücke erneut auf Generieren, um den Hinweis zu lesen.</translation>
+    </message>
+    <message>
+        <source>Nothing yet. The AI works from your zone and prompt only.</source>
+        <translation>Noch nichts. Die KI arbeitet nur mit deiner Zone und deinem Prompt.</translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation>Öffnen</translation>
+    </message>
+    <message>
+        <source>Open QGIS's Data Source Manager to add data</source>
+        <translation>Öffne den Datenquellen-Manager von QGIS, um Daten hinzuzufügen</translation>
+    </message>
+    <message>
+        <source>Open a prompt or a past edit and press its star: it will wait for you here.</source>
+        <translation>Öffne einen Prompt oder einen früheren Edit und drücke auf den Stern: Er wartet hier auf dich.</translation>
+    </message>
+    <message>
+        <source>Open dashboard</source>
+        <translation>Dashboard öffnen</translation>
+    </message>
+    <message>
+        <source>Open in QGIS</source>
+        <translation>In QGIS öffnen</translation>
+    </message>
+    <message>
+        <source>Open the AI Edit page</source>
+        <translation>Die AI Edit-Seite öffnen</translation>
+    </message>
+    <message>
+        <source>Open the Library</source>
+        <translation>Die Bibliothek öffnen</translation>
+    </message>
+    <message>
+        <source>Open your sessions</source>
+        <translation>Deine Sitzungen öffnen</translation>
+    </message>
+    <message>
+        <source>Opens in your browser</source>
+        <translation>Öffnet sich in deinem Browser</translation>
+    </message>
+    <message>
+        <source>Opens the QGIS plugin manager on this plugin.</source>
+        <translation>Öffnet den QGIS-Plugin-Manager bei diesem Plugin.</translation>
+    </message>
+    <message>
+        <source>Opens your dashboard in the browser</source>
+        <translation>Öffnet dein Dashboard im Browser</translation>
+    </message>
+    <message>
+        <source>Or drop images and layers here</source>
+        <translation>Oder ziehe Bilder und Layer hierher</translation>
+    </message>
+    <message>
+        <source>Other TerraLab plugins for QGIS</source>
+        <translation>Weitere TerraLab-Plugins für QGIS</translation>
+    </message>
+    <message>
+        <source>Other TerraLab plugins...</source>
+        <translation>Weitere TerraLab-Plugins...</translation>
+    </message>
+    <message>
+        <source>Outline an area, say what to change</source>
+        <translation>Umreiße einen Bereich, sag, was geändert werden soll</translation>
+    </message>
+    <message>
+        <source>Output size</source>
+        <translation>Ausgabegröße</translation>
+    </message>
+    <message>
+        <source>Outside the prompt box</source>
+        <translation>Außerhalb des Prompt-Felds</translation>
+    </message>
+    <message>
+        <source>Outside your zone, sent whole</source>
+        <translation>Außerhalb deiner Zone, vollständig gesendet</translation>
+    </message>
+    <message>
+        <source>Part of your zone is off the imagery. That part will come back blank.</source>
+        <translation>Ein Teil deiner Zone liegt außerhalb der Bilder. Dieser Teil kommt leer zurück.</translation>
+    </message>
+    <message>
+        <source>Personal, non-commercial use</source>
+        <translation>Persönliche, nicht kommerzielle Nutzung</translation>
+    </message>
+    <message>
+        <source>Pick a map under Layer first.</source>
+        <translation>Wähle zuerst eine Karte unter Layer.</translation>
+    </message>
+    <message>
+        <source>Pick a tool to draw.</source>
+        <translation>Wähle ein Werkzeug zum Zeichnen.</translation>
+    </message>
+    <message>
+        <source>Plan not loaded</source>
+        <translation>Plan nicht geladen</translation>
+    </message>
+    <message>
+        <source>Plan, payment and invoices</source>
+        <translation>Plan, Zahlung und Rechnungen</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Vorschau</translation>
+    </message>
+    <message>
+        <source>Privacy Policy</source>
+        <translation>Datenschutzrichtlinie</translation>
+    </message>
+    <message>
+        <source>Pro</source>
+        <translation>Pro</translation>
+    </message>
+    <message>
+        <source>Pro plan</source>
+        <translation>Pro-Plan</translation>
+    </message>
+    <message>
+        <source>Pro unlocks Detailed and Maximum, for printing and zooming in</source>
+        <translation>Pro schaltet Detailed und Maximum frei, zum Drucken und Hineinzoomen</translation>
+    </message>
+    <message>
+        <source>Project layer</source>
+        <translation>Projekt-Layer</translation>
+    </message>
+    <message>
+        <source>Prompts and edits you starred.</source>
+        <translation>Prompts und Edits, die du mit Stern markiert hast.</translation>
+    </message>
+    <message>
+        <source>Prompts, References, Draw, Vectorize</source>
+        <translation>Prompts, Referenzen, Zeichnen, Vektorisieren</translation>
+    </message>
+    <message>
+        <source>Proven prompts to start from. Open one to see it before and after.</source>
+        <translation>Bewährte Prompts als Ausgangspunkt. Öffne einen, um ihn vorher und nachher zu sehen.</translation>
+    </message>
+    <message>
+        <source>Proxy connection failed. Check QGIS proxy settings (Settings &gt; Options &gt; Network).</source>
+        <translation>Proxy-Verbindung fehlgeschlagen. Prüfe die QGIS-Proxy-Einstellungen (Einstellungen &gt; Optionen &gt; Netzwerk).</translation>
+    </message>
+    <message>
+        <source>QGIS could not turn it on. Tick it in Plugins &gt; Manage and Install Plugins.</source>
+        <translation>QGIS konnte es nicht aktivieren. Aktiviere es unter Plugins &gt; Verwalten und installieren.</translation>
+    </message>
+    <message>
+        <source>Raise the timeout in Settings &gt; Options &gt; Network.</source>
+        <translation>Erhöhe das Timeout unter Einstellungen &gt; Optionen &gt; Netzwerk.</translation>
+    </message>
+    <message>
+        <source>Read the guide</source>
+        <translation>Lies die Anleitung</translation>
+    </message>
+    <message>
+        <source>Reference {n}</source>
+        <translation>Referenz {n}</translation>
+    </message>
+    <message>
+        <source>References</source>
+        <translation>Referenzen</translation>
+    </message>
+    <message>
+        <source>Refreshing sessions</source>
+        <translation>Sitzungen werden aktualisiert</translation>
+    </message>
+    <message>
+        <source>Release to add</source>
+        <translation>Loslassen zum Hinzufügen</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>Entfernen</translation>
+    </message>
+    <message>
+        <source>Remove every stroke. Undo cannot bring them back.</source>
+        <translation>Alle Striche entfernen. Rückgängig kann sie nicht zurückbringen.</translation>
+    </message>
+    <message>
+        <source>Remove the last point</source>
+        <translation>Letzten Punkt entfernen</translation>
+    </message>
+    <message>
+        <source>Remove {name}</source>
+        <translation>{name} entfernen</translation>
+    </message>
+    <message>
+        <source>Reopen this session in AI Edit: its prompt, references and the same map zone.</source>
+        <translation>Diese Sitzung in AI Edit erneut öffnen: ihr Prompt, ihre Referenzen und dieselbe Kartenzone.</translation>
+    </message>
+    <message>
+        <source>Request cancelled.</source>
+        <translation>Anfrage abgebrochen.</translation>
+    </message>
+    <message>
+        <source>Request timed out. Check your connection or try again.</source>
+        <translation>Zeitüberschreitung der Anfrage. Prüfe deine Verbindung oder versuche es erneut.</translation>
+    </message>
+    <message>
+        <source>Reset settings</source>
+        <translation>Einstellungen zurücksetzen</translation>
+    </message>
+    <message>
+        <source>Restart QGIS</source>
+        <translation>QGIS neu starten</translation>
+    </message>
+    <message>
+        <source>Result</source>
+        <translation>Ergebnis</translation>
+    </message>
+    <message>
+        <source>Results for "{query}"</source>
+        <translation>Ergebnisse für "{query}"</translation>
+    </message>
+    <message>
+        <source>Run QGIS from a single sentence.</source>
+        <translation>Steuere QGIS mit einem einzigen Satz.</translation>
+    </message>
+    <message>
+        <source>Save reference</source>
+        <translation>Referenz speichern</translation>
+    </message>
+    <message>
+        <source>Saved in memory only: the GeoPackage is in use. Save the layer before closing QGIS.</source>
+        <translation>Nur im Speicher gespeichert: Das GeoPackage wird gerade verwendet. Speichern Sie den Layer, bevor Sie QGIS schließen.</translation>
+    </message>
+    <message>
+        <source>Search prompts</source>
+        <translation>Prompts suchen</translation>
+    </message>
+    <message>
+        <source>Secure connection failed, often because of company SSL inspection. Ask your IT team to allow terra-lab.ai, or import your company root certificate in Settings &gt; Options &gt; Authentication.</source>
+        <translation>Sichere Verbindung fehlgeschlagen, oft wegen SSL-Überwachung im Unternehmen. Bitten Sie Ihre IT-Abteilung, terra-lab.ai zu erlauben, oder importieren Sie Ihr Firmen-Root-Zertifikat unter Einstellungen &gt; Optionen &gt; Authentifizierung.</translation>
+    </message>
+    <message>
+        <source>See Pro</source>
+        <translation>Pro ansehen</translation>
+    </message>
+    <message>
+        <source>See it in action</source>
+        <translation>In Aktion sehen</translation>
+    </message>
+    <message>
+        <source>See plans on terra-lab.ai</source>
+        <translation>Pläne auf terra-lab.ai ansehen</translation>
+    </message>
+    <message>
+        <source>See usage</source>
+        <translation>Nutzung ansehen</translation>
+    </message>
+    <message>
+        <source>See what Pro unlocks</source>
+        <translation>Sehen, was Pro freischaltet</translation>
+    </message>
+    <message>
+        <source>Server refused the connection. The service may be temporarily down.</source>
+        <translation>Der Server hat die Verbindung abgelehnt. Der Dienst ist möglicherweise vorübergehend nicht erreichbar.</translation>
+    </message>
+    <message>
+        <source>Session expired. Sign out and back in.</source>
+        <translation>Sitzung abgelaufen. Melden Sie sich ab und wieder an.</translation>
+    </message>
+    <message>
+        <source>Session reopened. Edit the prompt or pick a version, then Generate.</source>
+        <translation>Sitzung wieder geöffnet. Bearbeiten Sie den Prompt oder wählen Sie eine Version und klicken Sie dann auf „Generieren“.</translation>
+    </message>
+    <message>
+        <source>Share usage statistics</source>
+        <translation>Nutzungsstatistiken teilen</translation>
+    </message>
+    <message>
+        <source>Sharp, clean result for real maps</source>
+        <translation>Scharfes, sauberes Ergebnis für echte Karten</translation>
+    </message>
+    <message>
+        <source>Show a layer, or start with a sample.</source>
+        <translation>Zeigen Sie einen Layer oder beginnen Sie mit einem Beispiel.</translation>
+    </message>
+    <message>
+        <source>Show it and generate</source>
+        <translation>Anzeigen und generieren</translation>
+    </message>
+    <message>
+        <source>Show the AI a style, a legend or an object to match.</source>
+        <translation>Zeigen Sie der KI einen Stil, eine Legende oder ein Objekt zum Nachahmen.</translation>
+    </message>
+    <message>
+        <source>Show the plugin's panel.</source>
+        <translation>Zeigen Sie das Bedienfeld des Plugins.</translation>
+    </message>
+    <message>
+        <source>Show this layer in the Layers panel</source>
+        <translation>Diesen Layer im Ebenenbedienfeld anzeigen</translation>
+    </message>
+    <message>
+        <source>Sign in</source>
+        <translation>Anmelden</translation>
+    </message>
+    <message>
+        <source>Sign in to see your plan</source>
+        <translation>Melden Sie sich an, um Ihren Plan zu sehen</translation>
+    </message>
+    <message>
+        <source>Sign in to see your plan.</source>
+        <translation>Melden Sie sich an, um Ihren Plan zu sehen.</translation>
+    </message>
+    <message>
+        <source>Sign out, then sign in again.</source>
+        <translation>Melden Sie sich ab und dann wieder an.</translation>
+    </message>
+    <message>
+        <source>Sign-in, plan and privacy</source>
+        <translation>Anmeldung, Plan und Datenschutz</translation>
+    </message>
+    <message>
+        <source>Sketch where the AI should act.</source>
+        <translation>Skizzieren Sie, wo die KI aktiv werden soll.</translation>
+    </message>
+    <message>
+        <source>Softer outlines for natural shapes like trees.</source>
+        <translation>Weichere Konturen für natürliche Formen wie Bäume.</translation>
+    </message>
+    <message>
+        <source>Start from {label}</source>
+        <translation>Von {label} starten</translation>
+    </message>
+    <message>
+        <source>Start the next edit from</source>
+        <translation>Nächste Bearbeitung starten von</translation>
+    </message>
+    <message>
+        <source>Start the next edit from this version</source>
+        <translation>Die nächste Bearbeitung mit dieser Version starten</translation>
+    </message>
+    <message>
+        <source>Still generating. The result is added to your map when ready.</source>
+        <translation>Wird noch generiert. Das Ergebnis wird Ihrer Karte hinzugefügt, sobald es fertig ist.</translation>
+    </message>
+    <message>
+        <source>Still waiting, but AI Edit cannot reach the server to check your sign-in.</source>
+        <translation>Wir warten weiter, aber AI Edit kann den Server nicht erreichen, um Ihre Anmeldung zu prüfen.</translation>
+    </message>
+    <message>
+        <source>Straight lines. Click the first point to close, Shift keeps 45 degree angles.</source>
+        <translation>Gerade Linien. Klicken Sie auf den ersten Punkt zum Schließen; Shift hält 45-Grad-Winkel ein.</translation>
+    </message>
+    <message>
+        <source>Stroke color</source>
+        <translation>Konturfarbe</translation>
+    </message>
+    <message>
+        <source>Strokes count only inside your zone.</source>
+        <translation>Striche zählen nur innerhalb Ihrer Zone.</translation>
+    </message>
+    <message>
+        <source>Subscription inactive. Manage it on terra-lab.ai.</source>
+        <translation>Abonnement inaktiv. Verwalten Sie es auf terra-lab.ai.</translation>
+    </message>
+    <message>
+        <source>Swipe between the original map and this result</source>
+        <translation>Zwischen Originalkarte und diesem Ergebnis wischen</translation>
+    </message>
+    <message>
+        <source>Team seats, custom quota, invoices</source>
+        <translation>Team-Sitze, individuelles Kontingent, Rechnungen</translation>
+    </message>
+    <message>
+        <source>TerraLab blog</source>
+        <translation>TerraLab-Blog</translation>
+    </message>
+    <message>
+        <source>TerraLab is busy right now</source>
+        <translation>TerraLab ist gerade ausgelastet</translation>
+    </message>
+    <message>
+        <source>That click missed the map. Try again on the map itself.</source>
+        <translation>Dieser Klick ging an der Karte vorbei. Versuchen Sie es erneut direkt auf der Karte.</translation>
+    </message>
+    <message>
+        <source>That email does not match. Try again.</source>
+        <translation>Diese E-Mail stimmt nicht überein. Versuchen Sie es erneut.</translation>
+    </message>
+    <message>
+        <source>The AI Edit drawing layer is hidden.</source>
+        <translation>Der Zeichen-Layer von AI Edit ist ausgeblendet.</translation>
+    </message>
+    <message>
+        <source>The Free plan takes up to {n} references.</source>
+        <translation>Der kostenlose Plan unterstützt bis zu {n} Referenzen.</translation>
+    </message>
+    <message>
+        <source>The Free plan takes {n} reference.</source>
+        <translation>Der kostenlose Plan unterstützt {n} Referenz.</translation>
+    </message>
+    <message>
+        <source>The account could not be deleted.</source>
+        <translation>Das Konto konnte nicht gelöscht werden.</translation>
+    </message>
+    <message>
+        <source>The free plan includes {n} reference. Remove it to add another.</source>
+        <translation>Der kostenlose Plan enthält {n} Referenz. Entfernen Sie sie, um eine weitere hinzuzufügen.</translation>
+    </message>
+    <message>
+        <source>The free plan includes {n} references. Remove one to add another.</source>
+        <translation>Der kostenlose Plan enthält {n} Referenzen. Entfernen Sie eine, um eine weitere hinzuzufügen.</translation>
+    </message>
+    <message>
+        <source>The imagery this session was edited on is not in this project. Add its Original to see your edits in context.</source>
+        <translation>Das Bildmaterial, auf dem diese Sitzung bearbeitet wurde, ist nicht in diesem Projekt. Fügen Sie sein Original hinzu, um Ihre Bearbeitungen im Kontext zu sehen.</translation>
+    </message>
+    <message>
+        <source>The layer keeps its last result.</source>
+        <translation>Der Layer behält sein letztes Ergebnis.</translation>
+    </message>
+    <message>
+        <source>The map area you select and your prompt go to our image generation partner only to produce the result, and it deletes them within 30 days.</source>
+        <translation>Der von Ihnen ausgewählte Kartenausschnitt und Ihr Prompt werden nur zur Erstellung des Ergebnisses an unseren Bildgenerierungs-Partner übertragen und von diesem innerhalb von 30 Tagen gelöscht.</translation>
+    </message>
+    <message>
+        <source>The map this layer came from was removed. Vectorize it again.</source>
+        <translation>Die Karte, aus der dieser Layer stammt, wurde entfernt. Vektorisieren Sie sie erneut.</translation>
+    </message>
+    <message>
+        <source>The next edit starts from it.</source>
+        <translation>Die nächste Bearbeitung startet davon.</translation>
+    </message>
+    <message>
+        <source>The polygons could not be added to your map. Try again.</source>
+        <translation>Die Polygone konnten Ihrer Karte nicht hinzugefügt werden. Versuchen Sie es erneut.</translation>
+    </message>
+    <message>
+        <source>The prompts could not load</source>
+        <translation>Die Prompts konnten nicht geladen werden</translation>
+    </message>
+    <message>
+        <source>The written tutorial, on the TerraLab blog.</source>
+        <translation>Das schriftliche Tutorial auf dem TerraLab-Blog.</translation>
+    </message>
+    <message>
+        <source>They help us fix bugs. You can switch them off in Settings whenever you want.</source>
+        <translation>Sie helfen uns, Fehler zu beheben. Sie können sie jederzeit in den Einstellungen deaktivieren.</translation>
+    </message>
+    <message>
+        <source>This Quality is not in your plan. Upgrade to Pro to use it.</source>
+        <translation>Diese Qualität ist nicht in Ihrem Plan enthalten. Steigen Sie auf Pro um, um sie zu nutzen.</translation>
+    </message>
+    <message>
+        <source>This computer is no longer signed in</source>
+        <translation>Dieser Computer ist nicht mehr angemeldet</translation>
+    </message>
+    <message>
+        <source>This looks like a photo. Pick a color below.</source>
+        <translation>Das sieht wie ein Foto aus. Wählen Sie unten eine Farbe.</translation>
+    </message>
+    <message>
+        <source>This map can't be read. Pick another one.</source>
+        <translation>Diese Karte kann nicht gelesen werden. Wählen Sie eine andere.</translation>
+    </message>
+    <message>
+        <source>This result has no saved map zone, so it cannot be reused.</source>
+        <translation>Dieses Ergebnis hat keine gespeicherte Kartenzone und kann daher nicht wiederverwendet werden.</translation>
+    </message>
+    <message>
+        <source>Tips</source>
+        <translation>Tipps</translation>
+    </message>
+    <message>
+        <source>Too many attempts. Try again in {seconds} seconds.</source>
+        <translation>Zu viele Versuche. Versuchen Sie es in {seconds} Sekunden erneut.</translation>
+    </message>
+    <message>
+        <source>Too many attempts. Try again soon.</source>
+        <translation>Zu viele Versuche. Versuchen Sie es gleich noch einmal.</translation>
+    </message>
+    <message>
+        <source>Tools</source>
+        <translation>Werkzeuge</translation>
+    </message>
+    <message>
+        <source>Try again in a moment.</source>
+        <translation>Versuchen Sie es in einem Moment erneut.</translation>
+    </message>
+    <message>
+        <source>Try one word, like "trees"</source>
+        <translation>Versuchen Sie ein einzelnes Wort, z. B. "trees"</translation>
+    </message>
+    <message>
+        <source>Turn buildings, trees or water into polygons.</source>
+        <translation>Verwandeln Sie Gebäude, Bäume oder Wasser in Polygone.</translation>
+    </message>
+    <message>
+        <source>Turn on</source>
+        <translation>Aktivieren</translation>
+    </message>
+    <message>
+        <source>Turn this result into polygons you can edit</source>
+        <translation>Dieses Ergebnis in bearbeitbare Polygone umwandeln</translation>
+    </message>
+    <message>
+        <source>Turned off</source>
+        <translation>Deaktiviert</translation>
+    </message>
+    <message>
+        <source>Turns a flat-color map into polygons, one class per color.</source>
+        <translation>Verwandelt eine Karte mit flachen Farben in Polygone, eine Klasse pro Farbe.</translation>
+    </message>
+    <message>
+        <source>Tutorials</source>
+        <translation>Tutorials</translation>
+    </message>
+    <message>
+        <source>Type your email to confirm:</source>
+        <translation>Geben Sie Ihre E-Mail ein, um zu bestätigen:</translation>
+    </message>
+    <message>
+        <source>Undo the last stroke ({shortcut})</source>
+        <translation>Letzten Strich rückgängig machen ({shortcut})</translation>
+    </message>
+    <message>
+        <source>Up to 12 reference images</source>
+        <translation>Bis zu 12 Referenzbilder</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Aktualisieren</translation>
+    </message>
+    <message>
+        <source>Update available</source>
+        <translation>Aktualisierung verfügbar</translation>
+    </message>
+    <message>
+        <source>Update required</source>
+        <translation>Aktualisierung erforderlich</translation>
+    </message>
+    <message>
+        <source>Update to keep using AI Edit. It takes one click in the QGIS Plugin Manager, and the plugin reloads on its own.</source>
+        <translation>Aktualisieren Sie, um AI Edit weiter zu nutzen. Das geht mit einem Klick im QGIS-Plugin-Manager, und das Plugin lädt sich von selbst neu.</translation>
+    </message>
+    <message>
+        <source>Updating the layer...</source>
+        <translation>Der Layer wird aktualisiert...</translation>
+    </message>
+    <message>
+        <source>Usage</source>
+        <translation>Nutzung</translation>
+    </message>
+    <message>
+        <source>Usage statistics</source>
+        <translation>Nutzungsstatistiken</translation>
+    </message>
+    <message>
+        <source>Usage stats are on.</source>
+        <translation>Nutzungsstatistiken sind aktiviert.</translation>
+    </message>
+    <message>
+        <source>Vectorize cancelled.</source>
+        <translation>Vektorisierung abgebrochen.</translation>
+    </message>
+    <message>
+        <source>Versions</source>
+        <translation>Versionen</translation>
+    </message>
+    <message>
+        <source>View full size</source>
+        <translation>In voller Größe anzeigen</translation>
+    </message>
+    <message>
+        <source>Wait for this edit to finish</source>
+        <translation>Warte, bis diese Bearbeitung abgeschlossen ist</translation>
+    </message>
+    <message>
+        <source>We will look into it and get back to you.</source>
+        <translation>Wir schauen es uns an und melden uns bei dir.</translation>
+    </message>
+    <message>
+        <source>What will you edit first?</source>
+        <translation>Was möchtest du zuerst bearbeiten?</translation>
+    </message>
+    <message>
+        <source>What would you like to edit?</source>
+        <translation>Was möchtest du bearbeiten?</translation>
+    </message>
+    <message>
+        <source>Where AI Edit writes its generated GeoTIFFs. Leave empty to use {folder} (or the saved project folder).</source>
+        <translation>Wohin AI Edit seine generierten GeoTIFFs schreibt. Leer lassen, um {folder} zu verwenden (oder den gespeicherten Projektordner).</translation>
+    </message>
+    <message>
+        <source>Where should the AI edit?</source>
+        <translation>Wo soll die AI bearbeiten?</translation>
+    </message>
+    <message>
+        <source>While drawing</source>
+        <translation>Während des Zeichnens</translation>
+    </message>
+    <message>
+        <source>Yellow</source>
+        <translation>Gelb</translation>
+    </message>
+    <message>
+        <source>You can sign back in anytime.</source>
+        <translation>Du kannst dich jederzeit wieder anmelden.</translation>
+    </message>
+    <message>
+        <source>You have {installed}.</source>
+        <translation>Du hast {installed}.</translation>
+    </message>
+    <message>
+        <source>You've used this month's free edits</source>
+        <translation>Du hast die kostenlosen Bearbeitungen dieses Monats aufgebraucht</translation>
+    </message>
+    <message>
+        <source>Your computer</source>
+        <translation>Dein Computer</translation>
+    </message>
+    <message>
+        <source>Your drawing</source>
+        <translation>Deine Zeichnung</translation>
+    </message>
+    <message>
+        <source>Your drawing won't be used</source>
+        <translation>Deine Zeichnung wird nicht verwendet</translation>
+    </message>
+    <message>
+        <source>Your email</source>
+        <translation>Deine E-Mail</translation>
+    </message>
+    <message>
+        <source>Your generations stay in your history until you delete them. On {pro} you can set 30 days, 90 days or 1 year in Settings.</source>
+        <translation>Deine Generierungen bleiben in deinem Verlauf, bis du sie löschst. Mit {pro} kannst du in den Einstellungen 30 Tage, 90 Tage oder 1 Jahr festlegen.</translation>
+    </message>
+    <message>
+        <source>Your generations, history and prompts are erased.</source>
+        <translation>Deine Generierungen, dein Verlauf und deine Prompts werden gelöscht.</translation>
+    </message>
+    <message>
+        <source>Your map, before any AI edit</source>
+        <translation>Deine Karte, vor jeder AI-Bearbeitung</translation>
+    </message>
+    <message>
+        <source>Your network blocked the connection (HTTP {status}). Ask your IT team to allow terra-lab.ai.</source>
+        <translation>Dein Netzwerk hat die Verbindung blockiert (HTTP {status}). Bitte dein IT-Team, terra-lab.ai zuzulassen.</translation>
+    </message>
+    <message>
+        <source>Your session is saved. Reopen it from Sessions, the clock at the top.</source>
+        <translation>Deine Sitzung ist gespeichert. Öffne sie erneut unter Sitzungen, die Uhr oben.</translation>
+    </message>
+    <message>
+        <source>Your zone is off the imagery. Draw it over your layers.</source>
+        <translation>Deine Zone liegt außerhalb der Bilddaten. Zeichne sie über deinen Layern.</translation>
+    </message>
+    <message>
+        <source>Your zone is too small. Draw it at least {pct}% of the map width.</source>
+        <translation>Deine Zone ist zu klein. Zeichne sie auf mindestens {pct}% der Kartenbreite.</translation>
+    </message>
+    <message>
+        <source>Your {total} free edits return next month</source>
+        <translation>Deine {total} kostenlosen Bearbeitungen kommen nächsten Monat zurück</translation>
+    </message>
+    <message>
+        <source>Your {total} free edits return on {date}</source>
+        <translation>Deine {total} kostenlosen Bearbeitungen kommen am {date} zurück</translation>
+    </message>
+    <message>
+        <source>by TerraLab</source>
+        <translation>von TerraLab</translation>
+    </message>
+    <message>
+        <source>credits left of {limit}</source>
+        <translation>Noch {limit} Credits übrig</translation>
+    </message>
+    <message>
+        <source>no AI edit</source>
+        <translation>keine AI-Bearbeitung</translation>
+    </message>
+    <message>
+        <source>{count} in {k} classes</source>
+        <translation>{count} in {k} Klassen</translation>
+    </message>
+    <message>
+        <source>{head} “{name}”: {count}.</source>
+        <translation>{head} „{name}”: {count}.</translation>
+    </message>
+    <message>
+        <source>{hex} is already listed as “{name}”. It is checked.</source>
+        <translation>{hex} ist bereits als „{name}” aufgeführt. Es ist angehakt.</translation>
+    </message>
+    <message>
+        <source>{label} {n}</source>
+        <translation>{label} {n}</translation>
+    </message>
+    <message>
+        <source>{map} polygons</source>
+        <translation>{map} Polygone</translation>
+    </message>
+    <message>
+        <source>{n} of {limit}</source>
+        <translation>{n} von {limit}</translation>
+    </message>
+    <message>
+        <source>{n} polygons</source>
+        <translation>{n} Polygone</translation>
+    </message>
+    <message>
+        <source>{n} strokes</source>
+        <translation>{n} Striche</translation>
+    </message>
+    <message>
+        <source>{n} were not added: {names}. {reason}</source>
+        <translation>{n} wurden nicht hinzugefügt: {names}. {reason}</translation>
+    </message>
+    <message>
+        <source>{ref} and {markup} show the AI what you mean. The {library} has ready-made prompts.</source>
+        <translation>{ref} und {markup} zeigen der AI, was du meinst. Die {library} enthält fertige Prompts.</translation>
+    </message>
+    <message>
+        <source>“Color tolerance” at {n} matches no pixel. Raise it.</source>
+        <translation>„Farbtoleranz” trifft bei {n} auf kein Pixel zu. Erhöhe den Wert.</translation>
+    </message>
+    <message>
+        <source>“Remove speckle” at {n} px removed every shape. Lower it.</source>
+        <translation>„Flecken entfernen” hat bei {n} px alle Formen entfernt. Verringere den Wert.</translation>
+    </message>
+    <message>
+        <source>“{name}” updated: {count}.</source>
+        <translation>„{name}” aktualisiert: {count}.</translation>
+    </message>
+    <message>
+        <source>Warning: Cannot connect to server ({error}). plugin requires internet connection to function.</source>
+        <translation>Warnung: Verbindung zum Server nicht möglich ({error}). Das plugin benötigt eine Internetverbindung, um zu funktionieren.</translation>
+    </message>
+    <message>
+        <source>plugin installed</source>
+        <translation>plugin installiert</translation>
+    </message>
+    <message>
+        <source>The AI Edit plugin is not loaded. Enable it in plugins &gt; Manage and Install plugins, then reopen this algorithm. (Looked for: {keys})</source>
+        <translation>Das AI Edit-plugin ist nicht geladen. Aktivieren Sie es unter plugins &gt; Manage and Install plugins und öffnen Sie diesen Algorithmus anschließend erneut. (Gesucht wurde nach: {keys})</translation>
+    </message>
+    <message>
+        <source>&#x27;Color tolerance&#x27; at {n} matches no pixel. Raise it.</source>
+        <translation>&#x27;Farbtoleranz&#x27; bei {n} trifft auf kein Pixel zu. Erhöhe den Wert.</translation>
+    </message>
+    <message>
+        <source>&#x27;Remove speckle&#x27; at {n} px removed every shape. Lower it.</source>
+        <translation>&#x27;Störpunkte entfernen&#x27; bei {n} px hat jede Form entfernt. Verringere den Wert.</translation>
+    </message>
+    <message>
+        <source>2K and 4K output</source>
+        <translation>2K- und 4K-Ausgabe</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Draw&lt;/b&gt;&lt;br&gt;Draw arrows, shapes, or labels on the map to show the AI what to change and where. Your drawing is sent with the prompt as visual guidance.</source>
+        <translation>&lt;b&gt;Zeichnen&lt;/b&gt;&lt;br&gt;Zeichne Pfeile, Formen oder Beschriftungen auf die Karte, um der KI zu zeigen, was und wo geändert werden soll. Deine Zeichnung wird mit dem Prompt als visuelle Anleitung gesendet.</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Output size&lt;/b&gt;&lt;br&gt;A bigger output is sharper and more precise, and costs more credits. Standard (1K), Large (2K), Maximum (4K).</source>
+        <translation>&lt;b&gt;Ausgabegröße&lt;/b&gt;&lt;br&gt;Eine größere Ausgabe ist schärfer und präziser und kostet mehr Credits. Standard (1K), Groß (2K), Maximum (4K).</translation>
+    </message>
+    <message>
+        <source>Add a reference</source>
+        <translation>Eine Referenz hinzufügen</translation>
+    </message>
+    <message>
+        <source>An image or a data file</source>
+        <translation>Ein Bild oder eine Datendatei</translation>
+    </message>
+    <message>
+        <source>Another output size</source>
+        <translation>Eine andere Ausgabegröße</translation>
+    </message>
+    <message>
+        <source>Capturing your zone</source>
+        <translation>Zone wird erfasst</translation>
+    </message>
+    <message>
+        <source>Check your connection</source>
+        <translation>Verbindung prüfen</translation>
+    </message>
+    <message>
+        <source>Click to view full size. Hover for download.</source>
+        <translation>Klicken für Vollbild. Zum Herunterladen darüberfahren.</translation>
+    </message>
+    <message>
+        <source>Contracting by {n} px erased every shape. Set &#x27;Expand/Contract&#x27; closer to 0.</source>
+        <translation>Kontraktion um {n} px hat jede Form entfernt. Setze &#x27;Erweitern/Kontrahieren&#x27; näher an 0.</translation>
+    </message>
+    <message>
+        <source>Create a map</source>
+        <translation>Karte erstellen</translation>
+    </message>
+    <message>
+        <source>Detail</source>
+        <translation>Detail</translation>
+    </message>
+    <message>
+        <source>Drag a box on the map</source>
+        <translation>Ziehe ein Rechteck auf der Karte auf</translation>
+    </message>
+    <message>
+        <source>Drawing your edit</source>
+        <translation>Bearbeitung wird gezeichnet</translation>
+    </message>
+    <message>
+        <source>Drop a file or a layer here</source>
+        <translation>Datei oder Layer hier ablegen</translation>
+    </message>
+    <message>
+        <source>Each checked color becomes a class.</source>
+        <translation>Jede angehakte Farbe wird zu einer Klasse.</translation>
+    </message>
+    <message>
+        <source>Finest detail for print and zoom</source>
+        <translation>Höchste Detailtiefe für Druck und Zoom</translation>
+    </message>
+    <message>
+        <source>Generation restored. Change the prompt or the zone, then generate again.</source>
+        <translation>Generation wiederhergestellt. Ändern Sie den Prompt oder die Zone und generieren Sie dann erneut.</translation>
+    </message>
+    <message>
+        <source>Generations</source>
+        <translation>Generationen</translation>
+    </message>
+    <message>
+        <source>Keep this result and start a new edit. You can resume this session later.</source>
+        <translation>Dieses Ergebnis behalten und eine neue Bearbeitung starten. Sie können diese Sitzung später fortsetzen.</translation>
+    </message>
+    <message>
+        <source>Keep your drawing on the zone to guide the edit, and close this panel</source>
+        <translation>Behalten Sie Ihre Zeichnung auf der Zone, um die Bearbeitung zu steuern, und schließen Sie dieses Bedienfeld</translation>
+    </message>
+    <message>
+        <source>Large</source>
+        <translation>Groß</translation>
+    </message>
+    <message>
+        <source>Like it? Pro adds 2K, 4K and commercial use.</source>
+        <translation>Gefällt es Ihnen? Pro fügt 2K, 4K und kommerzielle Nutzung hinzu.</translation>
+    </message>
+    <message>
+        <source>No shape reaches {n} px. Lower &#x27;Min polygon size&#x27;.</source>
+        <translation>Keine Form erreicht {n} px. Verringern Sie &#x27;Minimale Polygongröße&#x27;.</translation>
+    </message>
+    <message>
+        <source>No shapes left with these settings. Set &#x27;Expand/Contract&#x27; closer to 0, lower &#x27;Min polygon size&#x27; or &#x27;Remove speckle&#x27;, or raise &#x27;Color tolerance&#x27;.</source>
+        <translation>Mit diesen Einstellungen sind keine Formen mehr übrig. Setzen Sie &#x27;Erweitern/Zusammenziehen&#x27; näher an 0, verringern Sie &#x27;Minimale Polygongröße&#x27; oder &#x27;Flecken entfernen&#x27;, oder erhöhen Sie &#x27;Farbtoleranz&#x27;.</translation>
+    </message>
+    <message>
+        <source>No usage yet</source>
+        <translation>Noch keine Nutzung</translation>
+    </message>
+    <message>
+        <source>Non-commercial use</source>
+        <translation>Nicht-kommerzielle Nutzung</translation>
+    </message>
+    <message>
+        <source>Open QGIS&#x27;s Data Source Manager to add data</source>
+        <translation>Öffnen Sie die Datenquellenverwaltung von QGIS, um Daten hinzuzufügen</translation>
+    </message>
+    <message>
+        <source>Original, before any edit</source>
+        <translation>Original, vor jeder Bearbeitung</translation>
+    </message>
+    <message>
+        <source>Placing the result</source>
+        <translation>Ergebnis wird platziert</translation>
+    </message>
+    <message>
+        <source>Prompts, references, mark up, vectorize</source>
+        <translation>Prompts, Referenzen, markieren, vektorisieren</translation>
+    </message>
+    <message>
+        <source>QGIS could not turn it on. Tick it in plugins &gt; Manage and Install plugins.</source>
+        <translation>QGIS konnte es nicht aktivieren. Setzen Sie den Haken unter plugins &gt; plugins verwalten und installieren.</translation>
+    </message>
+    <message>
+        <source>Quick draft, lighter on credits</source>
+        <translation>Schneller Entwurf, sparsamer mit Credits</translation>
+    </message>
+    <message>
+        <source>Remove this reference</source>
+        <translation>Diese Referenz entfernen</translation>
+    </message>
+    <message>
+        <source>Rendered and cropped to your zone</source>
+        <translation>Gerendert und auf Ihre Zone zugeschnitten</translation>
+    </message>
+    <message>
+        <source>Run the prompt again on the same zone, from the selected version</source>
+        <translation>Den Prompt erneut auf derselben Zone ausführen, ausgehend von der ausgewählten Version</translation>
+    </message>
+    <message>
+        <source>Say in the prompt what to take from each reference.</source>
+        <translation>Geben Sie im Prompt an, was aus jeder Referenz übernommen werden soll.</translation>
+    </message>
+    <message>
+        <source>Search prompts, e.g. &quot;add trees&quot; or &quot;flood the river&quot;</source>
+        <translation>Prompts durchsuchen, z. B. &quot;add trees&quot; oder &quot;flood the river&quot;</translation>
+    </message>
+    <message>
+        <source>Sending the image</source>
+        <translation>Bild wird gesendet</translation>
+    </message>
+    <message>
+        <source>Sent whole, at its own size</source>
+        <translation>Vollständig und in Originalgröße gesendet</translation>
+    </message>
+    <message>
+        <source>Sharper result for everyday maps</source>
+        <translation>Schärferes Ergebnis für Alltagskarten</translation>
+    </message>
+    <message>
+        <source>Show the plugin&#x27;s panel.</source>
+        <translation>Bedienfeld des plugins anzeigen.</translation>
+    </message>
+    <message>
+        <source>Size</source>
+        <translation>Größe</translation>
+    </message>
+    <message>
+        <source>The imagery this session was edited on is not in this project. Add a snapshot of it to see your edits in context.</source>
+        <translation>Die Bilddaten, auf denen diese Sitzung bearbeitet wurde, sind nicht in diesem Projekt. Fügen Sie einen Schnappschuss davon hinzu, um Ihre Bearbeitungen im Kontext zu sehen.</translation>
+    </message>
+    <message>
+        <source>Try one word, like &quot;trees&quot;</source>
+        <translation>Versuchen Sie ein einzelnes Wort, z. B. „trees“</translation>
+    </message>
+    <message>
+        <source>Turn on a layer, or start with a sample.</source>
+        <translation>Aktivieren Sie einen Layer oder beginnen Sie mit einem Beispiel.</translation>
+    </message>
+    <message>
+        <source>Turn one on in the Layers panel to edit it.</source>
+        <translation>Aktivieren Sie einen im Layer-Bedienfeld, um ihn zu bearbeiten.</translation>
+    </message>
+    <message>
+        <source>Update to keep using AI Edit. It takes one click in the QGIS plugin Manager, and the plugin reloads on its own.</source>
+        <translation>Aktualisieren Sie, um AI Edit weiterhin nutzen zu können. Es genügt ein Klick im QGIS plugin Manager, und das plugin lädt sich von selbst neu.</translation>
+    </message>
+    <message>
+        <source>Vectorize turns a flat-color map into polygons.</source>
+        <translation>Vektorisieren wandelt eine einfarbige Karte in Polygone um.</translation>
+    </message>
+    <message>
+        <source>Very large</source>
+        <translation>Sehr groß</translation>
+    </message>
+    <message>
+        <source>While marking up</source>
+        <translation>Während des Markierens</translation>
+    </message>
+    <message>
+        <source>Working on your edit</source>
+        <translation>Wir arbeiten an Ihrer Bearbeitung</translation>
+    </message>
+    <message>
+        <source>You&#x27;ve used this month&#x27;s free edits</source>
+        <translation>Sie haben die kostenlosen Bearbeitungen dieses Monats aufgebraucht</translation>
+    </message>
+    <message>
+        <source>{n} stroke. Click Done to guide the edit with it.</source>
+        <translation>{n} Strich. Klicken Sie auf Fertig, um die Bearbeitung damit zu steuern.</translation>
+    </message>
+    <message>
+        <source>{n} strokes. Click Done to guide the edit with them.</source>
+        <translation>{n} Striche. Klicken Sie auf Fertig, um die Bearbeitung damit zu steuern.</translation>
+    </message>
 </context>
 </TS>

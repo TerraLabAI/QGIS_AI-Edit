@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import time
+import uuid
 from dataclasses import asdict, dataclass
 
 
@@ -182,7 +183,9 @@ def save_debug_artifacts(
 ) -> str | None:
     """Save debug artifacts to .debug/{timestamp}/. Returns path or None."""
     debug_dir = os.path.join(plugin_dir, ".debug")
-    run_dir = os.path.join(debug_dir, str(int(time.time())))
+    # Second resolution alone collides when two runs finish together.
+    run_name = f"{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    run_dir = os.path.join(debug_dir, run_name)
     os.makedirs(run_dir, exist_ok=True)
 
     if sent_png:
@@ -236,39 +239,50 @@ def _save_debug_geotiff(
     extent: dict,
     crs_wkt: str,
 ):
-    """Write a debug GeoTIFF from raw PNG bytes + extent. Fails silently."""
+    """Write a debug GeoTIFF from raw image bytes + extent. Fails silently.
+
+    Decodes from /vsimem (no temp file left behind on an error) and copies the
+    bands with ReadRaster/WriteRaster, like the main writer, so numpy is not
+    needed."""
     if not image_bytes:
         return
+    mem_path = f"/vsimem/ai_edit_debug_{uuid.uuid4().hex}"
+    src = None
+    dst = None
     try:
         from osgeo import gdal, osr
 
-        temp_png = os.path.join(run_dir, f"_tmp_{filename}.png")
-        tif_path = os.path.join(run_dir, filename)
-        with open(temp_png, "wb") as f:
-            f.write(image_bytes)
-        src = gdal.Open(temp_png)
+        gdal.FileFromMemBuffer(mem_path, image_bytes)
+        src = gdal.Open(mem_path)
         if src is None:
             return
         w, h, bands = src.RasterXSize, src.RasterYSize, min(src.RasterCount, 3)
         ext_w = extent["xmax"] - extent["xmin"]
         ext_h = extent["ymax"] - extent["ymin"]
         drv = gdal.GetDriverByName("GTiff")
-        dst = drv.Create(tif_path, w, h, bands, gdal.GDT_Byte)
+        dst = drv.Create(os.path.join(run_dir, filename), w, h, bands, gdal.GDT_Byte)
         dst.SetGeoTransform((
             extent["xmin"], ext_w / w, 0,
             extent["ymax"], 0, -(ext_h / h),
         ))
         srs = osr.SpatialReference()
-        srs.ImportFromWkt(crs_wkt)
-        dst.SetProjection(srs.ExportToWkt())
+        if srs.ImportFromWkt(crs_wkt) == 0:
+            dst.SetProjection(srs.ExportToWkt())
         for i in range(1, bands + 1):
-            dst.GetRasterBand(i).WriteArray(src.GetRasterBand(i).ReadAsArray())
+            data = src.GetRasterBand(i).ReadRaster(0, 0, w, h, buf_type=gdal.GDT_Byte)
+            dst.GetRasterBand(i).WriteRaster(0, 0, w, h, data, buf_type=gdal.GDT_Byte)
         dst.FlushCache()
-        dst = None
-        src = None
-        os.remove(temp_png)
     except Exception:
         pass  # nosec B110
+    finally:
+        dst = None
+        src = None
+        try:
+            from osgeo import gdal
+
+            gdal.Unlink(mem_path)
+        except Exception:
+            pass  # nosec B110
 
 
 def _cleanup_old_runs(debug_dir: str, max_runs: int):

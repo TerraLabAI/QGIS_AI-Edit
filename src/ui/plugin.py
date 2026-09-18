@@ -15,8 +15,10 @@ from .plugin_parts.conversations import ConversationsMixin
 from .plugin_parts.generation import GenerationMixin
 from .plugin_parts.generation_results import GenerationResultsMixin
 from .plugin_parts.history import HistoryMixin
+from .plugin_parts.launch_shortcut import LaunchShortcutMixin
 from .plugin_parts.lifecycle import PluginLifecycleMixin
 from .plugin_parts.onboarding import OnboardingMixin
+from .plugin_parts.processing_registration import ProcessingRegistrationMixin
 from .plugin_parts.reference_capture import ReferenceCaptureMixin
 from .plugin_parts.startup import StartupMixin
 from .plugin_parts.tool_panels import ToolPanelsMixin, _MarkupUndoFilter
@@ -26,6 +28,8 @@ from .tools.markup_tools import MarkupLayerManager
 
 class AIEditPlugin(
     PluginLifecycleMixin,
+    LaunchShortcutMixin,
+    ProcessingRegistrationMixin,
     StartupMixin,
     ActivationMixin,
     ZoneVersionsMixin,
@@ -63,6 +67,9 @@ class AIEditPlugin(
         # Set by Stop/Exit before they cancel, so the taskTerminated slot knows
         # the plugin already recovered the UI (vs a native task-manager Cancel).
         self._generation_cancel_handled = False
+        # A failed iteration returns to its existing result instead of dropping
+        # the lineage and edited prompt onto the first prompt screen.
+        self._generation_started_from_result = False
         self._selection_rubber_band = None
         self._selection_rubber_band_halo = None
         # Onboarding tile-warm-up watchers (see _start_imagery_gate).
@@ -87,11 +94,6 @@ class AIEditPlugin(
         self._last_image_b64 = None
         self._last_guidance_b64 = None
         self._last_guidance_format = None
-        self._last_input_format = None
-        self._last_input_bytes = None
-        self._last_extent_dict = None
-        self._last_crs_wkt = None
-        self._last_aspect_ratio = None
         self._last_suggested_res = None
         # Iteration anchor: sent as parent_request_id on the next submit.
         self._last_completed_request_id: str | None = None
@@ -156,6 +158,14 @@ class AIEditPlugin(
         # Fires once per QGIS session, on the first dock-open. Lifecycle event,
         # ships without explicit consent (no PII).
         self._plugin_opened_emitted = False
+        # Where the dock was opened from while the privacy notice was still
+        # unanswered; plugin_opened goes out with it once the notice is accepted.
+        self._pending_open_source: str | None = None
+        # The first-run privacy notice while it is on screen (startup mixin).
+        self._privacy_notice_dialog = None
+        # What to run once the user presses Continue on that notice: the action
+        # they asked for (a generation) that opened it in the first place.
+        self._privacy_notice_on_accept = None
         # Cached cohort props enriched onto every generation event.
         self._first_generation_milestone_emitted = False
         # Carried from generation_started to the terminal event so completed /
@@ -214,7 +224,7 @@ class AIEditPlugin(
         """Parse a simple KEY=VALUE env file (ignores comments and blank lines)."""
         env: dict = {}
         try:
-            with open(path, encoding="utf-8") as f:
+            with open(path, encoding="utf-8-sig", errors="replace") as f:
                 for line in f:
                     line = line.strip()
                     if not line or line.startswith("#"):
@@ -237,6 +247,6 @@ class AIEditPlugin(
                     line = line.strip()
                     if line.startswith("version="):
                         return line.split("=", 1)[1].strip()
-        except OSError:
+        except OSError:  # unreadable metadata: version reads as unknown
             pass
         return "unknown"

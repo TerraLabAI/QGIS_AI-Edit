@@ -60,6 +60,9 @@ _SETTLE_WAIT_MS = 300
 # set. Measured on a 120k-point vector job: 18 ms on QGIS 4.0.0 / Qt 6.8.1,
 # 23 ms on QGIS 3.22.0 / Qt 5.15.2.
 _RENDER_TIMEOUT_MS = 15000
+# How much of a .vrt file's head is read while sniffing for a remote (http/https)
+# source reference.
+_VRT_SNIFF_BYTES = 64 * 1024
 
 # Providers that fetch their data over the network during render. We render
 # these with the settling loop (tiles arrive async) and use the view extent
@@ -88,13 +91,13 @@ def _event_loop_flag(name: str):
 # inside it. So safe_single_shot callbacks, the progress ticker, poll tasks and
 # QgsTask.finished all re-enter plugin code here. The one thing that stays out
 # is a deleteLater() posted at the outer loop level, which Qt holds until that
-# loop resumes. `_settling_in_progress` below is the guard that follows from it.
+# loop resumes. `_settling["active"]` below is the guard that follows from it.
 _EXCLUDE_USER_INPUT = _event_loop_flag("ExcludeUserInputEvents")
 
 # True while a settling render holds a nested event loop. Re-entering would
 # stack a second loop inside the first, and the outer one could then only end
 # after the inner one.
-_settling_in_progress = False
+_settling = {"active": False}
 
 
 def is_remote_layer(layer) -> bool:
@@ -126,7 +129,7 @@ def is_remote_layer(layer) -> bool:
     if source.endswith(".vrt") and os.path.isfile(raw_source):
         try:
             with open(raw_source, encoding="utf-8", errors="replace") as f:
-                head = f.read(64 * 1024).lower()
+                head = f.read(get_export_dial("widgets.layer_renderer.vrt_sniff_bytes", _VRT_SNIFF_BYTES)).lower()
             if "http://" in head or "https://" in head:
                 return True
         except OSError:  # nosec B110 - unreadable VRT treated as local.
@@ -204,6 +207,24 @@ def load_transient_layers(path: str) -> list:
     Returns a list of QgsMapLayer; the caller must hold a reference to them until
     rendering completes (they are not parented to the project).
     """
+    layers = _load_transient_layers_at(path)
+    if layers or path.isascii():
+        return layers
+    # The QGIS GDAL provider refuses some non-ASCII paths on Windows (a file
+    # dropped from an accented folder). The folder's 8.3 short name is ASCII.
+    folder, base = os.path.split(path)
+    if not base.isascii():
+        return layers
+    from ..core.output_paths import ascii_safe_dir
+
+    safe_path = os.path.join(ascii_safe_dir(folder), base)
+    if safe_path == path:
+        return layers
+    return _load_transient_layers_at(safe_path)
+
+
+def _load_transient_layers_at(path: str) -> list:
+    """One attempt of load_transient_layers at exactly ``path``."""
     name = os.path.splitext(os.path.basename(path))[0]
     raster = QgsRasterLayer(path, name)
     if raster.isValid():
@@ -446,14 +467,13 @@ def _run_settling_render(settings: QgsMapSettings, layers: list) -> QImage | Non
     answers None for a render that overran its ceiling, so the near-blank frame
     such a render leaves behind can never become `prev`, and the loop cannot
     converge on two identical blank frames and hand one back as a reference."""
-    global _settling_in_progress
-    if _settling_in_progress:
+    if _settling["active"]:
         # `_run_render` on purpose: waitForFinished() runs no Python and
         # delivers no events, so it cannot re-enter here in turn. Anything that
         # turns a loop could, and the recursion would have no floor.
         log_warning("Settling render re-entered; rendering without settling")
         return _run_render(settings)
-    _settling_in_progress = True
+    _settling["active"] = True
     attempts = get_export_dial("render.settle_attempts", _SETTLE_MAX_ATTEMPTS)
     wait_ms = get_export_dial("render.settle_wait_ms", _SETTLE_WAIT_MS)
     try:
@@ -477,7 +497,7 @@ def _run_settling_render(settings: QgsMapSettings, layers: list) -> QImage | Non
                     pass
         return prev
     finally:
-        _settling_in_progress = False
+        _settling["active"] = False
 
 
 def _stop_render_job(job) -> None:

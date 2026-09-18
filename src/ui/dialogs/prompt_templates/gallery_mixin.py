@@ -11,12 +11,19 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ....core import qt_compat as QtC
+from ....core.config_store import get_export_copy, get_export_dial
 from ....core.i18n import tr
 from ....core.logger import log_debug
 from ....core.prompts.session_grouping import group_recent_jobs
+from .card_grid import card_grid_columns, settle_card_grid
 from .common import _LOAD_MORE_BTN, _gallery_batch_size, _is_alive
 from .generation_card import _GenerationCard
 from .workers import _detach_worker, _GenerationFavoriteWorker, _HistoryPageWorker
+
+# Coalesces scrollbar valueChanged ticks before the lazy-thumbnail sweep runs.
+_SCROLL_DEBOUNCE_MS = 50
+# Second lazy-load pass, after layout has settled from the first (0ms) tick.
+_LAZY_LOAD_SETTLE_MS = 80
 
 
 class GalleryMixin:
@@ -76,11 +83,11 @@ class GalleryMixin:
         cards = st["cards"]
         start = st["visible"]
         end = min(start + st.get("page_size", _gallery_batch_size()), len(entries))
-        # Favorites and the Starred page gallery tag generation cards with a
-        # Template / Your prompt origin pill so the two kinds read apart;
-        # Recent does not (all generations).
-        show_origin = key in ("user_favorites", "work_favorites")
-        columns = st.get("columns", 3)
+        # No Template / Your prompt pill any more: in Favorites a template
+        # card carries its description and a past edit its date, which tell
+        # the two apart without a badge on every card.
+        show_origin = False
+        columns = card_grid_columns(grid, st.get("columns", 3))
         slider_h = st.get("slider_h")
         for idx in range(start, end):
             row, col = divmod(idx, columns)
@@ -102,6 +109,7 @@ class GalleryMixin:
             grid.addWidget(card, row, col)
             cards.append(card)
         st["visible"] = end
+        settle_card_grid(grid)
 
     def _update_gallery_more_btn(self, key: str) -> None:
         st = self._gallery_state.get(key)
@@ -119,7 +127,9 @@ class GalleryMixin:
             # Local jobs all visible but the server holds older ones.
             btn.setVisible(True)
             btn.setEnabled(True)
-            btn.setText(tr("Load older generations"))
+            btn.setText(
+                get_export_copy("dialogs.gallery_mixin.load_older_button", tr("Load older generations"))
+            )
         else:
             btn.setVisible(False)
 
@@ -151,7 +161,9 @@ class GalleryMixin:
         st = self._gallery_state.get("recent")
         if st is not None and _is_alive(st.get("btn")):
             st["btn"].setEnabled(False)
-            st["btn"].setText(tr("Loading..."))
+            st["btn"].setText(
+                get_export_copy("dialogs.gallery_mixin.loading_button", tr("Loading..."))
+            )
         worker = _HistoryPageWorker(self._client, auth, oldest, parent=None)
         worker.page_fetched.connect(self._on_older_recent_fetched)
         worker.failed.connect(self._on_older_recent_failed)
@@ -238,14 +250,18 @@ class GalleryMixin:
         # dies with the gallery.
         debounce = QTimer(scroll)
         debounce.setSingleShot(True)
-        debounce.setInterval(50)
+        debounce.setInterval(
+            get_export_dial("dialogs.gallery_mixin.scroll_debounce_ms", _SCROLL_DEBOUNCE_MS)
+        )
         debounce.timeout.connect(trigger)
         on_scroll = lambda _v: debounce.start()  # noqa: E731
         scroll.verticalScrollBar().valueChanged.connect(on_scroll)
         self._gallery_lazy_wiring[key] = (scroll, on_scroll, debounce)
         # Two ticks: one once the event loop drains, one after layout settles.
         QTimer.singleShot(0, trigger)
-        QTimer.singleShot(80, trigger)
+        QTimer.singleShot(
+            get_export_dial("dialogs.gallery_mixin.lazy_load_settle_ms", _LAZY_LOAD_SETTLE_MS), trigger
+        )
 
     def _retire_gallery_wiring(self, key: str) -> None:
         """Unhook one gallery's lazy-load plumbing (scrollbar slot + debounce
@@ -257,7 +273,7 @@ class GalleryMixin:
         if _is_alive(scroll):
             try:
                 scroll.verticalScrollBar().valueChanged.disconnect(slot)
-            except (RuntimeError, TypeError):
+            except (RuntimeError, TypeError):  # slot already disconnected or scroll area deleted
                 pass
         if _is_alive(timer):
             timer.stop()

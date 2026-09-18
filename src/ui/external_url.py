@@ -23,3 +23,19 @@ def open_external(url: str) -> bool:
         log_warning(f"Blocked external URL with disallowed scheme: {scheme or '(none)'}")
         return False
     return QDesktopServices.openUrl(qurl)
+
+
+def open_mailto(url: str) -> bool:
+    """Hand a ``mailto:`` link to the OS mail client. Kept apart from
+    ``open_external`` on purpose: a served http link must never turn into a
+    mail scheme, and a mail link must never reach the browser gate. Returns
+    False when the scheme is anything else or the OS has no handler, so the
+    caller can fall back to showing the address."""
+    qurl = QUrl((url or "").strip())
+    if qurl.scheme().lower() != "mailto":
+        log_warning(f"Blocked mail link with disallowed scheme: {qurl.scheme() or '(none)'}")
+        return False
+    try:
+        return bool(QDesktopServices.openUrl(qurl))
+    except Exception:  # noqa: BLE001 - no mail handler; the caller shows the address.
+        return False

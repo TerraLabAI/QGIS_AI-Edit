@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 from qgis.PyQt.QtCore import QSize, Qt, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QSizePolicy,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -15,20 +15,22 @@ from qgis.PyQt.QtWidgets import (
 from ....core import qt_compat as QtC
 from ....core import telemetry
 from ....core import telemetry_events as te
+from ....core.config_store import get_export_copy
 from ....core.i18n import tr
 from ....core.prompts import prompt_history
 from ...dock.style import FOCUS_RING
+from .card_grid import add_row_height_filler, focus_neighbour_card, focus_out_of_grid
 from .common import (
     _CARD_HOVER,
     _CARD_NORMAL,
-    _CARD_PROMPT_CHARS,
-    _CARD_TITLE_H,
     _STAR_BTN,
     _STAR_FILLED_SVG,
     _STAR_OUTLINE_SVG,
-    _build_origin_pill,
+    CARD_HINT_QSS,
+    CARD_TITLE_QSS,
+    ElidedLabel,
     _build_use_hint,
-    _card_prompt,
+    _icon,
     _set_use_hint,
     _sip,
     _truncate,
@@ -41,9 +43,52 @@ from .common import (
 # Keyboard focus ring for a card, shared with _GenerationCard. Appended to
 # _CARD_NORMAL / _CARD_HOVER at every swap, because setStyleSheet replaces the
 # whole sheet and a rule left out of one of them disappears on hover. The hover
-# border is the brand green, so the ring cannot be green: FOCUS_RING is the
-# plugin's single ring hue and it reads as a different state under the cursor.
+# state is the strong hairline on the hover step, so the 2 px FOCUS_RING (the
+# plugin's single ring hue) reads as a different state under the cursor.
 _CARD_FOCUS = f"QFrame#card:focus {{ border: 2px solid {FOCUS_RING}; }}"
+
+
+class ElidedCardTitle(QLabel):
+    """A one-line card title that ends in an ellipsis when the card is narrow.
+
+    A plain QLabel was clipped mid-letter at a 900 px wide library ("Sharpen &
+    upscale imag"). The full name moves to the tooltip whenever it is cut."""
+
+    def __init__(self, text: str, parent=None):
+        super().__init__(parent)
+        self._full_text = text
+        self.setTextFormat(QtC.PlainText)
+        self.setText(text)
+
+    def minimumSizeHint(self):  # noqa: N802 - Qt signature
+        # Let the row shrink the title; the ellipsis takes over from there.
+        return QSize(0, super().minimumSizeHint().height())
+
+    def resizeEvent(self, event):  # noqa: N802 - Qt signature
+        super().resizeEvent(event)
+        shown = self.fontMetrics().elidedText(
+            self._full_text, Qt.TextElideMode.ElideRight, self.width()
+        )
+        if shown != self.text():
+            self.setText(shown)
+            self.setToolTip(self._full_text if shown != self._full_text else "")
+
+
+# Keyword the slider takes to round only its top corners (the picture is the
+# top of the card). Older slider builds lack it; the card then keeps four.
+_SQUARE_BOTTOM_KW = "square_bottom"
+
+
+def build_card_slider(parent):
+    """The before/after preview of a library card: idle at 50/50, no badges,
+    dragged only by its handle, its bottom edge square against the footer."""
+    from ...before_after_slider import BeforeAfterSlider
+
+    options = {"auto_loop": False, "show_badges": False, "handle_grab_only": True}
+    try:
+        return BeforeAfterSlider(parent, **options, **{_SQUARE_BOTTOM_KW: True})
+    except TypeError:
+        return BeforeAfterSlider(parent, **options)
 
 
 class _StarButton(QToolButton):
@@ -77,13 +122,15 @@ class _StarButton(QToolButton):
     def refresh(self):
         is_fav = prompt_history.is_favorite(self._prompt)
         if is_fav:
-            self.setIcon(QIcon(_STAR_FILLED_SVG))
-            self.setAccessibleName(tr("Remove from favorites"))
-            self.setToolTip(tr("Remove from favorites"))
+            self.setIcon(_icon(_STAR_FILLED_SVG))
+            remove_text = get_export_copy("dialogs.cards.remove_from_favorites", tr("Remove from favorites"))
+            self.setAccessibleName(remove_text)
+            self.setToolTip(remove_text)
         else:
-            self.setIcon(QIcon(_STAR_OUTLINE_SVG))
-            self.setAccessibleName(tr("Add to favorites"))
-            self.setToolTip(tr("Add to favorites"))
+            self.setIcon(_icon(_STAR_OUTLINE_SVG))
+            add_text = get_export_copy("dialogs.cards.add_to_favorites", tr("Add to favorites"))
+            self.setAccessibleName(add_text)
+            self.setToolTip(add_text)
 
     def _on_clicked(self):
         now_fav = prompt_history.toggle_favorite(
@@ -123,6 +170,7 @@ class _BeforeAfterCard(QFrame):
         demo_loader=None,
         absolute_url=None,
         parent=None,
+        hint: str = "",
     ):
         super().__init__(parent)
         self.setObjectName("card")
@@ -131,31 +179,33 @@ class _BeforeAfterCard(QFrame):
         self.setCursor(QtC.PointingHandCursor)
         self.setStyleSheet(_CARD_NORMAL + _CARD_FOCUS)
         # The card is the only way to pick a template, so it has to be tabbable
-        # and activatable; the star inside it was the sole focus stop before.
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setAccessibleName(preset.get("label") or tr("Template"))
+        # and activatable. Tab focus only: a mouse click opens the preview and
+        # used to leave a focus ring on the card once the preview closed.
+        self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.setAccessibleName(
+            preset.get("label") or get_export_copy("dialogs.cards.default_accessible_name", tr("Template"))
+        )
         # Flexible width so the grid columns stretch to fill the window (no
         # clipped right edge); a minimum keeps the preview readable when small.
         self.setMinimumWidth(200)
-        self.setSizePolicy(QtC.SizePolicyExpanding, QtC.SizePolicyFixed)
+        # Preferred height: the cards of one grid row share the tallest one's
+        # height, so a row never shows a short card next to a tall one.
+        self.setSizePolicy(QtC.SizePolicyExpanding, QSizePolicy.Policy.Preferred)
 
+        # 1 px inset: the picture sits inside the card's hairline and takes the
+        # card's own top corners.
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setContentsMargins(1, 1, 1, 1)
         outer.setSpacing(0)
 
         # --- slider preview ---
-        # Late import to avoid Qt initialisation order issues at module load.
-        from ...before_after_slider import BeforeAfterSlider
-
         # auto_loop=False keeps the divider parked at 50/50 by default - vital
         # when 6 cards share the page so the eye doesn't get pulled in 6
         # different directions. Each card animates only while the cursor is
         # over it (the slider already pauses on hover and respects drags).
         # No badges: match the clean Recent-card preview (the full before/after
         # detail lives in the popup the card opens).
-        self._slider = BeforeAfterSlider(
-            self, auto_loop=False, show_badges=False, handle_grab_only=True
-        )
+        self._slider = build_card_slider(self)
         self._slider.setFixedHeight(self.SLIDER_HEIGHT)
         self._slider.setSizePolicy(QtC.SizePolicyExpanding, QtC.SizePolicyFixed)
         self._slider.clicked.connect(self._emit_click)
@@ -168,63 +218,31 @@ class _BeforeAfterCard(QFrame):
         footer_wrap = QWidget(self)
         footer_outer = QVBoxLayout(footer_wrap)
         self._star = None
-        from_favorites = bool(preset.get("from_favorites"))
-
-        if from_favorites:
-            # Favorites: match the generation cards sharing this grid - origin
-            # pill, a 2-line title block, then the use hint on its own row - so
-            # every cell is the same height (1-line name vs 2-line prompt alike).
-            footer_outer.setContentsMargins(10, 6, 10, 8)
-            footer_outer.setSpacing(3)
-            pill_row = QHBoxLayout()
-            pill_row.setContentsMargins(0, 0, 0, 0)
-            pill_row.addWidget(
-                _build_origin_pill(self, bool(preset.get("source_category")))
-            )
-            pill_row.addStretch()
-            footer_outer.addLayout(pill_row)
-
-            label = QLabel(_card_prompt(preset["label"], _CARD_PROMPT_CHARS))
-            label.setWordWrap(True)
-            label.setFixedHeight(_CARD_TITLE_H)
-            label.setAlignment(QtC.AlignLeft | QtC.AlignTop)
-            label.setTextFormat(QtC.PlainText)
-            # 12px (not the template grid's 13px) so a starred template and a
-            # starred generation read at the same size side by side.
-            label.setStyleSheet(
-                "color: palette(text); font-size: 12px; font-weight: 600; "
-                "background: transparent; border: none;"
-            )
-            footer_outer.addWidget(label)
-
-            bottom_row = QHBoxLayout()
-            bottom_row.setContentsMargins(0, 0, 0, 0)
-            bottom_row.setSpacing(6)
-            bottom_row.addStretch()
-            self._use_hint = _build_use_hint(self)
-            bottom_row.addWidget(self._use_hint)
-            footer_outer.addLayout(bottom_row)
-        else:
-            # Templates (Top Picks, themed): the name alone. No prompt snippet -
-            # the title says what the template does, and the full prompt text
-            # lives in the detail popup the card opens.
-            footer_outer.setContentsMargins(10, 8, 10, 10)
-            footer_outer.setSpacing(3)
-            title_row = QHBoxLayout()
-            title_row.setContentsMargins(0, 0, 0, 0)
-            title_row.setSpacing(6)
-            label = QLabel(_truncate(preset["label"]))
-            label.setStyleSheet(
-                "color: palette(text); font-size: 13px; font-weight: 600; "
-                "background: transparent; border: none;"
-            )
-            title_row.addWidget(label)
-            title_row.addStretch()
-            self._use_hint = _build_use_hint(self)
-            title_row.addWidget(self._use_hint)
-            footer_outer.addLayout(title_row)
+        # One footer on every page, Favorites included (ChatGPT's GPT cards):
+        # the name with the chevron, then one muted line saying what it does.
+        # Never the category (the page or section above names it) and no
+        # Template pill: the description already tells a template from a past
+        # edit, whose card shows its date instead. The full prompt lives in
+        # the preview window the card opens.
+        footer_outer.setContentsMargins(12, 9, 12, 11)
+        footer_outer.setSpacing(2)
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(6)
+        label = ElidedCardTitle(_truncate(preset["label"]))
+        label.setStyleSheet(CARD_TITLE_QSS)
+        title_row.addWidget(label, 1)
+        self._use_hint = _build_use_hint(self)
+        title_row.addWidget(self._use_hint, 0, QtC.AlignVCenter)
+        footer_outer.addLayout(title_row)
+        # Always present, even empty, so every card of a row keeps the same
+        # height.
+        hint_lbl = ElidedLabel(hint)
+        hint_lbl.setStyleSheet(CARD_HINT_QSS)
+        footer_outer.addWidget(hint_lbl)
 
         outer.addWidget(footer_wrap)
+        add_row_height_filler(outer, footer_wrap)
 
         # --- demo image loading ---
         # Server-hosted demos via `demo_loader` + `absolute_url`. The loader
@@ -278,7 +296,9 @@ class _BeforeAfterCard(QFrame):
         # Once nothing is pending, an empty slider means the demo is genuinely
         # absent (no asset seeded, or every fetch failed) - say so plainly.
         if not self._pending_sides:
-            self._slider.set_placeholder_text(tr("No preview"))
+            self._slider.set_placeholder_text(
+                get_export_copy("dialogs.cards.no_preview_placeholder", tr("No preview"))
+            )
 
     def deleteLater(self):  # noqa: N802 - Qt signature
         # Drop the demo_loader signal connections so an inflight image load
@@ -290,7 +310,7 @@ class _BeforeAfterCard(QFrame):
             ):
                 try:
                     sig.disconnect(slot)
-                except (RuntimeError, TypeError):
+                except (RuntimeError, TypeError):  # slot never connected or loader deleted
                     pass
         super().deleteLater()
 
@@ -320,7 +340,7 @@ class _BeforeAfterCard(QFrame):
 
     def leaveEvent(self, event):  # noqa: N802
         self.setStyleSheet(_CARD_NORMAL + _CARD_FOCUS)
-        _set_use_hint(self._use_hint, False)
+        _set_use_hint(self._use_hint, self.hasFocus())
         super().leaveEvent(event)
 
     def mousePressEvent(self, event):  # noqa: N802
@@ -336,10 +356,25 @@ class _BeforeAfterCard(QFrame):
             if y >= self._slider.height():
                 self._emit_click()
 
+    def focusInEvent(self, event):  # noqa: N802
+        # A keyboard user sees the same "Open" cue a pointer does.
+        _set_use_hint(self._use_hint, True)
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event):  # noqa: N802
+        if not self.underMouse():
+            _set_use_hint(self._use_hint, False)
+        super().focusOutEvent(event)
+
     def keyPressEvent(self, event):  # noqa: N802
         # Space and Return open the same detail popup a click does.
         if event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self._emit_click()
+            event.accept()
+            return
+        # Arrow keys walk the grid, like the GPT store, and leave it at its
+        # top and left edges.
+        if focus_neighbour_card(self, event.key()) or focus_out_of_grid(self, event.key()):
             event.accept()
             return
         # Keys we don't handle: ignore, so Tab, Escape and the dialog's own

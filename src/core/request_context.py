@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 
 # The languages the server writes copy in. A QGIS locale outside this list
 # sends no lang at all, and the server picks its own default.
@@ -82,10 +83,12 @@ def _qgis_version() -> str:
 
 
 def _os_name() -> str:
+    # platform.system() runs WMI queries on Windows with Python 3.12, tens of
+    # milliseconds per call; these give the same names for free.
+    if sys.platform == "win32":
+        return "Windows"
     try:
-        import platform
-
-        return platform.system()
+        return os.uname().sysname
     except Exception:  # nosec B110
         return ""
 

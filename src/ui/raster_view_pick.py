@@ -31,6 +31,8 @@ from qgis.core import (
     QgsRectangle,
 )
 
+from ..core.config_store import get_export_dial, get_export_dial_ratio
+
 # View share bands. A raster filling at least half the view is what the user is
 # looking at; under a twentieth is a corner sliver and does not count as data
 # in view.
@@ -96,7 +98,9 @@ def raster_is_world_backdrop(layer: QgsRasterLayer) -> bool:
         layer.extent(), layer.crs(), QgsCoordinateReferenceSystem("EPSG:4326"))
     if extent is None:
         return False
-    return extent.width() >= _WORLD_SPAN_LON and extent.height() >= _WORLD_SPAN_LAT
+    span_lon = get_export_dial("widgets.raster_view_pick.world_span_lon_deg", _WORLD_SPAN_LON)
+    span_lat = get_export_dial("widgets.raster_view_pick.world_span_lat_deg", _WORLD_SPAN_LAT)
+    return extent.width() >= span_lon and extent.height() >= span_lat
 
 
 def view_fit_tier(layer: QgsRasterLayer, view_extent, view_crs) -> int:
@@ -106,9 +110,9 @@ def view_fit_tier(layer: QgsRasterLayer, view_extent, view_crs) -> int:
         return TIER_OUT_OF_VIEW
     if raster_is_world_backdrop(layer):
         return TIER_BACKDROP
-    if share >= VIEW_SHARE_FILLS:
+    if share >= get_export_dial_ratio("widgets.raster_view_pick.view_share_fills", VIEW_SHARE_FILLS):
         return TIER_FILLS_VIEW
-    if share >= VIEW_SHARE_PARTIAL:
+    if share >= get_export_dial_ratio("widgets.raster_view_pick.view_share_partial", VIEW_SHARE_PARTIAL):
         return TIER_IN_VIEW
     return TIER_SLIVER
 

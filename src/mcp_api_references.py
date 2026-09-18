@@ -112,15 +112,22 @@ _BASEMAP_ZOOM_MAX = 25
 
 def _is_safe_tile_template(value) -> bool:
     """Whether one served URL is an https XYZ tile template we can hand to QGIS."""
-    return (
+    if not (
         isinstance(value, str)
         and value.startswith("https://")
         and len(value) <= _BASEMAP_URL_MAX_CHARS
-        and "{z}" in value
-        and "{x}" in value
-        and "{y}" in value
+        and all(token in value for token in ("{z}", "{x}", "{y}"))
         and not _BASEMAP_URL_FORBIDDEN_RE.search(value)
-    )
+    ):
+        return False
+    try:
+        parsed = urllib.parse.urlsplit(value)
+        port = parsed.port
+        return bool(parsed.hostname and not parsed.username and not parsed.password
+                    and not parsed.fragment and (port is None or 1 <= port <= 65535)
+                    and not any(token in parsed.netloc for token in ("{z}", "{x}", "{y}")))
+    except ValueError:
+        return False
 
 
 def _served_basemap_catalog() -> dict[str, dict[str, Any]]:
@@ -302,6 +309,9 @@ class ReferencesMixin:
         project layer and no well-known basemap is reported back rather than
         silently dropped.
         """
+        if not isinstance(names, (list, tuple)) or any(not isinstance(name, str) or not name.strip() for name in names):
+            return {"_error": "reference_layers must contain non-empty layer names."}
+        names = list(dict.fromkeys(name.strip() for name in names))
         dock = self._dock()
         if dock is None:
             return {"_error": "The AI Edit panel is not available for references."}
@@ -322,6 +332,9 @@ class ReferencesMixin:
             pass
         attached, missing, added_layers = [], [], []
         for name in names:
+            if widget.at_capacity():
+                missing.append(str(name))
+                continue
             layer, added_layer, add_error = self._resolve_reference_layer(str(name))
             if add_error:
                 missing.append(f"{name} ({add_error})")
@@ -332,8 +345,12 @@ class ReferencesMixin:
             if added_layer:
                 added_layers.append(added_layer)
             try:
+                before_count = len(self._reference_entries())
                 widget.add_layers([layer])
-                attached.append(layer.name())
+                if len(self._reference_entries()) > before_count:
+                    attached.append(layer.name())
+                else:
+                    missing.append(str(name))
             except Exception as err:  # noqa: BLE001 - report, never abort the run.
                 missing.append(f"{name} ({err})")
         return {
@@ -387,6 +404,9 @@ class ReferencesMixin:
         if bool(layer_name) == bool(path):
             return {"_error": "Pass layer_name or path, exactly one of the two."}
 
+        if widget.at_capacity():
+            return {"ok": False, "added": False, "at_capacity": True, "count": store.count(),
+                    "_error": "The reference limit is reached. Remove one before adding another."}
         self._align_references_to_zone()
         has_zone = bool(getattr(self._plugin, "_selected_extent", None))
         known = {record.id for record in store.list()}

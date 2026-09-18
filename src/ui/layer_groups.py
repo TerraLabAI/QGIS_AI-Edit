@@ -22,10 +22,8 @@ AI_EDIT_GROUP_NAME = "AI-Edit"
 # group from a user-created or other-plugin "AI-Edit" group that happens
 # to share the name, so we never absorb someone else's layers.
 _OWNERSHIP_PROPERTY = "terralab/ai_edit_group"
-# Per-generation sub-group marker + slot for the source raster layer id
-# so vector layers know which sub-group to join even after a project reload.
+# Per-generation sub-group marker.
 _GENERATION_SUBGROUP_PROPERTY = "terralab/ai_edit_generation"
-_GENERATION_SOURCE_LAYER_PROPERTY = "terralab/ai_edit_source_layer_id"
 # Custom property stamped on the shared Mark up annotation layer. The
 # layer is unique per project and lives at the bottom of the AI-Edit
 # group so new generations stack above it without pushing it around.

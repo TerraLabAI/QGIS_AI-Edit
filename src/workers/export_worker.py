@@ -5,6 +5,7 @@ from qgis.core import QgsTask
 from qgis.PyQt.QtCore import pyqtSignal
 
 from ..core.canvas_export import ExportPrep, render_clean_base, render_export
+from ..core.config_store import get_export_copy
 from ..core.i18n import tr
 from ..core.logger import log_warning
 
@@ -36,7 +37,9 @@ class ExportWorker(QgsTask):
     @staticmethod
     def _unexpected_failure() -> str:
         """The message used when the render dies in a way nothing else caught."""
-        return tr("Unexpected error while rendering the map.")
+        return get_export_copy(
+            "pipeline.export_worker.unexpected_failure", tr("Unexpected error while rendering the map.")
+        )
 
     def run(self) -> bool:
         # Last-resort guard. sip swallows a Python exception raised out of
@@ -58,6 +61,8 @@ class ExportWorker(QgsTask):
             return False
         try:
             b64, size_bytes, actual_extent, fmt = render_export(self._prep)
+            if self.isCanceled():
+                return False
             clean_base = render_clean_base(self._prep)
         except Exception as err:  # noqa: BLE001
             self._failure = str(err)

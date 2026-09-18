@@ -3489,5 +3489,1693 @@ Kami senang mendengar dari Anda!</translation>
         <source>Later</source>
         <translation>Nanti</translation>
     </message>
+    <message>
+        <source>(no email)</source>
+        <translation>(tanpa email)</translation>
+    </message>
+    <message>
+        <source>1 polygon</source>
+        <translation>1 poligon</translation>
+    </message>
+    <message>
+        <source>1 prompt</source>
+        <translation>1 prompt</translation>
+    </message>
+    <message>
+        <source>1 stroke</source>
+        <translation>1 sapuan</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Draw&lt;/b&gt;&lt;br&gt;Draw lines, arrows or circles on the map to show the AI what to change and where. Your drawing is sent with the prompt as visual guidance.</source>
+        <translation>&lt;b&gt;Menggambar&lt;/b&gt;&lt;br&gt;Gambar garis, panah, atau lingkaran pada peta untuk menunjukkan kepada AI apa yang harus diubah dan di mana. Gambar Anda dikirim bersama prompt sebagai panduan visual.</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Library&lt;/b&gt;&lt;br&gt;Ready-made prompts, your recent prompts and your favorites.</source>
+        <translation>&lt;b&gt;Library&lt;/b&gt;&lt;br&gt;Prompt siap pakai, prompt terbaru Anda, dan favorit Anda.</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Higher quality is sharper and more precise, and costs more credits. Standard (1K), Detailed (2K), Maximum (4K).</source>
+        <translation>&lt;b&gt;Kualitas&lt;/b&gt;&lt;br&gt;Kualitas lebih tinggi lebih tajam dan presisi, serta menggunakan lebih banyak kredit. Standar (1K), Mendetail (2K), Maksimum (4K).</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;References&lt;/b&gt;&lt;br&gt;Add an image or data file from disk, or one of your project's layers, as guidance for the AI. You can also drag a layer from the Layers panel straight into the prompt box. Everything is cropped to your zone.</source>
+        <translation>&lt;b&gt;Referensi&lt;/b&gt;&lt;br&gt;Tambahkan gambar atau file data dari disk, atau salah satu layer proyek Anda, sebagai panduan bagi AI. Anda juga dapat menyeret layer dari panel Layers langsung ke kotak prompt. Semuanya dipotong ke zona Anda.</translation>
+    </message>
+    <message>
+        <source>A newer version is ready. Opens the QGIS plugin manager on it.</source>
+        <translation>Versi yang lebih baru sudah tersedia. Membuka pengelola plugin QGIS untuk versi tersebut.</translation>
+    </message>
+    <message>
+        <source>AI Edit Pro</source>
+        <translation>AI Edit Pro</translation>
+    </message>
+    <message>
+        <source>AI Edit Settings</source>
+        <translation>Pengaturan AI Edit</translation>
+    </message>
+    <message>
+        <source>AI Edit Settings...</source>
+        <translation>Pengaturan AI Edit...</translation>
+    </message>
+    <message>
+        <source>AI Edit and your data</source>
+        <translation>AI Edit dan data Anda</translation>
+    </message>
+    <message>
+        <source>About 150 edits a month and higher-resolution results. Cancel anytime.</source>
+        <translation>Sekitar 150 edit per bulan dan hasil beresolusi lebih tinggi. Batalkan kapan saja.</translation>
+    </message>
+    <message>
+        <source>Above 0 grows every shape outward, below 0 shrinks it inward.</source>
+        <translation>Nilai di atas 0 memperbesar setiap bentuk ke luar, sedangkan nilai di bawah 0 mengecilkannya ke dalam.</translation>
+    </message>
+    <message>
+        <source>Account</source>
+        <translation>Akun</translation>
+    </message>
+    <message>
+        <source>Account created. Outline an area on the example map to make your first edit.</source>
+        <translation>Akun dibuat. Tandai area pada peta contoh untuk membuat edit pertama Anda.</translation>
+    </message>
+    <message>
+        <source>Account deletion scheduled</source>
+        <translation>Penghapusan akun dijadwalkan</translation>
+    </message>
+    <message>
+        <source>Account not deleted.</source>
+        <translation>Akun tidak dihapus.</translation>
+    </message>
+    <message>
+        <source>Account not loaded</source>
+        <translation>Akun tidak dimuat</translation>
+    </message>
+    <message>
+        <source>Add a layer first</source>
+        <translation>Tambahkan layer terlebih dahulu</translation>
+    </message>
+    <message>
+        <source>Add a layer, or start with a sample.</source>
+        <translation>Tambahkan layer, atau mulai dengan contoh.</translation>
+    </message>
+    <message>
+        <source>Add the Original</source>
+        <translation>Tambahkan yang Asli</translation>
+    </message>
+    <message>
+        <source>Added</source>
+        <translation>Ditambahkan</translation>
+    </message>
+    <message>
+        <source>Added to your map as</source>
+        <translation>Ditambahkan ke peta Anda sebagai</translation>
+    </message>
+    <message>
+        <source>Added to your map as {name}</source>
+        <translation>Ditambahkan ke peta Anda sebagai {name}</translation>
+    </message>
+    <message>
+        <source>Added {added} of {total}. The limit is {n} references.</source>
+        <translation>Menambahkan {added} dari {total}. Batasnya adalah {n} referensi.</translation>
+    </message>
+    <message>
+        <source>Added {hex} to the classes.</source>
+        <translation>{hex} ditambahkan ke kelas.</translation>
+    </message>
+    <message>
+        <source>Address copied, paste it in your mail</source>
+        <translation>Alamat disalin, tempelkan di email Anda</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Lanjutan</translation>
+    </message>
+    <message>
+        <source>After</source>
+        <translation>Sesudah</translation>
+    </message>
+    <message>
+        <source>All TerraLab plugins are signed out. To cancel, sign in on terra-lab.ai.</source>
+        <translation>Semua plugin TerraLab telah keluar dari akun. Untuk membatalkan, masuk di terra-lab.ai.</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>Amber</translation>
+    </message>
+    <message>
+        <source>An AI edit of your map zone</source>
+        <translation>Edit AI pada zona peta Anda</translation>
+    </message>
+    <message>
+        <source>Another quality level</source>
+        <translation>Tingkat kualitas lain</translation>
+    </message>
+    <message>
+        <source>Any subscription stops renewing.</source>
+        <translation>Langganan apa pun berhenti diperpanjang.</translation>
+    </message>
+    <message>
+        <source>Apply the next change to the picked version, on the same zone</source>
+        <translation>Terapkan perubahan berikutnya ke versi yang dipilih, pada zona yang sama</translation>
+    </message>
+    <message>
+        <source>Ask your IT team to allow terra-lab.ai, or import your company root certificate in Settings &gt; Options &gt; Authentication</source>
+        <translation>Minta tim TI Anda untuk mengizinkan terra-lab.ai, atau impor sertifikat root perusahaan Anda di Pengaturan &gt; Opsi &gt; Autentikasi</translation>
+    </message>
+    <message>
+        <source>Ask your IT team to allow terra-lab.ai.</source>
+        <translation>Minta tim TI Anda untuk mengizinkan terra-lab.ai.</translation>
+    </message>
+    <message>
+        <source>Back to the classes: check, rename or recolor, then vectorize again.</source>
+        <translation>Kembali ke kelas: periksa, ganti nama, atau ubah warnanya, lalu lakukan vektorisasi lagi.</translation>
+    </message>
+    <message>
+        <source>Before</source>
+        <translation>Sebelum</translation>
+    </message>
+    <message>
+        <source>Before you start</source>
+        <translation>Sebelum memulai</translation>
+    </message>
+    <message>
+        <source>Best quality, crisp when zoomed or printed</source>
+        <translation>Kualitas terbaik, tetap tajam saat diperbesar atau dicetak</translation>
+    </message>
+    <message>
+        <source>Billing</source>
+        <translation>Penagihan</translation>
+    </message>
+    <message>
+        <source>Blog</source>
+        <translation>Blog</translation>
+    </message>
+    <message>
+        <source>Bring back the tips you closed</source>
+        <translation>Tampilkan kembali tips yang Anda tutup</translation>
+    </message>
+    <message>
+        <source>Browse the top picks</source>
+        <translation>Jelajahi pilihan terbaik</translation>
+    </message>
+    <message>
+        <source>Bug, question or idea? Write to us.</source>
+        <translation>Bug, pertanyaan, atau ide? Kirim pesan kepada kami.</translation>
+    </message>
+    <message>
+        <source>Cancel on terra-lab.ai during the grace period. After that, it is final.</source>
+        <translation>Batalkan di terra-lab.ai selama masa tenggang. Setelah itu, pembatalan bersifat final.</translation>
+    </message>
+    <message>
+        <source>Cancel the zone</source>
+        <translation>Batalkan zona</translation>
+    </message>
+    <message>
+        <source>Cannot reach the server. Check your internet connection.</source>
+        <translation>Tidak dapat terhubung ke server. Periksa koneksi internet Anda.</translation>
+    </message>
+    <message>
+        <source>Check your connection, then reopen the library.</source>
+        <translation>Periksa koneksi Anda, lalu buka kembali library.</translation>
+    </message>
+    <message>
+        <source>Check your connection, then retry.</source>
+        <translation>Periksa koneksi Anda, lalu coba lagi.</translation>
+    </message>
+    <message>
+        <source>Checkout on terra-lab.ai</source>
+        <translation>Lakukan pembayaran di terra-lab.ai</translation>
+    </message>
+    <message>
+        <source>Clear the search</source>
+        <translation>Hapus pencarian</translation>
+    </message>
+    <message>
+        <source>Click a color on the map to add it as a class.</source>
+        <translation>Klik warna pada peta untuk menambahkannya sebagai kelas.</translation>
+    </message>
+    <message>
+        <source>Click a color on the map. Esc cancels.</source>
+        <translation>Klik warna pada peta. Esc membatalkan.</translation>
+    </message>
+    <message>
+        <source>Click each point, double-click to finish.</source>
+        <translation>Klik setiap titik, lalu klik dua kali untuk selesai.</translation>
+    </message>
+    <message>
+        <source>Click to end the comparison</source>
+        <translation>Klik untuk mengakhiri perbandingan</translation>
+    </message>
+    <message>
+        <source>Close Vectorize</source>
+        <translation>Tutup Vectorize</translation>
+    </message>
+    <message>
+        <source>Close the panel</source>
+        <translation>Tutup panel</translation>
+    </message>
+    <message>
+        <source>Close the zone</source>
+        <translation>Tutup zona</translation>
+    </message>
+    <message>
+        <source>Commercial use</source>
+        <translation>Penggunaan komersial</translation>
+    </message>
+    <message>
+        <source>Complete guide</source>
+        <translation>Panduan lengkap</translation>
+    </message>
+    <message>
+        <source>Confirm with your email. Cancel on terra-lab.ai during the grace period.</source>
+        <translation>Konfirmasi dengan email Anda. Batalkan di terra-lab.ai selama masa tenggang.</translation>
+    </message>
+    <message>
+        <source>Confirmation refused. Close and try again.</source>
+        <translation>Konfirmasi ditolak. Tutup dan coba lagi.</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>Lanjutkan</translation>
+    </message>
+    <message>
+        <source>Continuing accepts the {terms} and the {privacy}.</source>
+        <translation>Dengan melanjutkan, Anda menyetujui {terms} dan {privacy}.</translation>
+    </message>
+    <message>
+        <source>Contracting by {n} px erased every shape. Set “Expand/Contract” closer to 0.</source>
+        <translation>Mengontraksikan sebesar {n} px menghapus semua bentuk. Atur “Perbesar/Perkecil” lebih dekat ke 0.</translation>
+    </message>
+    <message>
+        <source>Copy your logs and send them to us. We will look into it.</source>
+        <translation>Salin log Anda dan kirimkan kepada kami. Kami akan menyelidikinya.</translation>
+    </message>
+    <message>
+        <source>Could not add {name}. {reason}</source>
+        <translation>Tidak dapat menambahkan {name}. {reason}</translation>
+    </message>
+    <message>
+        <source>Could not capture your zone: {error}</source>
+        <translation>Tidak dapat mengambil zona Anda: {error}</translation>
+    </message>
+    <message>
+        <source>Could not download the reference.</source>
+        <translation>Tidak dapat mengunduh referensi.</translation>
+    </message>
+    <message>
+        <source>Could not reach TerraLab</source>
+        <translation>Tidak dapat terhubung ke TerraLab</translation>
+    </message>
+    <message>
+        <source>Credit count not available</source>
+        <translation>Jumlah kredit tidak tersedia</translation>
+    </message>
+    <message>
+        <source>Credits left and reset date</source>
+        <translation>Sisa kredit dan tanggal reset</translation>
+    </message>
+    <message>
+        <source>Custom color {hex}</source>
+        <translation>Warna khusus {hex}</translation>
+    </message>
+    <message>
+        <source>Custom needs</source>
+        <translation>Kebutuhan khusus</translation>
+    </message>
+    <message>
+        <source>Cyan</source>
+        <translation>Cyan</translation>
+    </message>
+    <message>
+        <source>Danger zone</source>
+        <translation>Zona berbahaya</translation>
+    </message>
+    <message>
+        <source>Data erased after the grace period.</source>
+        <translation>Data dihapus setelah masa tenggang.</translation>
+    </message>
+    <message>
+        <source>Data erased on {date}.</source>
+        <translation>Data dihapus pada {date}.</translation>
+    </message>
+    <message>
+        <source>Date</source>
+        <translation>Tanggal</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>Bawaan</translation>
+    </message>
+    <message>
+        <source>Delete account</source>
+        <translation>Hapus akun</translation>
+    </message>
+    <message>
+        <source>Delete your account?</source>
+        <translation>Hapus akun Anda?</translation>
+    </message>
+    <message>
+        <source>Deleting account</source>
+        <translation>Menghapus akun</translation>
+    </message>
+    <message>
+        <source>Deleting...</source>
+        <translation>Menghapus...</translation>
+    </message>
+    <message>
+        <source>Deletion already scheduled. Cancel on terra-lab.ai.</source>
+        <translation>Penghapusan sudah dijadwalkan. Batalkan di terra-lab.ai.</translation>
+    </message>
+    <message>
+        <source>Deletion already set for {date}. Cancel on terra-lab.ai.</source>
+        <translation>Penghapusan sudah dijadwalkan pada {date}. Batalkan di terra-lab.ai.</translation>
+    </message>
+    <message>
+        <source>Describe the change, e.g. turn the fields into a forest</source>
+        <translation>Jelaskan perubahan, misalnya ubah lahan pertanian menjadi hutan</translation>
+    </message>
+    <message>
+        <source>Describe the next change</source>
+        <translation>Jelaskan perubahan berikutnya</translation>
+    </message>
+    <message>
+        <source>Describe the next change to {base}</source>
+        <translation>Jelaskan perubahan berikutnya pada {base}</translation>
+    </message>
+    <message>
+        <source>Detailed and Maximum quality</source>
+        <translation>Kualitas Detail dan Maksimum</translation>
+    </message>
+    <message>
+        <source>Download Original as a georeferenced GeoTIFF (.tif)</source>
+        <translation>Unduh gambar asli sebagai GeoTIFF (.tif) bergeoreferensi</translation>
+    </message>
+    <message>
+        <source>Download as GeoTIFF</source>
+        <translation>Unduh sebagai GeoTIFF</translation>
+    </message>
+    <message>
+        <source>Downloading reference</source>
+        <translation>Mengunduh referensi</translation>
+    </message>
+    <message>
+        <source>Drag a box on the map. Esc cancels.</source>
+        <translation>Seret kotak pada peta. Esc membatalkan.</translation>
+    </message>
+    <message>
+        <source>Drag across an area. Shift draws a true circle.</source>
+        <translation>Seret melintasi area. Shift menggambar lingkaran sempurna.</translation>
+    </message>
+    <message>
+        <source>Drag across the area to circle it.</source>
+        <translation>Seret melintasi area untuk melingkarinya.</translation>
+    </message>
+    <message>
+        <source>Drag from the start to the tip.</source>
+        <translation>Seret dari awal ke ujung.</translation>
+    </message>
+    <message>
+        <source>Drag from the start to the tip. Shift keeps 45 degree angles.</source>
+        <translation>Seret dari awal ke ujung. Shift mempertahankan sudut 45 derajat.</translation>
+    </message>
+    <message>
+        <source>Drag on the map to draw freely.</source>
+        <translation>Seret pada peta untuk menggambar bebas.</translation>
+    </message>
+    <message>
+        <source>Drag the line or use the arrow keys. Esc stops.</source>
+        <translation>Seret garis atau gunakan tombol panah. Esc menghentikan.</translation>
+    </message>
+    <message>
+        <source>Draw</source>
+        <translation>Gambar</translation>
+    </message>
+    <message>
+        <source>Drawing a zone</source>
+        <translation>Menggambar zona</translation>
+    </message>
+    <message>
+        <source>Drop polygons smaller than this after tracing.</source>
+        <translation>Buang poligon yang lebih kecil dari ukuran ini setelah penelusuran.</translation>
+    </message>
+    <message>
+        <source>Drop this zone and go back to the start</source>
+        <translation>Buang zona ini dan kembali ke awal</translation>
+    </message>
+    <message>
+        <source>Duration</source>
+        <translation>Durasi</translation>
+    </message>
+    <message>
+        <source>Each change updates the same layer.</source>
+        <translation>Setiap perubahan memperbarui layer yang sama.</translation>
+    </message>
+    <message>
+        <source>Edit the selected area with AI (Enter)</source>
+        <translation>Edit area yang dipilih dengan AI (Enter)</translation>
+    </message>
+    <message>
+        <source>Erases all data, stops every TerraLab plugin</source>
+        <translation>Menghapus semua data, menghentikan setiap plugin TerraLab</translation>
+    </message>
+    <message>
+        <source>Errors, versions and features used, linked to your account. Never your imagery, layers or coordinates. On Pro, counts only.</source>
+        <translation>Kesalahan, versi, dan fitur yang digunakan ditautkan ke akun Anda. Citra, layer, atau koordinat Anda tidak pernah dikirim. Pada Pro, yang dikirim hanya jumlahnya.</translation>
+    </message>
+    <message>
+        <source>Every TerraLab plugin stops, on all computers.</source>
+        <translation>Setiap plugin TerraLab berhenti, di semua komputer.</translation>
+    </message>
+    <message>
+        <source>Every edit you run lands here, grouped by place, ready to pick up again.</source>
+        <translation>Setiap edit yang Anda jalankan tersimpan di sini, dikelompokkan berdasarkan tempat, siap dilanjutkan lagi.</translation>
+    </message>
+    <message>
+        <source>Everything we make</source>
+        <translation>Semua yang kami buat</translation>
+    </message>
+    <message>
+        <source>Failed to download result image after {attempts} attempts: {err}.</source>
+        <translation>Gagal mengunduh gambar hasil setelah {attempts} percobaan: {err}.</translation>
+    </message>
+    <message>
+        <source>Fill the holes inside each shape.</source>
+        <translation>Isi lubang di dalam setiap bentuk.</translation>
+    </message>
+    <message>
+        <source>Finish signing in on the page that just opened</source>
+        <translation>Selesaikan proses masuk di halaman yang baru saja terbuka</translation>
+    </message>
+    <message>
+        <source>For a team?</source>
+        <translation>Untuk tim?</translation>
+    </message>
+    <message>
+        <source>Free credits used up this month</source>
+        <translation>Kredit gratis bulan ini telah habis</translation>
+    </message>
+    <message>
+        <source>Free plan</source>
+        <translation>Paket gratis</translation>
+    </message>
+    <message>
+        <source>Free plan limit reached.</source>
+        <translation>Batas paket gratis tercapai.</translation>
+    </message>
+    <message>
+        <source>From zone to finished edit</source>
+        <translation>Dari zona hingga edit selesai</translation>
+    </message>
+    <message>
+        <source>Generate a flat-color map first, then come back.</source>
+        <translation>Buat peta warna datar terlebih dahulu, lalu kembali.</translation>
+    </message>
+    <message>
+        <source>Generate the edit on your zone</source>
+        <translation>Hasilkan edit pada zona Anda</translation>
+    </message>
+    <message>
+        <source>Generate without it</source>
+        <translation>Hasilkan tanpa itu</translation>
+    </message>
+    <message>
+        <source>Generated in the USA.</source>
+        <translation>Dihasilkan di AS.</translation>
+    </message>
+    <message>
+        <source>Get Pro</source>
+        <translation>Dapatkan Pro</translation>
+    </message>
+    <message>
+        <source>Get better results</source>
+        <translation>Dapatkan hasil yang lebih baik</translation>
+    </message>
+    <message>
+        <source>Go back one step</source>
+        <translation>Kembali satu langkah</translation>
+    </message>
+    <message>
+        <source>Good for a quick test</source>
+        <translation>Cocok untuk pengujian cepat</translation>
+    </message>
+    <message>
+        <source>Guide</source>
+        <translation>Panduan</translation>
+    </message>
+    <message>
+        <source>Hide this tip</source>
+        <translation>Sembunyikan tips ini</translation>
+    </message>
+    <message>
+        <source>Hints you closed in the panel</source>
+        <translation>Petunjuk yang Anda tutup di panel</translation>
+    </message>
+    <message>
+        <source>How far a pixel's color may drift from its class. Higher takes in noisy shades.</source>
+        <translation>Seberapa jauh warna piksel boleh menyimpang dari kelasnya. Nilai lebih tinggi menerima lebih banyak corak yang bising.</translation>
+    </message>
+    <message>
+        <source>Ideas and workflows</source>
+        <translation>Ide dan alur kerja</translation>
+    </message>
+    <message>
+        <source>If your browser works, turn on Settings &gt; Options &gt; Network &gt; Use proxy for web access.</source>
+        <translation>Jika browser Anda berfungsi, aktifkan Pengaturan &gt; Opsi &gt; Jaringan &gt; Gunakan proxy untuk akses web.</translation>
+    </message>
+    <message>
+        <source>Image too large. Draw a smaller zone or pick a lower Quality.</source>
+        <translation>Gambar terlalu besar. Gambar zona yang lebih kecil atau pilih Kualitas yang lebih rendah.</translation>
+    </message>
+    <message>
+        <source>In your prompt, say what to take from each: "roof colours from reference 1".</source>
+        <translation>Dalam prompt Anda, sebutkan apa yang harus diambil dari masing-masing: "warna atap dari referensi 1".</translation>
+    </message>
+    <message>
+        <source>Install in QGIS</source>
+        <translation>Instal di QGIS</translation>
+    </message>
+    <message>
+        <source>Installed</source>
+        <translation>Terpasang</translation>
+    </message>
+    <message>
+        <source>It is installed but did not start. Restart QGIS to use it.</source>
+        <translation>Plugin ini terpasang tetapi tidak dimulai. Mulai ulang QGIS untuk menggunakannya.</translation>
+    </message>
+    <message>
+        <source>It is installed but switched off. Turns it on and opens it.</source>
+        <translation>Plugin ini terpasang tetapi dinonaktifkan. Aktifkan dan buka plugin ini.</translation>
+    </message>
+    <message>
+        <source>Its companion files are missing ({missing}). Drop the whole set together.</source>
+        <translation>File pendampingnya tidak ada ({missing}). Seret seluruh set sekaligus.</translation>
+    </message>
+    <message>
+        <source>Keep editing with Pro</source>
+        <translation>Lanjutkan mengedit dengan Pro</translation>
+    </message>
+    <message>
+        <source>Keep the polygons on your map and close this panel</source>
+        <translation>Pertahankan poligon di peta Anda dan tutup panel ini</translation>
+    </message>
+    <message>
+        <source>Keep this result on your map and start over on a new zone. The session stays in Sessions.</source>
+        <translation>Pertahankan hasil ini di peta Anda dan mulai ulang pada zona baru. Sesi tetap tersimpan di Sesi.</translation>
+    </message>
+    <message>
+        <source>Keep your strokes to guide the edit. They are removed from the result.</source>
+        <translation>Pertahankan goresan Anda untuk memandu edit. Goresan tersebut dihapus dari hasil.</translation>
+    </message>
+    <message>
+        <source>Kept in France.</source>
+        <translation>Disimpan di Prancis.</translation>
+    </message>
+    <message>
+        <source>Keyboard shortcuts</source>
+        <translation>Pintasan keyboard</translation>
+    </message>
+    <message>
+        <source>Last free edit this month.</source>
+        <translation>Edit gratis terakhir bulan ini.</translation>
+    </message>
+    <message>
+        <source>Leave empty for the default folder</source>
+        <translation>Biarkan kosong untuk folder bawaan</translation>
+    </message>
+    <message>
+        <source>Leave fullscreen</source>
+        <translation>Keluar dari layar penuh</translation>
+    </message>
+    <message>
+        <source>Library (view only)</source>
+        <translation>Pustaka (hanya lihat)</translation>
+    </message>
+    <message>
+        <source>Like it? Pro adds Detailed and Maximum quality, and commercial use.</source>
+        <translation>Suka? Pro menambahkan kualitas Detail dan Maksimum, serta penggunaan komersial.</translation>
+    </message>
+    <message>
+        <source>Limit reached. Remove one to add another.</source>
+        <translation>Batas tercapai. Hapus satu untuk menambahkan yang lain.</translation>
+    </message>
+    <message>
+        <source>Linked to your account, no imagery</source>
+        <translation>Ditautkan ke akun Anda, tanpa citra</translation>
+    </message>
+    <message>
+        <source>Load this prompt, its references and the same map zone back into AI Edit, replacing what you have now.</source>
+        <translation>Muat kembali prompt ini beserta referensi dan zona peta yang sama ke AI Edit, menggantikan yang saat ini Anda gunakan.</translation>
+    </message>
+    <message>
+        <source>Locked while the AI generates</source>
+        <translation>Terkunci selama AI menghasilkan</translation>
+    </message>
+    <message>
+        <source>Made from</source>
+        <translation>Dibuat dari</translation>
+    </message>
+    <message>
+        <source>Magenta</source>
+        <translation>Magenta</translation>
+    </message>
+    <message>
+        <source>Manage</source>
+        <translation>Kelola</translation>
+    </message>
+    <message>
+        <source>Map view</source>
+        <translation>Tampilan peta</translation>
+    </message>
+    <message>
+        <source>More edits, commercial use</source>
+        <translation>Lebih banyak edit, penggunaan komersial</translation>
+    </message>
+    <message>
+        <source>More from TerraLab</source>
+        <translation>Lainnya dari TerraLab</translation>
+    </message>
+    <message>
+        <source>More plugins</source>
+        <translation>Plugin lainnya</translation>
+    </message>
+    <message>
+        <source>Need more?</source>
+        <translation>Butuh lebih?</translation>
+    </message>
+    <message>
+        <source>Needs a restart</source>
+        <translation>Perlu memulai ulang</translation>
+    </message>
+    <message>
+        <source>Network error. Check your internet connection.</source>
+        <translation>Kesalahan jaringan. Periksa koneksi internet Anda.</translation>
+    </message>
+    <message>
+        <source>New edit</source>
+        <translation>Edit baru</translation>
+    </message>
+    <message>
+        <source>No account linked to this key.</source>
+        <translation>Tidak ada akun yang tertaut dengan kunci ini.</translation>
+    </message>
+    <message>
+        <source>No edits yet</source>
+        <translation>Belum ada edit</translation>
+    </message>
+    <message>
+        <source>No favorites yet</source>
+        <translation>Belum ada favorit</translation>
+    </message>
+    <message>
+        <source>No map to vectorize yet</source>
+        <translation>Belum ada peta untuk divektorisasi</translation>
+    </message>
+    <message>
+        <source>No matches found</source>
+        <translation>Tidak ada kecocokan ditemukan</translation>
+    </message>
+    <message>
+        <source>No pixel matches the checked colors. Adjust a color, or add one with “Add color from map”.</source>
+        <translation>Tidak ada piksel yang cocok dengan warna yang dicentang. Sesuaikan warnanya, atau tambahkan satu dengan “Tambahkan warna dari peta”.</translation>
+    </message>
+    <message>
+        <source>No prompt was saved for this version.</source>
+        <translation>Tidak ada prompt yang tersimpan untuk versi ini.</translation>
+    </message>
+    <message>
+        <source>No prompts in this section yet</source>
+        <translation>Belum ada prompt di bagian ini</translation>
+    </message>
+    <message>
+        <source>No sessions match</source>
+        <translation>Tidak ada sesi yang cocok</translation>
+    </message>
+    <message>
+        <source>No shape reaches {n} px. Lower “Min polygon size”.</source>
+        <translation>Tidak ada bentuk yang mencapai {n} px. Turunkan “Ukuran poligon minimum”.</translation>
+    </message>
+    <message>
+        <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size” or “Remove speckle”, or raise “Color tolerance”.</source>
+        <translation>Tidak ada bentuk tersisa dengan pengaturan ini. Atur “Perbesar/Perkecil” mendekati 0, turunkan “Ukuran poligon minimum” atau “Hapus bintik”, atau naikkan “Toleransi warna”.</translation>
+    </message>
+    <message>
+        <source>No strokes yet</source>
+        <translation>Belum ada goresan</translation>
+    </message>
+    <message>
+        <source>Not an image or a map file QGIS can open.</source>
+        <translation>Bukan gambar atau file peta yang dapat dibuka QGIS.</translation>
+    </message>
+    <message>
+        <source>Not signed in</source>
+        <translation>Belum masuk</translation>
+    </message>
+    <message>
+        <source>Nothing was sent. Press Generate again to read the notice.</source>
+        <translation>Tidak ada yang dikirim. Tekan Hasilkan lagi untuk membaca pemberitahuannya.</translation>
+    </message>
+    <message>
+        <source>Nothing yet. The AI works from your zone and prompt only.</source>
+        <translation>Belum ada apa-apa. AI hanya bekerja dari zona dan prompt Anda.</translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation>Buka</translation>
+    </message>
+    <message>
+        <source>Open QGIS's Data Source Manager to add data</source>
+        <translation>Buka Data Source Manager QGIS untuk menambah data</translation>
+    </message>
+    <message>
+        <source>Open a prompt or a past edit and press its star: it will wait for you here.</source>
+        <translation>Buka sebuah prompt atau edit sebelumnya lalu tekan bintangnya: ia akan menunggu Anda di sini.</translation>
+    </message>
+    <message>
+        <source>Open dashboard</source>
+        <translation>Buka dashboard</translation>
+    </message>
+    <message>
+        <source>Open in QGIS</source>
+        <translation>Buka di QGIS</translation>
+    </message>
+    <message>
+        <source>Open the AI Edit page</source>
+        <translation>Buka halaman AI Edit</translation>
+    </message>
+    <message>
+        <source>Open the Library</source>
+        <translation>Buka Perpustakaan</translation>
+    </message>
+    <message>
+        <source>Open your sessions</source>
+        <translation>Buka sesi Anda</translation>
+    </message>
+    <message>
+        <source>Opens in your browser</source>
+        <translation>Terbuka di browser Anda</translation>
+    </message>
+    <message>
+        <source>Opens the QGIS plugin manager on this plugin.</source>
+        <translation>Membuka pengelola plugin QGIS pada plugin ini.</translation>
+    </message>
+    <message>
+        <source>Opens your dashboard in the browser</source>
+        <translation>Membuka dashboard Anda di browser</translation>
+    </message>
+    <message>
+        <source>Or drop images and layers here</source>
+        <translation>Atau letakkan gambar dan layer di sini</translation>
+    </message>
+    <message>
+        <source>Other TerraLab plugins for QGIS</source>
+        <translation>Plugin TerraLab lainnya untuk QGIS</translation>
+    </message>
+    <message>
+        <source>Other TerraLab plugins...</source>
+        <translation>Plugin TerraLab lainnya...</translation>
+    </message>
+    <message>
+        <source>Outline an area, say what to change</source>
+        <translation>Gariskan sebuah area, sebutkan yang ingin diubah</translation>
+    </message>
+    <message>
+        <source>Output size</source>
+        <translation>Ukuran keluaran</translation>
+    </message>
+    <message>
+        <source>Outside the prompt box</source>
+        <translation>Di luar kotak prompt</translation>
+    </message>
+    <message>
+        <source>Outside your zone, sent whole</source>
+        <translation>Di luar zona Anda, dikirim utuh</translation>
+    </message>
+    <message>
+        <source>Part of your zone is off the imagery. That part will come back blank.</source>
+        <translation>Sebagian zona Anda berada di luar citra. Bagian itu akan kembali kosong.</translation>
+    </message>
+    <message>
+        <source>Personal, non-commercial use</source>
+        <translation>Penggunaan pribadi, non-komersial</translation>
+    </message>
+    <message>
+        <source>Pick a map under Layer first.</source>
+        <translation>Pilih peta di bawah Layer terlebih dahulu.</translation>
+    </message>
+    <message>
+        <source>Pick a tool to draw.</source>
+        <translation>Pilih alat untuk menggambar.</translation>
+    </message>
+    <message>
+        <source>Plan not loaded</source>
+        <translation>Paket tidak dimuat</translation>
+    </message>
+    <message>
+        <source>Plan, payment and invoices</source>
+        <translation>Paket, pembayaran, dan invoice</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Pratinjau</translation>
+    </message>
+    <message>
+        <source>Privacy Policy</source>
+        <translation>Kebijakan Privasi</translation>
+    </message>
+    <message>
+        <source>Pro</source>
+        <translation>Pro</translation>
+    </message>
+    <message>
+        <source>Pro plan</source>
+        <translation>Paket Pro</translation>
+    </message>
+    <message>
+        <source>Pro unlocks Detailed and Maximum, for printing and zooming in</source>
+        <translation>Pro membuka Detailed dan Maximum, untuk mencetak dan memperbesar</translation>
+    </message>
+    <message>
+        <source>Project layer</source>
+        <translation>Layer proyek</translation>
+    </message>
+    <message>
+        <source>Prompts and edits you starred.</source>
+        <translation>Prompt dan edit yang Anda beri bintang.</translation>
+    </message>
+    <message>
+        <source>Prompts, References, Draw, Vectorize</source>
+        <translation>Prompts, Referensi, Gambar, Vektorisasi</translation>
+    </message>
+    <message>
+        <source>Proven prompts to start from. Open one to see it before and after.</source>
+        <translation>Prompt teruji untuk memulai. Buka salah satunya untuk melihat hasil sebelum dan sesudahnya.</translation>
+    </message>
+    <message>
+        <source>Proxy connection failed. Check QGIS proxy settings (Settings &gt; Options &gt; Network).</source>
+        <translation>Koneksi proxy gagal. Periksa pengaturan proxy QGIS (Settings &gt; Options &gt; Network).</translation>
+    </message>
+    <message>
+        <source>QGIS could not turn it on. Tick it in Plugins &gt; Manage and Install Plugins.</source>
+        <translation>QGIS tidak dapat mengaktifkannya. Centang di Plugins &gt; Manage and Install Plugins.</translation>
+    </message>
+    <message>
+        <source>Raise the timeout in Settings &gt; Options &gt; Network.</source>
+        <translation>Naikkan batas waktu di Settings &gt; Options &gt; Network.</translation>
+    </message>
+    <message>
+        <source>Read the guide</source>
+        <translation>Baca panduan</translation>
+    </message>
+    <message>
+        <source>Reference {n}</source>
+        <translation>Referensi {n}</translation>
+    </message>
+    <message>
+        <source>References</source>
+        <translation>Referensi</translation>
+    </message>
+    <message>
+        <source>Refreshing sessions</source>
+        <translation>Menyegarkan sesi</translation>
+    </message>
+    <message>
+        <source>Release to add</source>
+        <translation>Lepaskan untuk menambahkan</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>Hapus</translation>
+    </message>
+    <message>
+        <source>Remove every stroke. Undo cannot bring them back.</source>
+        <translation>Hapus semua goresan. Undo tidak dapat mengembalikannya.</translation>
+    </message>
+    <message>
+        <source>Remove the last point</source>
+        <translation>Hapus titik terakhir</translation>
+    </message>
+    <message>
+        <source>Remove {name}</source>
+        <translation>Hapus {name}</translation>
+    </message>
+    <message>
+        <source>Reopen this session in AI Edit: its prompt, references and the same map zone.</source>
+        <translation>Buka kembali sesi ini di AI Edit: prompt, referensinya, dan zona peta yang sama.</translation>
+    </message>
+    <message>
+        <source>Request cancelled.</source>
+        <translation>Permintaan dibatalkan.</translation>
+    </message>
+    <message>
+        <source>Request timed out. Check your connection or try again.</source>
+        <translation>Permintaan melewati batas waktu. Periksa koneksi Anda atau coba lagi.</translation>
+    </message>
+    <message>
+        <source>Reset settings</source>
+        <translation>Atur ulang pengaturan</translation>
+    </message>
+    <message>
+        <source>Restart QGIS</source>
+        <translation>Mulai ulang QGIS</translation>
+    </message>
+    <message>
+        <source>Result</source>
+        <translation>Hasil</translation>
+    </message>
+    <message>
+        <source>Results for "{query}"</source>
+        <translation>Hasil untuk "{query}"</translation>
+    </message>
+    <message>
+        <source>Run QGIS from a single sentence.</source>
+        <translation>Jalankan QGIS dari satu kalimat.</translation>
+    </message>
+    <message>
+        <source>Save reference</source>
+        <translation>Simpan referensi</translation>
+    </message>
+    <message>
+        <source>Saved in memory only: the GeoPackage is in use. Save the layer before closing QGIS.</source>
+        <translation>Disimpan hanya di memori: GeoPackage sedang digunakan. Simpan layer sebelum menutup QGIS.</translation>
+    </message>
+    <message>
+        <source>Search prompts</source>
+        <translation>Cari prompt</translation>
+    </message>
+    <message>
+        <source>Secure connection failed, often because of company SSL inspection. Ask your IT team to allow terra-lab.ai, or import your company root certificate in Settings &gt; Options &gt; Authentication.</source>
+        <translation>Koneksi aman gagal, sering kali karena inspeksi SSL perusahaan. Minta tim IT Anda mengizinkan terra-lab.ai, atau impor sertifikat root perusahaan Anda di Pengaturan &gt; Opsi &gt; Autentikasi.</translation>
+    </message>
+    <message>
+        <source>See Pro</source>
+        <translation>Lihat Pro</translation>
+    </message>
+    <message>
+        <source>See it in action</source>
+        <translation>Lihat cara kerjanya</translation>
+    </message>
+    <message>
+        <source>See plans on terra-lab.ai</source>
+        <translation>Lihat paket di terra-lab.ai</translation>
+    </message>
+    <message>
+        <source>See usage</source>
+        <translation>Lihat penggunaan</translation>
+    </message>
+    <message>
+        <source>See what Pro unlocks</source>
+        <translation>Lihat apa yang Pro buka</translation>
+    </message>
+    <message>
+        <source>Server refused the connection. The service may be temporarily down.</source>
+        <translation>Server menolak koneksi. Layanan mungkin sedang tidak tersedia sementara.</translation>
+    </message>
+    <message>
+        <source>Session expired. Sign out and back in.</source>
+        <translation>Sesi berakhir. Keluar lalu masuk kembali.</translation>
+    </message>
+    <message>
+        <source>Session reopened. Edit the prompt or pick a version, then Generate.</source>
+        <translation>Sesi dibuka kembali. Edit prompt atau pilih versi, lalu Hasilkan.</translation>
+    </message>
+    <message>
+        <source>Share usage statistics</source>
+        <translation>Bagikan statistik penggunaan</translation>
+    </message>
+    <message>
+        <source>Sharp, clean result for real maps</source>
+        <translation>Hasil tajam dan bersih untuk peta nyata</translation>
+    </message>
+    <message>
+        <source>Show a layer, or start with a sample.</source>
+        <translation>Tampilkan layer, atau mulai dengan contoh.</translation>
+    </message>
+    <message>
+        <source>Show it and generate</source>
+        <translation>Tampilkan dan hasilkan</translation>
+    </message>
+    <message>
+        <source>Show the AI a style, a legend or an object to match.</source>
+        <translation>Tunjukkan kepada AI sebuah gaya, legenda, atau objek untuk dicocokkan.</translation>
+    </message>
+    <message>
+        <source>Show the plugin's panel.</source>
+        <translation>Tampilkan panel plugin.</translation>
+    </message>
+    <message>
+        <source>Show this layer in the Layers panel</source>
+        <translation>Tampilkan layer ini di panel Layer</translation>
+    </message>
+    <message>
+        <source>Sign in</source>
+        <translation>Masuk</translation>
+    </message>
+    <message>
+        <source>Sign in to see your plan</source>
+        <translation>Masuk untuk melihat paket Anda</translation>
+    </message>
+    <message>
+        <source>Sign in to see your plan.</source>
+        <translation>Masuk untuk melihat paket Anda.</translation>
+    </message>
+    <message>
+        <source>Sign out, then sign in again.</source>
+        <translation>Keluar, lalu masuk lagi.</translation>
+    </message>
+    <message>
+        <source>Sign-in, plan and privacy</source>
+        <translation>Masuk, paket, dan privasi</translation>
+    </message>
+    <message>
+        <source>Sketch where the AI should act.</source>
+        <translation>Buat sketsa tempat AI harus bertindak.</translation>
+    </message>
+    <message>
+        <source>Softer outlines for natural shapes like trees.</source>
+        <translation>Garis tepi lebih lembut untuk bentuk alami seperti pohon.</translation>
+    </message>
+    <message>
+        <source>Start from {label}</source>
+        <translation>Mulai dari {label}</translation>
+    </message>
+    <message>
+        <source>Start the next edit from</source>
+        <translation>Mulai edit berikutnya dari</translation>
+    </message>
+    <message>
+        <source>Start the next edit from this version</source>
+        <translation>Mulai edit berikutnya dari versi ini</translation>
+    </message>
+    <message>
+        <source>Still generating. The result is added to your map when ready.</source>
+        <translation>Masih menghasilkan. Hasil ditambahkan ke peta Anda saat siap.</translation>
+    </message>
+    <message>
+        <source>Still waiting, but AI Edit cannot reach the server to check your sign-in.</source>
+        <translation>Masih menunggu, tetapi AI Edit tidak dapat menjangkau server untuk memeriksa status masuk Anda.</translation>
+    </message>
+    <message>
+        <source>Straight lines. Click the first point to close, Shift keeps 45 degree angles.</source>
+        <translation>Garis lurus. Klik titik pertama untuk menutup, Shift menjaga sudut 45 derajat.</translation>
+    </message>
+    <message>
+        <source>Stroke color</source>
+        <translation>Warna goresan</translation>
+    </message>
+    <message>
+        <source>Strokes count only inside your zone.</source>
+        <translation>Goresan hanya dihitung di dalam zona Anda.</translation>
+    </message>
+    <message>
+        <source>Subscription inactive. Manage it on terra-lab.ai.</source>
+        <translation>Langganan tidak aktif. Kelola di terra-lab.ai.</translation>
+    </message>
+    <message>
+        <source>Swipe between the original map and this result</source>
+        <translation>Geser antara peta asli dan hasil ini</translation>
+    </message>
+    <message>
+        <source>Team seats, custom quota, invoices</source>
+        <translation>Kursi tim, kuota khusus, faktur</translation>
+    </message>
+    <message>
+        <source>TerraLab blog</source>
+        <translation>Blog TerraLab</translation>
+    </message>
+    <message>
+        <source>TerraLab is busy right now</source>
+        <translation>TerraLab sedang sibuk saat ini</translation>
+    </message>
+    <message>
+        <source>That click missed the map. Try again on the map itself.</source>
+        <translation>Klik itu meleset dari peta. Coba lagi langsung di peta.</translation>
+    </message>
+    <message>
+        <source>That email does not match. Try again.</source>
+        <translation>Email itu tidak cocok. Coba lagi.</translation>
+    </message>
+    <message>
+        <source>The AI Edit drawing layer is hidden.</source>
+        <translation>Layer gambar AI Edit disembunyikan.</translation>
+    </message>
+    <message>
+        <source>The Free plan takes up to {n} references.</source>
+        <translation>Paket Free menerima hingga {n} referensi.</translation>
+    </message>
+    <message>
+        <source>The Free plan takes {n} reference.</source>
+        <translation>Paket Free menerima {n} referensi.</translation>
+    </message>
+    <message>
+        <source>The account could not be deleted.</source>
+        <translation>Akun tidak dapat dihapus.</translation>
+    </message>
+    <message>
+        <source>The free plan includes {n} reference. Remove it to add another.</source>
+        <translation>Paket free mencakup {n} referensi. Hapus untuk menambah yang lain.</translation>
+    </message>
+    <message>
+        <source>The free plan includes {n} references. Remove one to add another.</source>
+        <translation>Paket free mencakup {n} referensi. Hapus satu untuk menambah yang lain.</translation>
+    </message>
+    <message>
+        <source>The imagery this session was edited on is not in this project. Add its Original to see your edits in context.</source>
+        <translation>Citra yang menjadi dasar edit sesi ini tidak ada di proyek ini. Tambahkan Original-nya untuk melihat edit Anda dalam konteks.</translation>
+    </message>
+    <message>
+        <source>The layer keeps its last result.</source>
+        <translation>Layer menyimpan hasil terakhirnya.</translation>
+    </message>
+    <message>
+        <source>The map area you select and your prompt go to our image generation partner only to produce the result, and it deletes them within 30 days.</source>
+        <translation>Area peta yang Anda pilih dan prompt Anda dikirim ke mitra pembuatan gambar kami hanya untuk menghasilkan hasil, dan mitra tersebut menghapusnya dalam 30 hari.</translation>
+    </message>
+    <message>
+        <source>The map this layer came from was removed. Vectorize it again.</source>
+        <translation>Peta asal layer ini telah dihapus. Vektorkan lagi.</translation>
+    </message>
+    <message>
+        <source>The next edit starts from it.</source>
+        <translation>Edit berikutnya dimulai darinya.</translation>
+    </message>
+    <message>
+        <source>The polygons could not be added to your map. Try again.</source>
+        <translation>Poligon tidak dapat ditambahkan ke peta Anda. Coba lagi.</translation>
+    </message>
+    <message>
+        <source>The prompts could not load</source>
+        <translation>Prompt tidak dapat dimuat</translation>
+    </message>
+    <message>
+        <source>The written tutorial, on the TerraLab blog.</source>
+        <translation>Tutorial tertulis, di blog TerraLab.</translation>
+    </message>
+    <message>
+        <source>They help us fix bugs. You can switch them off in Settings whenever you want.</source>
+        <translation>Ini membantu kami memperbaiki bug. Anda dapat mematikannya di Pengaturan kapan saja.</translation>
+    </message>
+    <message>
+        <source>This Quality is not in your plan. Upgrade to Pro to use it.</source>
+        <translation>Kualitas ini tidak ada di paket Anda. Tingkatkan ke Pro untuk menggunakannya.</translation>
+    </message>
+    <message>
+        <source>This computer is no longer signed in</source>
+        <translation>Komputer ini tidak lagi masuk</translation>
+    </message>
+    <message>
+        <source>This looks like a photo. Pick a color below.</source>
+        <translation>Ini terlihat seperti foto. Pilih warna di bawah.</translation>
+    </message>
+    <message>
+        <source>This map can't be read. Pick another one.</source>
+        <translation>Peta ini tidak dapat dibaca. Pilih yang lain.</translation>
+    </message>
+    <message>
+        <source>This result has no saved map zone, so it cannot be reused.</source>
+        <translation>Hasil ini tidak memiliki zona peta tersimpan, jadi tidak dapat digunakan kembali.</translation>
+    </message>
+    <message>
+        <source>Tips</source>
+        <translation>Tips</translation>
+    </message>
+    <message>
+        <source>Too many attempts. Try again in {seconds} seconds.</source>
+        <translation>Terlalu banyak percobaan. Coba lagi dalam {seconds} detik.</translation>
+    </message>
+    <message>
+        <source>Too many attempts. Try again soon.</source>
+        <translation>Terlalu banyak percobaan. Coba lagi nanti.</translation>
+    </message>
+    <message>
+        <source>Tools</source>
+        <translation>Alat</translation>
+    </message>
+    <message>
+        <source>Try again in a moment.</source>
+        <translation>Coba lagi sebentar lagi.</translation>
+    </message>
+    <message>
+        <source>Try one word, like "trees"</source>
+        <translation>Coba satu kata, seperti "pohon"</translation>
+    </message>
+    <message>
+        <source>Turn buildings, trees or water into polygons.</source>
+        <translation>Ubah bangunan, pohon, atau air menjadi poligon.</translation>
+    </message>
+    <message>
+        <source>Turn on</source>
+        <translation>Aktifkan</translation>
+    </message>
+    <message>
+        <source>Turn this result into polygons you can edit</source>
+        <translation>Ubah hasil ini menjadi poligon yang dapat Anda edit</translation>
+    </message>
+    <message>
+        <source>Turned off</source>
+        <translation>Dimatikan</translation>
+    </message>
+    <message>
+        <source>Turns a flat-color map into polygons, one class per color.</source>
+        <translation>Mengubah peta warna datar menjadi poligon, satu kelas per warna.</translation>
+    </message>
+    <message>
+        <source>Tutorials</source>
+        <translation>Tutorial</translation>
+    </message>
+    <message>
+        <source>Type your email to confirm:</source>
+        <translation>Ketik email Anda untuk mengonfirmasi:</translation>
+    </message>
+    <message>
+        <source>Undo the last stroke ({shortcut})</source>
+        <translation>Batalkan goresan terakhir ({shortcut})</translation>
+    </message>
+    <message>
+        <source>Up to 12 reference images</source>
+        <translation>Hingga 12 gambar referensi</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Perbarui</translation>
+    </message>
+    <message>
+        <source>Update available</source>
+        <translation>Pembaruan tersedia</translation>
+    </message>
+    <message>
+        <source>Update required</source>
+        <translation>Pembaruan diperlukan</translation>
+    </message>
+    <message>
+        <source>Update to keep using AI Edit. It takes one click in the QGIS Plugin Manager, and the plugin reloads on its own.</source>
+        <translation>Perbarui untuk terus menggunakan AI Edit. Hanya perlu satu klik di Plugin Manager QGIS, dan plugin dimuat ulang sendiri.</translation>
+    </message>
+    <message>
+        <source>Updating the layer...</source>
+        <translation>Memperbarui layer...</translation>
+    </message>
+    <message>
+        <source>Usage</source>
+        <translation>Penggunaan</translation>
+    </message>
+    <message>
+        <source>Usage statistics</source>
+        <translation>Statistik penggunaan</translation>
+    </message>
+    <message>
+        <source>Usage stats are on.</source>
+        <translation>Statistik penggunaan aktif.</translation>
+    </message>
+    <message>
+        <source>Vectorize cancelled.</source>
+        <translation>Vektorisasi dibatalkan.</translation>
+    </message>
+    <message>
+        <source>Versions</source>
+        <translation>Versi</translation>
+    </message>
+    <message>
+        <source>View full size</source>
+        <translation>Lihat ukuran penuh</translation>
+    </message>
+    <message>
+        <source>Wait for this edit to finish</source>
+        <translation>Tunggu hingga edit ini selesai</translation>
+    </message>
+    <message>
+        <source>We will look into it and get back to you.</source>
+        <translation>Kami akan menyelidikinya dan menghubungi Anda kembali.</translation>
+    </message>
+    <message>
+        <source>What will you edit first?</source>
+        <translation>Apa yang akan Anda edit pertama kali?</translation>
+    </message>
+    <message>
+        <source>What would you like to edit?</source>
+        <translation>Apa yang ingin Anda edit?</translation>
+    </message>
+    <message>
+        <source>Where AI Edit writes its generated GeoTIFFs. Leave empty to use {folder} (or the saved project folder).</source>
+        <translation>Tempat AI Edit menyimpan GeoTIFF yang dihasilkan. Biarkan kosong untuk menggunakan {folder} (atau folder proyek yang disimpan).</translation>
+    </message>
+    <message>
+        <source>Where should the AI edit?</source>
+        <translation>Di mana AI harus mengedit?</translation>
+    </message>
+    <message>
+        <source>While drawing</source>
+        <translation>Saat menggambar</translation>
+    </message>
+    <message>
+        <source>Yellow</source>
+        <translation>Kuning</translation>
+    </message>
+    <message>
+        <source>You can sign back in anytime.</source>
+        <translation>Anda dapat masuk kembali kapan saja.</translation>
+    </message>
+    <message>
+        <source>You have {installed}.</source>
+        <translation>Anda memiliki {installed}.</translation>
+    </message>
+    <message>
+        <source>You've used this month's free edits</source>
+        <translation>Anda telah menggunakan edit gratis bulan ini</translation>
+    </message>
+    <message>
+        <source>Your computer</source>
+        <translation>Komputer Anda</translation>
+    </message>
+    <message>
+        <source>Your drawing</source>
+        <translation>Gambar Anda</translation>
+    </message>
+    <message>
+        <source>Your drawing won't be used</source>
+        <translation>Gambar Anda tidak akan digunakan</translation>
+    </message>
+    <message>
+        <source>Your email</source>
+        <translation>Email Anda</translation>
+    </message>
+    <message>
+        <source>Your generations stay in your history until you delete them. On {pro} you can set 30 days, 90 days or 1 year in Settings.</source>
+        <translation>Generasi Anda tetap berada di riwayat Anda hingga Anda menghapusnya. Pada {pro} Anda dapat mengatur 30 hari, 90 hari, atau 1 tahun di Pengaturan.</translation>
+    </message>
+    <message>
+        <source>Your generations, history and prompts are erased.</source>
+        <translation>Generasi, riwayat, dan prompt Anda dihapus.</translation>
+    </message>
+    <message>
+        <source>Your map, before any AI edit</source>
+        <translation>Peta Anda, sebelum ada edit AI apa pun</translation>
+    </message>
+    <message>
+        <source>Your network blocked the connection (HTTP {status}). Ask your IT team to allow terra-lab.ai.</source>
+        <translation>Jaringan Anda memblokir koneksi (HTTP {status}). Minta tim IT Anda untuk mengizinkan terra-lab.ai.</translation>
+    </message>
+    <message>
+        <source>Your session is saved. Reopen it from Sessions, the clock at the top.</source>
+        <translation>Sesi Anda tersimpan. Buka kembali dari Sesi, jam di bagian atas.</translation>
+    </message>
+    <message>
+        <source>Your zone is off the imagery. Draw it over your layers.</source>
+        <translation>Zona Anda berada di luar citra. Gambarlah di atas layer Anda.</translation>
+    </message>
+    <message>
+        <source>Your zone is too small. Draw it at least {pct}% of the map width.</source>
+        <translation>Zona Anda terlalu kecil. Gambarlah setidaknya {pct}% dari lebar peta.</translation>
+    </message>
+    <message>
+        <source>Your {total} free edits return next month</source>
+        <translation>{total} edit gratis Anda kembali bulan depan</translation>
+    </message>
+    <message>
+        <source>Your {total} free edits return on {date}</source>
+        <translation>{total} edit gratis Anda kembali pada {date}</translation>
+    </message>
+    <message>
+        <source>by TerraLab</source>
+        <translation>oleh TerraLab</translation>
+    </message>
+    <message>
+        <source>credits left of {limit}</source>
+        <translation>sisa kredit dari {limit}</translation>
+    </message>
+    <message>
+        <source>no AI edit</source>
+        <translation>tanpa edit AI</translation>
+    </message>
+    <message>
+        <source>{count} in {k} classes</source>
+        <translation>{count} dalam {k} kelas</translation>
+    </message>
+    <message>
+        <source>{head} “{name}”: {count}.</source>
+        <translation>{head} “{name}”: {count}.</translation>
+    </message>
+    <message>
+        <source>{hex} is already listed as “{name}”. It is checked.</source>
+        <translation>{hex} sudah terdaftar sebagai “{name}”. Sudah dicentang.</translation>
+    </message>
+    <message>
+        <source>{label} {n}</source>
+        <translation>{label} {n}</translation>
+    </message>
+    <message>
+        <source>{map} polygons</source>
+        <translation>{map} poligon</translation>
+    </message>
+    <message>
+        <source>{n} of {limit}</source>
+        <translation>{n} dari {limit}</translation>
+    </message>
+    <message>
+        <source>{n} polygons</source>
+        <translation>{n} poligon</translation>
+    </message>
+    <message>
+        <source>{n} strokes</source>
+        <translation>{n} goresan</translation>
+    </message>
+    <message>
+        <source>{n} were not added: {names}. {reason}</source>
+        <translation>{n} tidak ditambahkan: {names}. {reason}</translation>
+    </message>
+    <message>
+        <source>{ref} and {markup} show the AI what you mean. The {library} has ready-made prompts.</source>
+        <translation>{ref} dan {markup} menunjukkan kepada AI apa yang Anda maksud. {library} memiliki prompt yang siap pakai.</translation>
+    </message>
+    <message>
+        <source>“Color tolerance” at {n} matches no pixel. Raise it.</source>
+        <translation>“Toleransi warna” pada {n} tidak cocok dengan piksel mana pun. Naikkan nilainya.</translation>
+    </message>
+    <message>
+        <source>“Remove speckle” at {n} px removed every shape. Lower it.</source>
+        <translation>“Hapus bintik” pada {n} px menghapus semua bentuk. Turunkan nilainya.</translation>
+    </message>
+    <message>
+        <source>“{name}” updated: {count}.</source>
+        <translation>“{name}” diperbarui: {count}.</translation>
+    </message>
+    <message>
+        <source>&#x27;Color tolerance&#x27; at {n} matches no pixel. Raise it.</source>
+        <translation>&#x27;Toleransi warna&#x27; pada {n} tidak cocok dengan piksel mana pun. Naikkan.</translation>
+    </message>
+    <message>
+        <source>&#x27;Remove speckle&#x27; at {n} px removed every shape. Lower it.</source>
+        <translation>&#x27;Hapus bintik&#x27; pada {n} px menghapus semua bentuk. Turunkan.</translation>
+    </message>
+    <message>
+        <source>2K and 4K output</source>
+        <translation>Output 2K dan 4K</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Draw&lt;/b&gt;&lt;br&gt;Draw arrows, shapes, or labels on the map to show the AI what to change and where. Your drawing is sent with the prompt as visual guidance.</source>
+        <translation>&lt;b&gt;Gambar&lt;/b&gt;&lt;br&gt;Gambar panah, bentuk, atau label di peta untuk menunjukkan kepada AI apa yang diubah dan di mana. Gambar Anda dikirim bersama prompt sebagai panduan visual.</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Output size&lt;/b&gt;&lt;br&gt;A bigger output is sharper and more precise, and costs more credits. Standard (1K), Large (2K), Maximum (4K).</source>
+        <translation>&lt;b&gt;Ukuran output&lt;/b&gt;&lt;br&gt;Output yang lebih besar lebih tajam dan lebih presisi, serta menghabiskan lebih banyak kredit. Standar (1K), Besar (2K), Maksimum (4K).</translation>
+    </message>
+    <message>
+        <source>Add a reference</source>
+        <translation>Tambahkan referensi</translation>
+    </message>
+    <message>
+        <source>An image or a data file</source>
+        <translation>Gambar atau file data</translation>
+    </message>
+    <message>
+        <source>Another output size</source>
+        <translation>Ukuran output lain</translation>
+    </message>
+    <message>
+        <source>Capturing your zone</source>
+        <translation>Mengambil gambar zona Anda</translation>
+    </message>
+    <message>
+        <source>Check your connection</source>
+        <translation>Periksa koneksi Anda</translation>
+    </message>
+    <message>
+        <source>Click to view full size. Hover for download.</source>
+        <translation>Klik untuk melihat ukuran penuh. Arahkan kursor untuk mengunduh.</translation>
+    </message>
+    <message>
+        <source>Contracting by {n} px erased every shape. Set &#x27;Expand/Contract&#x27; closer to 0.</source>
+        <translation>Penyusutan sebesar {n} px menghapus semua bentuk. Atur &#x27;Perluas/Kontraksikan&#x27; mendekati 0.</translation>
+    </message>
+    <message>
+        <source>Create a map</source>
+        <translation>Buat peta</translation>
+    </message>
+    <message>
+        <source>Detail</source>
+        <translation>Detail</translation>
+    </message>
+    <message>
+        <source>Drag a box on the map</source>
+        <translation>Seret sebuah kotak di peta</translation>
+    </message>
+    <message>
+        <source>Drawing your edit</source>
+        <translation>Menggambar edit Anda</translation>
+    </message>
+    <message>
+        <source>Drop a file or a layer here</source>
+        <translation>Letakkan file atau layer di sini</translation>
+    </message>
+    <message>
+        <source>Each checked color becomes a class.</source>
+        <translation>Setiap warna yang dicentang menjadi kelas.</translation>
+    </message>
+    <message>
+        <source>Finest detail for print and zoom</source>
+        <translation>Detail terbaik untuk cetak dan zoom</translation>
+    </message>
+    <message>
+        <source>Generation restored. Change the prompt or the zone, then generate again.</source>
+        <translation>Generasi dipulihkan. Ubah prompt atau zona, lalu buat ulang.</translation>
+    </message>
+    <message>
+        <source>Generations</source>
+        <translation>Generasi</translation>
+    </message>
+    <message>
+        <source>Keep this result and start a new edit. You can resume this session later.</source>
+        <translation>Simpan hasil ini dan mulai edit baru. Anda dapat melanjutkan sesi ini nanti.</translation>
+    </message>
+    <message>
+        <source>Keep your drawing on the zone to guide the edit, and close this panel</source>
+        <translation>Biarkan gambar Anda tetap di zona untuk memandu edit, lalu tutup panel ini</translation>
+    </message>
+    <message>
+        <source>Large</source>
+        <translation>Besar</translation>
+    </message>
+    <message>
+        <source>Like it? Pro adds 2K, 4K and commercial use.</source>
+        <translation>Suka? Pro menambahkan 2K, 4K, dan penggunaan komersial.</translation>
+    </message>
+    <message>
+        <source>No shape reaches {n} px. Lower &#x27;Min polygon size&#x27;.</source>
+        <translation>Tidak ada bentuk yang mencapai {n} px. Turunkan &#x27;Ukuran poligon minimum&#x27;.</translation>
+    </message>
+    <message>
+        <source>No shapes left with these settings. Set &#x27;Expand/Contract&#x27; closer to 0, lower &#x27;Min polygon size&#x27; or &#x27;Remove speckle&#x27;, or raise &#x27;Color tolerance&#x27;.</source>
+        <translation>Tidak ada bentuk tersisa dengan pengaturan ini. Atur &#x27;Perluas/Kontraksikan&#x27; mendekati 0, turunkan &#x27;Ukuran poligon minimum&#x27; atau &#x27;Hapus bercak&#x27;, atau naikkan &#x27;Toleransi warna&#x27;.</translation>
+    </message>
+    <message>
+        <source>No usage yet</source>
+        <translation>Belum ada penggunaan</translation>
+    </message>
+    <message>
+        <source>Non-commercial use</source>
+        <translation>Penggunaan nonkomersial</translation>
+    </message>
+    <message>
+        <source>Open QGIS&#x27;s Data Source Manager to add data</source>
+        <translation>Buka Data Source Manager QGIS untuk menambahkan data</translation>
+    </message>
+    <message>
+        <source>Original, before any edit</source>
+        <translation>Asli, sebelum diedit</translation>
+    </message>
+    <message>
+        <source>Placing the result</source>
+        <translation>Menempatkan hasil</translation>
+    </message>
+    <message>
+        <source>Prompts, references, mark up, vectorize</source>
+        <translation>Prompt, referensi, tandai, vektorisasi</translation>
+    </message>
+    <message>
+        <source>Quick draft, lighter on credits</source>
+        <translation>Draf cepat, lebih hemat kredit</translation>
+    </message>
+    <message>
+        <source>Remove this reference</source>
+        <translation>Hapus referensi ini</translation>
+    </message>
+    <message>
+        <source>Rendered and cropped to your zone</source>
+        <translation>Dirender dan dipotong sesuai zona Anda</translation>
+    </message>
+    <message>
+        <source>Run the prompt again on the same zone, from the selected version</source>
+        <translation>Jalankan ulang prompt di zona yang sama, dari versi yang dipilih</translation>
+    </message>
+    <message>
+        <source>Say in the prompt what to take from each reference.</source>
+        <translation>Sebutkan dalam prompt apa yang ingin diambil dari setiap referensi.</translation>
+    </message>
+    <message>
+        <source>Search prompts, e.g. &quot;add trees&quot; or &quot;flood the river&quot;</source>
+        <translation>Cari prompt, mis. &quot;tambah pohon&quot; atau &quot;banjiri sungai&quot;</translation>
+    </message>
+    <message>
+        <source>Sending the image</source>
+        <translation>Mengirim gambar</translation>
+    </message>
+    <message>
+        <source>Sent whole, at its own size</source>
+        <translation>Dikirim utuh, sesuai ukuran aslinya</translation>
+    </message>
+    <message>
+        <source>Sharper result for everyday maps</source>
+        <translation>Hasil lebih tajam untuk peta sehari-hari</translation>
+    </message>
+    <message>
+        <source>Show the plugin&#x27;s panel.</source>
+        <translation>Tampilkan panel plugin.</translation>
+    </message>
+    <message>
+        <source>Size</source>
+        <translation>Ukuran</translation>
+    </message>
+    <message>
+        <source>The imagery this session was edited on is not in this project. Add a snapshot of it to see your edits in context.</source>
+        <translation>Citra tempat sesi ini diedit tidak ada di proyek ini. Tambahkan cuplikan citra tersebut untuk melihat hasil edit Anda dalam konteksnya.</translation>
+    </message>
+    <message>
+        <source>Try one word, like &quot;trees&quot;</source>
+        <translation>Coba satu kata, seperti &quot;pohon&quot;</translation>
+    </message>
+    <message>
+        <source>Turn on a layer, or start with a sample.</source>
+        <translation>Aktifkan layer, atau mulai dengan contoh.</translation>
+    </message>
+    <message>
+        <source>Turn one on in the Layers panel to edit it.</source>
+        <translation>Aktifkan salah satunya di panel Layers untuk mengeditnya.</translation>
+    </message>
+    <message>
+        <source>Vectorize turns a flat-color map into polygons.</source>
+        <translation>Vectorisasi mengubah peta berwarna datar menjadi poligon.</translation>
+    </message>
+    <message>
+        <source>Very large</source>
+        <translation>Sangat besar</translation>
+    </message>
+    <message>
+        <source>While marking up</source>
+        <translation>Saat menandai</translation>
+    </message>
+    <message>
+        <source>Working on your edit</source>
+        <translation>Sedang mengerjakan edit Anda</translation>
+    </message>
+    <message>
+        <source>You&#x27;ve used this month&#x27;s free edits</source>
+        <translation>Anda telah menggunakan edit gratis bulan ini</translation>
+    </message>
+    <message>
+        <source>{n} stroke. Click Done to guide the edit with it.</source>
+        <translation>{n} goresan. Klik Selesai untuk memandu edit dengannya.</translation>
+    </message>
+    <message>
+        <source>{n} strokes. Click Done to guide the edit with them.</source>
+        <translation>{n} goresan. Klik Selesai untuk memandu edit dengannya.</translation>
+    </message>
 </context>
 </TS>

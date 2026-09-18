@@ -3,143 +3,61 @@ name=AI Edit by TerraLab
 description=Show a project on real aerial imagery, from a text prompt: a redevelopment before it is built, a street planted with trees, a flood, or an orthophoto redrawn as a clean site plan. Land cover maps, cloud and object removal too. Georeferenced output.
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
-version=1.7.5
+# Qt6 builds of QGIS 3.x refuse to load a plugin that omits this line.
+# QGIS 4 dropped the check and a Qt5 build never runs it.
+supportsQt6=True
+version=1.9.0
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.9.0
+    - Vectorize results now save straight to a GeoPackage, ready to use in your project
+    - The Library page gets full keyboard navigation, a Favorites star, and clearer session names and previews
+    - Undo now works while drawing a zone, removing your last stroke like Ctrl+Z
+    - Layers shown above the one you edit, like labels or polygons, now guide the AI as references
+
     1.7.5
-    - A new version of the plugin now shows up on the panel, says what it brings, and installs in one click; close it and it stays closed
-    - The update notice only appears when QGIS can actually install it for you
-    - A failed generation now offers one clear next step instead of a bare sentence
-    - Generate says under the button why it cannot run, and the reason follows the button
-    - The account dialog fits a laptop screen again, with one baseline per plan row
-    - Pro users near the monthly credit limit get a Contact us path that copies our address on click
-    - Your prompt stays in the box after a result, and Compare and Vectorize work from the panel
-    - Fixed: the settings gear no longer raises an error when the panel closes during the dialog
-    - Fixed: a vectorize error stays on screen until something replaces it
+    - A new plugin version now appears on the panel and installs in one click
+    - Generate tells you under the button why it is greyed out
+    - A generation that stops tells you what to try next
+    - The account window fits a laptop screen
 
     1.7.4
-    - Pick the raster layer to edit first, then draw your zone in it: the AI now works from that one layer, whatever else is drawn on the map
-    - The layer list follows your map view and picks the imagery you are looking at, never a world basemap over a local orthophoto
-    - A zone drawn outside the chosen layer is refused, and a zone partly outside it gets a heads-up
-    - Reference images: a new Map button captures any rectangle you drag on the map, and a layer that does not cover your zone is marked as sent whole
-    - The per-image note field is gone: say in the prompt what the AI should take from each reference
-    - Prompt Library: Top picks now follow what people actually use, and the Analyze family drops the cards the AI could only guess at
-    - Looking for building, tree or road outlines? The library now points you to AI Segmentation
-
-    1.8.1
-    - AI Edit now works from the Processing Toolbox, the model designer and batch mode: generate, check your plan, and vectorize a color
-    - Scripts and AI assistants can drive the plugin directly, and read what it can do before they spend anything
-    - The plugin reads its imagery and pacing settings from the server, so improvements reach you without an update
-    - Fixed: a result that lands behind your own imagery now says so, and one click brings it back to the front
-    - Fixed: layers filed inside a group set to render as one group are no longer invisible to the plugin
-    - Fixed: reloading the plugin no longer loses its algorithms, and unloading it no longer logs an error
-
-    1.7.1
-    - Fixed: adding a reference image stopped working after your first generation, until QGIS was restarted
+    - Pick the layer to edit, then draw your zone in it: the AI works from that layer alone
+    - The layer list follows your map view and picks the imagery you are looking at
+    - A Map button captures any rectangle you drag as a reference image
+    - AI Edit runs from the Processing Toolbox, the model designer and batch mode
 
     1.7.0
-    - Sessions: find, reopen and rename your past work from the Prompt Library, grouped by month, with search and before/after previews
-    - New Reference panel: import an image from a file or from your project, and write next to each one what the AI should take from it
-    - Mark up now draws lines, and reminds you to name your marks in the prompt so the AI uses them
-    - Draw a zone as a free shape, pan while drawing, and the zone outline stays visible once the result is on the map
-    - A heads-up when the selected zone is very large, where the AI can only keep broad shapes
-    - Calmer Prompt Library, with your starred prompts on their own page
-    - The panel is now usable with the keyboard and readable by a screen reader
-    - Vectorize is faster, and results are saved correctly on Windows accounts with accents in the user name
+    - Find, reopen and rename your past work from the Prompt Library
+    - New Reference panel: import an image from a file or from your project
+    - Draw a zone as a free shape, and pan while drawing
+    - The panel works with the keyboard and reads correctly on a screen reader
 
     1.6.8
-    - The free plan now includes 10 AI edits every month (up from 5)
-    - Compatibility fixes for QGIS 4
-
-    1.6.6
-    - More reliable generation: it no longer gets stuck on unexpected errors, and cancelling frees things up right away
-    - Vectorize is now suggested only when the result is genuinely a flat-color map
-    - Refreshed interface styling and clearer wording throughout
-    - Privacy and stability improvements
-
-    1.6.5
-    - AI Edit now recognizes land cover and segmentation style results and offers to vectorize them in one click, with the detected color classes ready to trace
-    - Clearer Vectorize panel: one big green Vectorize button, with a quiet Exit link below
-    - The free plan now renews every month: 5 free generations per month, with the renewal date shown in the plugin
-
-    1.6.4
-    - Vectorize now extracts every map color as its own class, in one click
-    - Subscribers now start on the Detailed (2K) quality by default
-    - Fully translated interface in all 11 languages
-    - Smoother interface: previews and reference images load without freezing QGIS
-    - Clearer messages when a generation fails or free credits run out
-    - Reliability and stability fixes
-
-    1.6.3
-    - Stay signed in through temporary service interruptions
-
-    1.6.2
-    - Minor maintenance and stability improvements
-
-    1.6.0
-    - New first-run experience, built around starting from your own imagery
-    - Cleaner Report a problem and Contact us dialogs
-    - Startup reliability fixes
-
-    1.5.0
-    - Now available in 8 more languages (German, Chinese, Italian, Indonesian, Polish, Japanese, Dutch)
-    - Guided onboarding with a built-in guide button and first-run tips
-    - Press Escape or Exit to leave the draw-your-zone step anytime
-    - Clearer dated names and richer details on the layers you create
-    - More reliable cancelling, connection handling, and Vectorize saving
-
-    1.4.0
-    - History groups all the versions from one editing session into a single card
-    - Vectorize: one-click buttons for the colors in your map, with cleaner edges
-
-    1.3.8
-    - Added a version changelog so you can see what's new in each release
-
-    1.3.7
-    - More reliable handling on slow or unstable connections
-
-    1.3.6
-    - Simpler one-click connection, with a copyable connection link
-    - Polished settings, before/after compare, and onboarding
-
-    1.3.5
-    - More reliable downloads; smoother, faster interface
-
-    1.3.4
-    - Sketch on the map to guide the AI (marks stay visible while generating)
-    - Clearer output quality tiers: Standard, Detailed, Maximum
-
-    1.3.3
-    - Clearer resolution and quality labels throughout
-
-    1.3.2
-    - More reliable result delivery
-
-    1.3.1
-    - More robust sign-in and pairing, with manual key recovery
-    - Better download retries when a connection is blocked
+    - The free plan includes 10 AI edits every month
+    - Runs on QGIS 4
 
 about=
     Show a project before it exists, on the aerial imagery you already have open
 
-    • Select an area, write what you want -> get the result back as a georeferenced layer, aligned on your source imagery and tagged as AI-generated
+    • Select an area, write what you want, get the result back as a georeferenced layer on the same extent and CRS as your source imagery, tagged as AI-generated
 
-    • The most used case: turn an orthophoto into a clean architectural site plan. Then redevelopments, planted streets, parks, solar farms, floods and sea level rise
+    • The most used case: an orthophoto redrawn as a clean illustrative site plan. Then redevelopments, planted streets, densified blocks, parks, solar farms, flood and sea level scenarios, enhanced aerials, clouds and cars removed, land cover drawn as flat colours
 
-    • Works on any raster on your map: GeoTIFF, JPG, PNG, and online basemaps (WMS, XYZ tiles). Vector layers, OpenStreetMap and other rasters can guide the result as references
+    • Works on any raster on your map: GeoTIFF, JPG, PNG, and online basemaps (WMS, XYZ tiles). Vector layers and other rasters can guide the result as references
 
-    • Guide the result: add reference images or layers, sketch directly on the map, and compare before/after with a slider
+    • Guide the result: reference images or layers, a sketch on the map, iterations, and a before/after slider
 
-    • Vectorize results: turn a generated map into clean vector polygons (buildings, parcels, land cover) ready for SHP or GeoJSON
+    • Vectorize: a generated map with flat colours becomes editable polygons, exported to GeoPackage, Shapefile or GeoJSON
 
-    • 100+ ready-made prompt templates, or write your own
+    • 100+ ready-made prompts, ranked by what people actually run, or write your own
 
-    • One AI model for almost anything: describe a task and it handles it, from urban planning and solar studies to crop mapping, archaeology, or restoring old maps
+    • What it is not: a preview, not a document. No dimensions, no legal value, not a site plan for a permit. Not a detector: for building, tree or parcel outlines with real geometry, use AI Segmentation. Not a prediction: a flood scenario is an illustration
 
-    • Universal: Windows, macOS, Linux. Powered by the best generative AI model from Google
+    • Windows, macOS, Linux, no GPU needed. Free tier without a card. Powered by Google's Nano Banana image model, run on TerraLab servers
 
 tracker=https://github.com/TerraLabAI/QGIS_AI-Edit/issues
 repository=https://github.com/TerraLabAI/QGIS_AI-Edit

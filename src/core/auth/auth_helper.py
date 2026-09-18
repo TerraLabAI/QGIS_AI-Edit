@@ -61,8 +61,26 @@ def _store_to_auth_manager(key: str) -> str:
         return ""
 
 
+def _set_if_changed(s, key: str, value) -> bool:
+    """setValue only when the stored value differs. Any write, even of the
+    same value, makes QGIS rewrite its whole settings file. True if written."""
+    try:
+        current = s.value(key, None)
+    except Exception:
+        current = None
+    same_value = current == value or (
+        isinstance(value, bool) and str(current).lower() == str(value).lower()
+    )
+    if current is not None and same_value:
+        return False
+    if current is None and value in ("", False):
+        return False
+    s.setValue(key, value)
+    return True
+
+
 def get_activation_key(settings=None) -> str:
-    s = settings or QgsSettings()
+    s = settings if settings is not None else QgsSettings()
     authcfg_id = s.value(_AUTHCFG_KEY, "", type=str)
     if authcfg_id:
         key = _read_from_auth_manager(authcfg_id)
@@ -71,9 +89,22 @@ def get_activation_key(settings=None) -> str:
     return s.value(_LEGACY_KEY, "", type=str)
 
 
+def has_stored_activation(settings=None) -> bool:
+    """True when the profile points at a stored key, readable or not.
+
+    get_activation_key() answers "" both when nothing is stored and when the
+    auth database refused the read (master password dialog cancelled, another
+    QGIS instance holding qgis-auth.db). Only the first case may clear
+    anything: the second is a sign-out for this session, nothing more."""
+    s = settings if settings is not None else QgsSettings()
+    return bool(
+        s.value(_AUTHCFG_KEY, "", type=str) or s.value(_LEGACY_KEY, "", type=str)
+    )
+
+
 def save_activation(key: str, settings=None) -> None:
     key = (key or "").strip()
-    s = settings or QgsSettings()
+    s = settings if settings is not None else QgsSettings()
     if not key:
         clear_activation(s)
         return
@@ -87,12 +118,12 @@ def save_activation(key: str, settings=None) -> None:
             return
 
     s.setValue(_LEGACY_KEY, key)
-    s.setValue(_AUTHCFG_KEY, "")
-    s.setValue(_MIGRATION_PENDING_KEY, True)
+    _set_if_changed(s, _AUTHCFG_KEY, "")
+    _set_if_changed(s, _MIGRATION_PENDING_KEY, True)
 
 
 def clear_activation(settings=None) -> None:
-    s = settings or QgsSettings()
+    s = settings if settings is not None else QgsSettings()
     authcfg_id = s.value(_AUTHCFG_KEY, "", type=str)
     if authcfg_id:
         am = _get_auth_manager()
@@ -101,10 +132,18 @@ def clear_activation(settings=None) -> None:
                 am.removeAuthenticationConfig(authcfg_id)
             except Exception:  # nosec B110
                 pass
-    s.setValue(_AUTHCFG_KEY, "")
-    s.setValue(_LEGACY_KEY, "")
-    s.setValue(_MIGRATION_PENDING_KEY, False)
-    s.setValue(_TIMESTAMP_KEY, "")
+    # A signed-out user reaches this at every start: write only what holds a
+    # value, and force a sync only when something was actually removed.
+    changed = False
+    for key, empty in (
+        (_AUTHCFG_KEY, ""),
+        (_LEGACY_KEY, ""),
+        (_MIGRATION_PENDING_KEY, False),
+        (_TIMESTAMP_KEY, ""),
+    ):
+        changed = _set_if_changed(s, key, empty) or changed
+    if not changed:
+        return
     try:
         s.sync()
     except Exception:  # nosec B110
@@ -113,13 +152,13 @@ def clear_activation(settings=None) -> None:
 
 def migrate_legacy_key(settings=None) -> bool:
     """Idempotent. False = retry on next plugin load (legacy key still in QSettings)."""
-    s = settings or QgsSettings()
+    s = settings if settings is not None else QgsSettings()
     legacy = s.value(_LEGACY_KEY, "", type=str)
     authcfg = s.value(_AUTHCFG_KEY, "", type=str)
 
     if not legacy:
         return True
-    if authcfg:
+    if authcfg and _read_from_auth_manager(authcfg) == legacy:
         s.setValue(_LEGACY_KEY, "")
         s.setValue(_MIGRATION_PENDING_KEY, False)
         try:
@@ -131,12 +170,12 @@ def migrate_legacy_key(settings=None) -> bool:
     if not _can_use_auth_manager():
         # No master password = QgsAuthManager unavailable. QSettings fallback
         # is the normal path for most users; retry silently next load.
-        s.setValue(_MIGRATION_PENDING_KEY, True)
+        _set_if_changed(s, _MIGRATION_PENDING_KEY, True)
         return False
 
     new_id = _store_to_auth_manager(legacy)
     if not new_id:
-        s.setValue(_MIGRATION_PENDING_KEY, True)
+        _set_if_changed(s, _MIGRATION_PENDING_KEY, True)
         log_warning("Auth migration failed: storeAuthenticationConfig returned empty id")
         return False
 

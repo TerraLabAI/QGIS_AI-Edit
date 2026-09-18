@@ -8,14 +8,17 @@ right as they are produced. When the results overflow the dock width, small
 chevrons appear to jump to either end. The most recent result is auto-selected.
 Clicking a tile picks which version the next edit starts from.
 
-Each tile shows a permanent label (Original / V1 / V2...). Hovering reveals a
-small ⓘ button; clicking it opens a light popup with that version's prompt and
-basic info (resolution, which version it came from). The selected tile drives
-the next edit; the dock's prompt placeholder + Generate button echo the base.
+Each tile is a small card: the picture, then its name under it (Original / V1 /
+V2...) with the whole tile width, so no name is ever cut. The picked tile
+carries the shared picked look (a soft tint of the hue, a thin border in the
+hue ink and a check), never a solid fill. An eye button in the picture's top
+right corner opens that version's details card (its prompt, what it was made
+from, what it was saved as). The picked tile drives the next edit; the dock's
+prompt placeholder and Generate button name it.
 
 Tiles take keyboard focus from Tab (never from a click, which would pull the
 caret out of the prompt box): Space or Return picks one, and the context-menu
-key (or a right-click) opens the same details popup the ⓘ does without
+key (or a right-click) opens the same details popover the button does without
 touching the selection.
 
 This widget is a pure view: it owns the thumbnails and the selection state,
@@ -29,11 +32,12 @@ from qgis.PyQt.QtCore import (
     QEasingCurve,
     QEvent,
     QPropertyAnimation,
+    QRectF,
     QSize,
     Qt,
     pyqtSignal,
 )
-from qgis.PyQt.QtGui import QPixmap
+from qgis.PyQt.QtGui import QPainter, QPainterPath, QPixmap
 from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -45,84 +49,158 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..core import qt_compat as QtC
+from ..core.config_store import get_export_copy, get_export_dial
 from ..core.i18n import tr
 from ..core.resolution_labels import resolution_display_label
-from .dock.style import BRAND_BLUE, FOCUS_RING
+from .dock.design_tokens import (
+    ACCENT_BORDER,
+    FIELD,
+    FONT_HINT,
+    FONT_MICRO,
+    HOVER,
+    INK,
+    INK_2,
+    LINE,
+    LINE_INPUT,
+    LINE_STRONG,
+    PICKED_HUE,
+    RADIUS_CHIP,
+    RADIUS_CONTROL,
+    SPACE_TIGHT,
+    SURFACE,
+    category_ink,
+    category_tint,
+    qcolor,
+    repolish_widget,
+)
+from .icons import icon_for, pixmap_for, widget_pixel_ratio
 from .panel_helpers import main_window_for_dialog
-from .version_details_popup import VersionDetailsPopup
+from .version_details_popup import VersionDetailsPopup, VersionFacts
 
-VERSION_THUMB_PX = 56
-_TILE_PX = VERSION_THUMB_PX + 4  # tile box incl. the 2px max selection border
+# The picture inside a tile. 76 px made the row the biggest thing on the
+# result screen, above the prompt it serves (Yvann, 2026-09-18: "too big,
+# more minimalist"). 48 px keeps the zone recognisable in a compact row.
+VERSION_THUMB_PX = 48
+# The card's padding around the picture, and the caption line under it. The
+# caption sits OUTSIDE the picture, with the full tile width to itself, so
+# "Original" reads as a word instead of "Orig...".
+_TILE_PAD_PX = 3
+_CAPTION_H_PX = 14
+_TILE_W_PX = VERSION_THUMB_PX + 2 * _TILE_PAD_PX
+_TILE_H_PX = 2 * _TILE_PAD_PX + VERSION_THUMB_PX + 2 + _CAPTION_H_PX
+# The caption spans the tile inside its 1 px border, wider than the picture,
+# so "Original" still fits at 11 px semibold on a 48 px tile.
+_CAPTION_W_PX = _TILE_W_PX - 2
 # Smallest pointer/touch target we ship (WCAG 2.2 target size, minimum).
 _MIN_TARGET_PX = 24
+# The picked check: a round field chip on the picture, and the glyph in it.
+_MARK_PX = 16
+_CHECK_PX = 10
+# Chevron-jump glide duration.
+_SCROLL_ANIM_MS = 240
 
-# Keyboard focus ring. Same hue as the selection ring (the one brand token that
-# clears 3:1 on both themes) and told apart from it by line STYLE, not colour:
-# focus is dashed, selected is solid, and a selected tile also carries the →
-# badge. Carried by every stylesheet the tile swaps at runtime: setStyleSheet
-# replaces the whole sheet, so a rule left out of one of them vanishes the
-# moment the tile is selected.
-_FOCUS_RING_QSS = f"QFrame:focus {{ border: 2px dashed {FOCUS_RING}; }}"
+# The picked look, shared with AI Segmentation: a soft tint of the hue, a thin
+# border in the hue ink and a check. Never a solid fill. Keyboard focus stays
+# the interaction blue and dashed, so the two never read as one thing.
+_PICKED_INK = category_ink(PICKED_HUE)
+_PICKED_TINT = category_tint(PICKED_HUE)
+_PICKED_TINT_ON = category_tint(PICKED_HUE, strong=True)
+_FOCUS_RING_QSS = f"QFrame#versionTile:focus {{ border: 1px dashed {ACCENT_BORDER}; }}"
 
-# Resting tile: subtle 1px border, transparent fill so the prompt container
-# shows through. Selected tile: 2px brand-blue ring (mirrors the reference
-# capture). Kept as two full stylesheets so toggling is a single setStyleSheet.
+# A tile is a small card: 8 px corners on the strong hairline at rest, the
+# picked tint and hue border when it is what the next edit starts from. One
+# stylesheet for both states (a `picked` property switches them), so no rule
+# can go missing when the state changes. The picture is clipped to the inner
+# curve (see rounded_cover_pixmap), so no square corner shows inside.
 _TILE_STYLE = (
-    "QFrame { background: rgba(0, 0, 0, 0.0);"
-    " border: 1px solid rgba(128, 128, 128, 0.3); border-radius: 4px; }"
-    + _FOCUS_RING_QSS
-)
-_TILE_STYLE_SELECTED = (
-    "QFrame { background: rgba(0, 0, 0, 0.0);"
-    f" border: 2px solid {BRAND_BLUE}; border-radius: 4px; }}"
+    f"QFrame#versionTile {{ background: {SURFACE};"
+    f" border: 1px solid {LINE_STRONG}; border-radius: {RADIUS_CONTROL}px; }}"
+    f"QFrame#versionTile:hover {{ border-color: {LINE_INPUT}; }}"
+    f'QFrame#versionTile[picked="true"] {{ background: {_PICKED_TINT};'
+    f" border: 1px solid {_PICKED_INK}; }}"
+    f'QFrame#versionTile[picked="true"]:hover {{ background: {_PICKED_TINT_ON}; }}'
+    f"QLabel#versionCaption {{ color: {INK}; font-size: {FONT_MICRO}px;"
+    " font-weight: 600; background: transparent; border: none; }"
+    f'QFrame#versionTile[picked="true"] QLabel#versionCaption {{ color: {_PICKED_INK}; }}'
     + _FOCUS_RING_QSS
 )
 
-# Permanent caption ("Original" / "V1" / "V2" ...) on each tile's bottom edge.
-_CAPTION_STYLE = (
-    "QLabel { background: rgba(0, 0, 0, 0.55); color: rgba(255, 255, 255, 0.95);"
-    " border: none; border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;"
-    " font-size: 9px; font-weight: bold; padding: 0 2px; }"
-)
-
-# Selected-state badge (top-right). A non-color cue so the selection is not
-# conveyed by the blue ring alone (colour-blind safety, per the design system).
-# An arrow says what selection does - the next edit goes FROM here, which is
-# what the strip's "Start from" header promises.
+# The picked mark's chip: opaque, so the check reads over any photograph.
 _BASE_BADGE_STYLE = (
-    f"QLabel {{ background: {BRAND_BLUE}; color: white; border: none;"
-    " border-top-right-radius: 3px; border-bottom-left-radius: 3px;"
-    " font-size: 9px; font-weight: bold; padding: 0 2px; }"
+    f"QLabel {{ background: {FIELD}; border: none; border-radius: {_MARK_PX // 2}px; }}"
 )
 
-# Small hover-only info button (top-left), opens the details popup. The button
-# box is _MIN_TARGET_PX square; the margin shrinks only what is painted, so a
-# 20x20 chip sits in a target that meets the minimum. Kept at 4px because the
-# unpainted band still opens the popup instead of selecting the tile.
+# Details button, top right of the picture: a round field chip, always there so
+# "open this version" is a visible affordance and not a hover secret. The box
+# meets the minimum target size; the chip painted inside it is 18 px, so it
+# covers little of a 48 px picture.
 _INFO_STYLE = (
-    "QToolButton { background: rgba(0, 0, 0, 0.6); color: white; border: none;"
-    " border-top-left-radius: 3px; border-bottom-right-radius: 3px;"
-    " font-size: 11px; font-weight: bold; margin: 0px 4px 4px 0px; }"
-    "QToolButton:hover { background: rgba(0, 0, 0, 0.85); }"
-    f"QToolButton:focus {{ background: rgba(0, 0, 0, 0.85);"
-    f" border: 2px solid {FOCUS_RING}; }}"
+    f"QToolButton {{ background: {FIELD}; border: none; border-radius: 9px;"
+    " margin: 3px; padding: 0; }"
+    f"QToolButton:hover {{ background: {SURFACE}; }}"
+    f"QToolButton:focus {{ border: 1px solid {ACCENT_BORDER}; }}"
 )
 
-# "Start from" header above the row: a quiet hint that the strip is the picker
-# for what the next edit builds on.
+# The heading above the row: a quiet hint-weight label that says what the
+# tiles are for, lighter than the prompt above it.
 _HEADER_STYLE = (
-    "QLabel { color: palette(text); font-size: 11px; background: transparent; }"
+    f"QLabel {{ color: {INK_2}; font-size: {FONT_HINT}px; font-weight: 400;"
+    " background: transparent; border: none; }"
 )
 
-# Overflow chevron: a small floating button overlaid on the scroll edge. Dark
-# semi-opaque so the glyph stays readable over a thumbnail.
+# Overflow chevron: a round surface button on the strong hairline, floating
+# over the scroll edge.
 _NAV_STYLE = (
-    "QToolButton { background: rgba(0, 0, 0, 0.55); color: white;"
-    " border: none; border-radius: 4px; font-size: 14px; font-weight: bold; }"
-    "QToolButton:hover { background: rgba(0, 0, 0, 0.78); }"
-    f"QToolButton:focus {{ background: rgba(0, 0, 0, 0.78);"
-    f" border: 2px solid {FOCUS_RING}; }}"
+    f"QToolButton {{ background: {SURFACE}; border: 1px solid {LINE_STRONG};"
+    f" border-radius: {_MIN_TARGET_PX // 2}px; padding: 0; }}"
+    f"QToolButton:hover {{ background: {HOVER}; }}"
+    f"QToolButton:focus {{ border: 2px solid {ACCENT_BORDER}; }}"
 )
+
+
+def _pick_tooltip() -> str:
+    """What a click on a tile does."""
+    return get_export_copy(
+        "widgets.version_strip.pick_tooltip",
+        tr("Start the next edit from this version"),
+    )
+
+
+def _strip_heading(readonly: bool) -> str:
+    """The row's heading: what a pick does, or, while a generation runs and
+    picking is locked, just what the row holds."""
+    if readonly:
+        return get_export_copy("widgets.version_strip.versions_heading", tr("Versions"))
+    return get_export_copy(
+        "widgets.version_strip.start_from_heading", tr("Start the next edit from")
+    )
+
+
+def rounded_cover_pixmap(pixmap: QPixmap, size: int, radius: float, ratio: float) -> QPixmap:
+    """``pixmap`` cropped to fill a ``size`` square, its corners on ``radius``.
+
+    Drawn at the screen's pixel ratio so a Retina thumbnail stays sharp."""
+    physical = max(1, int(round(size * ratio)))
+    scaled = pixmap.scaled(
+        QSize(physical, physical),
+        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+        QtC.SmoothTransformation,
+    )
+    out = QPixmap(physical, physical)
+    out.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(out)
+    try:
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(0, 0, physical, physical), radius * ratio, radius * ratio)
+        painter.setClipPath(path)
+        painter.drawPixmap(
+            -(scaled.width() - physical) // 2, -(scaled.height() - physical) // 2, scaled
+        )
+    finally:
+        painter.end()
+    out.setDevicePixelRatio(ratio)
+    return out
 
 
 class _ResultsScroll(QScrollArea):
@@ -160,7 +238,7 @@ class _ResultsScroll(QScrollArea):
 
 
 class _VersionTile(QFrame):
-    """A single strip thumbnail with a permanent caption and an ⓘ popup that
+    """A single strip thumbnail with a permanent caption and a details popover that
     shows on hover or focus."""
 
     clicked = pyqtSignal(int)
@@ -181,8 +259,12 @@ class _VersionTile(QFrame):
         self._readonly = False
         self._prompt = prompt
         self._meta = meta or {}
-        self._hovered = False
-        self.setFixedSize(_TILE_PX, _TILE_PX)
+        # Set by the strip on the tile whose layer the last generation wrote,
+        # so the details card can name it and select it in the Layers panel.
+        self._layer_probe = None
+        self.setObjectName("versionTile")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setFixedSize(_TILE_W_PX, _TILE_H_PX)
         self.setStyleSheet(_TILE_STYLE)
         self.setCursor(QtC.PointingHandCursor)
         # The tile IS the picker for what the next edit builds on, so it has to
@@ -192,123 +274,179 @@ class _VersionTile(QFrame):
         # the characters typed straight after the pick go nowhere.
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
 
-        label = tr("Original") if is_original else tr("V{n}").format(n=index)
+        label = (
+            tr("Original")
+            if is_original
+            else tr("V{n}").format(n=index)
+        )
         self._label = label
         self.setAccessibleName(label)
+        # Says what a click does, so the row never reads as a gallery the user
+        # is merely looking at (Yvann, 2026-09-17).
+        self.setToolTip(_pick_tooltip())
+        # The details button is chrome that never takes focus, so this is a
+        # screen reader's route to the version's facts and prompt.
         self.setAccessibleDescription(self._details_text())
 
-        # Thumbnail, inset by the 2px max border so the selected ring never
-        # clips the image.
+        # The picture, inset by the card's padding and rounded to a chip curve
+        # so it sits inside the card instead of filling it edge to edge.
         self._pixmap_label = QLabel(self)
-        self._pixmap_label.setGeometry(2, 2, VERSION_THUMB_PX, VERSION_THUMB_PX)
+        self._pixmap_label.setGeometry(
+            _TILE_PAD_PX, _TILE_PAD_PX, VERSION_THUMB_PX, VERSION_THUMB_PX
+        )
         self._pixmap_label.setAlignment(QtC.AlignCenter)
+        self._pixmap_label.setStyleSheet("background: transparent; border: none;")
         if pixmap is not None and not pixmap.isNull():
             self._pixmap_label.setPixmap(
-                pixmap.scaled(
-                    QSize(VERSION_THUMB_PX, VERSION_THUMB_PX),
-                    QtC.KeepAspectRatio,
-                    QtC.SmoothTransformation,
+                rounded_cover_pixmap(
+                    pixmap, VERSION_THUMB_PX, RADIUS_CHIP, widget_pixel_ratio(self)
                 )
             )
 
-        # Permanent caption: "Original" / "V1" / "V2"...
+        # Caption under the picture, with the whole tile width to itself: the
+        # word is never cut. A language that still overflows elides and keeps
+        # the whole word in the tooltip and the accessible name.
         cap = QLabel(label, self)
-        cap.setStyleSheet(_CAPTION_STYLE)
-        cap.setAlignment(Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter)
-        cap.adjustSize()
-        cap.move(2, VERSION_THUMB_PX + 2 - cap.height())
+        cap.setObjectName("versionCaption")
+        cap.setAlignment(QtC.AlignCenter)
+        # Measure with the caption's own 11 px semibold, not the default font
+        # it carries before the tile's stylesheet reaches it.
+        cap.ensurePolished()
+        room = _CAPTION_W_PX
+        if cap.fontMetrics().horizontalAdvance(label) > room:
+            cap.setText(cap.fontMetrics().elidedText(label, Qt.TextElideMode.ElideRight, room))
+            cap.setToolTip(label)
+        cap.setGeometry(
+            1,
+            _TILE_PAD_PX + VERSION_THUMB_PX + 2,
+            room,
+            _CAPTION_H_PX,
+        )
         self._caption = cap
 
-        # Base badge (top-right), shown only when this tile is selected.
-        self._base_badge = QLabel("→", self)  # →
+        # Picked mark, top left of the picture: a round field chip with the
+        # check in the picked hue. The tint and the border say the same thing
+        # in colour; this says it without colour.
+        self._base_badge = QLabel(self)
+        self._base_badge.setFixedSize(_MARK_PX, _MARK_PX)
+        self._base_badge.setAlignment(QtC.AlignCenter)
         self._base_badge.setStyleSheet(_BASE_BADGE_STYLE)
-        self._base_badge.adjustSize()
-        self._base_badge.move(_TILE_PX - self._base_badge.width(), 0)
+        self._base_badge.setPixmap(pixmap_for(self, "check", _CHECK_PX, qcolor(_PICKED_INK)))
+        self._base_badge.move(_TILE_PAD_PX + 2, _TILE_PAD_PX + 2)
         self._base_badge.setVisible(False)
 
-        # Hover-only ⓘ (top-left). Its own click opens the popup and, being a
-        # child on top, never triggers tile selection. It stays out of the tab
-        # chain on purpose: a hidden widget cannot hold focus, and the same
-        # popup opens from the tile itself (contextMenuEvent).
+        # Details button, top right of the picture, always visible: opening a
+        # version is a thing the user does (Yvann, 2026-09-17), so it is not
+        # hidden behind hover. Its own click opens the card and, being a child
+        # on top, never changes which version is picked. It stays out of the
+        # tab chain: the same card opens from the focused tile with the
+        # context-menu key (contextMenuEvent).
         self._info_btn = QToolButton(self)
-        self._info_btn.setText("ⓘ")  # ⓘ
+        self._info_btn.setIcon(icon_for(self, "eye", 12, qcolor(INK)))
+        self._info_btn.setIconSize(QSize(12, 12))
         self._info_btn.setStyleSheet(_INFO_STYLE)
         self._info_btn.setCursor(QtC.PointingHandCursor)
         self._info_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._info_btn.setAccessibleName(tr("Version details"))
-        self._info_btn.setToolTip(tr("Version details"))
+        details_label = get_export_copy("widgets.version_strip.version_details", tr("Version details"))
+        self._info_btn.setAccessibleName(details_label)
+        self._info_btn.setToolTip(details_label)
         self._info_btn.setFixedSize(_MIN_TARGET_PX, _MIN_TARGET_PX)
-        self._info_btn.move(0, 0)
-        self._info_btn.setVisible(False)
+        # The box's 3 px margin lines the painted chip up with the picture's
+        # top right corner.
+        self._info_btn.move(
+            _TILE_PAD_PX + VERSION_THUMB_PX - _MIN_TARGET_PX + 2, _TILE_PAD_PX - 2
+        )
         self._info_btn.clicked.connect(self._open_info)
 
+    def set_layer_probe(self, probe) -> None:
+        """Hand the tile a callable returning ``(layer name, reveal callback)``
+        for the layer this version was saved to, or None. Only the tile the
+        last generation wrote gets one."""
+        self._layer_probe = probe
+
+    def _facts(self) -> VersionFacts:
+        """Everything the details card reads about this version."""
+        layer_name = ""
+        if self._layer_probe is not None:
+            found = self._layer_probe()
+            layer_name = (found[0] if found else "") or ""
+        return VersionFacts(
+            label=self._label,
+            is_original=self._is_original,
+            is_picked=self._selected,
+            prompt=self._prompt,
+            definition=resolution_display_label(self._meta.get("definition")) or "",
+            dimensions=str(self._meta.get("dimensions") or ""),
+            template_name=str(self._meta.get("template_name") or ""),
+            base_label=str(self._meta.get("base_label") or ""),
+            layer_name=layer_name,
+        )
+
     def _details_text(self) -> str:
-        """The ⓘ popup's content on one line. The button is chrome that never
-        takes focus, so this is the route a screen reader has to the version's
-        prompt and lineage."""
-        parts = [self._label]
-        definition = resolution_display_label(self._meta.get("definition"))
-        if self._is_original:
-            parts.append(tr("clean source"))
+        """The details card's content on one line, for a screen reader that
+        reads the tile itself."""
+        facts = self._facts()
+        parts = [facts.label]
+        if facts.is_original:
+            parts.append(get_export_copy("widgets.version_strip.clean_source", tr("no AI edit")))
         else:
-            if definition:
-                parts.append(definition)
-            base_label = self._meta.get("base_label")
-            if base_label:
-                parts.append(tr("from {base}").format(base=base_label))
-            if self._prompt:
-                parts.append(self._prompt)
+            if facts.definition:
+                parts.append(facts.definition)
+            if facts.base_label:
+                parts.append(tr("from {base}").format(base=facts.base_label))
+            if facts.prompt:
+                parts.append(facts.prompt)
         return ", ".join(parts)
 
-    def _update_overlays(self) -> None:
-        """Reveal the corner affordances on hover or keyboard focus."""
-        self._info_btn.setVisible(self._hovered or self.hasFocus())
-
-    def enterEvent(self, event):  # noqa: N802
-        self._hovered = True
-        self._update_overlays()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):  # noqa: N802
-        self._hovered = False
-        self._update_overlays()
-        super().leaveEvent(event)
-
-    def focusInEvent(self, event):  # noqa: N802
-        self._update_overlays()
-        super().focusInEvent(event)
-
-    def focusOutEvent(self, event):  # noqa: N802
-        self._update_overlays()
-        super().focusOutEvent(event)
+    def _reveal_layer(self) -> None:
+        found = self._layer_probe() if self._layer_probe is not None else None
+        if found and callable(found[1]):
+            found[1]()
 
     def _open_info(self) -> None:
         # Parent on the top-level window, not self: on macOS fullscreen a dialog
         # parented to a widget inside a (floating) dock can open in another Space.
         parent_window = main_window_for_dialog(self)
         dlg = VersionDetailsPopup(
-            self._label,
-            resolution_display_label(self._meta.get("definition")),
-            self._meta.get("base_label"),
-            self._prompt,
-            self._is_original,
+            self._facts(),
             parent_window,
+            anchor=self,
+            on_pick=None if self._readonly else self._pick_from_card,
+            on_reveal_layer=self._reveal_layer,
         )
         dlg.exec()
 
+    def _pick_from_card(self) -> None:
+        """The card's 'Start from ...' button: the same thing a click on the
+        tile does, said in words."""
+        if not self._readonly:
+            self.clicked.emit(self._index)
+
     def _refresh_accessible_name(self) -> None:
         """Name the tile with its selection state."""
-        suffix = " - " + tr("selected") if self._selected else ""
+        selected_word = get_export_copy("widgets.version_strip.selected_suffix", tr("selected"))
+        suffix = " - " + selected_word if self._selected else ""
         self.setAccessibleName(self._label + suffix)
 
     def set_selected(self, selected: bool) -> None:
         self._selected = selected
-        self.setStyleSheet(_TILE_STYLE_SELECTED if selected else _TILE_STYLE)
+        # A property switch, not a second stylesheet: one sheet holds both
+        # states, so no rule can be lost when the tile is picked.
+        self.setProperty("picked", "true" if selected else "false")
+        repolish_widget(self)
+        # The caption's colour comes from a descendant rule of the same sheet,
+        # and Qt does not re-evaluate a child when its parent is repolished:
+        # without this the word kept the hue of the state it was last in.
+        repolish_widget(self._caption)
         self._base_badge.setVisible(selected)
         self._refresh_accessible_name()
 
     def set_readonly(self, readonly: bool) -> None:
+        """A locked tile (a generation is running) still opens its card, but
+        no longer promises what a click would do."""
         self._readonly = readonly
+        self.setCursor(QtC.ArrowCursor if readonly else QtC.PointingHandCursor)
+        self.setToolTip("" if readonly else _pick_tooltip())
 
     def mousePressEvent(self, event):  # noqa: N802
         # Left button only. A right-click is the "show me the details" gesture
@@ -346,15 +484,16 @@ class _VersionTile(QFrame):
         event.ignore()
 
     def contextMenuEvent(self, event):  # noqa: N802
-        # Fired by a right-click AND by the keyboard menu key (Shift+F10), which
-        # is how the details popup opens without the hover-only ⓘ. Reading the
-        # details never changes the selection (see mousePressEvent).
+        # Fired by a right-click AND by the keyboard menu key (Shift+F10), the
+        # keyboard route to the details card. Reading the details never changes
+        # which version is picked (see mousePressEvent).
         self._open_info()
         event.accept()
 
 
 class VersionStrip(QWidget):
-    """Version picker: a 'Start from' header + a thumbnail row (Original pinned)."""
+    """Version picker: a 'Start the next edit from' heading + a thumbnail row
+    (Original pinned left, results scrolling right)."""
 
     version_selected = pyqtSignal(int)
 
@@ -363,13 +502,15 @@ class VersionStrip(QWidget):
         self._tiles: list[_VersionTile] = []
         self._selected_index = 0
         self._readonly = False
+        self._layer_probe = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(3)
+        outer.setSpacing(SPACE_TIGHT)
 
-        # Quiet header so the strip's purpose reads at a glance.
-        self._header = QLabel(tr("Start from"), self)
+        # Quiet heading so the row's purpose reads at a glance: these pictures
+        # are the choice of what the next edit builds on.
+        self._header = QLabel(_strip_heading(False), self)
         self._header.setStyleSheet(_HEADER_STYLE)
         outer.addWidget(self._header)
 
@@ -377,13 +518,13 @@ class VersionStrip(QWidget):
         self._row_host.setStyleSheet("background: transparent;")
         self._row = QHBoxLayout(self._row_host)
         self._row.setContentsMargins(0, 0, 0, 0)
-        self._row.setSpacing(6)
+        self._row.setSpacing(SPACE_TIGHT)
 
         # Separator between the pinned Original and the scrolling results.
         self._separator = QFrame(self._row_host)
         self._separator.setFrameShape(QtC.FrameVLine)
         self._separator.setFixedWidth(1)
-        self._separator.setStyleSheet("QFrame { color: rgba(128, 128, 128, 0.4); }")
+        self._separator.setStyleSheet(f"QFrame {{ color: {LINE}; background: {LINE}; border: none; }}")
         self._separator.setVisible(False)
 
         # Scrolling results (generated versions only; Original stays pinned).
@@ -391,7 +532,7 @@ class VersionStrip(QWidget):
         self._gen_host.setStyleSheet("background: transparent;")
         self._gen_row = QHBoxLayout(self._gen_host)
         self._gen_row.setContentsMargins(0, 0, 0, 0)
-        self._gen_row.setSpacing(6)
+        self._gen_row.setSpacing(SPACE_TIGHT)
         self._gen_row.addStretch()
 
         self._scroll = _ResultsScroll(self._row_host)
@@ -405,13 +546,17 @@ class VersionStrip(QWidget):
         self._scroll.viewport().setAutoFillBackground(False)
         self._scroll.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
         self._scroll.setVerticalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
-        self._scroll.setFixedHeight(_TILE_PX)
+        self._scroll.setFixedHeight(_TILE_H_PX)
         self._scroll.setSizePolicy(QtC.SizePolicyExpanding, QtC.SizePolicyFixed)
 
         # Overflow chevrons overlaid on the scroll edges (jump to far end).
-        self._left_btn = self._make_nav_btn("‹", tr("Jump to the first version"))  # ‹
+        self._left_btn = self._make_nav_btn(
+            "chevron_left", get_export_copy("widgets.version_strip.jump_first", tr("Jump to the first version"))
+        )
         self._left_btn.clicked.connect(self._scroll_to_start)
-        self._right_btn = self._make_nav_btn("›", tr("Jump to the latest version"))  # ›
+        self._right_btn = self._make_nav_btn(
+            "chevron_right", get_export_copy("widgets.version_strip.jump_latest", tr("Jump to the latest version"))
+        )
         self._right_btn.clicked.connect(self._scroll_to_end)
         self._scroll.attach_chevrons(self._left_btn, self._right_btn)
 
@@ -421,7 +566,7 @@ class VersionStrip(QWidget):
 
         # Smooth glide when a chevron jumps to an end (no instant teleport).
         self._scroll_anim = QPropertyAnimation(bar, b"value", self)
-        self._scroll_anim.setDuration(240)
+        self._scroll_anim.setDuration(get_export_dial("widgets.version_strip.scroll_anim_ms", _SCROLL_ANIM_MS))
         self._scroll_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         # Assemble: [Original inserted at 0 in reset] | sep | scroll
@@ -465,16 +610,35 @@ class VersionStrip(QWidget):
         self._gen_row.addStretch()
         self._tiles.append(tile)
         self._separator.setVisible(True)
+        self._refresh_layer_probes()
         self.set_selected(index)
         self._update_nav()
         return index
 
+    def set_saved_layer_probe(self, probe) -> None:
+        """Hand the strip a callable returning ``(layer name, reveal callback)``
+        for the layer the last generation wrote, or None.
+
+        Only the newest generated tile gets it: that is the version the dock
+        just saved. The old "Saved as <layer>" row of the result screen is
+        gone, and this is where that fact and its click now live."""
+        self._layer_probe = probe
+        self._refresh_layer_probes()
+
     def clear(self) -> None:
-        """Empty the strip and hide it (a new lineage starts blank)."""
+        """Empty the strip and hide it, heading included (a new lineage starts
+        blank). Everything the strip holds is dropped here: the tiles, the
+        selection, the separator and the overflow chevrons. Nothing may
+        outlive the tiles. The saved-layer probe survives: it is the wiring to
+        the dock, set once at build time, and it answers None on its own once
+        there is no saved layer to name."""
         self._clear_generated()
         self._remove_original()
         self._separator.setVisible(False)
         self._selected_index = 0
+        self._scroll_anim.stop()
+        self._left_btn.setVisible(False)
+        self._right_btn.setVisible(False)
         self.setVisible(False)
         self._update_nav()
 
@@ -492,7 +656,11 @@ class VersionStrip(QWidget):
 
     def label_for(self, index: int) -> str:
         """Short label for a strip index: 'Original' (0) or 'V{n}'."""
-        return tr("Original") if index <= 0 else tr("V{n}").format(n=index)
+        return (
+            tr("Original")
+            if index <= 0
+            else tr("V{n}").format(n=index)
+        )
 
     def count(self) -> int:
         return len(self._tiles)
@@ -500,6 +668,7 @@ class VersionStrip(QWidget):
     def set_readonly(self, readonly: bool) -> None:
         """Lock selection while a generation runs (scrolling stays allowed)."""
         self._readonly = readonly
+        self._header.setText(_strip_heading(readonly))
         for tile in self._tiles:
             tile.set_readonly(readonly)
 
@@ -514,14 +683,25 @@ class VersionStrip(QWidget):
         tile.clicked.connect(self._on_tile_clicked)
         return tile
 
+    def _refresh_layer_probes(self) -> None:
+        """Point the saved-layer probe at the newest generated tile only: the
+        Original was never written to a layer, and an older version's layer is
+        not what the last generation saved."""
+        newest = len(self._tiles) - 1
+        for i, tile in enumerate(self._tiles):
+            tile.set_layer_probe(
+                self._layer_probe if (i == newest and i > 0) else None
+            )
+
     def _make_nav_btn(self, glyph: str, name: str) -> QToolButton:
         btn = QToolButton(self._scroll)
-        btn.setText(glyph)
+        btn.setIcon(icon_for(self, glyph, 16, qcolor(INK)))
+        btn.setIconSize(QSize(16, 16))
         btn.setCursor(QtC.PointingHandCursor)
         btn.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         btn.setAccessibleName(name)
         btn.setToolTip(name)
-        btn.setFixedSize(_MIN_TARGET_PX, 40)
+        btn.setFixedSize(_MIN_TARGET_PX, _MIN_TARGET_PX)
         btn.setStyleSheet(_NAV_STYLE)
         btn.setVisible(False)
         return btn
@@ -536,6 +716,22 @@ class VersionStrip(QWidget):
         # Index 0 is the pinned Original (outside the scroll); only results scroll.
         if 1 <= index < len(self._tiles):
             self._scroll.ensureWidgetVisible(self._tiles[index])
+            # A tile added this instant has no geometry yet, so the call above
+            # measured nothing: with six or more versions the picked newest
+            # one sat past the right edge. Again once the row is laid out.
+            QtC.safe_single_shot(0, self, self._ensure_selected_visible)
+
+    def _ensure_selected_visible(self) -> None:
+        index = self._selected_index
+        if 1 <= index < len(self._tiles):
+            self._scroll.ensureWidgetVisible(self._tiles[index])
+        self._update_nav()
+
+    def showEvent(self, event):  # noqa: N802
+        # The strip is re-homed between screens hidden; its picked tile comes
+        # back into view with it.
+        super().showEvent(event)
+        QtC.safe_single_shot(0, self, self._ensure_selected_visible)
 
     def _animate_scroll_to(self, target: int) -> None:
         bar = self._scroll.horizontalScrollBar()

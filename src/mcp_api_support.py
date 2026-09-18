@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import difflib
 import functools
+import math
 import os
 from collections.abc import Sequence
 
@@ -135,7 +136,7 @@ def _project_layer_names() -> list[str]:
 
 def _find_project_layer(name: str):
     """First project layer whose name matches, exact first then substring."""
-    if not name:
+    if not isinstance(name, str) or not name.strip():
         return None
     target = name.strip().lower()
     fallback = None
@@ -156,7 +157,9 @@ def _jsonable(value, depth: int = 0):
     to be plain data. Anything that is not a string, a number, a boolean, a
     list or a dict is rendered as its text.
     """
-    if value is None or isinstance(value, (str, bool, int, float)):
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if value is None or isinstance(value, (str, bool, int)):
         return value
     if depth >= 8:
         return str(value)
@@ -165,3 +168,23 @@ def _jsonable(value, depth: int = 0):
     if isinstance(value, (list, tuple, set)):
         return [_jsonable(item, depth + 1) for item in value]
     return str(value)
+
+
+def _whole_number(value) -> int:
+    """Parse a whole number without silently rounding or accepting booleans."""
+    if isinstance(value, bool):
+        raise ValueError("Boolean is not a whole-number parameter")
+    number = int(value)
+    if not isinstance(value, (str, int)) and number != value:
+        raise ValueError("A fractional value is not a whole number")
+    return number
+
+
+def _response_error(payload, action: str) -> dict | None:
+    """Reject unreadable or refused server results before local side effects."""
+    if not isinstance(payload, dict):
+        return {"_error": f"{action} returned an invalid response."}
+    if "error" in payload or "_error" in payload:
+        detail = str(payload.get("_error") or payload.get("error") or f"{action} failed.")
+        return {"_error": detail, "code": str(payload.get("code") or "")}
+    return None

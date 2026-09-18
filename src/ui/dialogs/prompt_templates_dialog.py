@@ -1,23 +1,15 @@
-"""Prompt Library dialog.
+"""Prompt Library dialog: the facade other modules import from.
 
-Tab-style navigation: clicking a sidebar entry swaps the right pane.
-Sidebar order: Favorites → Recent → Top Picks → (separator) → themed
-categories. The user's own lists (Favorites, Recent) and the Top Picks
-shortcut sit at the top; the themed catalog follows below the divider. The
-themed categories are long (13 métiers), so they are grouped under three
-high-level needs (Classify / Project / Render); each group folds via its
-header and remembers its state across sessions. The dialog still opens on Top
-Picks regardless of sidebar order.
+The window itself lives in ``prompt_templates/``: a persistent rail on the
+left (Top picks, one row per category family, then Sessions and Favorites),
+one search field over the page stack, and card grids of before/after
+previews. A card opens the preview window, whose button uses the prompt.
 
-Recent and Favorites are the user's own past generations, fetched from the
-server in the background: each renders as a before/after card carrying the
-prompt, location, and signed input/output URLs. From a card the user can reuse
-the prompt, add the output back to the map as a georeferenced layer, download
-it, or star it. Top Picks and the themed categories stay curated prompt cards.
-
-Generation favorites (the ★ on a Recent/Favorites card) are a separate concept
-from prompt favorites (the ★ on a curated template) and sync to their own
-endpoint.
+Sessions are the user's own past generations, fetched from the server in the
+background and grouped by zone; Favorites holds the starred templates, the
+user's own starred prompts and the starred generations in one grid.
+Generation favorites (a star on a past edit) and prompt favorites (a star on
+a template) sync to separate endpoints.
 """
 
 from .prompt_templates.cards import _BeforeAfterCard, _StarButton

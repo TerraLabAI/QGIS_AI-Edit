@@ -3,7 +3,9 @@
 Single-shot QgsMapTool: click anywhere on the source raster, the tool
 samples the RGB at that pixel, hands the QColor back to a callback, and
 restores the previous map tool. Off-raster clicks fire an "off_raster"
-callback so the panel can show a recoverable error.
+callback so the panel can show a recoverable error. Every way the tool
+leaves the canvas (a pick, a miss, Esc, another tool) ends in QgsMapTool's
+``deactivated`` signal, which the panel listens to.
 """
 from __future__ import annotations
 
@@ -56,14 +58,17 @@ class EyedropperMapTool(QgsMapTool):
             self._on_color(color)
 
     def keyPressEvent(self, event):  # noqa: N802
-        # Escape cancels the sampling without firing either callback.
+        # QgsMapCanvas reads a map tool's answer backwards: an IGNORED key is
+        # one the tool took, an accepted one goes on to the canvas's own
+        # keys. Escape is ours: it cancels the sampling without firing either
+        # callback. Every other key stays accepted so the arrows still pan
+        # and Space still grabs the map while a color is being picked; the
+        # old ignore() here swallowed them all.
         if event.key() == QtC.Key_Escape:
             self._restore_previous_tool()
-            event.accept()
+            event.ignore()
             return
-        # Keys we don't handle: ignore so the canvas keeps its keyboard nav
-        # (hold-Space temporary pan). super() would leave the event accepted.
-        event.ignore()
+        event.accept()
 
     def _sample_color(self, map_point: QgsPointXY) -> QColor | None:
         if self._raster is None or not self._raster.isValid():
@@ -105,9 +110,13 @@ class EyedropperMapTool(QgsMapTool):
         )
 
     def _restore_previous_tool(self) -> None:
-        if self._previous_tool is None:
-            return
+        """Hand the canvas back. With no tool before it (a fresh QGIS where
+        nothing was armed) the eyedropper unsets itself: returning early left
+        it armed, so every later click on the map added another class."""
         try:
-            self._canvas.setMapTool(self._previous_tool)
+            if self._previous_tool is not None and self._previous_tool is not self:
+                self._canvas.setMapTool(self._previous_tool)
+            elif self._canvas.mapTool() is self:
+                self._canvas.unsetMapTool(self)
         except RuntimeError:  # pragma: no cover - C++ widget gone
             pass

@@ -16,8 +16,8 @@ from __future__ import annotations
 
 def _session_key(job: dict) -> str | None:
     """The job's session id, or None when it carries none (stays ungrouped)."""
-    sid = job.get("session_id")
-    return sid or None
+    sid = job.get("session_id") if isinstance(job, dict) else None
+    return sid if isinstance(sid, str) and sid.strip() else None
 
 
 def group_recent_jobs(jobs: list[dict]) -> list[dict]:
@@ -31,6 +31,8 @@ def group_recent_jobs(jobs: list[dict]) -> list[dict]:
     by_key: dict[str, dict] = {}
     solo = 0
     for job in jobs or []:
+        if not isinstance(job, dict):
+            continue
         sid = _session_key(job)
         if sid is None:
             solo += 1
@@ -56,13 +58,16 @@ def session_jobs_for(job: dict, jobs: list[dict]) -> list[dict]:
     sid = _session_key(job)
     if sid is None:
         return [job]
-    members = [j for j in (jobs or []) if _session_key(j) == sid]
+    members = [j for j in (jobs or []) if isinstance(j, dict) and _session_key(j) == sid]
     rid = job.get("request_id")
     # Identity is request_id, not dict value: a clicked job whose dict differs
     # from its cached twin (stale vs fresh copy) must not double up.
-    if not any(j.get("request_id") == rid for j in members):
+    if not any((j.get("request_id") == rid) if rid else j is job for j in members):
         members.append(job)
     # request_id breaks ties so same-timestamp multi-model siblings (and rows
     # missing created_at) keep a stable, deterministic order.
-    members.sort(key=lambda j: (j.get("created_at") or "", j.get("request_id") or ""))
+    members.sort(key=lambda j: (
+        j.get("created_at") if isinstance(j.get("created_at"), str) else "",
+        j.get("request_id") if isinstance(j.get("request_id"), str) else "",
+    ))
     return members

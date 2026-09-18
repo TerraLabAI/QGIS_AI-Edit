@@ -178,6 +178,8 @@ class VectorizeColorAlgorithm(QgsProcessingAlgorithm):
         # The tracing runs on this computer and spends nothing, so this one asks
         # only that the plugin is loaded. Demanding a signed-in account here
         # refused a job that needs no account.
+        if feedback.isCanceled():
+            raise QgsProcessingException(tr("Cancelled before tracing."))
         api = loaded_edit_facade(feedback)
 
         rgb = self._target_rgb(parameters, context)
@@ -249,10 +251,12 @@ class VectorizeColorAlgorithm(QgsProcessingAlgorithm):
         if named.isValid():
             return (named.red(), named.green(), named.blue())
         parts = [piece.strip() for piece in raw.replace(";", ",").split(",")]
-        if len(parts) < 3:
+        if len(parts) != 3:
             return None
         try:
-            channels = [max(0, min(255, int(float(piece)))) for piece in parts[:3]]
-        except (TypeError, ValueError):
+            channels = [int(piece) for piece in parts]
+            if any(channel < 0 or channel > 255 for channel in channels):
+                return None
+        except (TypeError, ValueError, OverflowError):
             return None
         return tuple(channels)

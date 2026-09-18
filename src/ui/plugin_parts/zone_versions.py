@@ -16,6 +16,7 @@ from ...core.canvas_export.zone_validation import (
     OVERLAP_PARTIAL,
     zone_layer_overlap,
 )
+from ...core.config_store import get_export_copy, get_export_dial
 from ...core.i18n import tr
 from ...core.logger import log_debug, log_warning
 from ..dock.blocked_reasons import LAUNCH_BLOCK_WORKER_BUSY
@@ -27,6 +28,9 @@ from ..dock.blocked_reasons import LAUNCH_BLOCK_WORKER_BUSY
 _ZONE_OUTLINE = QColor(65, 105, 225, 220)
 _ZONE_NO_FILL = QColor(0, 0, 0, 0)
 _ZONE_OUTLINE_WIDTH = 2
+
+# Message-bar notice duration, in seconds, for the post-exit history hint.
+_NOTIFY_EXIT_HISTORY_HINT_S = 6
 
 
 class ZoneVersionsMixin:
@@ -51,6 +55,12 @@ class ZoneVersionsMixin:
                 self._canvas.setMapTool(self._previous_map_tool)
             except (RuntimeError, AttributeError):  # nosec B110 - canvas gone
                 pass
+        elif self._canvas is not None and self._map_tool is not None:
+            try:
+                if self._canvas.mapTool() is self._map_tool:
+                    self._canvas.unsetMapTool(self._map_tool)
+            except (RuntimeError, AttributeError):  # nosec B110 - canvas gone
+                pass
         self._previous_map_tool = None
 
     def _cancel_generation_and_reset_zone(self):
@@ -61,13 +71,17 @@ class ZoneVersionsMixin:
         """
         self._disarm_swipe()
         self._pills_armed = False
-        if self._worker is not None and self._worker.is_active() and not self._generation_cancel_handled:
-            duration = time.time() - getattr(self, "_generation_start_time", time.time())
-            telemetry.track(te.GENERATION_CANCELLED, self._enrich_generation_props({
-                "duration_ms": int(duration * 1000),
-                "resolution": getattr(self, "_last_suggested_res", ""),
-            }))
-            telemetry.flush()
+        if self._worker is not None and self._worker.is_active():
+            if not self._generation_cancel_handled:
+                duration = time.time() - getattr(self, "_generation_start_time", time.time())
+                telemetry.track(te.GENERATION_CANCELLED, self._enrich_generation_props({
+                    "duration_ms": int(duration * 1000),
+                    "resolution": getattr(self, "_last_suggested_res", ""),
+                }))
+                telemetry.flush()
+            # Cancel even when the flag is still set from a run whose
+            # taskTerminated never fired: the flag only dedupes the telemetry
+            # and the UI recovery, never the cancel itself.
             self._generation_service.cancel()
             # The plugin recovers the UI itself here, so tell the taskTerminated
             # slot not to double-handle this same cancel.
@@ -104,10 +118,12 @@ class ZoneVersionsMixin:
         self._deactivate_selection_tool()
 
     def _on_stop(self):
-        """Dock closing mid-generation: cancel work and clear zone state.
+        """Cancel the work in flight and clear the zone state.
 
-        Triggered by the dock's closeEvent (title-bar X). The Exit button has
-        its own handler - see _on_exit_clicked.
+        No dock control triggers this any more: closing or hiding the dock
+        keeps a running generation (its credits are booked), and New edit /
+        Cancel go through _on_exit_clicked. The one caller left is the MCP
+        API's stop (mcp_api_generation), for an agent that asks for it.
         """
         self._cancel_generation_and_reset_zone()
         # Reset the DOCK VIEW, not just the data. Setting _generation_cancel_handled
@@ -142,23 +158,32 @@ class ZoneVersionsMixin:
         self._dock_widget.set_selecting_zone_state()
 
     def _on_exit_clicked(self):
-        """User clicked Exit / Done: cancel work and return to LAUNCH."""
+        """User clicked Cancel (prompt screen) or New edit (result screen):
+        cancel work and return to the entry screen."""
         # Index 0 of the lineage is the seeded Original, so anything past it
         # means at least one generation happened in this session.
         had_generation = len(self._versions or []) > 1
         self._cancel_generation_and_reset_zone()
-        # Mark up annotations persist across sessions on a single shared layer.
-        # User wipes them explicitly via the Clear all button.
+        # The flow is over: the lineage goes with it. Left in place, the next
+        # Cancel (Escape on the draw step, say) still counted the old versions
+        # and repeated the "session kept" notice for a session already left.
+        # The version on screen keeps its layer (see _reset_version_lineage).
+        self._reset_version_lineage()
+        # Draw marks persist across sessions on a single shared layer. The
+        # user wipes them explicitly via the Clear all button.
         self._dock_widget.set_launch_state()
+        self._reset_version_lineage()
         if had_generation:
-            # Leaving is not losing: the session stays reachable from the
-            # Prompt Library's Sessions page.
+            # Leaving is not losing: the session stays reachable from
+            # Sessions, behind the header clock.
             self._notify(
-                tr(
-                    "Your session stays in your history. Reopen it anytime "
-                    "from the Prompt Library."
+                get_export_copy(
+                    "flows.zone_versions.session_kept_in_sessions",
+                    tr("Your session is saved. Reopen it from Sessions, the clock at the top."),
                 ),
-                duration=6,
+                duration=get_export_dial(
+                    "flows.zone_versions.notify_exit_history_hint_s", _NOTIFY_EXIT_HISTORY_HINT_S
+                ),
             )
 
     def _on_project_layers_changed(self, *_args):
@@ -348,7 +373,7 @@ class ZoneVersionsMixin:
         if self._dock_widget is not None:
             try:
                 self._dock_widget.clear_active_template()
-            except AttributeError:
+            except AttributeError:  # dock without templates support: nothing to clear
                 pass
             # Drop any Mark up reference baked at the previous zone extent so it
             # is not shipped as context for this new, differently-located zone.
@@ -379,6 +404,7 @@ class ZoneVersionsMixin:
             self._dock_widget.set_reference_target_extent(QgsRectangle(extent), zone_crs)
         except Exception:  # nosec B110 - alignment is best-effort, never blocks selection.
             pass
+        self._attach_layers_above(extent)
         # Captures the common case of drawing a zone without generating, which
         # would otherwise go unmeasured. Dimensions only, never coordinates.
         try:
@@ -394,6 +420,43 @@ class ZoneVersionsMixin:
         except Exception:  # nosec B110 - telemetry must never block selection.
             pass
         log_debug("Zone selected")
+
+    def _attach_layers_above(self, extent) -> None:
+        """Send what is drawn above the picked layer as references.
+
+        The input image is the picked layer alone, so polygons, labels or
+        another raster stacked over it would otherwise never reach the model.
+        Each visible layer above it that touches the zone becomes one
+        reference, rendered at the zone so it lines up with the input. A layer
+        that misses the zone would only arrive as an unaligned whole image,
+        so it stays out. The AI Edit outputs and the drawing layer have their
+        own paths and never count.
+        """
+        if self._dock_widget is None:
+            return
+        try:
+            from ...core.canvas_export.input_render_set import layers_above_input
+            from ..layer_groups import collect_ai_edit_layer_ids
+            from ..layer_renderer import layer_misses_zone
+
+            settings = self._canvas.mapSettings()
+            zone_crs = settings.destinationCrs()
+            markup_layer = None
+            if self._markup_manager is not None:
+                markup_layer = self._markup_manager.layer()
+            above = [
+                layer
+                for layer in layers_above_input(
+                    settings.layers(),
+                    self._input_layer(),
+                    collect_ai_edit_layer_ids(),
+                    markup_layer=markup_layer,
+                )
+                if not layer_misses_zone([layer], extent, zone_crs)
+            ]
+            self._dock_widget.set_reference_layers_above(above)
+        except Exception as err:  # nosec B110 - references are extra context, never block the zone.
+            log_debug(f"Layers above the input not attached: {err}")
 
     def _input_layer(self):
         """The raster picked in the dock's layer header, or None."""
@@ -457,8 +520,7 @@ class ZoneVersionsMixin:
         except Exception:
             min_pct = 5
         message = tr(
-            "Selected zone too small. Draw a rectangle at least "
-            "{pct}% of the canvas size."
+            "Your zone is too small. Draw it at least {pct}% of the map width."
         ).format(pct=max(1, min_pct))
         self._dock_widget.set_status(message, is_error=True)
         self._dock_widget.set_zone_step_notice(message)
@@ -515,7 +577,7 @@ class ZoneVersionsMixin:
         if self._dock_widget is not None:
             try:
                 self._dock_widget.reset_version_strip()
-            except AttributeError:
+            except AttributeError:  # dock without a version strip: nothing to reset
                 pass
 
     def _pixmap_from_b64(self, image_b64: str | None) -> QPixmap | None:
@@ -648,6 +710,6 @@ class ZoneVersionsMixin:
                 scene = band.scene()
                 if scene is not None:
                     scene.removeItem(band)
-            except (RuntimeError, AttributeError):
+            except (RuntimeError, AttributeError):  # band or scene already deleted by Qt
                 pass
             setattr(self, attr, None)

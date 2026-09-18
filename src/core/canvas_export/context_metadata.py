@@ -53,6 +53,7 @@ def apply_export_context(
     ctx.export_height = prep.out_h
     ctx.image_size_bytes = image_size_bytes
     ctx.input_format = input_format
+    ctx.zone_polygon_wkt = None
     if zone_polygon is not None and not zone_polygon.isEmpty():
         ctx.zone_polygon_wkt = zone_polygon.asWkt()
 

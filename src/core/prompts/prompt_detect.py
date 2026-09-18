@@ -22,9 +22,8 @@ from ..config_store import get_export_dial_seq, get_export_dial_str
 
 # Bounds on the served side. Twelve patterns is far more than a rule needs, a
 # pattern longer than this is not a phrasing but a program, and no served
-# pattern ever sees more than the first part of a prompt: runtime then has a
-# ceiling whatever the pattern does, which no amount of inspecting it would
-# give us.
+# pattern ever sees more than the first part of a prompt. This limits input
+# work but does not by itself guarantee a safe regex runtime.
 _MAX_SERVED_PATTERNS = 12
 _MAX_PATTERN_CHARS = 120
 _MAX_SERVED_SCAN_CHARS = 1000
@@ -62,8 +61,9 @@ def _served_patterns(cfg_key: str) -> tuple:
     out = tuple(compiled)
     # A cap on the cache too: the config changes rarely, and an unbounded dict
     # here would be a slow leak across a long session.
-    if len(_compiled_extras) < 32:
-        _compiled_extras[key] = out
+    if len(_compiled_extras) >= 32:
+        _compiled_extras.pop(next(iter(_compiled_extras)), None)
+    _compiled_extras[key] = out
     return out
 
 

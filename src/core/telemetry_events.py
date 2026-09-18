@@ -47,6 +47,10 @@ SUBSCRIBE_LINK_CLICKED = "subscribe_link_clicked"
 # Pre-wall banner: last free generation of the month, shown ahead of the
 # wall (trial_exhausted_viewed covers the wall itself, reused as-is).
 PAYWALL_PREWALL_SHOWN = "paywall_prewall_shown"
+# A Pro nudge was shown (header pill, the line after a first free result,
+# a locked tier, the reference cap). trigger and cta_source carry the same
+# word as the click's source, so a view joins its click.
+PRO_UPSELL_VIEWED = "pro_upsell_viewed"
 
 # Update notice in the dock. shown fires once per offered version per install,
 # clicked pairs with it to give a release nudge its take-up rate.
@@ -147,6 +151,7 @@ ALL_EVENTS = frozenset({
     TRIAL_EXHAUSTED_VIEWED,
     SUBSCRIBE_LINK_CLICKED,
     PAYWALL_PREWALL_SHOWN,
+    PRO_UPSELL_VIEWED,
     PLUGIN_UPDATE_PROMPT_SHOWN,
     PLUGIN_UPDATE_PROMPT_CLICKED,
     PLUGIN_UPDATE_PROMPT_SUPPRESSED,
@@ -207,6 +212,7 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     TRIAL_EXHAUSTED_VIEWED: ("is_free_tier",),
     SUBSCRIBE_LINK_CLICKED: (),
     PAYWALL_PREWALL_SHOWN: (),
+    PRO_UPSELL_VIEWED: (),
     PLUGIN_UPDATE_PROMPT_SHOWN: ("offered_version", "trigger"),
     PLUGIN_UPDATE_PROMPT_CLICKED: ("offered_version", "action"),
     PLUGIN_UPDATE_PROMPT_SUPPRESSED: ("served_version", "reason"),

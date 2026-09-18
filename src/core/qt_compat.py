@@ -7,7 +7,7 @@ them once at import time so the rest of the codebase stays clean.
 from __future__ import annotations
 
 from qgis.core import QgsBlockingNetworkRequest, QgsRaster, QgsTask
-from qgis.PyQt.QtCore import QIODevice, QObject, QStandardPaths, Qt, QTimer
+from qgis.PyQt.QtCore import QIODevice, QLocale, QObject, QStandardPaths, Qt, QTimer
 from qgis.PyQt.QtGui import QImage, QPainter, QPalette, QTextCursor, QTextOption
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 from qgis.PyQt.QtWidgets import QFrame, QSizePolicy, QTextEdit
@@ -128,6 +128,9 @@ TextBrowserInteraction = _resolve(Qt, "TextInteractionFlag", "TextBrowserInterac
 # QIODevice.OpenModeFlag
 WriteOnly = _resolve(QIODevice, "OpenModeFlag", "WriteOnly")
 
+# QLocale.NumberOption
+LocaleDefaultNumberOptions = _resolve(QLocale, "NumberOption", "DefaultNumberOptions")
+
 # QStandardPaths.StandardLocation
 CacheLocation = _resolve(QStandardPaths, "StandardLocation", "CacheLocation")
 
@@ -206,6 +209,10 @@ SslHandshakeFailedError = _net_enum("SslHandshakeFailedError")
 ContentAccessDenied = _net_enum("ContentAccessDenied")
 AuthenticationRequiredError = _net_enum("AuthenticationRequiredError")
 UnknownNetworkError = _net_enum("UnknownNetworkError")
+# What a reply carries when it was aborted: by its own transfer timeout, by the
+# QGIS network timeout (Settings > Options > Network), or by a QgsFeedback
+# cancel. QgsBlockingNetworkRequest still answers NoError for the first two.
+OperationCanceledError = _net_enum("OperationCanceledError")
 
 PROXY_ERRORS = {
     _net_enum("ProxyConnectionRefusedError"),
@@ -309,6 +316,10 @@ def safe_single_shot(msec: int, owner: QObject, callback) -> QTimer:
     timer = QTimer(owner)
     timer.setSingleShot(True)
     timer.timeout.connect(callback)
+    # A fired single-shot is dead weight: without this, every call leaves one
+    # QTimer child on ``owner`` for the owner's whole life. Callers must not
+    # touch the returned timer once it has fired.
+    timer.timeout.connect(timer.deleteLater)
     timer.start(max(0, int(msec)))
     return timer
 

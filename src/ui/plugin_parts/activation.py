@@ -17,13 +17,20 @@ from ...core.auth.activation_manager import (
     save_activation,
     validate_key_with_server,
 )
+from ...core.config_store import get_export_copy, get_export_dial
 from ...core.errors import NETWORK_ERROR_CODES, TRANSIENT_SERVER_ERROR_CODES
 from ...core.i18n import tr
 from ...core.logger import log, log_debug, log_warning
+from ...core.prompts import conversation_thumbs
 from ...core.window_focus import bring_qgis_window_to_front
 from ...workers.generic_request_task import GenericRequestTask
 from ...workers.pairing_poll_task import PairingPollTask
-from .errors import subscribe_error_url
+from .errors import network_next_step, subscribe_error_url
+from .lifecycle import REQUEST_TASK_SIGNALS, drain_task
+
+# Client-side revalidation window: below this, a dock toggle reuses the last
+# server confirmation instead of firing another /usage call.
+_KEY_REVALIDATION_WINDOW_S = 900
 
 
 def _key_validation_request(client, key):
@@ -48,10 +55,18 @@ class ActivationMixin:
         settings = QSettings()
         saved_key = get_activation_key(settings)
         if not saved_key:
-            clear_activation(settings)
+            from ...core.auth.auth_helper import has_stored_activation
+
+            if has_stored_activation(settings):
+                # A key is stored but the auth database would not hand it over
+                # (master password dialog cancelled, another QGIS instance
+                # holding it). Signed out for this session only: clearing here
+                # would delete a paying user's key for good.
+                log_warning("Stored activation key could not be read; signed out for this session")
+            else:
+                clear_activation(settings)
             self._auth_manager.set_activation_key("")
             self._dock_widget.set_activated(False)
-            self._settings_action.setEnabled(False)
             self._last_key_validation_unix = 0.0
             return
 
@@ -61,9 +76,10 @@ class ActivationMixin:
         # anyway, so this client-side check is purely cosmetic (which screen to
         # show); 30s made every dock toggle cost two /usage calls and was the
         # single largest source of API traffic (10x the generation volume).
-        if (time.time() - self._last_key_validation_unix) < 900:
+        if (time.time() - self._last_key_validation_unix) < get_export_dial(
+            "flows.activation.key_revalidation_window_s", _KEY_REVALIDATION_WINDOW_S
+        ):
             self._dock_widget.set_activated(True)
-            self._settings_action.setEnabled(True)
             # Stay on LAUNCH state; tool is activated on user click.
             return
 
@@ -72,7 +88,6 @@ class ActivationMixin:
         # Launch until the async credit check confirms; otherwise the
         # sign-up screen flashes for half a second on every reload.
         self._dock_widget.set_activated(True)
-        self._settings_action.setEnabled(True)
         self._dock_widget.set_launch_enabled(False)
 
         if not validate:
@@ -91,14 +106,14 @@ class ActivationMixin:
         """Server confirmed the key is valid. The validation call IS a /usage
         fetch, so its payload feeds the credits display directly instead of
         firing a second, identical request."""
-        # Guard against an orphaned validation worker firing after unload.
-        if self._dock_widget is None:
+        # Guard against an orphaned validation worker firing after unload, or
+        # after a sign-out that raced the answer.
+        if self._dock_widget is None or not self._auth_manager.has_activation_key():
             return
         # Connection works again: re-arm the one-shot connectivity notice.
         self._connectivity_notice_shown = False
         self._last_key_validation_unix = time.time()
         self._dock_widget.set_activated(True)
-        self._settings_action.setEnabled(True)
         # History refresh + thumb backfill want a confirmed key and a live
         # network, both of which this callback just proved. The lifecycle
         # startup call can run before the key is restored and then skips.
@@ -126,13 +141,18 @@ class ActivationMixin:
         if self._dock_widget is None:
             return
         code_up = (code or "").strip().upper()
-        if code_up in NETWORK_ERROR_CODES or code_up in TRANSIENT_SERVER_ERROR_CODES:
+        # NO_CONNECTION is what validate_key_with_server answers when the
+        # client call itself raised: a network fault too, never a verdict.
+        if (
+            code_up in NETWORK_ERROR_CODES
+            or code_up in TRANSIENT_SERVER_ERROR_CODES
+            or code_up == "NO_CONNECTION"
+        ):
             self._dock_widget.set_activated(True)
-            self._settings_action.setEnabled(True)
             # The optimistic path disabled Launch pending this check; restore it
             # so an offline user can still open the tool from a cached session.
             self._dock_widget.set_launch_enabled(True)
-            self._show_connectivity_notice(code)
+            self._show_connectivity_notice(code, message)
             return
         # Genuine auth rejection (INVALID_KEY / KEY_REVOKED / SUBSCRIPTION_EXPIRED
         # / DEVICE_LIMIT_EXCEEDED). Record the machine code only, never the
@@ -148,22 +168,29 @@ class ActivationMixin:
         self._auth_manager.set_activation_key("")
         self._dock_widget.set_activated(False)
         self._dock_widget.set_activation_message(message, is_error=True)
-        self._settings_action.setEnabled(False)
 
     def _on_settings_clicked(self):
-        """Open the Account Settings dialog."""
-        if not self._auth_manager.has_activation_key():
-            return
+        """Open the Settings dialog, signed in or not.
+
+        Signed out it used to return without a word, from a menu row left
+        greyed: Tutorials, Contact us and Report a problem were out of reach
+        for exactly the people who could not sign in. It now opens on a
+        "Not signed in" Account page whose Sign in shows the panel."""
         self._disarm_swipe()
         from ..dialogs.account_settings_dialog import AccountSettingsDialog
 
+        signed_in = self._auth_manager.has_activation_key()
         dlg = AccountSettingsDialog(
             client=self._client,
-            auth=self._auth_manager.get_auth_header(),
-            activation_key=self._auth_manager.get_activation_key(),
+            auth=self._auth_manager.get_auth_header() if signed_in else {},
+            activation_key=self._auth_manager.get_activation_key() if signed_in else "",
             parent=self._iface.mainWindow(),
+            signed_in=signed_in,
         )
+        dlg.sign_in_requested.connect(self._ensure_dock_widget)
         dlg.sign_out_requested.connect(self._on_sign_out)
+        dlg.account_deleted.connect(self._on_account_deleted)
+        dlg.usage_loaded.connect(self._on_account_usage_loaded)
         # Held across exec(): the dialog is modal, and a plugin reload while it
         # is open drops self._dock_widget, so the finally below raised an
         # AttributeError on the way out and swallowed the real exit path.
@@ -178,10 +205,34 @@ class ActivationMixin:
                     dock.set_settings_button_active(False)
                 except RuntimeError:
                     pass  # nosec B110 - the dock's C++ half is already gone.
+            # Parented to the main window, so it would live until QGIS exits.
+            dlg.deleteLater()
+
+    def _on_account_usage_loaded(self, usage: dict):
+        """The account dialog's load carried the /usage payload: reuse it for
+        the credits display and the pre-generation snapshot instead of
+        firing a separate request."""
+        if self._dock_widget is None or not self._auth_manager.has_activation_key():
+            return
+        self._auth_manager.seed_usage(usage)
+        self._on_credits_loaded(usage)
 
     def _on_sign_out(self):
         """Disconnect: clear the stored key and return to the sign-in screen."""
+        # Retire every account-bound history callback before clearing the key.
+        # Queued answers from the old account must not repopulate the next one.
+        advance_history = getattr(self, "_advance_history_account_revision", None)
+        if callable(advance_history):
+            advance_history()
         self._last_key_validation_unix = 0.0
+        # A validation or credits load still in flight carries the old key and
+        # would flip the dock back to the activated view when it lands.
+        for attr in ("_key_validation_worker", "_credits_loader"):
+            drain_task(getattr(self, attr, None), REQUEST_TASK_SIGNALS)
+            setattr(self, attr, None)
+        cancel_history = getattr(self, "_cancel_history_tasks", None)
+        if callable(cancel_history):
+            cancel_history()
         clear_activation()
         self._auth_manager.set_activation_key("")
         # The conversation cache is per QGIS profile, not per account, and the
@@ -190,8 +241,19 @@ class ActivationMixin:
         # call returns, and for good if it never does (offline, server error).
         self._clear_local_conversations()
         self._dock_widget.set_activated(False)
-        self._settings_action.setEnabled(False)
         log_debug("Signed out")
+
+    def _on_account_deleted(self):
+        """The account is scheduled for erasure: sign out and drop the rest.
+
+        Everything the sign-out does applies, plus the thumbnails it keeps on
+        purpose. Sign-out keeps them because the same account usually comes
+        back and would otherwise re-download the whole store; a deleted
+        account never signs back in, so they have nothing left to serve.
+        """
+        self._on_sign_out()
+        conversation_thumbs.clear_thumbs()
+        log_debug("Account deletion scheduled: local data cleared")
 
     def _apply_activation(self, key: str):
         """Shared success funnel for both manual paste and one-click connect.
@@ -200,11 +262,16 @@ class ActivationMixin:
         activated state, and kicks a credit refresh. Callers add their own
         path-specific telemetry afterward.
         """
+        advance_history = getattr(self, "_advance_history_account_revision", None)
+        if callable(advance_history):
+            advance_history()
         save_activation(key)
         self._auth_manager.set_activation_key(key)
         self._dock_widget.set_activated(True)
-        self._dock_widget.set_activation_message(tr("Activation key verified!"), is_error=False)
-        self._settings_action.setEnabled(True)
+        self._dock_widget.set_activation_message(
+            get_export_copy("flows.activation.key_verified", tr("Activation key verified!")),
+            is_error=False,
+        )
         # Stay on LAUNCH state; tool is activated on user click.
         self._dock_widget.set_checking_credits(True)
         self._refresh_credits()
@@ -221,9 +288,32 @@ class ActivationMixin:
         """Cancel any in-flight pairing poll (never terminate())."""
         if self._pairing_worker is not None and self._pairing_worker.is_active():
             try:
-                self._pairing_worker.cancel()
+                self._pairing_worker.cancel_by_plugin()
             except Exception:  # nosec B110
                 pass
+
+    def _on_pairing_task_terminated(self, worker):
+        """The poll ended without success. A cancel the plugin did not ask
+        for came from the QGIS Task Manager: recover the dock as a user
+        cancel would, or it waits on "signing in" for good."""
+        if not worker.isCanceled() or worker.cancelled_by_plugin:
+            return
+        if self._pairing_worker is worker:
+            self._pairing_worker = None
+        if self._dock_widget is None:
+            return
+        self._dock_widget.show_pairing_idle()
+        telemetry.track(te.AI_EDIT_PAIR_CANCELLED, {
+            "duration_ms": self._pairing_duration_ms(),
+            "stalled": bool(getattr(self, "_pairing_stalled", False)),
+        })
+        telemetry.flush()
+        log("Pairing cancelled from the task manager")
+
+    def _on_pairing_network_problem(self, code: str):
+        if self._dock_widget:
+            self._dock_widget.show_pairing_network_problem(network_next_step(code))
+        log_warning(f"Pairing poll keeps failing on the network ({code})")
 
     # --- One-click connect (browser pairing handoff) ------------------------
 
@@ -247,7 +337,10 @@ class ActivationMixin:
         if not opened:
             self._dock_widget.show_pairing_idle()
             self._dock_widget.set_activation_message(
-                tr("Couldn't open your browser. Copy the link and open it manually."),
+                get_export_copy(
+                    "flows.activation.browser_open_failed",
+                    tr("Couldn't open your browser. Copy the link and open it manually."),
+                ),
                 is_error=True,
             )
             return
@@ -262,6 +355,10 @@ class ActivationMixin:
         self._pairing_worker.pairing_timeout.connect(self._on_pairing_timeout)
         self._pairing_worker.pairing_browser_seen.connect(self._on_pairing_browser_seen)
         self._pairing_worker.pairing_stalled.connect(self._on_pairing_stalled)
+        self._pairing_worker.pairing_network_problem.connect(self._on_pairing_network_problem)
+        self._pairing_worker.taskTerminated.connect(
+            lambda w=self._pairing_worker: self._on_pairing_task_terminated(w)
+        )
         QgsApplication.taskManager().addTask(self._pairing_worker)
         # Anchor the wait clock + reset the stalled flag on a genuine start (this
         # branch is skipped on a browser re-open), so the terminal pairing event
@@ -326,8 +423,11 @@ class ActivationMixin:
     def _on_pairing_timeout(self):
         self._dock_widget.show_pairing_idle()
         self._dock_widget.set_activation_message(
-            tr("Sign-in timed out. Click Connect to try again, "
-               "or enter your key manually."),
+            get_export_copy(
+                "flows.activation.pairing_timed_out",
+                tr("Sign-in timed out. Click Connect to try again, "
+                   "or enter your key manually."),
+            ),
             is_error=True,
         )
         telemetry.track(te.AI_EDIT_PAIR_TIMEOUT, {
@@ -343,7 +443,7 @@ class ActivationMixin:
             # Retire the code server-side so a later Confirm in the browser
             # shows "expired" instead of binding a key nobody is polling for.
             task = GenericRequestTask(
-                tr("Cancelling sign-in"),
+                get_export_copy("flows.activation.cancelling_sign_in", tr("Cancelling sign-in")),
                 lambda c=code: self._client.cancel_pairing(c),
                 silent=True,
             )
@@ -374,7 +474,7 @@ class ActivationMixin:
 
     def _on_credits_loaded(self, usage: dict):
         """Update dock widget with credits from background fetch."""
-        if self._dock_widget:
+        if self._dock_widget and self._auth_manager.has_activation_key():
             self._dock_widget.set_checking_credits(False)
             self._dock_widget.set_launch_enabled(True)
             used = usage.get("images_used")

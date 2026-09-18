@@ -9,13 +9,22 @@ Security: Uses defusedxml for safe XML parsing (no global monkey-patch).
 from __future__ import annotations
 
 import os
-import xml.etree.ElementTree as ET  # nosec B405
+import re
+import threading
+import xml.etree.ElementTree as ET  # nosec B405 - fallback rejects declarations.
 
 # Prefer defusedxml for safe XML parsing (no global monkey-patch)
 try:
     from defusedxml.ElementTree import parse as _safe_parse
 except ImportError:
-    _safe_parse = ET.parse  # fallback: .ts files are local trusted plugin files
+    def _safe_parse(path):
+        # Some QGIS distributions omit defusedxml. Accept only the UTF-8 TS
+        # format we ship, with its empty doctype, before using stdlib XML.
+        with open(path, encoding="utf-8-sig") as source:
+            text = source.read().replace("<!DOCTYPE TS>", "")
+        if "<!DOCTYPE" in text or "<!ENTITY" in text:
+            raise ValueError("Translation XML declarations are not allowed")
+        return ET.ElementTree(ET.fromstring(text))  # nosec B314
 
 # Translation context - must match the context in .ts files
 CONTEXT = "AIEdit"
@@ -25,6 +34,7 @@ _translations: dict[str, str] = {}
 
 # Flag to track if translations have been loaded
 _loaded = False
+_locale_lock = threading.RLock()
 
 # Session memo of the locale string. QGIS only applies a locale change after a
 # restart, so this cannot move under us. It matters because constructing a
@@ -41,15 +51,27 @@ def _query_user_locale() -> str:
         from qgis.PyQt.QtCore import QSettings
     except ImportError:
         return "en_US"
-    return QSettings().value("locale/userLocale", "en_US")
+    try:
+        return QSettings().value("locale/userLocale", "en_US")
+    except (TypeError, ValueError, RuntimeError):
+        return "en_US"
 
 
 def _read_user_locale() -> str:
     """The QGIS locale, read once per session (see `_user_locale`)."""
     global _user_locale
-    if _user_locale is None:
-        _user_locale = _query_user_locale()
-    return _user_locale
+    with _locale_lock:
+        if _user_locale is None:
+            raw = _query_user_locale()
+            value = raw.strip().split(".", 1)[0].split("@", 1)[0].replace("-", "_") if isinstance(raw, str) else ""
+            if not re.fullmatch(r"[A-Za-z]{2,3}(?:_[A-Za-z0-9]{2,8})*", value):
+                value = "en_US"
+            parts = value.split("_")
+            _user_locale = "_".join([
+                parts[0].lower(),
+                *(p.title() if len(p) == 4 else p.upper() for p in parts[1:]),
+            ])
+        return _user_locale
 
 
 def reset_locale_cache() -> None:
@@ -61,20 +83,24 @@ def reset_locale_cache() -> None:
     from it is rebuilt on the next read. tests/test_i18n.py drives it through a
     language change and checks that the translations follow."""
     global _user_locale, _loaded
-    _user_locale = None
-    _loaded = False
-    _translations.clear()
+    with _locale_lock:
+        _user_locale = None
+        _loaded = False
+        _translations.clear()
 
 
 def _load_translations():
-    """Load translations from .ts XML file based on QGIS locale."""
+    """Publish one complete locale table before another thread can use it."""
     global _loaded
+    with _locale_lock:
+        if not _loaded:
+            try:
+                _load_translation_file()
+            finally:
+                _loaded = True
 
-    if _loaded:
-        return
 
-    _loaded = True
-
+def _load_translation_file():
     # Get the locale from QGIS settings
     locale = _read_user_locale()
     if not locale:
@@ -104,20 +130,16 @@ def _load_translations():
         "zh_MO": "zh_TW",
     }
 
-    locale_variants = []
-    normalized_locale = locale.replace("-", "_")
-
-    if "_" in normalized_locale:
-        locale_variants.append(normalized_locale)
-        locale_variants.append(normalized_locale[:2])
-        if normalized_locale in language_fallbacks:
-            locale_variants.append(language_fallbacks[normalized_locale])
-        if normalized_locale[:2] in language_fallbacks:
-            locale_variants.append(language_fallbacks[normalized_locale[:2]])
-    else:
-        locale_variants.append(normalized_locale[:2])
-        if normalized_locale[:2] in language_fallbacks:
-            locale_variants.append(language_fallbacks[normalized_locale[:2]])
+    locale_variants = [locale]
+    parts = locale.split("_")
+    # Try script-specific aliases before the generic language alias.
+    for width in range(len(parts), 0, -1):
+        variant = "_".join(parts[:width])
+        alias = language_fallbacks.get(variant)
+        if alias and alias not in locale_variants:
+            locale_variants.append(alias)
+    if parts[0] not in locale_variants:
+        locale_variants.append(parts[0])
 
     ts_path = None
     for variant in locale_variants:
@@ -133,6 +155,7 @@ def _load_translations():
         tree = _safe_parse(ts_path)
         root = tree.getroot()
 
+        translations = {}
         for context in root.findall("context"):
             context_name = context.find("name")
             if context_name is None or context_name.text != CONTEXT:
@@ -149,8 +172,12 @@ def _load_translations():
                 translation_text = translation.text
 
                 # Skip unfinished/empty translations
-                if translation_text and translation.get("type") != "unfinished":
-                    _translations[source_text] = translation_text
+                if (
+                    source_text and translation_text
+                    and translation.get("type") not in ("unfinished", "obsolete", "vanished")
+                ):
+                    translations[source_text] = translation_text
+        _translations.update(translations)
 
     except Exception as e:
         try:

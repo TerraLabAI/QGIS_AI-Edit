@@ -6,8 +6,7 @@ try:  # SIP ships with both PyQt5 and PyQt6 - used to detect dead C++ objects.
 except ImportError:  # pragma: no cover - defensive only
     _sip = None
 
-from qgis.PyQt.QtCore import QSize, QTimer
-from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtCore import QSize
 from qgis.PyQt.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -21,30 +20,44 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ....core import qt_compat as QtC
+from ....core.config_store import get_export_copy, get_export_dial
 from ....core.date_format import format_smart_date
 from ....core.i18n import tr
+from ....core.number_format import format_count
 from ....core.prompts import prompt_history
 from ....core.prompts.hex_highlight import prompt_to_hex_html
 from ....core.prompts.prompt_presets import format_template_prompt, lookup_template_by_prompt
+from ....core.resolution_labels import resolution_display_label
 from ...before_after_slider import BeforeAfterSlider
+from ...dock.design_tokens import BTN_PRIMARY_WIDE_PX, INK, INK_2, SCROLL_AREA_QSS, qcolor
+from ...icons import icon_for
 from .styles import (
     _ACTION_BTN,
     _CHIP_CAPTION,
     _CHIP_STYLE,
     _CHIP_VALUE,
     _COPY_BTN,
-    _COPY_SVG,
     _DANGER_BTN,
     _DETAIL_BADGE_STYLE,
     _DETAIL_SECTION_STYLE,
     _DETAIL_TITLE_STYLE,
-    _DOWNLOAD_SVG,
     _FS_BTN,
     _PRIMARY_BTN,
     _PROMPT_STYLE,
     _SEPARATOR,
+    _STAR_BTN,
 )
 from .widgets import _AspectBox, _RefThumb
+
+# How long the prompt "Copy" button shows "Copied" before it reverts.
+_COPY_RESET_MS = 1400
+# The dialog's outer margin and the gap between the picture and the info
+# pane. dialog.py sizes the window from the same two numbers.
+_DIALOG_MARGIN_PX = 16
+_PANE_GAP_PX = 16
+# Long titles (a template label or a raw prompt) are clipped to this many
+# characters, with an ellipsis, so the header never runs multiple lines.
+_TITLE_TRUNCATE_CHARS = 60
 
 
 def _job_has_location(job: dict) -> bool:
@@ -71,7 +84,8 @@ class BuildUiMixin:
             if title:
                 return title
         if not self._is_generation:
-            return str(src.get("label") or "").strip() or tr("Template")
+            return str(src.get("label") or "").strip() or get_export_copy(
+                "dialogs.build.template_fallback", tr("Template"))
         # A generation is "a template" only when its prompt still matches one
         # verbatim; an edited template reads as a custom prompt and titles off
         # the prompt text instead of the (stale) stored template name.
@@ -80,13 +94,22 @@ class BuildUiMixin:
             return match[1]
         prompt = " ".join(str(src.get("prompt") or "").split())
         if not prompt:
-            return tr("Generation")
-        return prompt[:59].rstrip() + "…" if len(prompt) > 60 else prompt
+            return get_export_copy("dialogs.build.generation_fallback", tr("Generation"))
+        limit = get_export_dial("dialogs.build.title_truncate_chars", _TITLE_TRUNCATE_CHARS)
+        if len(prompt) <= limit:
+            return prompt
+        # End on a whole word ("...parasols…"), never mid-word ("...parasols al…").
+        cut = prompt[:limit - 1]
+        if prompt[limit - 1] != " " and " " in cut:
+            cut = cut.rsplit(" ", 1)[0]
+        return cut.rstrip(" ,.;:-") + "…"
 
     def _build_ui(self) -> bool:
         root = QHBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 12)
-        root.setSpacing(12)
+        root.setContentsMargins(
+            _DIALOG_MARGIN_PX, _DIALOG_MARGIN_PX, _DIALOG_MARGIN_PX, _DIALOG_MARGIN_PX
+        )
+        root.setSpacing(_PANE_GAP_PX)
 
         has_images = self._image_sources_present()
 
@@ -109,8 +132,12 @@ class BuildUiMixin:
             # Fullscreen toggle floats over the image's bottom-right corner,
             # clear of the BEFORE / Example / AFTER badges along the top edge.
             self._fs_btn = QToolButton(self._aspect_box)
-            self._fs_btn.setText("⤢")  # diagonal expand glyph
-            self._fs_btn.setToolTip(tr("Fullscreen"))
+            self._fs_btn.setIcon(icon_for(self, "expand", 16, qcolor(INK)))
+            self._fs_btn.setIconSize(QSize(16, 16))
+            self._fs_btn.setCheckable(True)
+            self._fs_btn.setToolTip(
+                get_export_copy("dialogs.dialog.fullscreen_tooltip", tr("Fullscreen")))
+            self._fs_btn.setAccessibleName(self._fs_btn.toolTip())
             self._fs_btn.setCursor(QtC.PointingHandCursor)
             self._fs_btn.setStyleSheet(_FS_BTN)
             self._fs_btn.setFixedSize(30, 30)
@@ -146,7 +173,7 @@ class BuildUiMixin:
         info.setMinimumWidth(300)
         col = QVBoxLayout(info)
         col.setContentsMargins(4, 2, 10, 2)
-        col.setSpacing(12)
+        col.setSpacing(14)
 
         # Header: a small type tag, then the title. The tag adds context and
         # anchors the top of the panel so the title doesn't float alone.
@@ -169,7 +196,9 @@ class BuildUiMixin:
         if self._is_generation:
             refs = self._job.get("reference_image_urls") or []
             if refs:
-                col.addWidget(self._section_label(tr("Reference images")))
+                # The word the prompt box and its panel use.
+                col.addWidget(self._section_label(get_export_copy(
+                    "dialogs.build.references_label", tr("References"))))
                 col.addWidget(self._build_reference_row(refs))
             meta = self._build_meta_block()
             if meta is not None:
@@ -177,6 +206,11 @@ class BuildUiMixin:
 
         col.addStretch(1)
         info_scroll.setWidget(info)
+        # The column shows the dialog's canvas: QScrollArea fills its viewport
+        # and the widget it holds with the native window grey otherwise.
+        info_scroll.setStyleSheet(SCROLL_AREA_QSS)
+        info_scroll.viewport().setAutoFillBackground(False)
+        info.setAutoFillBackground(False)
         right_col.addWidget(info_scroll, 1)
 
         # Pinned footer: a separator, the downloads (generations only), then the
@@ -201,12 +235,12 @@ class BuildUiMixin:
 
     def _badge_text(self) -> str:
         if self._session is not None:
-            return tr("Session")
+            return get_export_copy("dialogs.build.session_badge", tr("Session"))
         if self._is_generation:
-            return tr("Your result")
+            return get_export_copy("dialogs.build.your_result_badge", tr("Your result"))
         src = self._preset or {}
         label = str(src.get("category_label") or src.get("category") or "").strip()
-        return label or tr("Template")
+        return label or get_export_copy("dialogs.build.template_fallback", tr("Template"))
 
     def _image_sources_present(self) -> bool:
         if self._is_generation:
@@ -229,22 +263,23 @@ class BuildUiMixin:
         wrap = QWidget(self)
         v = QVBoxLayout(wrap)
         v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(4)
+        v.setSpacing(6)
 
         # Header: section label on the left, a tiny one-click "Copy" on the
         # right so the user can reuse a past prompt without selecting it by hand.
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
         header.setSpacing(6)
-        header.addWidget(self._section_label(tr("Prompt")))
+        header.addWidget(self._section_label(get_export_copy(
+            "dialogs.build.prompt_section_label", tr("Prompt"))))
         header.addStretch(1)
         if prompt.strip():
-            btn = QPushButton(tr("Copy"))
-            btn.setIcon(QIcon(_COPY_SVG))
+            btn = QPushButton(get_export_copy("dialogs.build.copy_button", tr("Copy")))
+            btn.setIcon(icon_for(self, "copy", 14, qcolor(INK_2)))
             btn.setIconSize(QSize(13, 13))
             btn.setCursor(QtC.PointingHandCursor)
             btn.setFlat(True)
-            btn.setToolTip(tr("Copy prompt"))
+            btn.setToolTip(get_export_copy("dialogs.build.copy_prompt_tooltip", tr("Copy prompt")))
             btn.setStyleSheet(_COPY_BTN)
             btn.clicked.connect(self._on_copy_prompt)
             self._copy_btn = btn
@@ -270,8 +305,14 @@ class BuildUiMixin:
         if clipboard is not None:
             clipboard.setText(text)
         if self._copy_btn is not None:
-            self._copy_btn.setText(tr("Copied"))
-            QTimer.singleShot(1400, self._reset_copy_btn)
+            self._copy_btn.setText(get_export_copy("dialogs.build.copied_label", tr("Copied")))
+            # Bound to the button: a dialog closed within the delay drops the
+            # pending reset instead of running it into a deleted widget.
+            QtC.safe_single_shot(
+                get_export_dial("dialogs.build.copy_reset_ms", _COPY_RESET_MS),
+                self._copy_btn,
+                self._reset_copy_btn,
+            )
 
     def _reset_copy_btn(self) -> None:
         btn = getattr(self, "_copy_btn", None)
@@ -279,7 +320,7 @@ class BuildUiMixin:
             return
         if _sip is not None and _sip.isdeleted(btn):
             return
-        btn.setText(tr("Copy"))
+        btn.setText(get_export_copy("dialogs.build.copy_button", tr("Copy")))
 
     def _build_reference_row(self, urls: list) -> QWidget:
         host = QWidget(self)
@@ -296,9 +337,11 @@ class BuildUiMixin:
 
     def _chip(self, caption: str, value: str) -> QFrame:
         chip = QFrame(self)
+        chip.setObjectName("detailFactCard")
+        chip.setAttribute(QtC.WA_StyledBackground, True)
         chip.setStyleSheet(_CHIP_STYLE)
         v = QVBoxLayout(chip)
-        v.setContentsMargins(8, 6, 8, 6)
+        v.setContentsMargins(10, 8, 10, 8)
         v.setSpacing(2)
         cap = QLabel(caption)
         cap.setStyleSheet(_CHIP_CAPTION)
@@ -316,24 +359,33 @@ class BuildUiMixin:
 
         # Session mode: how many generations the session holds, first.
         if self._session is not None:
+            # The same word the version row uses: a session is its versions.
             count = int(self._session.get("count") or 1)
-            chips.append((tr("GENERATIONS"), str(count)))
+            chips.append((get_export_copy("dialogs.build.chip_versions", tr("Versions")), str(count)))
 
+        # The tier by its picker name ("Detailed (2K)"), then the pixels it
+        # produced: two facts, two cards, instead of "1,167 × 912 px · 2K".
         res = str(job.get("resolution") or "").strip()
+        if res:
+            chips.append((
+                get_export_copy("dialogs.build.chip_quality", tr("Quality")),
+                resolution_display_label(res) or res,
+            ))
         w, h = job.get("output_w"), job.get("output_h")
         if isinstance(w, int) and isinstance(h, int) and w > 0 and h > 0:
-            dims = f"{w}×{h}"
-            chips.append((tr("RESOLUTION"), f"{dims} · {res}" if res else dims))
-        elif res:
-            chips.append((tr("RESOLUTION"), res))
+            # Grouped digits and a unit: "1,167 × 912 px", not "1167×912".
+            chips.append((
+                get_export_copy("dialogs.build.chip_output_size", tr("Output size")),
+                f"{format_count(w)} × {format_count(h)} px",
+            ))
 
         dur = job.get("duration_ms")
         if isinstance(dur, (int, float)) and dur > 0:
-            chips.append((tr("DURATION"), f"{dur / 1000.0:.1f}s"))
+            chips.append((get_export_copy("dialogs.build.chip_duration", tr("Duration")), f"{dur / 1000.0:.1f} s"))
 
         date_text = format_smart_date(job.get("created_at") or "")
         if date_text:
-            chips.append((tr("DATE"), date_text))
+            chips.append((get_export_copy("dialogs.build.chip_date", tr("Date")), date_text))
 
         if not chips:
             return None
@@ -343,8 +395,11 @@ class BuildUiMixin:
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(6)
         grid.setVerticalSpacing(6)
+        # Rows as even as the count allows: four facts read as two pairs, not
+        # three and a lone one.
+        columns = 2 if len(chips) in (2, 4) else min(3, len(chips))
         for idx, (cap, val) in enumerate(chips):
-            r, c = divmod(idx, 3)
+            r, c = divmod(idx, columns)
             grid.addWidget(self._chip(cap, val), r, c)
         return host
 
@@ -358,13 +413,9 @@ class BuildUiMixin:
             # Favoriting a template lives here now (removed from the grid cards).
             self._prompt_star_btn = QToolButton(self)
             self._prompt_star_btn.setIconSize(QSize(18, 18))
-            self._prompt_star_btn.setFixedSize(38, 38)
+            self._prompt_star_btn.setFixedSize(BTN_PRIMARY_WIDE_PX, BTN_PRIMARY_WIDE_PX)
             self._prompt_star_btn.setCursor(QtC.PointingHandCursor)
-            self._prompt_star_btn.setStyleSheet(
-                "QToolButton { background: transparent; border: 1px solid "
-                "rgba(128,128,128,0.35); border-radius: 4px; }"
-                "QToolButton:hover { background: rgba(128,128,128,0.15); }"
-            )
+            self._prompt_star_btn.setStyleSheet(_STAR_BTN)
             self._prompt_is_favorite = prompt_history.is_favorite(
                 str((self._preset or {}).get("prompt") or "")
             )
@@ -372,9 +423,9 @@ class BuildUiMixin:
             self._prompt_star_btn.clicked.connect(self._on_prompt_star)
             row.addWidget(self._prompt_star_btn)
 
-            use_btn = QPushButton(tr("Use this prompt"))
+            use_btn = QPushButton(get_export_copy("dialogs.build.use_prompt_button", tr("Use this prompt")))
             use_btn.setStyleSheet(_PRIMARY_BTN)
-            use_btn.setMinimumHeight(38)
+            use_btn.setMinimumHeight(BTN_PRIMARY_WIDE_PX)
             use_btn.setCursor(QtC.PointingHandCursor)
             use_btn.setEnabled(not self._browse_only)
             use_btn.clicked.connect(self._on_use)
@@ -391,25 +442,29 @@ class BuildUiMixin:
 
         self._star_btn = QToolButton(self)
         self._star_btn.setIconSize(QSize(18, 18))
-        self._star_btn.setFixedSize(38, 38)
+        self._star_btn.setFixedSize(BTN_PRIMARY_WIDE_PX, BTN_PRIMARY_WIDE_PX)
         self._star_btn.setCursor(QtC.PointingHandCursor)
-        self._star_btn.setStyleSheet(
-            "QToolButton { background: transparent; border: 1px solid "
-            "rgba(128,128,128,0.35); border-radius: 4px; }"
-            "QToolButton:hover { background: rgba(128,128,128,0.15); }"
-        )
+        self._star_btn.setStyleSheet(_STAR_BTN)
         self._refresh_star()
         self._star_btn.clicked.connect(self._on_star)
         row.addWidget(self._star_btn)
 
-        use_btn = QPushButton(tr("Reuse this setup"))
+        use_btn = QPushButton(get_export_copy("dialogs.build.reuse_setup_button", tr("Reuse this setup")))
         use_btn.setStyleSheet(_PRIMARY_BTN)
-        use_btn.setMinimumHeight(38)
+        use_btn.setMinimumHeight(BTN_PRIMARY_WIDE_PX)
         use_btn.setCursor(QtC.PointingHandCursor)
-        use_btn.setToolTip(
-            tr("Load this prompt, its reference images, and the same map zone "
-               "back into AI Edit, replacing what you have now.")
-        )
+        if can_apply:
+            use_btn.setToolTip(
+                get_export_copy(
+                    "dialogs.build.reuse_setup_tooltip_v2",
+                    tr("Load this prompt, its references and the same map zone "
+                       "back into AI Edit, replacing what you have now."))
+            )
+        elif not self._browse_only:
+            # A grey primary says why it cannot run.
+            use_btn.setToolTip(get_export_copy(
+                "dialogs.build.reuse_no_location_tooltip",
+                tr("This result has no saved map zone, so it cannot be reused.")))
         use_btn.setEnabled(can_apply)
         use_btn.clicked.connect(self._on_use)
         row.addWidget(use_btn, 1)
@@ -426,25 +481,28 @@ class BuildUiMixin:
 
         # Same gate as the old row menu: renaming needs a server session id.
         if (self._session or {}).get("session_id"):
-            rename_btn = QPushButton(tr("Rename"))
+            rename_btn = QPushButton(get_export_copy("dialogs.build.rename_button", tr("Rename")))
             rename_btn.setStyleSheet(_ACTION_BTN)
             rename_btn.setCursor(QtC.PointingHandCursor)
             rename_btn.clicked.connect(self._on_rename_session)
             row.addWidget(rename_btn)
 
-        delete_btn = QPushButton(tr("Delete"))
+        delete_btn = QPushButton(get_export_copy("dialogs.build.delete_button", tr("Delete")))
         delete_btn.setStyleSheet(_DANGER_BTN)
         delete_btn.setCursor(QtC.PointingHandCursor)
         delete_btn.clicked.connect(self._on_delete_session)
         row.addWidget(delete_btn)
 
-        resume_btn = QPushButton(tr("Resume this session"))
+        resume_btn = QPushButton(
+            get_export_copy("dialogs.build.resume_session_button", tr("Resume this session")))
         resume_btn.setStyleSheet(_PRIMARY_BTN)
-        resume_btn.setMinimumHeight(38)
+        resume_btn.setMinimumHeight(BTN_PRIMARY_WIDE_PX)
         resume_btn.setCursor(QtC.PointingHandCursor)
         resume_btn.setToolTip(
-            tr("Reopen this session in AI Edit: its prompt, reference images, "
-               "and the same map zone.")
+            get_export_copy(
+                "dialogs.build.resume_session_tooltip_v2",
+                tr("Reopen this session in AI Edit: its prompt, references "
+                   "and the same map zone."))
         )
         resume_btn.setEnabled(not self._browse_only)
         resume_btn.clicked.connect(self._on_resume_session)
@@ -462,27 +520,35 @@ class BuildUiMixin:
         v = QVBoxLayout(host)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(6)
-        v.addWidget(self._section_label(tr("Download")))
+        v.addWidget(self._section_label(get_export_copy(
+            "dialogs.build.download_section_label", tr("Download as GeoTIFF"))))
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
-        icon = QIcon(_DOWNLOAD_SVG)
+        icon = icon_for(self, "download", 16)
 
-        dl_in = QPushButton(tr("Input image"))
+        dl_in = QPushButton(
+            get_export_copy("dialogs.build.original_image_button", tr("Original"))
+        )
         dl_in.setIcon(icon)
         dl_in.setStyleSheet(_ACTION_BTN)
         dl_in.setCursor(QtC.PointingHandCursor)
-        dl_in.setToolTip(tr("Download the original input as a georeferenced GeoTIFF (.tif)"))
-        dl_in.setEnabled(has_in)
+        dl_in.setToolTip(get_export_copy(
+            "dialogs.build.download_original_tooltip",
+            tr("Download Original as a georeferenced GeoTIFF (.tif)")))
+        # A side with no file is not offered, rather than shown greyed.
+        dl_in.setVisible(has_in)
         dl_in.clicked.connect(lambda: self._on_download("input"))
         row.addWidget(dl_in, 1)
 
-        dl_out = QPushButton(tr("AI result"))
+        dl_out = QPushButton(get_export_copy("dialogs.build.ai_result_button", tr("AI result")))
         dl_out.setIcon(icon)
         dl_out.setStyleSheet(_ACTION_BTN)
         dl_out.setCursor(QtC.PointingHandCursor)
-        dl_out.setToolTip(tr("Download the AI result as a georeferenced GeoTIFF (.tif)"))
-        dl_out.setEnabled(has_out)
+        dl_out.setToolTip(get_export_copy(
+            "dialogs.build.ai_result_tooltip",
+            tr("Download the AI result as a georeferenced GeoTIFF (.tif)")))
+        dl_out.setVisible(has_out)
         dl_out.clicked.connect(lambda: self._on_download("output"))
         row.addWidget(dl_out, 1)
         v.addLayout(row)

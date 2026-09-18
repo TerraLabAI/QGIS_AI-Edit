@@ -48,6 +48,11 @@ def shipped_tier_name(resolution: str) -> str | None:
     The tr() calls stay literal here so the i18n extractor keeps finding the
     three source strings.
     """
+    # Standard, Detailed, Maximum: a quality ramp, so the higher tiers read as
+    # worth paying for (Yvann, 2026-09-18, after trying the size words
+    # Large and Very large). The picker prints the 1K/2K/4K and the credits
+    # beside the word. The served key is new for this vocabulary so a value
+    # served for the size words cannot come back.
     return {
         "1K": tr("Standard"),
         "2K": tr("Detailed"),
@@ -63,7 +68,7 @@ def resolution_quality_name(resolution: str | None) -> str | None:
     render. Callers that want the resolution shown alongside use
     ``resolution_display_label`` instead.
 
-    The word itself is served copy (``resolution.label.<tier>``), which is what
+    The word itself is served copy (``resolution.quality_label.<tier>``), which is what
     makes a tier added through ``resolution_tiers`` above complete: the picker
     can offer it, price it and size it from the server, and now name it too,
     instead of showing the bare key until the next release.
@@ -73,7 +78,9 @@ def resolution_quality_name(resolution: str | None) -> str | None:
     # An unknown tier has no shipped word, so the raw key is what it falls back
     # to, exactly as before a label could be served for it.
     fallback = shipped_tier_name(resolution) or resolution
-    return get_export_copy(f"resolution.label.{resolution}", fallback, max_chars=40)
+    return get_export_copy(
+        f"resolution.quality_label.{resolution}", fallback, max_chars=40
+    )
 
 
 def resolution_display_label(resolution: str | None) -> str | None:

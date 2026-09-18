@@ -23,7 +23,7 @@ def get_or_create_terralab_toolbar(iface):
 
 
 def add_action_to_toolbar(toolbar, action, product_id, is_cross_promo=False):
-    """Add a plugin action alphabetically to the shared toolbar.
+    """Add a plugin action to the shared toolbar, ordered by product id.
 
     Cross-promo actions never replace a real plugin's action.
     Real plugin actions replace cross-promo placeholders.
@@ -37,10 +37,19 @@ def add_action_to_toolbar(toolbar, action, product_id, is_cross_promo=False):
             toolbar.removeAction(existing)
             break
     for existing in toolbar.actions():
-        if existing.text() > action.text():
+        if _toolbar_sort_key(existing) > _toolbar_sort_key(action):
             toolbar.insertAction(existing, action)
             return
     toolbar.addAction(action)
+
+
+def _toolbar_sort_key(action) -> str:
+    """Order buttons by product id, never by their translated label.
+
+    The TerraLab menu already does (terralab_menu._sort_key): sorting on the
+    text put the same buttons in a different order in every UI language.
+    """
+    return str(action.property("terralab_product_id") or action.text())
 
 
 def is_terralab_toolbar_alive(toolbar) -> bool:
@@ -74,7 +83,12 @@ def remove_action_from_toolbar(toolbar, action, main_window) -> bool:
         if remaining:
             return True
         main_window.removeToolBar(toolbar)
+        # Off the main window now, not at the deferred delete: a reload that
+        # runs before it would find this dying toolbar by its objectName, add
+        # its action to it, and lose the toolbar when the delete lands.
+        toolbar.hide()
+        toolbar.setParent(None)
         toolbar.deleteLater()
-    except RuntimeError:
+    except RuntimeError:  # toolbar already deleted by QGIS
         pass
     return False

@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from qgis.core import QgsTask
+from qgis.core import QgsFeedback, QgsTask
 from qgis.PyQt.QtCore import pyqtSignal
 
+from ..api.network_error_classifier import request_feedback
+from ..core.config_store import get_export_copy, get_export_dial
 from ..core.i18n import tr
 from ..core.qt_compat import silent_task_flags
 
@@ -31,6 +33,16 @@ class GenericRequestTask(QgsTask):
         self._request_fn = request_fn
         self._result: Any = None
         self._failure: tuple[str, str] | None = None
+        # Every client call inside run() goes through this, so cancel() aborts
+        # the request in flight instead of waiting for its timeout.
+        self._feedback = QgsFeedback()
+
+    def cancel(self) -> None:
+        try:
+            self._feedback.cancel()
+        except Exception:  # nosec B110
+            pass
+        super().cancel()
 
     def is_active(self) -> bool:
         try:
@@ -46,7 +58,12 @@ class GenericRequestTask(QgsTask):
     def _unexpected_failure() -> tuple[str, str]:
         """Message + code for a request that died in a way nothing else caught."""
         from ..core.errors import ErrorCode
-        return (tr("The request failed unexpectedly."), ErrorCode.UNKNOWN.value)
+        return (
+            get_export_copy(
+                "pipeline.generic_request_task.unexpected_failure", tr("The request failed unexpectedly.")
+            ),
+            ErrorCode.UNKNOWN.value,
+        )
 
     @staticmethod
     def _failure_text(err: Exception) -> str:
@@ -55,7 +72,8 @@ class GenericRequestTask(QgsTask):
         own slot, so read the plain ``message`` when the exception has one."""
         message = getattr(err, "message", "")
         text = message if isinstance(message, str) and message else str(err)
-        return text[:_MAX_FAILURE_CHARS]
+        max_chars = get_export_dial("pipeline.generic_request_task.max_failure_chars", _MAX_FAILURE_CHARS)
+        return text[:max_chars]
 
     def run(self) -> bool:
         # The guard covers the whole body, not just the call: unpacking the
@@ -63,7 +81,8 @@ class GenericRequestTask(QgsTask):
         # finished() as a bare False with no failure recorded, leaving whoever
         # is waiting on succeeded/failed with no answer at all.
         try:
-            return self._run_request()
+            with request_feedback(self._feedback):
+                return self._run_request()
         except Exception as e:
             # Preserve a usable code so consumers that branch on it (network vs
             # app error, whether to open the bug-report dialog) don't misread a
@@ -84,8 +103,8 @@ class GenericRequestTask(QgsTask):
 
         if isinstance(result, dict) and "error" in result:
             self._failure = (
-                str(result.get("error", "Unknown error")),
-                str(result.get("code", "")),
+                self._failure_text(RuntimeError(str(result.get("error") or self._unexpected_failure()[0]))),
+                str(result.get("code") or self._unexpected_failure()[1]),
             )
             return False
 

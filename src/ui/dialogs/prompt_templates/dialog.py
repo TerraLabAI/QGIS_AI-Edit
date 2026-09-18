@@ -1,30 +1,34 @@
 """Prompt Library dialog shell: window, sidebar, and tab switching."""
 from __future__ import annotations
 
-from qgis.PyQt.QtCore import QSettings, QTimer, pyqtSignal
-from qgis.PyQt.QtGui import QGuiApplication
+from qgis.PyQt.QtCore import QEvent, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtGui import QKeySequence
 from qgis.PyQt.QtWidgets import (
     QDialog,
+    QFrame,
     QHBoxLayout,
     QLineEdit,
-    QPushButton,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from ....core import qt_compat as QtC
+from ....core.config_store import get_export_copy, get_export_dial, get_export_dial_ratio
 from ....core.i18n import tr
 from ....core.prompts.prompt_presets import get_all_categories
-from ...onboarding_hint import search_icon
+from ...icons import icon_for
+from ...keyboard_focus import settle_dialog_default_button
+from ...panel_helpers import screen_for_dialog
 from .common import (
-    _NEED_COLLAPSED_SETTING,
     _SEARCH_BOX,
     _SIDEBAR_ITEM,
     _SIDEBAR_ITEM_ACTIVE,
     _TABS_WITH_COUNT,
-    _is_alive,
+    LIBRARY_DIALOG_QSS,
     _sidebar_icon_html,
     _tab_label,
+    paint_search_clear_button,
 )
 from .gallery_mixin import GalleryMixin
 from .generation_card import _SidebarButton
@@ -35,6 +39,21 @@ from .search_mixin import SearchMixin
 from .sessions_mixin import SessionsMixin
 from .sync_mixin import SyncMixin
 from .workers import _HistoryPageWorker, _LibrarySyncWorker
+
+# The magnifier at the left of the search field, px.
+_SEARCH_GLYPH_PX = 16
+
+# Debounce before a keystroke in the search box rebuilds the results grid.
+_SEARCH_DEBOUNCE_MS = 180
+
+# How much of the available screen width/height the dialog may claim when
+# opening large, so it never asks for more than the screen it opens on.
+_OPEN_WIDTH_RATIO = 0.96
+_OPEN_HEIGHT_RATIO = 0.92
+# History pages come back this many rows at a time; a full page from the
+# session cache is treated as "there is probably more" until a sync says
+# otherwise. Matches the fetch size in workers.py's history page worker.
+_RECENT_PAGE_SIZE = 50
 
 
 class PromptTemplatesDialog(
@@ -85,9 +104,16 @@ class PromptTemplatesDialog(
             favorites, and inspect prompts.
         """
         super().__init__(parent)
+        self.setObjectName("promptLibrary")
+        self.setStyleSheet(LIBRARY_DIALOG_QSS)
         self._browse_only = browse_only
+        # "Library", the word of the dock button that opens it and of the
+        # "Open the Library" notice. Fresh keys, so an older served value
+        # cannot bring "Prompt library" back.
         self.setWindowTitle(
-            tr("Prompt library (view only)") if browse_only else tr("Prompt library")
+            get_export_copy("dialogs.dialog.window_title_library_view_only", tr("Library (view only)"))
+            if browse_only
+            else get_export_copy("dialogs.dialog.window_title_library", tr("Library"))
         )
         self.setMinimumSize(640, 480)
         # Open large: size to hug the 3-column grid so there is little empty
@@ -118,7 +144,7 @@ class PromptTemplatesDialog(
         # Whether the server holds generations older than what we have; drives
         # the Recent tab's server-side Load more. A full warm-cache page means
         # "probably more" until a sync says otherwise.
-        self._recent_has_more = len(self._recent_jobs) >= 50
+        self._recent_has_more = len(self._recent_jobs) >= _RECENT_PAGE_SIZE
         self._recent_page_worker: _HistoryPageWorker | None = None
 
         self._selected_preset: dict | None = None
@@ -127,13 +153,6 @@ class PromptTemplatesDialog(
         self._restore_job: dict | None = None
         self._categories_by_key: dict[str, dict] = {}
         self._sidebar_buttons: dict[str, _SidebarButton] = {}
-        # Need-group folding: header button + member category buttons + state,
-        # keyed by need key. Populated in _build_ui.
-        self._need_header_btns: dict[str, QPushButton] = {}
-        self._need_members: dict[str, list[_SidebarButton]] = {}
-        self._need_collapsed: dict[str, bool] = {}
-        # cat_key -> need key, to auto-unfold when a folded tab is targeted.
-        self._category_need: dict[str, str] = {}
         self._pages: dict[str, QWidget] = {}
         # Landing redesign: need drill-in pages (R6 hall: sections +
         # scroll-spy state), keyed by need key. The sidebar/tab state above is
@@ -164,6 +183,14 @@ class PromptTemplatesDialog(
         self._load_categories()
         self._build_ui()
         self._start_sync()
+        # No filled action on the library: Enter in the search field never
+        # presses a card button or Show more.
+        settle_dialog_default_button(self)
+
+    def showEvent(self, event):  # noqa: N802 - Qt signature
+        # Before QDialog picks a default among buttons built since __init__.
+        settle_dialog_default_button(self)
+        super().showEvent(event)
 
     # -- Data ------------------------------------------------------------
 
@@ -185,35 +212,59 @@ class PromptTemplatesDialog(
         parent), never the primary one: on a two-monitor desk, measuring the
         1920x1080 primary hands the laptop panel a window it cannot fit."""
         target_w, target_h = 1220, 880
-        screen = self.screen() or QGuiApplication.primaryScreen()
+        screen = screen_for_dialog(self.parentWidget())
         if screen is not None:
             avail = screen.availableGeometry()
-            target_w = min(target_w, int(avail.width() * 0.96))
-            target_h = min(target_h, int(avail.height() * 0.92))
+            target_w = min(target_w, int(avail.width() * get_export_dial_ratio(
+                "dialogs.dialog.open_width_ratio", _OPEN_WIDTH_RATIO)))
+            target_h = min(target_h, int(avail.height() * get_export_dial_ratio(
+                "dialogs.dialog.open_height_ratio", _OPEN_HEIGHT_RATIO)))
         self.resize(max(target_w, 640), max(target_h, 480))
 
     def _build_ui(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 12)
-        root.setSpacing(8)
+        # AI Agent's settings window: the rail runs the full height at the
+        # left; the right column holds the search field over the page stack.
+        root = QHBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        right = QVBoxLayout()
+        right.setContentsMargins(24, 18, 12, 0)
+        right.setSpacing(14)
 
         self._search_input = QLineEdit()
-        self._search_input.setPlaceholderText(
-            tr('Search prompts... e.g. "add trees", "segment buildings"')
-        )
+        self._search_input.setObjectName("librarySearch")
+        # Short, like ChatGPT's "Search GPTs": the long example sentence was
+        # cut to "flood th..." at the window's minimum width. The example
+        # lives in the no-result hint.
+        self._search_scope = "prompts"
+        self._search_input.setPlaceholderText(self._prompt_search_placeholder())
+        self._search_input.setAccessibleName(self._prompt_search_placeholder())
         self._search_input.addAction(
-            search_icon(), QLineEdit.ActionPosition.LeadingPosition
+            icon_for(self._search_input, "search", _SEARCH_GLYPH_PX),
+            QLineEdit.ActionPosition.LeadingPosition,
         )
         self._search_input.setClearButtonEnabled(True)
+        paint_search_clear_button(self._search_input)
         self._search_input.setStyleSheet(_SEARCH_BOX)
         # Debounce: rebuilding the whole results grid on every keystroke was
         # visibly laggy. Coalesce keystrokes into one rebuild after a short pause.
         self._search_debounce = QTimer(self)
         self._search_debounce.setSingleShot(True)
-        self._search_debounce.setInterval(180)
+        self._search_debounce.setInterval(
+            get_export_dial("dialogs.dialog.search_debounce_ms", _SEARCH_DEBOUNCE_MS)
+        )
         self._search_debounce.timeout.connect(self._run_search)
         self._search_input.textChanged.connect(self._on_search_changed)
-        root.addWidget(self._search_input)
+        # Down from the field steps into the first card of the page; Escape
+        # clears a query before it closes the window.
+        self._search_input.installEventFilter(self)
+        # Ctrl+F (Cmd+F) jumps back to the field from anywhere in the window.
+        find = QtC.QShortcut(QKeySequence(QKeySequence.StandardKey.Find), self)
+        find.activated.connect(self._focus_search)
+        search_row = QHBoxLayout()
+        search_row.setContentsMargins(0, 0, 12, 0)
+        search_row.addWidget(self._search_input)
+        right.addLayout(search_row)
 
         # Rail-first: a persistent navigation rail sits left of the page stack
         # and is always visible. It navigates (Top picks / one item per category
@@ -232,17 +283,84 @@ class PromptTemplatesDialog(
         self._search_page = self._build_search_page()
         self._stack.addWidget(self._search_page)
 
-        body = QHBoxLayout()
-        body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(8)
-        body.addWidget(rail)
-        body.addWidget(self._stack, 1)
-        root.addLayout(body, 1)
+        right.addWidget(self._stack, 1)
+        root.addWidget(rail)
+        root.addLayout(right, 1)
 
         self._stack.setCurrentWidget(self._landing_page)
+        self._stack.currentChanged.connect(self._sync_search_for_page)
         self._set_rail_active("popular")
+        # Typing is the fastest way in, as in AI Agent's library: the search
+        # field holds the focus when the window opens.
+        self._search_input.setFocus()
         # TODO(telemetry Task 6): track LIBRARY_LANDING_VIEWED once the event is
         # added to the website registry + analytics_events.json.
+
+    @staticmethod
+    def _prompt_search_placeholder() -> str:
+        return get_export_copy("dialogs.dialog.search_prompts_placeholder", tr("Search prompts"))
+
+    def _sync_search_for_page(self, _index: int = 0) -> None:
+        """One search field for the whole window, always in the same place.
+        On the Sessions page it filters the sessions (its placeholder says
+        so); everywhere else it searches the prompts. The old second field
+        on the Sessions page pushed that page's title 50 px higher than every
+        other page's."""
+        sessions = getattr(self, "_feed_all_pages", {}).get("work")
+        on_sessions = sessions is not None and self._stack.currentWidget() is sessions
+        scope = "sessions" if on_sessions else "prompts"
+        if scope == self._search_scope:
+            return
+        self._search_scope = scope
+        text = (
+            get_export_copy("dialogs.sessions_mixin.search_placeholder", tr("Search your sessions"))
+            if on_sessions else self._prompt_search_placeholder()
+        )
+        self._search_input.setPlaceholderText(text)
+        self._search_input.setAccessibleName(text)
+
+    def _focus_search(self) -> None:
+        self._search_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self._search_input.selectAll()
+
+    def _first_card_on_page(self) -> QWidget | None:
+        """The first card of the page on screen, in reading order, skipping
+        cards scrolled above the view."""
+        page = self._stack.currentWidget()
+        if page is None:
+            return None
+        placed = []
+        for card in page.findChildren(QFrame, "card"):
+            if not card.isVisibleTo(page) or card.focusPolicy() == Qt.FocusPolicy.NoFocus:
+                continue
+            top_left = card.mapTo(page, card.rect().topLeft())
+            if top_left.y() + card.height() <= 0:
+                continue
+            placed.append((top_left.y(), top_left.x(), card))
+        if not placed:
+            return None
+        return min(placed, key=lambda entry: (entry[0], entry[1]))[2]
+
+    def _focus_first_card(self) -> bool:
+        """Keyboard focus to the page's first card on screen. False when the
+        page shows none (an empty state)."""
+        card = self._first_card_on_page()
+        if card is None:
+            return False
+        card.setFocus(Qt.FocusReason.TabFocusReason)
+        return True
+
+    def eventFilter(self, obj, event):  # noqa: N802 - Qt signature
+        if obj is self._search_input and event.type() == QEvent.Type.KeyPress:
+            key = event.key()
+            if key == Qt.Key.Key_Escape and self._search_input.text():
+                self._search_input.clear()
+                return True
+            # Down, or Enter once the results are in, steps into the grid.
+            if key in (Qt.Key.Key_Down, Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                if self._focus_first_card():
+                    return True
+        return super().eventFilter(obj, event)
 
     # -- Rail navigation -------------------------------------------------
 
@@ -315,33 +433,6 @@ class PromptTemplatesDialog(
         cat = category or self._categories_by_key.get(key) or {}
         return len(cat.get("presets", []))
 
-    def _update_need_header_text(self, need_key: str):
-        btn = self._need_header_btns.get(need_key)
-        if btn is None or not _is_alive(btn):
-            return
-        chevron = "▸" if self._need_collapsed.get(need_key) else "▾"
-        label = str(btn.property("_need_label") or "")
-        btn.setText(f"{chevron}  {label}")
-
-    def _on_toggle_need(self, need_key: str):
-        """Fold or unfold one need group and remember the choice."""
-        collapsed = not self._need_collapsed.get(need_key, False)
-        self._need_collapsed[need_key] = collapsed
-        QSettings().setValue(
-            _NEED_COLLAPSED_SETTING.format(key=need_key), collapsed
-        )
-        for btn in self._need_members.get(need_key, []):
-            if _is_alive(btn):
-                btn.setVisible(not collapsed)
-        self._update_need_header_text(need_key)
-
-    def _ensure_need_visible(self, cat_key: str):
-        """Unfold the need group holding `cat_key` (e.g. tab targeted from a
-        search result) so its highlighted button is actually visible."""
-        need_key = self._category_need.get(cat_key)
-        if need_key and self._need_collapsed.get(need_key):
-            self._on_toggle_need(need_key)
-
     def _on_sidebar_click(self, key: str):
         """Sidebar click is an explicit "leave search" - clear the box."""
         if self._search_input.text().strip():
@@ -370,9 +461,6 @@ class PromptTemplatesDialog(
         responsibility (see _on_sidebar_click)."""
         if self._ensure_page(key) is None:
             return
-        # If the target sits in a folded need group, unfold it first so its
-        # highlighted button is actually visible (e.g. selected via search).
-        self._ensure_need_visible(key)
         self._active_tab = key
         self._previous_tab = key
         self._stack.setCurrentWidget(self._pages[key])

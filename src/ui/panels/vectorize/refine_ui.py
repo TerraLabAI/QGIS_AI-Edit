@@ -1,59 +1,110 @@
 """Refine group construction for the Vectorize panel."""
 from __future__ import annotations
 
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QDoubleSpinBox,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSpinBox,
     QVBoxLayout,
 )
 
+from ....core import qt_compat as QtC
+from ....core.config_store import get_export_copy
 from ....core.i18n import tr
-from ...panel_helpers import GROUP_BOX_QSS
+from ...dock import design_tokens as T
+from ...panel_helpers import (
+    FIELD_LABEL_QSS,
+    PanelSection,
+    check_box_qss,
+    spin_box_qss,
+)
+
+# Refine spinbox defaults. Not server dials: the agent's vectorize call uses
+# the same defaults, and the two must not drift apart.
+_REFINE_TOLERANCE_DEFAULT = 90
+_REFINE_SIMPLIFY_DEFAULT = 1.0
+_REFINE_SIEVE_DEFAULT = 10
+_REFINE_MIN_PIXELS_DEFAULT = 50
+
+
+# Every refine field is the same width, suffix or not, so the column aligns:
+# at least this, or the widest field's own need once they are all built.
+_SPIN_MIN_PX = 112
+
+# The step headers inside the card (Detection, Outline, Cleanup) sit one step
+# under the card's own section label: the same muted ink at the hint size.
+# They used to copy the outer label exactly, so "Refine" and "Detection" read
+# as two headers of the same rank.
+_STEP_LABEL_QSS = (
+    f"font-size: {T.FONT_HINT}px; font-weight: 600; color: {T.INK_2};"
+    " background: transparent; border: none; padding: 6px 0px 0px 0px;"
+)
+
+
+class _ClickableFieldLabel(QLabel):
+    """A row label that toggles the checkbox it names."""
+
+    def __init__(self, text: str, check: QCheckBox) -> None:
+        super().__init__(text)
+        self._check = check
+        self.setCursor(QtC.PointingHandCursor)
+
+    def mouseReleaseEvent(self, event):  # noqa: N802 - Qt signature
+        if event.button() == Qt.MouseButton.LeftButton and self._check.isEnabled():
+            self._check.toggle()
+        super().mouseReleaseEvent(event)
 
 
 class RefineUiMixin:
     """Builds the refine controls group and its spinbox/checkbox rows."""
 
-    def _build_refine_group(self) -> QGroupBox:
+    def _build_refine_group(self) -> PanelSection:
         """Refine group, shown alone once a vectorization succeeds.
 
-        Same bordered group box as Layer / Classes so the two panel states
-        read as one surface. Sections follow the pipeline: how pixels match
+        Same section card as Layer / Classes so the two panel states read as
+        one surface. Sections follow the pipeline: how pixels match
         (Detection), how edges look (Outline), what gets dropped (Cleanup).
         """
-        group = QGroupBox(tr("Refine"))
-        group.setStyleSheet(GROUP_BOX_QSS)
-        content_layout = QVBoxLayout(group)
-        content_layout.setContentsMargins(8, 6, 8, 8)
-        content_layout.setSpacing(6)
+        group = PanelSection(get_export_copy("widgets.refine_ui.refine_group_title", tr("Refine")))
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(T.SPACE_CARD)
+        group.body.addLayout(content_layout)
+        spin_qss = spin_box_qss()
 
         def _section(text: str) -> QLabel:
+            """A step header inside the card: sentence case, muted."""
             lbl = QLabel(text)
-            lbl.setStyleSheet(
-                "font-size: 10px; color: palette(text); font-weight: bold;"
-                " background: transparent; border: none;"
-                " border-bottom: 1px solid rgba(128, 128, 128, 0.35);"
-                " padding: 4px 0px 4px 0px; margin-bottom: 4px;"
-            )
+            lbl.setIndent(0)
+            lbl.setStyleSheet(_STEP_LABEL_QSS)
             return lbl
+
+        def _field_label(text: str, tip: str) -> QLabel:
+            # The served labels end in a colon; a row label on this line
+            # does not.
+            lab = QLabel(text.rstrip(" :"))
+            lab.setStyleSheet(FIELD_LABEL_QSS)
+            lab.setToolTip(tip)
+            return lab
 
         def _spin_row(parent_layout, label_text: str, tip: str,
                       lo: int, hi: int, default: int) -> QSpinBox:
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
-            lab = QLabel(label_text)
-            lab.setStyleSheet("font-size: 11px; color: palette(text);")
-            lab.setToolTip(tip)
+            row.setSpacing(T.SPACE_OUTER)
+            lab = _field_label(label_text, tip)
             spin = QSpinBox()
             spin.setRange(lo, hi)
             spin.setValue(default)
-            spin.setMinimumWidth(55)
-            spin.setMaximumWidth(70)
+            # No maximum width: a suffix such as "100000 px" lost its digits
+            # under Segoe UI at 125% and above.
+            spin.setMinimumWidth(_SPIN_MIN_PX)
             spin.setToolTip(tip)
+            spin.setStyleSheet(spin_qss)
             row.addWidget(lab)
             row.addStretch()
             row.addWidget(spin)
@@ -65,17 +116,16 @@ class RefineUiMixin:
             """Float spinbox for sub-integer (finer) control."""
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
-            lab = QLabel(label_text)
-            lab.setStyleSheet("font-size: 11px; color: palette(text);")
-            lab.setToolTip(tip)
+            row.setSpacing(T.SPACE_OUTER)
+            lab = _field_label(label_text, tip)
             spin = QDoubleSpinBox()
             spin.setDecimals(1)
             spin.setRange(lo, hi)
             spin.setSingleStep(step)
             spin.setValue(default)
-            spin.setMinimumWidth(55)
-            spin.setMaximumWidth(75)
+            spin.setMinimumWidth(_SPIN_MIN_PX)
             spin.setToolTip(tip)
+            spin.setStyleSheet(spin_qss)
             row.addWidget(lab)
             row.addStretch()
             row.addWidget(spin)
@@ -86,112 +136,180 @@ class RefineUiMixin:
                        default: bool) -> QCheckBox:
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
-            lab = QLabel(label_text)
-            lab.setStyleSheet("font-size: 11px; color: palette(text);")
-            lab.setToolTip(tip)
+            row.setSpacing(T.SPACE_OUTER)
             chk = QCheckBox()
+            # A click on the words toggles the box, as on any checkbox; the
+            # row label used to be dead text next to a 20 px target.
+            lab = _ClickableFieldLabel(label_text.rstrip(" :"), chk)
+            lab.setStyleSheet(FIELD_LABEL_QSS)
+            lab.setToolTip(tip)
             chk.setChecked(default)
             chk.setToolTip(tip)
+            chk.setAccessibleName(lab.text())
+            # The house checkbox, with no room kept for a text it does not
+            # have: that spacing sat the box 8 px inside the column's edge.
+            chk.setStyleSheet(check_box_qss() + "QCheckBox { spacing: 0px; }")
             row.addWidget(lab)
             row.addStretch()
             row.addWidget(chk)
             parent_layout.addLayout(row)
             return chk
 
-        refine_hint = QLabel(
-            "ⓘ " + tr("Adjustments re-run instantly and update the same layer.")
-        )
-        refine_hint.setWordWrap(True)
-        refine_hint.setStyleSheet(
-            "font-size: 11px; color: rgba(128,128,128,0.95);"
-            " background: transparent; border: none; margin-bottom: 2px;"
-        )
-        content_layout.addWidget(refine_hint)
-
         # Detection: how pixels are matched to classes. Tolerance is
         # per-channel (0-255), so the range is bounded and every step counts.
-        content_layout.addWidget(_section(tr("Detection")))
+        content_layout.addWidget(
+            _section(get_export_copy("widgets.refine_ui.detection_section", tr("Detection")))
+        )
         self._tolerance_spin = _spin_row(
             content_layout,
-            tr("Color tolerance:"),
-            tr(
-                "Each pixel goes to the closest class color, so edges stay "
-                "clean even when the model's colors drift. This caps how far a "
-                "pixel may sit from its class: higher sweeps in noisy shades, "
-                "lower leaves them out of every class."
+            get_export_copy("widgets.refine_ui.color_tolerance_label", tr("Color tolerance:")),
+            get_export_copy(
+                "widgets.refine_ui.color_tolerance_tip_short",
+                tr("How far a pixel's color may drift from its class. Higher takes in noisy shades."),
             ),
-            0, 255, 90,
+            0, 255, _REFINE_TOLERANCE_DEFAULT,
         )
 
-        content_layout.addWidget(_section(tr("Outline")))
+        content_layout.addWidget(
+            _section(get_export_copy("widgets.refine_ui.outline_section", tr("Outline")))
+        )
         self._simplify_spin = _dspin_row(
             content_layout,
-            tr("Simplify outline:"),
-            tr("Reduce small variations in the outline (0 = no change)."),
-            0.0, 50.0, 1.0, 0.5,
+            get_export_copy("widgets.refine_ui.simplify_outline_label", tr("Simplify outline:")),
+            get_export_copy(
+                "widgets.refine_ui.simplify_outline_tip",
+                tr("Reduce small variations in the outline (0 = no change)."),
+            ),
+            0.0, 50.0, _REFINE_SIMPLIFY_DEFAULT, 0.5,
         )
         self._round_corners_check = _check_row(
             content_layout,
-            tr("Round corners:"),
-            tr(
-                "Round corners for natural shapes like trees and bushes. "
-                "Increase 'Simplify outline' for smoother results."
+            get_export_copy("widgets.refine_ui.round_corners_label", tr("Round corners:")),
+            get_export_copy(
+                "widgets.refine_ui.round_corners_tip_short",
+                tr("Softer outlines for natural shapes like trees."),
             ),
             default=False,
         )
         self._expand_spin = _spin_row(
             content_layout,
-            tr("Expand/Contract:"),
-            tr("Positive = expand outward, Negative = shrink inward"),
+            get_export_copy("widgets.refine_ui.expand_contract_label", tr("Expand/Contract:")),
+            get_export_copy(
+                "widgets.refine_ui.expand_contract_tip_signed",
+                tr("Above 0 grows every shape outward, below 0 shrinks it inward."),
+            ),
             -1000, 1000, 0,
         )
         self._expand_spin.setSuffix(" px")
 
-        content_layout.addWidget(_section(tr("Cleanup")))
+        content_layout.addWidget(
+            _section(get_export_copy("widgets.refine_ui.cleanup_section", tr("Cleanup")))
+        )
         self._sieve_spin = _spin_row(
             content_layout,
-            tr("Remove speckle:"),
-            tr("Drop connected blobs smaller than this many pixels before tracing."),
-            0, 2000, 10,
+            get_export_copy("widgets.refine_ui.remove_speckle_label", tr("Remove speckle:")),
+            get_export_copy(
+                "widgets.refine_ui.remove_speckle_tip",
+                tr("Drop connected blobs smaller than this many pixels before tracing."),
+            ),
+            0, 2000, _REFINE_SIEVE_DEFAULT,
         )
+        # Pixels, like the two other size fields; it was the only bare number.
+        self._sieve_spin.setSuffix(" px")
         self._fill_holes_check = _check_row(
             content_layout,
-            tr("Fill holes:"),
-            tr("Fill interior holes in each shape"),
+            get_export_copy("widgets.refine_ui.fill_holes_label", tr("Fill holes:")),
+            get_export_copy("widgets.refine_ui.fill_holes_tip_period", tr("Fill the holes inside each shape.")),
             default=False,
         )
         self._min_pixels_spin = _spin_row(
             content_layout,
-            tr("Min polygon size:"),
-            tr(
-                "Drop polygons smaller than this many pixels after tracing. "
-                "Useful for cleaning up speckle that the sieve missed."
+            get_export_copy("widgets.refine_ui.min_polygon_size_label", tr("Min polygon size:")),
+            get_export_copy(
+                "widgets.refine_ui.min_polygon_size_tip_short",
+                tr("Drop polygons smaller than this after tracing."),
             ),
-            0, 100000, 50,
+            0, 100000, _REFINE_MIN_PIXELS_DEFAULT,
         )
         self._min_pixels_spin.setSuffix(" px")
 
-        # Every refine control re-runs the vectorize (debounced) on change.
-        for spin in (
+        # One width for the whole column, measured once the suffixes are on:
+        # "0 px" and "50 px" used to stick out past "90" and "1.0".
+        spins = (
             self._tolerance_spin,
             self._sieve_spin,
             self._simplify_spin,
             self._expand_spin,
             self._min_pixels_spin,
-        ):
+        )
+        column_px = max([_SPIN_MIN_PX] + [spin.sizeHint().width() for spin in spins])
+        for spin in spins:
+            spin.setMinimumWidth(column_px)
+
+        # Every refine control re-runs the vectorize (debounced) on change.
+        for spin in spins:
             spin.valueChanged.connect(self._on_refine_changed)
         for chk in (self._round_corners_check, self._fill_holes_check):
             chk.stateChanged.connect(self._on_refine_changed)
 
+        # The way back to the starting values after a few experiments; it
+        # stays grey while nothing differs from them.
+        reset_row = QHBoxLayout()
+        reset_row.setContentsMargins(0, 0, 0, 0)
+        reset_row.addStretch(1)
+        self._refine_reset_btn = QPushButton(
+            get_export_copy("widgets.refine_ui.reset_button", tr("Reset settings"))
+        )
+        # A link while there is something to reset, the faint ink when not:
+        # the quiet grey read the same in both states.
+        self._refine_reset_btn.setStyleSheet(
+            T.BTN_LINK_QSS + f"QPushButton:disabled {{ color: {T.INK_3}; }}"
+        )
+        self._refine_reset_btn.setCursor(QtC.PointingHandCursor)
+        self._refine_reset_btn.setAutoDefault(False)
+        self._refine_reset_btn.setEnabled(False)
+        self._refine_reset_btn.clicked.connect(self._on_refine_reset_clicked)
+        reset_row.addWidget(self._refine_reset_btn)
+        content_layout.addLayout(reset_row)
+        for spin in spins:
+            spin.valueChanged.connect(self._sync_refine_reset)
+        for chk in (self._round_corners_check, self._fill_holes_check):
+            chk.stateChanged.connect(self._sync_refine_reset)
+
         return group
 
+    def _refine_at_defaults(self) -> bool:
+        return (
+            self._tolerance_spin.value() == _REFINE_TOLERANCE_DEFAULT
+            and self._sieve_spin.value() == _REFINE_SIEVE_DEFAULT
+            and abs(self._simplify_spin.value() - _REFINE_SIMPLIFY_DEFAULT) < 1e-9
+            and self._expand_spin.value() == 0
+            and self._min_pixels_spin.value() == _REFINE_MIN_PIXELS_DEFAULT
+            and not self._round_corners_check.isChecked()
+            and not self._fill_holes_check.isChecked()
+        )
+
+    def _sync_refine_reset(self, *_args) -> None:
+        self._refine_reset_btn.setEnabled(not self._refine_at_defaults())
+
+    def _on_refine_reset_clicked(self) -> None:
+        """Back to the starting values, then one re-run for all of them."""
+        if self._refine_at_defaults():
+            return
+        self._reset_refine_spinboxes()
+        self._on_refine_changed()
+
     def _reset_refine_spinboxes(self) -> None:
+        tolerance_default = _REFINE_TOLERANCE_DEFAULT
+        sieve_default = _REFINE_SIEVE_DEFAULT
+        simplify_default = _REFINE_SIMPLIFY_DEFAULT
+        min_pixels_default = _REFINE_MIN_PIXELS_DEFAULT
         for spin, default in (
-            (self._tolerance_spin, 90),
-            (self._sieve_spin, 10),
-            (self._simplify_spin, 1),
+            (self._tolerance_spin, tolerance_default),
+            (self._sieve_spin, sieve_default),
+            (self._simplify_spin, simplify_default),
             (self._expand_spin, 0),
-            (self._min_pixels_spin, 50),
+            (self._min_pixels_spin, min_pixels_default),
         ):
             spin.blockSignals(True)
             spin.setValue(default)
@@ -203,3 +321,4 @@ class RefineUiMixin:
             chk.blockSignals(True)
             chk.setChecked(default)
             chk.blockSignals(False)
+        self._sync_refine_reset()

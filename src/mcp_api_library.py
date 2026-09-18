@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .mcp_api_support import _jsonable, _never_raises, not_found_error
+from .mcp_api_support import _jsonable, _never_raises, _whole_number, not_found_error
 
 
 def _matches(preset: dict, needle: str) -> bool:
@@ -144,8 +144,8 @@ class LibraryMixin:
         if not needle:
             return {"_error": "query is required."}
         try:
-            limit = max(1, int(limit))
-        except (TypeError, ValueError):
+            limit = max(1, _whole_number(limit))
+        except (TypeError, ValueError, OverflowError):
             return {"_error": "limit must be a whole number."}
         hits = [p for p in self._all_presets() if _matches(p, needle)]
         out = {
@@ -238,8 +238,8 @@ class LibraryMixin:
         from .core.prompts import prompt_history
 
         try:
-            limit = max(1, int(limit))
-        except (TypeError, ValueError):
+            limit = max(1, _whole_number(limit))
+        except (TypeError, ValueError, OverflowError):
             return {"_error": "limit must be a whole number."}
         entries = prompt_history.get_recent()[:limit]
         return {"count": len(entries), "prompts": _jsonable(entries)}

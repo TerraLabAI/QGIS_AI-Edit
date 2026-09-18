@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .mcp_api_support import _never_raises, not_found_error
+from .mcp_api_support import _never_raises, _whole_number, not_found_error
 
 
 class GenerationMixin:
@@ -240,6 +240,11 @@ class GenerationMixin:
                 extent["submitted"] = False
                 return extent
 
+        refused = self._validate_extent(extent)
+        if refused is not None:
+            refused["submitted"] = False
+            return refused
+
         applied = self._apply_resolution(resolution)
         if "_error" in applied:
             applied["submitted"] = False
@@ -293,7 +298,7 @@ class GenerationMixin:
             "running": True,
             "resolution": applied.get("resolution"),
             "zone_reused": keep_zone,
-            "free_shape": shape is not None,
+            "free_shape": shape is not None or (keep_zone and getattr(plugin, "_selected_polygon", None) is not None),
             "note": "The run is asynchronous. Poll generation_status().",
             "hint": (
                 "Poll generation_status() every 5 seconds until running is False, "
@@ -347,13 +352,14 @@ class GenerationMixin:
             )
         else:
             hint = "Call set_zone(bbox) then generate(prompt) to start an edit."
+        result_layers = self._result_layers()
         return {
             "running": running,
             # Kept for callers written against the older reflection layer.
             "in_flight": running,
             "state": "generating" if running else ("done" if last_request_id else "idle"),
-            "result_layers": self._result_layer_names(),
-            "result_layer_ids": self._result_layer_ids(),
+            "result_layers": [name for _id, name in result_layers],
+            "result_layer_ids": [layer_id for layer_id, _name in result_layers],
             "last_completed_request_id": last_request_id,
             "dock_status": self._dock_status(),
             "error": last_error,
@@ -414,6 +420,8 @@ class GenerationMixin:
         ``ok``, ``selected_index``, its ``label``, and the full ``versions``
         list. Run a generation first: with no lineage yet this returns an error.
         """
+        if self._busy():
+            return {"_error": "Wait for the current generation before selecting a version.", "busy": True}
         dock = self._dock()
         strip = self._version_strip()
         if dock is None or strip is None:
@@ -422,8 +430,8 @@ class GenerationMixin:
         if count <= 0:
             return {"_error": "No versions yet. Run a generation first."}
         try:
-            index = int(index)
-        except (TypeError, ValueError):
+            index = _whole_number(index)
+        except (TypeError, ValueError, OverflowError):
             return {"_error": "index must be a whole number."}
         if index < 0 or index >= count:
             out = not_found_error(

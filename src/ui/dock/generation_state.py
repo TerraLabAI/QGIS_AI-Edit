@@ -1,29 +1,36 @@
 from __future__ import annotations
 
-import html
-import random
-
 from qgis.PyQt.QtCore import QTimer
 from qgis.PyQt.QtGui import QTextCursor
-from qgis.PyQt.QtWidgets import QStyle
 
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.auth.activation_manager import has_seen_privacy_notice
+from ...core.config_store import get_export_copy, get_export_dial
 from ...core.i18n import tr
 from ...core.paywall_state import classify_paywall_state
 from ...core.pro_ceiling import pro_ceiling_enabled, pro_low_threshold
-from ...core.prompts.loading_messages import get_phase_messages
 from ...core.prompts.prompt_presets import format_template_prompt
 from ...core.resolution_labels import DEFAULT_RESOLUTION_CREDIT_COSTS
+from ..icons import pixmap_for
 from ..onboarding_hint import (
-    HINT_FIRST_STEPS,
     HINT_GUIDE_AI,
     dismiss_hint,
     is_hint_dismissed,
 )
-from .style import SUCCESS_TEXT
+from . import design_tokens as tokens
+
+# Second focus retry after a zone is drawn (see set_zone_selected).
+_FOCUS_RETRY_MS = 50
+# Prep ticker: how often the pre-worker percentage tick advances.
+_PREP_TICKER_MS = 1300
+# Smooth progress-bar animation step interval.
+_PROGRESS_ANIMATE_MS = 30
+# Prep ticker ceiling while exporting the canvas, before the upload phase.
+_PREP_CAP_CANVAS_PCT = 5
+# Prep ticker ceiling during every other pre-worker phase.
+_PREP_CAP_OTHER_PCT = 10
 
 
 class DockGenerationStateMixin:
@@ -38,7 +45,7 @@ class DockGenerationStateMixin:
             self._reference_widget.set_target_extent(extent, crs)
 
     def selected_input_layer(self):
-        """The raster the edit starts from, as picked in the layer header, or
+        """The raster the edit starts from, as picked in "Image to edit", or
         None when the project holds no visible raster."""
         combo = getattr(self, "_layer_combo", None)
         if combo is None:
@@ -48,41 +55,71 @@ class DockGenerationStateMixin:
         except RuntimeError:
             return None
 
+    def _place_layer_header(self, target: str) -> None:
+        """Re-home "Image to edit": "launch" puts it between the home hero and
+        Launch, like AI Segmentation's picker above Start; "flow" puts it at
+        the top of the zone, prompt and result steps. One widget, reparented,
+        so the pick survives the move."""
+        header = getattr(self, "_layer_header", None)
+        launch_layout = getattr(self, "_launch_layout", None)
+        if header is None or launch_layout is None:
+            return
+        if target == "launch":
+            if launch_layout.indexOf(header) >= 0:
+                return
+            self._main_layout.removeWidget(header)
+            launch_layout.insertWidget(launch_layout.indexOf(self._launch_hero) + 1, header)
+            return
+        if self._main_layout.indexOf(header) >= 0:
+            return
+        launch_layout.removeWidget(header)
+        self._main_layout.insertWidget(self._main_layout.indexOf(self._select_zone_section), header)
+
     def _set_layer_header_state(self, state: str) -> None:
-        """"hidden" on the idle screen, "editable" while the zone is being
-        drawn, "frozen" from the zone commit to the result: the list stops
-        following the layer tree and the map view, and the combo greys out so
-        the user reads which raster the run started from."""
+        """"launch" and "editable": the label over a live combo that follows
+        the map view. "locked": from the zone commit to the result the label
+        goes, the combo keeps the layer name with its chevron gone and stops
+        following the tree, so the user reads which layer the run started
+        from. With no raster at all the empty-canvas card owns the screen and
+        the header stays hidden."""
         header = getattr(self, "_layer_header", None)
         combo = getattr(self, "_layer_combo", None)
         if header is None or combo is None:
             return
-        if state == "hidden":
-            header.setVisible(False)
-            combo.set_frozen(False)
-            combo.set_view_tracking(True)
-            return
-        header.setVisible(True)
-        frozen = state == "frozen"
-        combo.set_frozen(frozen)
-        combo.set_view_tracking(not frozen)
-        combo.setEnabled(not frozen)
+        from ..panel_helpers import combo_box_qss, locked_combo_qss
+
+        self._place_layer_header("launch" if state == "launch" else "flow")
+        locked = state == "locked"
+        combo.set_frozen(locked)
+        combo.set_view_tracking(not locked)
+        combo.setEnabled(not locked)
+        qss = locked_combo_qss() if locked else combo_box_qss()
+        # Only when it changes: a stylesheet write re-polishes the combo.
+        if getattr(self, "_layer_combo_qss", None) != qss:
+            self._layer_combo_qss = qss
+            combo.setStyleSheet(qss)
         combo.setToolTip(
-            tr("Exit to pick another raster.") if frozen else tr(
-                "Pick the raster layer the edit starts from. Everything else on "
-                "the map stays out of the input."
+            get_export_copy("dock.generation_state.layer_combo_locked_tooltip", tr("Exit to pick another layer."))
+            if locked else get_export_copy(
+                "dock.build.layer_combo_above_tooltip",
+                tr("The layer the AI edits. Visible layers above it are sent as references."),
             )
         )
+        self._layer_label.setVisible(not locked)
+        from qgis.core import QgsProject
+
+        from .tools_footer import tree_has_visible_raster
+
+        header.setVisible(tree_has_visible_raster(QgsProject.instance().layerTreeRoot()))
 
     def set_zone_selected(self):
-        """Zone drawn: show the prompt section and the Generate/Exit row."""
+        """Zone drawn: show the prompt section and the Generate/Cancel row."""
         self._zone_selected = True
         self._hide_status_box()
-        self._layer_saved_label.setVisible(False)
         self._launch_section.setVisible(False)
         self._select_zone_section.setVisible(False)
         self._result_section.setVisible(False)
-        self._set_layer_header_state("frozen")
+        self._set_layer_header_state("locked")
         self._prompt_section.setVisible(True)
         self._prompt_container.set_readonly(False)
         self._place_reference_widget("prompt")
@@ -99,7 +136,9 @@ class DockGenerationStateMixin:
         # (0ms + 50ms) because on some platforms the canvas reclaims focus
         # after the first setFocus call.
         QtC.safe_single_shot(0, self, self._focus_prompt_input)
-        QtC.safe_single_shot(50, self, self._focus_prompt_input)
+        QtC.safe_single_shot(
+            get_export_dial("dock.generation_state.focus_retry_ms", _FOCUS_RETRY_MS), self, self._focus_prompt_input
+        )
 
     def _focus_prompt_input(self):
         """Bring the dock forward and put the caret in the prompt textarea."""
@@ -127,47 +166,30 @@ class DockGenerationStateMixin:
         self.set_selecting_zone_state()
 
     def _stop_progress_animation(self):
-        """Stop the smooth progress animation timer if running."""
+        """Stop both progress timers: the smooth bar step and the prep ticker.
+
+        The prep ticker restarts the bar timer on every tick, so stopping the
+        bar alone (a dock closed during the canvas export) left the pair
+        ticking for nothing until the next run."""
+        self._stop_prep_ticker()
         if hasattr(self, "_progress_timer") and self._progress_timer is not None:
             self._progress_timer.stop()
-
-    def _should_show_first_steps(self) -> bool:
-        """First-steps guide banner gate: only when signed in, on the idle
-        LAUNCH screen, and not yet dismissed. Hidden while selecting a zone,
-        generating, or viewing a result, and inside the tool panels."""
-        if not getattr(self, "_activated", False):
-            return False
-        if is_hint_dismissed(HINT_FIRST_STEPS):
-            return False
-        try:
-            # The empty state shows ONLY the hero card (one info per state):
-            # the guide banner waits until imagery exists.
-            if self._warning_widget.isVisibleTo(self):
-                return False
-        except (RuntimeError, AttributeError):
-            pass
-        try:
-            # isVisibleTo (not isVisible) so the gate reflects the INTENDED
-            # state even if the dock window is not on-screen right now.
-            return bool(self._launch_section.isVisibleTo(self))
-        except (RuntimeError, AttributeError):
-            return False
-
-    def _update_first_steps_visibility(self) -> None:
-        """Drive the bottom-pinned first-steps banner from its gate. Called on
-        every state transition: the banner is a top-level sibling of the footer,
-        so it is not auto-hidden when the flow swaps the content views."""
-        hint = getattr(self, "_first_steps_hint", None)
-        if hint is not None:
-            hint.setVisible(self._should_show_first_steps())
+        loader = getattr(self, "_progress_loader", None)
+        if loader is not None:
+            loader.stop_run()
 
     def _guide_ai_tip_visible(self) -> bool:
         """Visibility gate for the "Guide the AI" tip: retires for the rest of
         the session once the user has used a grounding feature (reference or
-        markup), or closed the tip. Read by DismissibleHint.reshow() so a
-        guidance reset never flashes the tip back for someone who just used
-        the features."""
-        return not is_hint_dismissed(HINT_GUIDE_AI)
+        markup), or closed the tip, and stays hidden while a generation runs.
+        Read by DismissibleHint.reshow() so a guidance reset never flashes the
+        tip back for someone who just used the features, or over a run."""
+        if is_hint_dismissed(HINT_GUIDE_AI):
+            return False
+        try:
+            return not self._progress_widget.isVisibleTo(self)
+        except (RuntimeError, AttributeError):  # progress widget not built yet
+            return True
 
     def _mark_guide_ai_touched(self) -> None:
         """The user used a grounding feature (a reference got attached, or the
@@ -198,17 +220,25 @@ class DockGenerationStateMixin:
         hint.show()
         telemetry.track(te.GUIDANCE_TIP_SHOWN)
 
+    def _set_guide_ai_tip_held(self, held: bool) -> None:
+        """Hide the tip for a run; on a cancelled or failed run, give it back
+        by its gate without counting a second view."""
+        hint = getattr(self, "_guide_ai_hint", None)
+        if hint is None:
+            return
+        hint.setVisible(False if held else self._guide_ai_tip_visible())
+
     def set_launch_state(self):
         """LAUNCH: show the entry screen with the 'Launch AI Edit' button.
 
-        Used after activation and whenever the user clicks Exit. The selection
-        tool is expected to be inactive in this state (managed by the plugin).
+        Used after activation and whenever the user clicks Cancel or New
+        edit. The selection tool is expected to be inactive in this state (managed by the plugin).
         """
         self._stop_progress_animation()
         self._hide_status_box()
         self._zone_selected = False
         # Leaving the flow voids any onboarding imagery gate, so a mid-load
-        # Exit or zone-clear can't strand Generate disabled for the next zone.
+        # Cancel or zone-clear can't strand Generate disabled for the next zone.
         self._imagery_loading = False
 
         if self._reference_widget is not None:
@@ -216,12 +246,17 @@ class DockGenerationStateMixin:
             self._reference_widget.setVisible(False)
 
         self._launch_section.setVisible(True)
-        self._set_layer_header_state("hidden")
+        self._set_layer_header_state("launch")
         self._select_zone_section.setVisible(False)
         self._prompt_section.setVisible(False)
         self._progress_widget.setVisible(False)
         self._result_section.setVisible(False)
-        self._layer_saved_label.setVisible(False)
+        # The lineage belongs to the flow the user just left. Its in-flight
+        # slot sits inside _main_widget, which this screen keeps on screen, so
+        # without this the home screen showed "Next edit starts from" and dead
+        # tiles under the Launch button (Cancel or the dock's X during a run).
+        self._place_version_strip("launch")
+        self._version_strip.set_readonly(False)
         self._generate_note_box.setVisible(False)
         self._generate_btn.setVisible(False)
         self.set_generate_block_reason(None)
@@ -243,8 +278,6 @@ class DockGenerationStateMixin:
             self._library_history_dirty or not self._library_history_loaded
         ):
             self.conversations_refresh_requested.emit()
-        # Idle screen: reveal the first-steps guide banner (gate-checked).
-        self._update_first_steps_visibility()
 
     def clear_active_template(self) -> None:
         """Drop the armed template so a new zone doesn't reuse a preset that
@@ -283,7 +316,7 @@ class DockGenerationStateMixin:
             return
         try:
             area.verticalScrollBar().setValue(0)
-        except (RuntimeError, AttributeError):
+        except (RuntimeError, AttributeError):  # scroll area deleted during teardown
             pass
 
     def set_selecting_zone_state(self):
@@ -296,28 +329,25 @@ class DockGenerationStateMixin:
         self._hide_status_box()
         self._zone_selected = False
         # Leaving the flow voids any onboarding imagery gate, so a mid-load
-        # Exit or zone-clear can't strand Generate disabled for the next zone.
+        # Cancel or zone-clear can't strand Generate disabled for the next zone.
         self._imagery_loading = False
 
         if self._reference_widget is not None:
             self._reference_widget.setVisible(False)
 
         self._launch_section.setVisible(False)
-        self._set_layer_header_state("editable")
         self._select_zone_section.setVisible(True)
+        self._set_layer_header_state("editable")
         self._prompt_section.setVisible(False)
         self._progress_widget.setVisible(False)
         self._result_section.setVisible(False)
-        self._layer_saved_label.setVisible(False)
         self._generate_note_box.setVisible(False)
         self._generate_btn.setVisible(False)
         self.set_generate_block_reason(None)
-        # No Exit in this state - the screen is just the draw invitation.
+        # No Cancel in this state: the screen is just the draw invitation.
         self._exit_btn.setVisible(False)
         self.set_zone_step_notice()
         self._update_layer_warning()
-        # Left the idle screen: hide the first-steps guide banner.
-        self._update_first_steps_visibility()
         # The step always shows itself: see _scroll_panel_to_top.
         self._scroll_panel_to_top()
 
@@ -329,6 +359,8 @@ class DockGenerationStateMixin:
         the panel reflows piecewise on Generate click and the user sees the
         dock go blank for ~1s before the progress UI lands.
         """
+        if generating:
+            self._hide_after_success()
         self.setUpdatesEnabled(False)
         try:
             self._progress_widget.setVisible(generating)
@@ -364,45 +396,82 @@ class DockGenerationStateMixin:
                 self._place_version_strip("generating")
                 self._version_strip.set_readonly(True)
                 self._generate_note_box.setVisible(False)
+                # The tip is advice for writing the prompt: a locked prompt
+                # under a progress bar has no use for it.
+                self._set_guide_ai_tip_held(True)
                 self._generate_btn.setVisible(False)
                 self.set_generate_block_reason(None)
-                # Hide Exit during generation: the user shouldn't be tempted to
+                # Hide Cancel during generation: the user shouldn't be tempted to
                 # cancel mid-run from this row. The title-bar X still works as
                 # an escape hatch.
                 self._exit_btn.setVisible(False)
+                self._progress_loader.start_run()
                 self._start_prep_ticker("canvas")
+                # Generate sits at the bottom of a scrolled result; the card
+                # that answers the click opens at the top.
+                self._scroll_panel_to_top()
             else:
-                self._stop_prep_ticker()
+                self._stop_progress_animation()
                 self._prompt_container.set_readonly(False)
                 if self._reference_widget is not None:
                     self._reference_widget.set_readonly(False)
                 if getattr(self, "_reference_panel", None) is not None:
                     self._reference_panel.set_readonly(False)
-                self._generate_note_box.setVisible(not has_seen_privacy_notice())
-                self._generate_btn.setVisible(True)
-                self._exit_btn.setVisible(True)
                 self._refresh_resolution_triggers()
-                self._prompt_section.setVisible(True)
-                # Cancelled / errored run: bring the strip back to its home and
-                # unlock it (the result screen may re-appear with it).
-                self._place_version_strip("result")
-                self._version_strip.set_readonly(False)
+                if self._version_strip.count() > 1:
+                    # A failed or cancelled run started from a result: land back
+                    # on that result, versions and the typed next change intact,
+                    # with the error under it. The first prompt screen showed
+                    # no versions at all, so the lineage read as lost.
+                    self._show_result_layout()
+                else:
+                    self._generate_note_box.setVisible(not has_seen_privacy_notice())
+                    self._generate_btn.setVisible(True)
+                    self._exit_btn.setVisible(True)
+                    self._prompt_section.setVisible(True)
+                    self._set_guide_ai_tip_held(False)
+                    # Cancelled / errored run: bring the strip back to its home
+                    # and unlock it.
+                    self._place_version_strip("result")
+                    self._version_strip.set_readonly(False)
         finally:
             self.setUpdatesEnabled(True)
 
+    def _show_result_layout(self) -> None:
+        """The result screen's widgets, without touching its prompt text:
+        the next-change box, Generate from and New edit, then the versions
+        and the result tools under them."""
+        self._launch_section.setVisible(False)
+        self._select_zone_section.setVisible(False)
+        self._prompt_section.setVisible(False)
+        self._generate_btn.setVisible(False)
+        self.set_generate_block_reason(None)
+        self._exit_btn.setVisible(False)
+        self._generate_note_box.setVisible(False)
+        self._set_guide_ai_tip_held(True)
+        self._result_section.setVisible(True)
+        self._result_prompt_widget.setVisible(True)
+        self._result_prompt_container.set_readonly(False)
+        self._place_version_strip("result")
+        self._version_strip.set_readonly(False)
+        self._place_reference_widget("result")
+        self._update_result_generate_enabled()
+
     # Prep ticker: animates the bar 1->10% during canvas (export) and upload
-    # phases, rotating playful messages so the user gets visible feedback
-    # instead of a static "Preparing..." until the worker's first poll.
+    # phases under one factual line per phase, until the worker's first poll.
+    # The rotating jokes are gone (Yvann, 2026-09-18): the dots, the clock and
+    # the percent are the feedback now.
     def _start_prep_ticker(self, phase: str) -> None:
         self._prep_phase = phase
-        self._prep_messages_pool = get_phase_messages(phase) or [tr("Preparing...")]
-        random.shuffle(self._prep_messages_pool)
-        self._prep_idx = 0
-        # Set first message right away so the user sees something immediately.
-        self._progress_label.setText(self._prep_messages_pool[0])
+        if phase == "canvas":
+            text = tr("Capturing your zone...")
+        else:
+            # The worker opens on the same line, then says it is sending.
+            text = get_export_copy("dock.generation_state.preparing", tr("Preparing..."))
+        self._progress_loader.set_phase_text(text)
         if not hasattr(self, "_prep_ticker") or self._prep_ticker is None:
             self._prep_ticker = QTimer(self)
-            self._prep_ticker.setInterval(1300)
+            self._prep_ticker.setInterval(get_export_dial("dock.generation_state.prep_ticker_ms", _PREP_TICKER_MS))
             self._prep_ticker.timeout.connect(self._tick_prep)
         if not self._prep_ticker.isActive():
             self._prep_ticker.start()
@@ -412,7 +481,7 @@ class DockGenerationStateMixin:
             self._prep_ticker.stop()
 
     def prep_advance_phase(self, phase: str) -> None:
-        """Switch the prep ticker to a new message pool mid-flight.
+        """Switch the prep ticker to the next phase's line mid-flight.
         Called by plugin.py when canvas export finishes -> upload phase starts.
         """
         if not hasattr(self, "_prep_ticker") or self._prep_ticker is None or not self._prep_ticker.isActive():
@@ -420,20 +489,22 @@ class DockGenerationStateMixin:
         self._start_prep_ticker(phase)
 
     def _tick_prep(self) -> None:
-        # Cycle messages
-        if self._prep_messages_pool:
-            self._prep_idx = (self._prep_idx + 1) % len(self._prep_messages_pool)
-            self._progress_label.setText(self._prep_messages_pool[self._prep_idx])
         # Advance the bar by 1% per tick, capped at the phase ceiling. Stops
         # naturally when the worker emits a real progress signal (>=5%) since
         # set_progress_message stops the prep ticker.
-        cap = 5 if self._prep_phase == "canvas" else 10
+        cap = (
+            _PREP_CAP_CANVAS_PCT
+            if self._prep_phase == "canvas"
+            else _PREP_CAP_OTHER_PCT
+        )
         current = self._progress_bar.value()
         if current < cap:
             self._progress_target = min(cap, current + 1)
             if not hasattr(self, "_progress_timer") or self._progress_timer is None:
                 self._progress_timer = QTimer(self)
-                self._progress_timer.setInterval(30)
+                self._progress_timer.setInterval(
+                    get_export_dial("dock.generation_state.progress_animate_ms", _PROGRESS_ANIMATE_MS)
+                )
                 self._progress_timer.timeout.connect(self._animate_progress)
             if not self._progress_timer.isActive():
                 self._progress_timer.start()
@@ -443,15 +514,18 @@ class DockGenerationStateMixin:
         # First real worker progress signal -> stop the prep ticker so it stops
         # competing for the label + bar with the worker's own messages.
         self._stop_prep_ticker()
-        self._progress_label.setText(message)
+        self._resume_prep_ticker_on_show = False
+        self._progress_loader.set_phase_text(message)
         if percentage >= 0:
             self._progress_bar.setRange(0, 100)
             self._progress_target = percentage
             if not hasattr(self, "_progress_timer") or self._progress_timer is None:
                 self._progress_timer = QTimer(self)
-                self._progress_timer.setInterval(30)
+                self._progress_timer.setInterval(
+                    get_export_dial("dock.generation_state.progress_animate_ms", _PROGRESS_ANIMATE_MS)
+                )
                 self._progress_timer.timeout.connect(self._animate_progress)
-            if not self._progress_timer.isActive():
+            if self.isVisible() and not self._progress_timer.isActive():
                 self._progress_timer.start()
 
     def _animate_progress(self):
@@ -466,38 +540,39 @@ class DockGenerationStateMixin:
 
     def _show_status_box(self, message: str, box_type: str = "info"):
         """Show a styled status message box (AI Segmentation style)."""
-        styles = {
-            "error": (
-                "QWidget { background-color: rgba(211, 47, 47, 0.25); "
-                "border: 1px solid rgba(211, 47, 47, 0.6); border-radius: 4px; }"
-                "QLabel { background: transparent; border: none; color: #ef5350; }",
-                QStyle.StandardPixmap.SP_MessageBoxCritical,
-            ),
-            "success": (
-                "QWidget { background-color: rgba(139, 172, 39, 0.25); "
-                "border: 1px solid rgba(139, 172, 39, 0.6); border-radius: 4px; }"
-                "QLabel { background: transparent; border: none; color: #66bb6a; }",
-                QStyle.StandardPixmap.SP_DialogApplyButton,
-            ),
-            "warning": (
-                "QWidget { background-color: rgba(245, 166, 35, 0.12); "
-                "border: 1px solid rgba(245, 166, 35, 0.45); border-radius: 4px; }"
-                "QLabel { background: transparent; border: none; color: palette(text); }",
-                QStyle.StandardPixmap.SP_MessageBoxWarning,
-            ),
-            "info": (
-                "QWidget { background-color: rgba(30, 136, 229, 0.08); "
-                "border: 1px solid rgba(30, 136, 229, 0.2); border-radius: 4px; }"
-                "QLabel { background: transparent; border: none; }",
-                QStyle.StandardPixmap.SP_MessageBoxInformation,
-            ),
+        # The hue of its kind (error coral, success green, warning amber,
+        # info sky): a faint ground, a line in the hue, 10 px corners, the
+        # words in the main ink and the meaning carried by the glyph.
+        kinds = {
+            "error": ("coral", "warning"),
+            "success": ("green", "check"),
+            "warning": ("amber", "warning"),
+            "info": ("sky", "sparkles"),
         }
-        style_str, icon_enum = styles.get(box_type, styles["error"])
-        self._status_widget.setStyleSheet(style_str)
-        icon = self._status_widget.style().standardIcon(icon_enum)
-        self._status_icon.setPixmap(icon.pixmap(self._status_icon_size, self._status_icon_size))
+        category, glyph = kinds.get(box_type, kinds["error"])
+        tint, ink = tokens.category_tint(category), tokens.category_ink(category)
+        self._status_widget.setStyleSheet(
+            f"QWidget#statusBox {{ background: {tint}; border: 1px solid {tokens.category_line(category)};"
+            f" border-radius: {tokens.RADIUS_CARD}px; }}"
+        )
+        self._status_icon.setPixmap(
+            pixmap_for(self._status_icon, glyph, self._status_icon_size, tokens.qcolor(ink))
+        )
         self._status_label.setText(message)
         self._status_widget.setVisible(True)
+        # The box sits under the screen's actions: on a short dock a failure
+        # landed below the fold and read as nothing happening. Deferred so
+        # the layout has placed the box before the scroll is measured.
+        QtC.safe_single_shot(0, self, self._reveal_status_box)
+
+    def _reveal_status_box(self) -> None:
+        """Scroll just enough to bring the status box into view."""
+        area = getattr(self, "_scroll_area", None)
+        try:
+            if area is not None and self._status_widget.isVisible():
+                area.ensureWidgetVisible(self._status_widget, 0, 8)
+        except RuntimeError:  # dock torn down before the deferred call
+            pass
 
     def _hide_status_box(self):
         self._status_widget.setVisible(False)
@@ -592,25 +667,30 @@ class DockGenerationStateMixin:
         # Clear any stale Vectorize suggestion from a previous generation;
         # the plugin re-arms it for this run only if the template carries
         # a vector_color in the catalog.
-        self._vectorize_cta_section.setVisible(False)
-        self._vectorize_cta_pending = None
+        self._clear_vectorize_suggestion()
 
         self._launch_section.setVisible(False)
         self._select_zone_section.setVisible(False)
         self._prompt_section.setVisible(False)
         self._generate_btn.setVisible(False)
         self.set_generate_block_reason(None)
-        # The result section has its own Exit button, so suppress the prompt
-        # row's Exit to avoid duplication.
+        # The result section has its own New edit button, so the prompt
+        # row's Cancel goes.
         self._exit_btn.setVisible(False)
         self._generate_note_box.setVisible(False)
 
-        # Keep the prompt that produced this result. A blank field asked the
-        # user to retype what they had just typed, and 110 of the 214 people
-        # whose first generation succeeded left within a minute of seeing it.
-        # Running the same instruction again is now one click.
-        self._result_prompt_input.setPlainText(self.get_prompt())
-        self._update_result_generate_enabled()
+        # The box asks for the NEXT change (Yvann, 2026-09-17): it starts
+        # empty and its placeholder names the picked version. Refilling it
+        # with the prompt that just ran read as "press Generate to make the
+        # same thing again" on top of the result. That prompt stays one click
+        # away, in the version's details card.
+        self._result_prompt_input.blockSignals(True)
+        self._result_prompt_input.clear()
+        self._result_prompt_input.blockSignals(False)
+        self._adjust_result_prompt_height()
+        self._result_prompt_container.refresh_favorite_star()
+        self._update_result_guidance_hint("")
+        self._update_result_generate_enabled("")
         self._result_prompt_container.set_readonly(False)
         # Generation is done: clear the (now hidden) prompt container's readonly
         # flag too. set_generating(True) set it and the success path never calls
@@ -618,6 +698,7 @@ class DockGenerationStateMixin:
         # view-only mode (browse_only) and template clicks are ignored.
         self._prompt_container.set_readonly(False)
         self._result_section.setVisible(True)
+        self._scroll_panel_to_top()
         # Single prompt screen: the version strip below it carries the base
         # choice, so there is no separate choice step to land on first. Bring the
         # strip back from the progress area (success skips set_generating(False)).
@@ -628,36 +709,42 @@ class DockGenerationStateMixin:
 
         self._place_reference_widget("result")
 
+        # The layer this run wrote. Its name shows in the newest version's
+        # details card ("Added to your map as"), read through
+        # saved_layer_probe; the result screen spends no row on it.
+        del layer_name
         self._saved_layer_id = layer_id
-        escaped_name = html.escape(layer_name)
-        if layer_id:
-            link_html = (
-                f'<a href="terralab:focus-layer" '
-                f'style="color: {SUCCESS_TEXT}; text-decoration: underline;">'
-                f'{escaped_name}</a>'
-            )
-        else:
-            link_html = escaped_name
-        self._layer_saved_label.setText(tr("Saved as {name}").format(name=link_html))
-        self._layer_saved_label.setVisible(True)
 
-        # Result screen (not idle): keep the first-steps guide banner hidden.
-        self._update_first_steps_visibility()
+        self._maybe_show_after_success()
+        # The result opens at its top, prompt in view, whatever the scroll
+        # position of the screen that launched the run.
+        self._scroll_panel_to_top()
+        # The next thing to do is type the next change: put the caret there so
+        # Enter runs it straight away.
+        QtC.safe_single_shot(0, self, self._focus_result_prompt)
+
+    def _focus_result_prompt(self) -> None:
+        """Caret into the next-change box, without raising a floating dock
+        over the map the user is looking at."""
+        try:
+            if self._result_prompt_widget.isVisible():
+                self._result_prompt_input.setFocus(QtC.OtherFocusReason)
+        except RuntimeError:  # dock torn down before the deferred call
+            pass
 
     def _enter_iteration_state(self) -> None:
-        """Show the RESULT/iterate UI (prompt + version strip above the Generate
-        row) without the post-generation 'Saved as' line.
+        """Show the RESULT/iterate UI (prompt and Generate row, version strip
+        under them) without the post-generation 'Saved as' line.
 
         Restoring a past generation means 'resume iterating on this image', so it
         lands in the same layout a fresh result does. This keeps the version
-        strip in its proper home above the action row instead of falling below
-        it (the old restore path used the in-flight 'generating' slot, which sits
-        under the Generate/Exit row in the prompt state)."""
+        strip in its result home under the action row (the old restore path
+        used the in-flight 'generating' slot, which belongs to the progress
+        area of the prompt state)."""
         self._stop_progress_animation()
         self._progress_widget.setVisible(False)
         self._hide_status_box()
-        self._vectorize_cta_section.setVisible(False)
-        self._vectorize_cta_pending = None
+        self._clear_vectorize_suggestion()
         self._launch_section.setVisible(False)
         self._select_zone_section.setVisible(False)
         self._prompt_section.setVisible(False)
@@ -667,16 +754,15 @@ class DockGenerationStateMixin:
         self._generate_note_box.setVisible(False)
         self._prompt_container.set_readonly(False)
         self._result_section.setVisible(True)
+        self._scroll_panel_to_top()
         self._result_prompt_widget.setVisible(True)
         self._result_prompt_container.set_readonly(False)
         self._place_version_strip("result")
         self._version_strip.set_readonly(False)
         self._place_reference_widget("result")
-        # Nothing was just saved on restore: keep the success line hidden.
-        self._layer_saved_label.setVisible(False)
+        self._hide_after_success()
         self._refresh_resolution_triggers()
-        # Restore can jump straight here from the idle screen: hide the banner.
-        self._update_first_steps_visibility()
+        self._scroll_panel_to_top()
 
     def restore_generation_context(
         self, prompt_text: str, template_id=None, template_name=None

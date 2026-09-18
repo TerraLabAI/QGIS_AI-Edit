@@ -189,7 +189,7 @@ def _analyze(
     Threshold defaults are the shipped constants; the QImage shell passes the
     server-tunable values from _detect_dials()."""
     total = width * height
-    if total == 0 or len(pixels) < total:
+    if width <= 0 or height <= 0 or len(pixels) != total:
         return None
 
     # Bucket every pixel into a coarse 16-level-per-channel color cube.

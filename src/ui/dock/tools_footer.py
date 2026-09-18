@@ -1,55 +1,91 @@
 from __future__ import annotations
 
-import html
+from qgis.core import QgsLayerTree, QgsProject, QgsRasterLayer
+from qgis.PyQt.QtGui import QColor
 
-from qgis.core import QgsProject
-from qgis.PyQt.QtCore import QRectF, Qt
-from qgis.PyQt.QtGui import (
-    QBrush,
-    QColor,
-    QIcon,
-    QKeySequence,
-    QPainter,
-    QPalette,
-    QPen,
-    QPixmap,
-)
-from qgis.PyQt.QtWidgets import QLabel, QPushButton
-
-from ...core import qt_compat as QtC
-from ...core.auth.activation_manager import (
-    get_contact_call_url,
-    get_support_email,
-    get_tutorial_url,
-)
+from ...core.auth.activation_manager import get_tutorial_url
 from ...core.i18n import tr
 from ..dialogs.error_report_dialog import (
     REPORT_PROBLEM_HREF,
-    SUPPORT_EMAIL,
     show_error_report,
 )
 from ..external_url import open_external
-from ..panel_helpers import make_hidpi_pixmap
+from ..icons import icon_for
+from ..layers_panel import show_layers_panel
 from .blocked_reasons import (
+    LAUNCH_BLOCK_NO_KEY,
     LAUNCH_BLOCK_NO_RASTER,
     LAUNCH_BLOCK_TILES_WARMING,
 )
-from .style import _BTN_BLUE, _BTN_GREEN, _tinted_svg_icon
+from .design_tokens import (
+    INK,
+    INK_2,
+    INK_3,
+    qcolor,
+    repolish_widget,
+)
+from .tool_bar import set_compare_icon, tool_available
+
+
+def _tool_panel_is_open(dock) -> bool:
+    """Compatibility helper for callers that inspect the tool-panel guard."""
+    checker = getattr(dock, "_tool_panel_open", None)
+    if callable(checker):
+        if bool(checker()):
+            return True
+    for name in ("_markup_panel", "_vectorize_panel", "_reference_panel"):
+        panel = getattr(dock, name, None)
+        try:
+            if panel is not None and panel.isVisible():
+                return True
+        except RuntimeError:
+            continue
+    return False
+
+
+def tree_has_visible_raster(node) -> bool:
+    """True as soon as one checked raster sits under checked groups.
+
+    A raster, not any layer: the edit starts from the raster picked in "Image
+    to edit", and a project showing only vectors has nothing to offer there.
+
+    Same answer as ``any(n.isVisible() for n in root.findLayers() if raster)``
+    but stops at the first hit instead of listing the whole tree, which QGIS
+    rebuilds on every layer added."""
+    for child in node.children():
+        if not child.itemVisibilityChecked():
+            continue
+        if QgsLayerTree.isLayer(child):
+            if isinstance(child.layer(), QgsRasterLayer):
+                return True
+        elif QgsLayerTree.isGroup(child) and tree_has_visible_raster(child):
+            return True
+    return False
 
 
 class DockToolsFooterMixin:
-    """Layer-visibility gate, tool panels (Mark up / Vectorize / swipe),
-    footer glyphs, and help/support dialogs for AIEditDockWidget."""
+    """Layer-visibility gate, tool panels (Draw / References / Vectorize),
+    the tool bar's state, and the status box's report link for AIEditDockWidget."""
 
     def _schedule_layer_warning_update(self, *_args):
         """Re-check the Launch gate after the layer tree has settled.
 
-        Connected to ``layersAdded`` / ``layersRemoved``, which fire mid-sync:
-        the layer tree node for the new layer is not yet present in
-        ``layerTreeRoot().findLayers()`` at emit time. Deferring by one event
-        loop tick lets QGIS finish wiring the node before we evaluate visibility.
+        Connected to ``layersAdded`` / ``layersRemoved`` and the tree's
+        ``visibilityChanged``. The first two fire mid-sync: the node for the
+        new layer is not in the tree yet at emit time. Deferring by one event
+        loop tick lets QGIS finish wiring it. One reused timer folds a burst
+        (300 layers added at once) into a single check.
         """
-        QtC.safe_single_shot(0, self, self._update_layer_warning)
+        self._layer_warning_timer.start(0)
+
+    def _run_layer_warning_update(self) -> None:
+        """Timer target: skip the tree walk while the dock is hidden and
+        catch up when it shows (see AIEditDockWidget.showEvent)."""
+        if not self.isVisible():
+            self._layer_warning_dirty = True
+            return
+        self._layer_warning_dirty = False
+        self._update_layer_warning()
 
     def _update_layer_warning(self, *_args):
         """Show/hide the empty-canvas hero and keep the entry flow coherent with
@@ -62,7 +98,7 @@ class DockToolsFooterMixin:
 
         When nothing is visible we FIRST drive the flow back to the canonical
         empty baseline (``set_launch_state`` hides the zone / prompt / result /
-        progress sections and clears ``_zone_selected``), so a raster deleted
+        progress sections and clears ``_zone_selected``), so a layer deleted
         mid-flow (SELECTING_ZONE, PROMPT, RESULT) converges on the exact same
         centered hero as a fresh start, instead of stranding a half-open flow
         over a blank canvas (the old ``if self._zone_selected`` early-out kept
@@ -74,21 +110,37 @@ class DockToolsFooterMixin:
         if self._progress_widget.isVisible():
             return
         # A visible RASTER, not any visible layer: the edit starts from one
-        # raster picked in the layer header, and a project showing only
-        # vectors has nothing that header could offer.
-        from qgis.core import QgsRasterLayer
-
-        root = QgsProject.instance().layerTreeRoot()
-        has_visible = any(
-            node.isVisible() for node in root.findLayers()
-            if isinstance(node.layer(), QgsRasterLayer)
-        )
+        # raster picked in "Image to edit", and a project showing only vectors
+        # has nothing that field could offer.
+        has_visible = tree_has_visible_raster(QgsProject.instance().layerTreeRoot())
         if not has_visible:
+            # A tool panel (Draw, References, Vectorize) covers the flow: the
+            # reset used to run behind it, and Done then landed on an empty
+            # home screen with the zone and the prompt gone and no word why
+            # (findings 2.3). Held until the panel closes (exit_tool_panel).
+            if _tool_panel_is_open(self):
+                self._layer_warning_dirty = True
+                return
+            # The typed prompt survives the reset: hiding the last layer is
+            # not a request to throw the sentence away. The next zone finds it
+            # back in the box. Kept across the repeated checks while the map
+            # stays blank, released once a layer shows again.
+            keep_prompt = self._zone_selected or getattr(self, "_prompt_kept_for_blank_map", False)
+            kept_text = self._prompt_input.toPlainText() if keep_prompt else ""
+            kept_template = (self._active_template_id, self._active_template_name)
             # Reset first, then reveal the hero. Launch STAYS on screen,
             # greyed, with the reason written under it (2026-09-03): hiding it
             # left 29 people a month on an entry screen with no primary button
             # and nothing telling them what was missing.
             self.set_launch_state()
+            if kept_text:
+                self._prompt_input.blockSignals(True)
+                try:
+                    self._prompt_input.setPlainText(kept_text)
+                finally:
+                    self._prompt_input.blockSignals(False)
+                self._active_template_id, self._active_template_name = kept_template
+            self._prompt_kept_for_blank_map = bool(kept_text)
             self._warning_widget.setVisible(True)
             self._sync_demo_button()
             # Re-decide the hero's secondary action on every (re)show: the
@@ -101,18 +153,40 @@ class DockToolsFooterMixin:
                 LAUNCH_BLOCK_NO_RASTER, has_own_card=True
             )
             self._past_sessions_link.setVisible(False)
+            if getattr(self, "_launch_hero", None) is not None:
+                self._launch_hero.setVisible(False)
+            # The card asks for imagery; an empty "Image to edit" over it
+            # would ask the same thing twice.
+            if getattr(self, "_layer_header", None) is not None:
+                self._layer_header.setVisible(False)
         else:
+            if getattr(self, "_layer_header", None) is not None:
+                self._layer_header.setVisible(True)
+            self._prompt_kept_for_blank_map = False
             self._warning_widget.setVisible(False)
-            self.set_launch_block_reason(
-                LAUNCH_BLOCK_TILES_WARMING if self._imagery_loading else None
-            )
+            # The account check outranks the imagery: a layer toggled while the
+            # key was being confirmed used to switch Launch back on mid-check.
+            if getattr(self, "_launch_account_pending", False):
+                reason = LAUNCH_BLOCK_NO_KEY
+            elif self._imagery_loading:
+                reason = LAUNCH_BLOCK_TILES_WARMING
+            else:
+                reason = None
+            self.set_launch_block_reason(reason)
             self._past_sessions_link.setVisible(True)
-        # The first-steps banner follows the same rule: never stacked on the
-        # hero card, back once imagery exists.
-        try:
-            self._update_first_steps_visibility()
-        except (RuntimeError, AttributeError):
-            pass
+            if getattr(self, "_launch_hero", None) is not None:
+                self._launch_hero.setVisible(True)
+
+    def _tool_panel_open(self) -> bool:
+        """True while Draw, References or Vectorize has the dock."""
+        for name in ("_markup_panel", "_vectorize_panel", "_reference_panel"):
+            panel = getattr(self, name, None)
+            try:
+                if panel is not None and not panel.isHidden():
+                    return True
+            except RuntimeError:  # panel deleted during teardown
+                continue
+        return False
 
     def _on_project_loaded(self, *_args):
         """Re-bind to the fresh layerTreeRoot and re-evaluate the Launch gate.
@@ -124,24 +198,18 @@ class DockToolsFooterMixin:
         """
         try:
             QgsProject.instance().layerTreeRoot().visibilityChanged.disconnect(
-                self._update_layer_warning
+                self._schedule_layer_warning_update
             )
-        except (TypeError, RuntimeError):
+        except (TypeError, RuntimeError):  # old layer tree already gone or never connected
             pass
         QgsProject.instance().layerTreeRoot().visibilityChanged.connect(
-            self._update_layer_warning
+            self._schedule_layer_warning_update
         )
-        QtC.safe_single_shot(0, self, self._update_layer_warning)
+        self._schedule_layer_warning_update()
 
     def _on_open_tutorial(self):
         """Open the tutorial URL in the user's default browser."""
         open_external(get_tutorial_url())
-
-    def _on_open_guide_footer(self):
-        """Footer book button: open the step-by-step written guide (with UTM +
-        best-effort telemetry). Always opens the URL, even if telemetry is off."""
-        from ..onboarding_hint import open_guide
-        open_guide("footer_tutorial")
 
     def _on_layer_saved_link_clicked(self, _link: str) -> None:
         """Focus the saved layer in the QGIS Layers panel."""
@@ -161,6 +229,9 @@ class DockToolsFooterMixin:
         tree_view = iface.layerTreeView()
         if tree_view is None:
             return
+        # With the Layers panel closed the selection had nothing to show and
+        # the link read as dead: open the panel first, then select in it.
+        show_layers_panel(tree_view)
         root = QgsProject.instance().layerTreeRoot()
         node = root.findLayer(layer_id) if root is not None else None
         if node is None:
@@ -172,142 +243,9 @@ class DockToolsFooterMixin:
         tree_view.setCurrentIndex(index)
         tree_view.scrollTo(index)
 
-    # ------------------------------------------------------------------
-    # Tool panels (Mark up, Vectorize) - full-dock views reached via the
-    # 🧰 Tools menu. They swap with `_main_widget` and restore it on Done.
-    # ------------------------------------------------------------------
-
-    def _make_polygon_glyph_icon(self) -> QIcon:
-        """Footer Vectorize button glyph - same square-in-square shape as the
-        Prompt Library 'Segment' tab (Unicode ▣). Painted in the palette text
-        colour (like the pencil chip) so it stays legible on dark themes and
-        Windows instead of rendering as an invisible black-on-black square.
-        """
-        size = 40  # 2x for crisp rendering at 20px
-        pm = QPixmap(size, size)
-        pm.fill(Qt.GlobalColor.transparent)
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        ink = self.palette().color(QPalette.ColorRole.WindowText)
-        pen = QPen(ink)
-        pen.setWidthF(2.4)
-        pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
-        p.setPen(pen)
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        outer = QRectF(6, 6, 28, 28)
-        p.drawRect(outer)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(ink))
-        inner = QRectF(13, 13, 14, 14)
-        p.drawRect(inner)
-        p.end()
-        return QIcon(pm)
-
-    def _make_swipe_glyph_icon(self) -> QIcon:
-        """Footer Before/after glyph - swipe.svg tinted to the palette text
-        colour so it carries the same weight as the gear / help glyphs rather
-        than looking dim and half-transparent on a dark theme.
-        """
-        ink = self.palette().color(QPalette.ColorRole.WindowText)
-        return _tinted_svg_icon("swipe.svg", ink)
-
-    def _make_gear_glyph_icon(self) -> QIcon:
-        """Footer Settings glyph - a vector gear painted in the palette text
-        colour. Replaces the U+2699 GEAR character, which Windows renders as a
-        colour emoji (Segoe UI Emoji) while macOS shows a flat black glyph; the
-        painted version is identical on both platforms and crisp at any DPI.
-        """
-        import math
-
-        from qgis.PyQt.QtCore import QPointF, Qt
-        from qgis.PyQt.QtGui import QPainter, QPainterPath
-
-        s = 20
-        ink = self.palette().color(QPalette.ColorRole.WindowText)
-        pm = make_hidpi_pixmap(s)
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        cx = cy = s / 2.0
-        teeth = 8
-        step = 2.0 * math.pi / teeth
-        r_tip = s * 0.46
-        r_root = s * 0.34
-        half_tip = step * 0.18
-        half_root = step * 0.30
-        path = QPainterPath()
-        for i in range(teeth):
-            a = i * step
-            corners = (
-                (a - half_root, r_root),
-                (a - half_tip, r_tip),
-                (a + half_tip, r_tip),
-                (a + half_root, r_root),
-            )
-            for ang, r in corners:
-                pt = QPointF(cx + r * math.cos(ang), cy + r * math.sin(ang))
-                if i == 0 and ang == corners[0][0]:
-                    path.moveTo(pt)
-                else:
-                    path.lineTo(pt)
-        path.closeSubpath()
-        # Center hole: OddEven fill subtracts it from the gear body.
-        path.addEllipse(QPointF(cx, cy), s * 0.15, s * 0.15)
-        path.setFillRule(Qt.FillRule.OddEvenFill)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(ink)
-        p.drawPath(path)
-        p.end()
-        return QIcon(pm)
-
-    def _make_book_glyph_icon(self) -> QIcon:
-        """Footer Tutorial glyph - two stroked pages meeting on a spine, in the
-        palette text colour. Replaces U+1F4D6 OPEN BOOK, which Windows renders
-        through Segoe UI Emoji as a full-colour bitmap: next to four flat
-        palette-ink vector glyphs it was the one coloured picture in the row.
-        (It did not change the row height - the footer button's sizeHint
-        measures 89x37 with the emoji, with "?" and with the gear character
-        alike.)
-
-        Stroke width and span are set so the painted weight matches its
-        neighbours rather than fading next to them: 152.1 ink px over the 20px
-        box, against the filled gear's 171.5 and the polygon's 116.2. The
-        1.6px/25-75% version measured 97.3.
-        """
-        from qgis.PyQt.QtCore import QPointF, Qt
-        from qgis.PyQt.QtGui import QPainter, QPainterPath, QPen
-
-        s = 20
-        ink = self.palette().color(QPalette.ColorRole.WindowText)
-        pm = make_hidpi_pixmap(s)
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        pen = QPen(ink)
-        pen.setWidthF(2.2)
-        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        p.setPen(pen)
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        cx = s / 2.0
-        top, bottom = s * 0.18, s * 0.82
-        edge = s * 0.10
-        for outer in (edge, s - edge):
-            page = QPainterPath()
-            page.moveTo(QPointF(cx, top))
-            # Both curves bow away from the spine, so the pages read as open.
-            page.quadTo(
-                QPointF((cx + outer) / 2.0, top - s * 0.09),
-                QPointF(outer, top - s * 0.05),
-            )
-            page.lineTo(QPointF(outer, bottom - s * 0.05))
-            page.quadTo(
-                QPointF((cx + outer) / 2.0, bottom - s * 0.09),
-                QPointF(cx, bottom),
-            )
-            # closeSubpath draws the spine back up to the start point.
-            page.closeSubpath()
-            p.drawPath(page)
-        p.end()
-        return QIcon(pm)
+    # Tool panels (Draw, Vectorize, References) swap with `_main_widget`
+    # and restore it on Done. Vectorize and Compare are hidden toggles
+    # (tool_bar.py) shown as buttons on the result screen only.
 
     # Public API consumed by the plugin layer ---------------------------
 
@@ -318,7 +256,7 @@ class DockToolsFooterMixin:
             self._reference_panel.setVisible(False)
 
     def set_markup_state(self) -> None:
-        """Swap the dock view to the Mark up panel."""
+        """Swap the dock view to the Draw panel."""
         self._stop_progress_animation()
         self._hide_status_box()
         self._vectorize_panel.deactivate()
@@ -327,6 +265,7 @@ class DockToolsFooterMixin:
         self._hide_reference_panel()
         self._markup_panel.setVisible(True)
         self._markup_panel.activate()
+        self._refresh_dock_key_shortcuts()
 
     def set_vectorize_state(self) -> None:
         """Swap the dock view to the Vectorize panel."""
@@ -342,6 +281,7 @@ class DockToolsFooterMixin:
         # Vectorize panel is open.
         self._swipe_panel_lock = True
         self._refresh_swipe_enabled()
+        self._refresh_dock_key_shortcuts()
 
     def set_reference_capture_armed(self, armed: bool) -> None:
         """Mirror the map-capture tool's state on the panel's "Map" chip. The
@@ -351,7 +291,7 @@ class DockToolsFooterMixin:
             panel.set_capture_armed(armed)
 
     def set_reference_state(self) -> None:
-        """Swap the dock view to the Reference panel (import + per-image
+        """Swap the dock view to the References panel (import + per-image
         notes). The panel's "Map" chip asks the plugin to arm a canvas tool,
         nothing here touches the canvas."""
         if getattr(self, "_reference_panel", None) is None:
@@ -364,6 +304,7 @@ class DockToolsFooterMixin:
         self._vectorize_panel.setVisible(False)
         self._reference_panel.setVisible(True)
         self._reference_panel.activate()
+        self._refresh_dock_key_shortcuts()
 
     def exit_tool_panel(self) -> None:
         """Hide whichever tool panel is showing and restore _main_widget."""
@@ -375,6 +316,11 @@ class DockToolsFooterMixin:
         self._vectorize_btn.set_active(False)
         self._swipe_panel_lock = False
         self._refresh_swipe_enabled()
+        self._refresh_dock_key_shortcuts()
+        # A layer change held while the panel was open runs now, on the
+        # screen the user is back on (see _update_layer_warning).
+        if self._layer_warning_dirty:
+            self._schedule_layer_warning_update()
 
     def set_swipe_button_checked(self, checked: bool) -> None:
         """Sync the Before/After button visual to the controller state.
@@ -419,11 +365,19 @@ class DockToolsFooterMixin:
             self._swipe_btn.setChecked(checked)
 
     def _sync_result_tools_row(self) -> None:
-        """Mirror the footer Vectorize and Before/after state onto the fixed
-        row in the result panel. The footer buttons stay the source of truth,
-        so the panel row can never allow what the footer refuses."""
+        """Mirror the hidden Vectorize and Before/after toggles onto the
+        result screen's buttons. The toggles stay the source of truth, so
+        the buttons can never allow what the toggles refuse; a tool that is
+        not available (signed out, switched off) is not shown at all."""
         compare = getattr(self, "_result_compare_btn", None)
-        if compare is not None:
+        vectorize = getattr(self, "_result_vectorize_btn", None)
+        row = getattr(self, "_result_tools_row", None)
+        if compare is None or vectorize is None or row is None:
+            return
+        try:
+            swipe_on = tool_available(self._swipe_btn)
+            vectorize_on = tool_available(self._vectorize_btn)
+            compare.setVisible(swipe_on)
             compare.setEnabled(self._swipe_btn.isEnabled())
             checked = self._swipe_btn.isChecked()
             if compare.isChecked() != checked:
@@ -432,21 +386,24 @@ class DockToolsFooterMixin:
                     compare.setChecked(checked)
                 finally:
                     compare.blockSignals(False)
-        vectorize = getattr(self, "_result_vectorize_btn", None)
-        if vectorize is not None:
-            vectorize.setEnabled(self._vectorize_btn.isVisible())
+            set_compare_icon(compare)
+            vectorize.setVisible(vectorize_on)
+            row.setVisible(swipe_on or vectorize_on)
+        except RuntimeError:
+            pass  # the dock is being torn down
 
     def set_settings_button_active(self, active: bool) -> None:
-        """Light the green tint on the Settings (gear) footer icon while
+        """Light the selected tint on the Settings (gear) header icon while
         the Account Settings dialog is open.
         """
         self._settings_btn.set_active(active)
 
     def _set_swipe_button_visible(self, visible: bool) -> None:
-        """Show or hide the Before/after footer button.
+        """Make Before/after available or not (the result screen's Compare
+        button follows).
 
-        Mirrors the Vectorize visibility rule: revealed whenever the dock is
-        activated, hidden otherwise. The button operates on whichever AI-Edit
+        Mirrors the Vectorize rule: available whenever the dock is
+        activated, not otherwise. The button operates on whichever AI-Edit
         raster the user has active in the QGIS Layers panel, not just on a
         fresh generation - per-click eligibility (greyed-out vs clickable)
         is driven separately by set_swipe_button_enabled.
@@ -483,164 +440,80 @@ class DockToolsFooterMixin:
         detected_colors: list[str] | None = None,
         trigger: str = "",
     ) -> None:
-        """Inject (or clear) the post-generation Vectorize CTA card.
+        """Arm (or clear) the post-generation Vectorize suggestion.
 
         Called by the plugin orchestrator after a successful generation when
         a template carried vector hints, a free-form prompt asked to segment
         one target, or the downloaded result itself is a set of flat color
         zones (trigger="flat_output", detected_colors carries the zone
-        palette). Hidden the moment the user navigates away from the result
-        section. ``class_label`` (when known) flows down to the vectorize
-        panel so the produced polygons land with a sensible class_name value.
+        palette). The result screen's one Vectorize button carries it: a
+        stronger label, a tooltip saying what was found, and a click that
+        opens the panel pre-filled. ``class_label`` (when known) flows down to
+        the vectorize panel so the polygons land with a sensible class_name.
         """
         from ...core.auth.activation_manager import is_feature_enabled
 
-        # No CTA for a feature the server switched off: offering it and then
-        # refusing the click is the one thing worse than not offering it.
+        # No suggestion for a feature the server switched off: offering it and
+        # then refusing the click is worse than not offering it.
         if not layer_id or not color_hex or not is_feature_enabled("vectorize"):
-            self._vectorize_cta_section.setVisible(False)
-            self._vectorize_cta_pending = None
+            self._clear_vectorize_suggestion()
             return
         # Normalise the hex so we always pass `#RRGGBB` downstream.
         qc = QColor(color_hex)
         if not qc.isValid():
-            self._vectorize_cta_section.setVisible(False)
-            self._vectorize_cta_pending = None
+            self._clear_vectorize_suggestion()
             return
         normalised = qc.name().upper()
-        swatches: list[str] = []
-        for candidate in detected_colors or [normalised]:
-            sc = QColor(candidate)
-            if sc.isValid():
-                swatches.append(sc.name().upper())
-        if not swatches:
-            swatches = [normalised]
-        self._set_vectorize_swatches(swatches)
-        # Instrument voice: measure what was detected; the button carries
-        # the action. The generic line covers template / prompt triggers.
+        # Instrument voice: say what was detected. A template or prompt trigger
+        # found nothing to count, and the plain tooltip already says the rest.
+        finding = ""
         if trigger == "flat_output":
-            n_zones = len(swatches)
-            caption = (
+            n_zones = sum(
+                1 for c in (detected_colors or [normalised]) if QColor(c).isValid()
+            ) or 1
+            finding = (
                 tr("{n} color zone detected in this result").format(n=n_zones)
                 if n_zones == 1
                 else tr("{n} color zones detected in this result").format(n=n_zones)
             )
-        else:
-            caption = tr("Turn the colored zones into editable polygons")
-        self._vectorize_cta_caption.setText(caption)
         self._vectorize_cta_pending = (
             layer_id, normalised, class_label or "", trigger or ""
         )
-        # The AI Segmentation line rides along unless closed for good.
-        from ..onboarding_hint import HINT_SEG_CROSS, is_hint_dismissed
-        self._vectorize_seg_row.setVisible(not is_hint_dismissed(HINT_SEG_CROSS))
-        self._vectorize_cta_section.setVisible(True)
+        self._mark_result_vectorize_button(True, finding)
 
-    def _on_vectorize_seg_link_activated(self, href: str) -> None:
-        """The Vectorize card's AI Segmentation link: open the plugin's dock
-        when installed, else the Plugin Manager pre-filtered to it."""
-        if href != "ai_seg":
+    def _clear_vectorize_suggestion(self) -> None:
+        """Drop the armed suggestion: Vectorize goes back to its plain look."""
+        self._vectorize_cta_pending = None
+        self._mark_result_vectorize_button(False, "")
+
+    def _mark_result_vectorize_button(self, suggested: bool, finding: str) -> None:
+        """The suggested look (strong ink, heavier weight) or the plain one,
+        with ``finding`` (what was detected) leading the tooltip."""
+        button = getattr(self, "_result_vectorize_btn", None)
+        if button is None:
             return
-        from ...core import telemetry
-        from ...core import telemetry_events as te
-        from ..cross_plugin_discovery import open_ai_segmentation
-        installed = open_ai_segmentation()
-        telemetry.track(te.SEG_REDIRECT_CLICKED, {
-            "guidance_kind": "vectorize_cta",
-            "installed": installed,
-        })
-        telemetry.flush()
-
-    def _on_vectorize_seg_dismissed(self) -> None:
-        from ..onboarding_hint import HINT_SEG_CROSS, dismiss_hint
-        dismiss_hint(HINT_SEG_CROSS)
-        self._vectorize_seg_row.setVisible(False)
-
-    def _set_vectorize_swatches(self, colors: list[str]) -> None:
-        """Rebuild the CTA's color swatch row (max 6, one per detected zone)."""
-        row = self._vectorize_cta_swatch_row
-        while row.count():
-            item = row.takeAt(0)
-            w = item.widget()
-            if w is not None:
-                w.deleteLater()
-        for hex_color in colors[:6]:
-            sw = QLabel()
-            sw.setFixedSize(14, 14)
-            sw.setStyleSheet(
-                f"background: {hex_color};"
-                " border: 1px solid rgba(128,128,128,0.5); border-radius: 3px;"
+        plain_tip = getattr(self, "_result_vectorize_tip", "") or button.toolTip()
+        try:
+            button.setToolTip(f"{finding}. {plain_tip}" if finding else plain_tip)
+            if bool(button.property("suggested")) != suggested:
+                button.setProperty("suggested", suggested)
+                repolish_widget(button)
+            button.setIcon(
+                icon_for(button, "polygon", 16, qcolor(INK if suggested else INK_2),
+                         disabled_color=qcolor(INK_3))
             )
-            row.addWidget(sw)
+        except RuntimeError:
+            pass  # the dock is being torn down
 
-    def _on_vectorize_cta_clicked(self) -> None:
-        if self._vectorize_cta_pending is None:
+    def _on_result_vectorize_clicked(self) -> None:
+        """The result screen's Vectorize: pre-filled when a suggestion is
+        armed, the plain panel otherwise."""
+        pending = getattr(self, "_vectorize_cta_pending", None)
+        if pending is None:
+            self.vectorize_clicked.emit()
             return
-        layer_id, color_hex, class_label, trigger = self._vectorize_cta_pending
+        layer_id, color_hex, class_label, trigger = pending
         self.vectorize_suggestion_clicked.emit(layer_id, color_hex, class_label, trigger)
-
-    def _on_contact_us(self, _link=None):
-        """Show a dialog with email + Calendly options."""
-        from qgis.PyQt.QtWidgets import QApplication, QDialog
-        from qgis.PyQt.QtWidgets import QVBoxLayout as _VBox
-
-        call_url = get_contact_call_url()
-        support_email = get_support_email(SUPPORT_EMAIL)
-
-        dlg = QDialog(self._main_window_for_dialog())
-        dlg.setWindowTitle(tr("Contact us"))
-        dlg.setMinimumWidth(350)
-        dlg.setMaximumWidth(450)
-        lay = _VBox(dlg)
-        lay.setSpacing(10)
-        lay.setContentsMargins(16, 16, 16, 16)
-
-        # Same design as the AI Segmentation Contact dialog: styled labels,
-        # green primary (copy email), blue secondary (book a call), so support
-        # surfaces match across the TerraLab plugins.
-        msg = QLabel(tr("Bug, question, feature request?\nWe'd love to hear from you!"))
-        msg.setWordWrap(True)
-        msg.setStyleSheet("font-size: 12px; color: palette(text);")
-        lay.addWidget(msg)
-
-        # Bold means rich text, and the address may come from the server, so it
-        # is escaped here as well as validated there.
-        email_label = QLabel(f"<b>{html.escape(support_email, quote=False)}</b>")
-        email_label.setTextInteractionFlags(QtC.TextSelectableByMouse)
-        email_label.setStyleSheet("font-size: 12px; color: palette(text);")
-        lay.addWidget(email_label)
-
-        # Primary action: green filled CTA, like the dock's own primary buttons.
-        copy_btn = QPushButton(tr("Copy email address"))
-        copy_btn.setStyleSheet(_BTN_GREEN)
-        copy_btn.setCursor(QtC.PointingHandCursor)
-        copy_btn.clicked.connect(
-            lambda: (
-                QApplication.clipboard().setText(support_email),
-                copy_btn.setText(tr("Copied!")),
-            )
-        )
-        lay.addWidget(copy_btn)
-
-        or_label = QLabel(tr("or"))
-        or_label.setAlignment(QtC.AlignCenter)
-        or_label.setStyleSheet("color: palette(text); font-size: 11px;")
-        lay.addWidget(or_label)
-
-        # Secondary action: blue filled, one step down from the green primary.
-        call_btn = QPushButton(tr("Book a video call"))
-        call_btn.setStyleSheet(_BTN_BLUE)
-        call_btn.setCursor(QtC.PointingHandCursor)
-        call_btn.clicked.connect(
-            lambda: open_external(call_url)
-        )
-        lay.addWidget(call_btn)
-
-        dlg.exec()
-
-    def _on_report_problem(self, _link=None):
-        """User-initiated report: copy the session logs and email support."""
-        show_error_report(self._main_window_for_dialog())
 
     def arm_report_context(self, request_id: str = "") -> None:
         """Stash the request id for the next inline 'Report a problem' link so the
@@ -657,57 +530,3 @@ class DockToolsFooterMixin:
             )
             return
         open_external(href)
-
-    def _on_show_shortcuts(self, _link=None):
-        from qgis.PyQt.QtWidgets import QDialog
-        from qgis.PyQt.QtWidgets import QVBoxLayout as _VBox
-
-        def native(seq: str) -> str:
-            return QKeySequence(seq).toString(QKeySequence.SequenceFormat.NativeText)
-
-        undo_key = QKeySequence(QKeySequence.StandardKey.Undo).toString(
-            QKeySequence.SequenceFormat.NativeText
-        )
-        launch_key = native("Ctrl+Alt+E")
-        markup_key = native("Alt+M")
-        vectorize_key = native("Alt+V")
-        swipe_key = native("Alt+B")
-        # Real family names, not the CSS generic `monospace`: Qt maps no font to
-        # it, so on Windows the keycaps fell back to Segoe UI and the shortcut
-        # column lost its alignment.
-        key_style = (
-            "background-color: rgba(128,128,128,0.18);"
-            "border: 1px solid rgba(128,128,128,0.35);"
-            "border-radius: 3px; padding: 1px 5px;"
-            ' font-family: Consolas, "Cascadia Mono", Menlo, monospace;'
-        )
-        k = f"<span style='{key_style}'>{{}}</span>"
-
-        enter_key = QKeySequence(QtC.Key_Return).toString(
-            QKeySequence.SequenceFormat.NativeText
-        )
-        shortcuts_html = (
-            "<table cellspacing='4' cellpadding='2'>"
-            f"<tr><td colspan='2' style='padding-bottom:2px;'><b>{tr('Editing')}</b></td></tr>"
-            f"<tr><td>{k.format(launch_key)}</td><td>{tr('Launch AI Edit')}</td></tr>"
-            f"<tr><td>{k.format(enter_key)}</td><td>{tr('Generate')}</td></tr>"
-            f"<tr><td>{k.format('Esc')}</td><td>{tr('Go back one step (comparison, drawing, zone)')}</td></tr>"
-            f"<tr><td>{k.format(undo_key)}</td><td>{tr('Undo')}</td></tr>"
-            f"<tr><td>{k.format(markup_key)}</td><td>{tr('Mark up')}</td></tr>"
-            f"<tr><td>{k.format(vectorize_key)}</td><td>{tr('Vectorize')}</td></tr>"
-            f"<tr><td>{k.format(swipe_key)}</td><td>{tr('Before / after')}</td></tr>"
-            "</table>"
-        )
-
-        dlg = QDialog(self._main_window_for_dialog())
-        dlg.setWindowTitle(tr("Shortcuts"))
-        lay = _VBox(dlg)
-        lay.setContentsMargins(16, 16, 16, 12)
-        label = QLabel(shortcuts_html)
-        label.setTextFormat(QtC.RichText)
-        lay.addWidget(label)
-        ok_btn = QPushButton(tr("OK"))
-        ok_btn.setFixedWidth(80)
-        ok_btn.clicked.connect(dlg.accept)
-        lay.addWidget(ok_btn, alignment=QtC.AlignCenter)
-        dlg.exec()

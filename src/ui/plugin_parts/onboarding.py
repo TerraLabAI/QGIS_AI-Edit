@@ -9,6 +9,7 @@ from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.config_store import (
+    get_export_copy,
     get_export_dial,
     get_export_dial_objs,
     get_export_dial_str,
@@ -67,6 +68,8 @@ _DEFAULT_SCENE_ID = "paris"
 # releases the gate on a slow or offline network.
 _IMAGERY_SETTLE_MS = 1200
 _IMAGERY_CAP_MS = 8000
+# Blocking network timeout for the one-tile IGN probe.
+_PROBE_TIMEOUT_MS = 4000
 
 
 # -- served onboarding sources ----------------------------------------------
@@ -233,7 +236,9 @@ class OnboardingMixin:
             return
         probe_url = _served_probe_url(_IGN_PROBE_URL)
         task = GenericRequestTask(
-            tr("Checking imagery availability"),
+            get_export_copy(
+                "flows.onboarding.checking_imagery_task", tr("Checking imagery availability")
+            ),
             lambda url=probe_url: {"ok": self._probe_tile(url)},
             silent=True,
         )
@@ -289,9 +294,11 @@ class OnboardingMixin:
         self._activate_selection_tool()
         self._dock_widget.set_selecting_zone_state()
         self._dock_widget._show_status_box(
-            "✓ " + tr(
-                "Account created. Draw a zone on the example map to run "
-                "your first edit."
+            # "make", not "run": a run is internal vocabulary (2026-09-18).
+            get_export_copy(
+                "flows.onboarding.account_created_v2",
+                tr("Account created. Outline an area on the example map to "
+                   "make your first edit."),
             ),
             "success",
         )
@@ -338,8 +345,18 @@ class OnboardingMixin:
 
         try:
             request = QNetworkRequest(QUrl(url))
-            QtC.set_transfer_timeout(request, 4000)  # no-op before Qt 5.15
-            return QgsBlockingNetworkRequest().get(request) == QtC.BlockingNoError
+            # no-op before Qt 5.15
+            QtC.set_transfer_timeout(
+                request, get_export_dial("flows.onboarding.probe_timeout_ms", _PROBE_TIMEOUT_MS)
+            )
+            blocker = QgsBlockingNetworkRequest()
+            # forceRefresh: a cached tile from an earlier session says nothing
+            # about the network today.
+            if blocker.get(request, forceRefresh=True) != QtC.BlockingNoError:
+                return False
+            # A timed-out reply still answers NoError; only the reply's own
+            # error shows the abort.
+            return blocker.reply().error() == QtC.NetworkNoError
         except Exception as err:  # noqa: BLE001 - a probe must never break the click.
             log_warning(f"basemap probe failed: {err}")
             return False

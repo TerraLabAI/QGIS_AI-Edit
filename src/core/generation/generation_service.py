@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import base64
-import secrets
+import copy
+import math
+import os
+import threading
 import time
-from dataclasses import dataclass
+import weakref
 from typing import Callable
 
-from ..config_store import get_export_dial, get_export_dial_list, get_export_dial_pair
+from ..config_store import get_export_copy, get_export_dial, get_export_dial_list, get_export_dial_pair
 from ..errors import NETWORK_ERROR_CODES, ErrorCode
 from ..i18n import tr
 from ..logger import log_debug, log_warning
+from .generation_result import GenerationResult
+from .generation_upload import GenerationUploadMixin
 
 # Network-level error codes (from terralab_client._classify_network_error) that
 # are transient: a flaky/slow link can produce one mid-poll while the server is
@@ -45,6 +50,40 @@ _MAX_INLINE_BODY_BYTES = 4_200_000
 # tiny interval producing a multi-hour loop.
 _POLL_HARD_CAP = 1000
 
+# Submit retry after a network blip on the initial POST. Safe to repeat: every
+# attempt carries the same idempotency key. The second wait (5x the backoff)
+# gives a resuming Wi-Fi or a reconnecting VPN time to come back.
+_SUBMIT_RETRY_ATTEMPTS = 3
+_SUBMIT_RETRY_STEPS = (1, 5)
+# Upper bound on any served retry count above: each retry backs off, so an
+# unbounded count would stall a generation for minutes.
+_MAX_RETRY_ATTEMPTS = 5
+_SUBMIT_RETRY_BACKOFF_S = 1.0
+# Last-ditch force_fallback poll after the budget runs out.
+_RESCUE_RETRY_ATTEMPTS = 2
+_RESCUE_RETRY_BACKOFF_S = 1.5
+
+
+def _positive_number(value, fallback):
+    """Accept only finite positive server timings; malformed hints use defaults."""
+    if isinstance(value, bool):
+        return fallback
+    try:
+        number = float(value)
+        return number if math.isfinite(number) and number > 0 else fallback
+    except (TypeError, ValueError, OverflowError):
+        return fallback
+
+
+def _retry_delay(value, fallback, minimum, maximum):
+    hint = _positive_number(value, None)
+    return min(max(hint, minimum), maximum) if hint is not None else fallback
+
+
+def _image_url(response):
+    value = response.get("image_url")
+    return isinstance(value, str) and bool(value.strip())
+
 
 def normalize_context_image_notes(
     context_images: list[str] | None, notes: list[str] | None
@@ -57,31 +96,46 @@ def normalize_context_image_notes(
     generations."""
     if not context_images or not notes:
         return None
-    aligned = [(note or "").strip() for note in notes[: len(context_images)]]
+    aligned = [note.strip() if isinstance(note, str) else "" for note in notes[: len(context_images)]]
     aligned += [""] * (len(context_images) - len(aligned))
     return aligned if any(aligned) else None
 
 
-@dataclass
-class GenerationResult:
-    success: bool
-    image_url: str | None = None
-    error: str | None = None
-    error_code: str | None = None
-    request_id: str | None = None
+def _cancelled_message() -> str:
+    return get_export_copy("pipeline.generation_service.generation_cancelled", tr("Generation cancelled"))
 
 
-class GenerationService:
+def _generation_failed_message() -> str:
+    return get_export_copy("pipeline.generation_service.generation_failed", tr("Generation failed"))
+
+
+def _status_check_failed_message() -> str:
+    return get_export_copy("pipeline.generation_service.status_check_failed", tr("Status check failed"))
+
+
+class GenerationService(GenerationUploadMixin):
     """Orchestrates the image generation flow. Pure Python."""
 
     def __init__(self, client, poll_interval: float = 2.0, max_polls: int = 60):
         self._client = client
-        self._poll_interval = poll_interval
+        self._poll_interval = _positive_number(poll_interval, 2.0)
         self._max_polls = max_polls
-        self._cancelled = False
-        # Optional bridge to the task's own isCanceled(), so a native QGIS
-        # task-manager Cancel is honored, not just the plugin's Stop/Exit.
-        self._is_cancelled_cb = None
+        # One service serves every run, and a cancelled run keeps draining in
+        # its thread after the dock has moved on. Cancellation is therefore
+        # per thread: cancel() bumps an epoch, generate() snapshots it in the
+        # worker thread, and only that run reads the mismatch. A later run's
+        # start can no longer un-cancel the old one.
+        self._cancel_epoch = 0
+        self._run = threading.local()
+        # QgsFeedback of each task running generate(), registered by that
+        # task. cancel() aborts their requests in flight; QgsFeedback.cancel()
+        # is safe from any thread. Weak, so a finished task is not kept alive.
+        self._feedbacks = weakref.WeakSet()
+        self._feedback_lock = threading.Lock()
+
+    def set_feedback(self, feedback) -> None:
+        with self._feedback_lock:
+            self._feedbacks.add(feedback)
 
     def cancel(self):
         """Stop the local polling loop only. We deliberately do NOT cancel the
@@ -91,27 +145,38 @@ class GenerationService:
         lands in the user's Recent tab to pick up. Refunds happen only for
         genuine server-side failures (the reconcile cron) or our own delivery
         failures (the download path)."""
-        self._cancelled = True
+        self._cancel_epoch += 1
+        with self._feedback_lock:
+            feedbacks = list(self._feedbacks)
+        for feedback in feedbacks:
+            try:
+                feedback.cancel()
+            except Exception:  # nosec B110
+                pass
 
     def reset(self):
-        self._cancelled = False
-        self._is_cancelled_cb = None
+        """Kept for callers; a new run snapshots the epoch in generate()."""
 
     def _is_cancelled(self) -> bool:
-        """True if the plugin cancelled locally OR the QgsTask was cancelled
+        """True if the plugin cancelled this run OR its QgsTask was cancelled
         (e.g. the native task-manager Cancel button)."""
-        return self._cancelled or bool(self._is_cancelled_cb and self._is_cancelled_cb())
+        run_epoch = getattr(self._run, "epoch", self._cancel_epoch)
+        cb = getattr(self._run, "is_cancelled", None)
+        return run_epoch != self._cancel_epoch or bool(cb and cb())
 
     def _sleep_or_cancelled(self, seconds: float) -> bool:
         """Sleep in small chunks so a Cancel is picked up quickly. Returns True
         if cancellation was requested during the wait (caller should bail)."""
         if seconds <= 0:
             return self._is_cancelled()
-        for _ in range(int(seconds * 5)):
+        deadline = time.monotonic() + seconds
+        while True:
             if self._is_cancelled():
                 return True
-            time.sleep(0.2)
-        return self._is_cancelled()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return self._is_cancelled()
+            time.sleep(min(0.2, remaining))
 
     def _wait_with_progress(
         self, seconds, on_progress, status, polls, max_polls, estimated_time, submit_time
@@ -127,104 +192,9 @@ class GenerationService:
             waited += chunk
             if on_progress and waited < seconds:
                 on_progress(
-                    status, polls, max_polls, estimated_time, time.time() - submit_time
+                    status, polls, max_polls, estimated_time, time.monotonic() - submit_time
                 )
         return False
-
-    # Below this base64 size we send the image inline in the submit body -
-    # a single round-trip looks cleaner from outside and avoids an extra API
-    # call for the common-case small generations (most zones encode well under
-    # this once compressed). Above it, we'd risk the serverless body cap, so we
-    # switch to the presigned-upload path.
-    _INLINE_BASE64_THRESHOLD = 4 * 1024 * 1024  # 4 MB of base64 ≈ 3 MB raw
-
-    def _try_upload_token_flow(
-        self, image_b64: str, auth: dict, image_format: str | None = None,
-        reserved_bytes: int = 0,
-    ) -> str | None:
-        """Attempt the presigned-upload path. Returns the upload token on
-        success, or None to signal the caller to fall back to inline base64.
-
-        Skipped entirely when the image is small enough to inline so we don't
-        burn an extra round-trip on small generations. ``reserved_bytes`` is
-        other inline payload that shares the submit body (reference images), so
-        a near-threshold main image still moves to the presigned path when the
-        combined body would overflow the serverless cap.
-
-        ``image_format`` ('webp' | 'jpeg' | 'png') is the format the canvas was
-        encoded as; the server signs the upload with a matching content-type.
-
-        Failures here are silent (logged but not surfaced) - we'd rather pay
-        the inline body cost than show a network error for a path we control
-        entirely and can retry as inline.
-        """
-        if len(image_b64) + reserved_bytes <= self._INLINE_BASE64_THRESHOLD:
-            return None
-
-        try:
-            resp = self._client.request_upload_url(auth, image_format or "png")
-        except Exception as e:
-            log_warning(f"Upload URL request raised: {e}")
-            return None
-        if not isinstance(resp, dict) or "error" in resp:
-            # Log code + error only, never the whole dict: a malformed success
-            # body would dump the signed upload URL into the QGIS log.
-            code = resp.get("code") if isinstance(resp, dict) else None
-            error = resp.get("error") if isinstance(resp, dict) else resp
-            log_warning(f"Upload URL request returned error: code={code} error={error}")
-            return None
-        upload_url = resp.get("upload_url")
-        token = resp.get("upload_token")
-        headers = resp.get("required_headers") or {}
-        max_bytes = resp.get("max_bytes")
-        if not upload_url or not token:
-            return None
-
-        # Guard against an older server that ignores the 'format' field and
-        # signs the upload as PNG. We PUT echoing the server's Content-Type, so
-        # uploading non-PNG bytes under a PNG-signed URL would store a
-        # mislabeled object (the server still sniffs it, but the archive + image proxy
-        # would serve it with the wrong type). If the signed content-type
-        # doesn't match what we encoded, skip the upload path and fall back to
-        # inline, where the server detects the format from the bytes.
-        expected_ct = {
-            "webp": "image/webp", "jpeg": "image/jpeg", "png": "image/png",
-        }.get((image_format or "png").lower(), "image/png")
-        signed_ct = (headers.get("Content-Type") or headers.get("content-type") or "").lower()
-        if signed_ct and signed_ct != expected_ct:
-            log_warning(
-                f"Upload URL signed for {signed_ct}, expected {expected_ct}; "
-                "falling back to inline so the bytes aren't mislabeled"
-            )
-            return None
-
-        try:
-            data = base64.b64decode(image_b64)
-        except Exception as e:
-            log_warning(f"Could not decode image_b64 for upload: {e}")
-            return None
-        if max_bytes is not None and len(data) > max_bytes:
-            log_warning(
-                f"Image too large for upload ({len(data)} > {max_bytes}), falling back to inline"
-            )
-            return None
-
-        # Retry a transient blip on the storage PUT before conceding. The
-        # presigned path is taken precisely for large images, so a single
-        # dropped packet here would otherwise cascade into an inline body that
-        # overflows the cap and surfaces a misleading "too much image data".
-        ok, err = False, None
-        for _attempt in range(3):
-            ok, err = self._client.upload_to_signed_url(upload_url, data, headers)
-            if ok:
-                break
-            log_warning(f"Presigned upload attempt {_attempt + 1} failed: {err}")
-            if _attempt < 2:
-                time.sleep(0.5 * (_attempt + 1))
-        if not ok:
-            log_warning(f"Presigned upload failed after retries: {err}; falling back to inline")
-            return None
-        return token
 
     def generate(
         self,
@@ -242,14 +212,18 @@ class GenerationService:
         is_cancelled: Callable[[], bool] | None = None,
     ) -> GenerationResult:
         """Submit image for generation and poll until complete."""
-        self._is_cancelled_cb = is_cancelled
+        self._run.epoch = self._cancel_epoch
+        self._run.is_cancelled = is_cancelled
         if self._is_cancelled():
             return GenerationResult(
                 success=False,
-                error=tr("Generation cancelled"),
+                error=_cancelled_message(),
                 error_code=ErrorCode.GENERATION_CANCELLED.value,
             )
 
+        # Snapshot caller-owned values before the first blocking upload.
+        auth = dict(auth)
+        context_images = list(context_images) if context_images else None
         notes = normalize_context_image_notes(context_images, context_image_notes)
 
         ctx_count = len(context_images) if context_images else 0
@@ -264,7 +238,8 @@ class GenerationService:
 
         prepared = self._prepare_uploads(
             image_b64, auth, ctx, context_images, guidance_image, guidance_format,
-            extra_inline_bytes=sum(len(n) for n in (notes or [])),
+            extra_inline_bytes=sum(len(n.encode("utf-8")) for n in (notes or []))
+            + len(prompt.encode("utf-8")),
         )
         if isinstance(prepared, GenerationResult):
             return prepared
@@ -300,89 +275,6 @@ class GenerationService:
             return result
 
         return self._rescue_or_timeout(request_id, auth, ctx, polls, submit_time)
-
-    def _prepare_uploads(
-        self,
-        image_b64: str,
-        auth: dict,
-        ctx,
-        context_images: list[str] | None,
-        guidance_image: str | None,
-        guidance_format: str | None,
-        extra_inline_bytes: int = 0,
-    ) -> tuple[str | None, str | None, str | None] | GenerationResult:
-        """Offload the main and guidance images to presigned upload when large.
-
-        Returns (upload_token, guidance_upload_token, guidance_inline), or a
-        failed GenerationResult when the inline body would overflow the cap.
-        ``extra_inline_bytes`` is other inline payload that always rides the
-        submit body (per-image notes), counted in every budget decision.
-        """
-        # Preferred path: upload the image straight to remote storage via a
-        # short-lived presigned URL, then submit only a tiny token. Skips the
-        # serverless body-size cap entirely so multi-MB inputs go through
-        # without truncation. Falls back to inline base64 if any step fails so
-        # an outage on the storage path doesn't break edits.
-        # Single shared inline budget. The submit body carries main + guidance +
-        # context together, and the serverless body cap applies to the WHOLE
-        # body, not to any one image. So every inline decision must reserve all
-        # the other payload that will stay inline: the main image reserves
-        # guidance + context up front. Without this, three individually
-        # sub-threshold images (e.g. a 1K main + a markup overlay + one
-        # reference) each look small alone yet together overflow the cap -> the
-        # edge rejects the POST with HTTP 413 before it reaches our function.
-        ctx_inline_bytes = sum(len(c) for c in (context_images or [])) + extra_inline_bytes
-        guidance_bytes = len(guidance_image) if guidance_image else 0
-        upload_token = self._try_upload_token_flow(
-            image_b64, auth, ctx.input_format if ctx is not None else None,
-            reserved_bytes=ctx_inline_bytes + guidance_bytes,
-        )
-        # If the main image stayed inline it still occupies the body, so the
-        # guidance decision below must reserve it too (alongside context).
-        main_inline_bytes = len(image_b64) if upload_token is None else 0
-
-        # The clean base image (the zone with the marks removed; the marks ride
-        # on the main image) travels through the guidance channel. It rides the
-        # same upload path as the main image: presigned when large (keeps the
-        # submit body under the serverless cap), inline otherwise. Its own
-        # format token is used so a rare PNG encode fallback on it alone stays
-        # correctly labeled. It never counts against the reference-image quota.
-        guidance_upload_token = None
-        guidance_inline = None
-        if guidance_image:
-            guidance_upload_token = self._try_upload_token_flow(
-                guidance_image, auth, guidance_format,
-                reserved_bytes=ctx_inline_bytes + main_inline_bytes,
-            )
-            if guidance_upload_token is None:
-                guidance_inline = guidance_image
-                log_debug(
-                    f"Guidance image: inline ({len(guidance_image)} b64 bytes)"
-                )
-            else:
-                log_debug("Guidance image: presigned upload")
-
-        # Everything that stayed inline shares the platform body cap. Main and
-        # guidance offload to presigned when large, but reference images have no
-        # presigned path, so this is where a stack of big references is caught.
-        # Refuse early with a clear message rather than eat an opaque 413.
-        guidance_inline_bytes = len(guidance_inline) if guidance_inline else 0
-        total_inline_bytes = main_inline_bytes + guidance_inline_bytes + ctx_inline_bytes
-        if total_inline_bytes > get_export_dial("max_inline_body_bytes", _MAX_INLINE_BODY_BYTES):
-            log_warning(
-                f"Inline submit body too large ({total_inline_bytes} bytes): "
-                f"main={main_inline_bytes}, guidance={guidance_inline_bytes}, "
-                f"context={ctx_inline_bytes}"
-            )
-            return GenerationResult(
-                success=False,
-                error=tr(
-                    "Too much image data to send. Remove a reference image or "
-                    "lower the resolution, then try again."
-                ),
-                error_code=ErrorCode.TOO_LARGE.value,
-            )
-        return upload_token, guidance_upload_token, guidance_inline
 
     def _build_geo_kwargs(self, ctx) -> dict:
         """Optional submit fields sourced from the pipeline context."""
@@ -422,7 +314,7 @@ class GenerationService:
                 geo_kwargs["template_id"] = ctx.template_id
             if ctx.template_name:
                 geo_kwargs["template_name"] = ctx.template_name
-        return geo_kwargs
+        return copy.deepcopy(geo_kwargs)
 
     def _submit(
         self,
@@ -444,18 +336,27 @@ class GenerationService:
         # One idempotency key for this whole generation attempt: a submit retried
         # after a dropped response reuses it so the server dedupes instead of
         # creating a second paid job. Old servers ignore the field.
-        idempotency_key = secrets.token_urlsafe(16)
+        # Same shape as secrets.token_urlsafe(16) (22 url-safe characters),
+        # without the secrets import cost at plugin load.
+        idempotency_key = base64.urlsafe_b64encode(os.urandom(16)).rstrip(b"=").decode("ascii")
         image_kwargs = (
             {"upload_token": upload_token}
             if upload_token is not None
             else {"image_b64": image_b64}
         )
+        submit_attempts = min(
+            get_export_dial("pipeline.generation_service.submit_retry_attempts", _SUBMIT_RETRY_ATTEMPTS),
+            _MAX_RETRY_ATTEMPTS,
+        )
+        submit_backoff_s = get_export_dial(
+            "pipeline.generation_service.submit_retry_backoff_s", _SUBMIT_RETRY_BACKOFF_S
+        )
         resp: dict = {}
-        for _attempt in range(2):
+        for _attempt in range(submit_attempts):
             if self._is_cancelled():
                 return GenerationResult(
                     success=False,
-                    error=tr("Generation cancelled"),
+                    error=_cancelled_message(),
                     error_code=ErrorCode.GENERATION_CANCELLED.value,
                 )
             resp = self._client.submit_generation(
@@ -471,16 +372,20 @@ class GenerationService:
                 **image_kwargs,
                 **geo_kwargs,
             )
+            if not isinstance(resp, dict):
+                resp = {"error": _generation_failed_message(), "code": ErrorCode.SERVER_ERROR.value}
             if "error" not in resp:
                 break
             code = resp.get("code", "")
             # Retry only a transient network blip, reusing the key so the retry
             # cannot double-charge. App errors (quota, bad request) fail fast.
-            if code in NETWORK_ERROR_CODES and _attempt == 0:
-                if self._sleep_or_cancelled(1.0):
+            if code in NETWORK_ERROR_CODES and _attempt < submit_attempts - 1:
+                log_warning(f"Submit attempt {_attempt + 1} failed ({code}); retrying")
+                step = _SUBMIT_RETRY_STEPS[min(_attempt, len(_SUBMIT_RETRY_STEPS) - 1)]
+                if self._sleep_or_cancelled(submit_backoff_s * step):
                     return GenerationResult(
                         success=False,
-                        error=tr("Generation cancelled"),
+                        error=_cancelled_message(),
                         error_code=ErrorCode.GENERATION_CANCELLED.value,
                     )
                 continue
@@ -494,18 +399,21 @@ class GenerationService:
         # no failed signal and wedges the dock on "generating" forever. Treat a
         # missing id as a clean, reassuring failure instead.
         request_id = resp.get("request_id")
-        if not request_id:
+        if not isinstance(request_id, str) or not request_id.strip():
             log_warning(f"Submit returned no request_id; resp keys={list(resp.keys())}")
             return GenerationResult(
                 success=False,
-                error=tr(
-                    "The server did not confirm your request. If a credit was "
-                    "charged it will be refunded shortly. Check the Recent tab "
-                    "before retrying."
+                error=get_export_copy(
+                    "pipeline.generation_service.no_request_id",
+                    tr(
+                        "The server did not confirm your request. If a credit was "
+                        "charged it will be refunded shortly. Check the Recent tab "
+                        "before retrying."
+                    ),
                 ),
                 error_code=ErrorCode.SERVER_ERROR.value,
             )
-        submit_time = time.time()
+        submit_time = time.monotonic()
         log_debug(
             f"Submitted: request_id={request_id}, "
             f"resolution={resp.get('resolution', suggested_resolution)}, "
@@ -530,9 +438,9 @@ class GenerationService:
         or a completed GenerationResult when submit already carried the image.
         """
         # Use server-suggested polling config if available
-        poll_interval = resp.get("poll_interval", self._poll_interval)
-        estimated_time = resp.get("estimated_time")
-        max_wait = resp.get("max_wait")  # Server-driven hard ceiling (seconds)
+        poll_interval = _positive_number(resp.get("poll_interval"), self._poll_interval)
+        estimated_time = _positive_number(resp.get("estimated_time"), None)
+        max_wait = _positive_number(resp.get("max_wait"), None)  # Server-driven hard ceiling (seconds)
         if max_wait:
             budget_s = float(max_wait)
         else:
@@ -548,7 +456,7 @@ class GenerationService:
         # not move the ceiling out from under a generation already counting.
         hard_cap = get_export_dial("poll.hard_cap", _POLL_HARD_CAP)
         # Poll-count estimate kept for the progress callback signature.
-        max_polls = min(int(budget_s / poll_interval), hard_cap)
+        max_polls = max(1, min(math.ceil(budget_s / poll_interval), hard_cap))
 
         if ctx is not None:
             ctx.submitted_resolution = resp.get("resolution", suggested_resolution)
@@ -561,7 +469,7 @@ class GenerationService:
             ctx.max_wait_seconds = max_wait
 
         # If submit already returned the image (sync mode), skip polling
-        if resp.get("status") == "completed" and resp.get("image_url"):
+        if resp.get("status") == "completed" and _image_url(resp):
             if ctx is not None:
                 ctx.poll_count = 0
                 ctx.total_wait_seconds = 0.0
@@ -613,17 +521,25 @@ class GenerationService:
             hard_cap = get_export_dial("poll.hard_cap", _POLL_HARD_CAP)
         consecutive_poll_errors = 0
         polls = 0
-        while polls < hard_cap and (time.time() - submit_time) < budget_s:
+        while polls < hard_cap and (time.monotonic() - submit_time) < budget_s:
             if self._is_cancelled():
                 return GenerationResult(
                     success=False,
-                    error=tr("Generation cancelled"),
+                    error=_cancelled_message(),
                     error_code=ErrorCode.GENERATION_CANCELLED.value,
                     request_id=request_id,
                 ), polls
 
             status_resp = self._client.poll_status(request_id, auth=auth)
             polls += 1
+            if not isinstance(status_resp, dict):
+                status_resp = {"error": _status_check_failed_message(), "code": ErrorCode.SERVER_ERROR.value}
+            if self._is_cancelled():
+                return GenerationResult(False, error=_cancelled_message(),
+                                        error_code=ErrorCode.GENERATION_CANCELLED.value,
+                                        request_id=request_id), polls
+            if status_resp.get("status") == "completed" and not _image_url(status_resp):
+                status_resp = {"error": _status_check_failed_message(), "code": ErrorCode.EMPTY_RESPONSE.value}
 
             if "error" in status_resp and "status" not in status_resp:
                 code = status_resp.get("code", "")
@@ -639,6 +555,8 @@ class GenerationService:
                             poll_interval * (2 ** (consecutive_poll_errors - 1)),
                             backoff_cap_s,
                         )
+                        backoff = _retry_delay(status_resp.get("retry_after"), backoff, retry_lo, retry_hi)
+                        backoff = min(backoff, max(0.0, budget_s - (time.monotonic() - submit_time)))
                         log_warning(
                             f"Transient poll error {code} "
                             f"({consecutive_poll_errors}/{max_poll_errors}), "
@@ -647,7 +565,7 @@ class GenerationService:
                         if self._sleep_or_cancelled(backoff):
                             return GenerationResult(
                                 success=False,
-                                error=tr("Generation cancelled"),
+                                error=_cancelled_message(),
                                 error_code=ErrorCode.GENERATION_CANCELLED.value,
                                 request_id=request_id,
                             ), polls
@@ -655,11 +573,11 @@ class GenerationService:
                 # Non-retryable server/app error, or too many consecutive blips.
                 if ctx is not None:
                     ctx.poll_count = polls
-                    ctx.total_wait_seconds = round(time.time() - submit_time, 1)
+                    ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
                     ctx.final_status = "error"
                 return GenerationResult(
                     success=False,
-                    error=status_resp.get("error") or tr("Status check failed"),
+                    error=status_resp.get("error") or _status_check_failed_message(),
                     error_code=code,
                     request_id=request_id,
                 ), polls
@@ -669,13 +587,13 @@ class GenerationService:
             status = status_resp.get("status", "unknown")
 
             if on_progress:
-                elapsed = time.time() - submit_time
+                elapsed = time.monotonic() - submit_time
                 on_progress(status, polls, max_polls, estimated_time, elapsed)
 
             if status == "completed":
                 if ctx is not None:
                     ctx.poll_count = polls
-                    ctx.total_wait_seconds = round(time.time() - submit_time, 1)
+                    ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
                     ctx.final_status = "completed"
                     ctx.received_image_width = status_resp.get("output_width")
                     ctx.received_image_height = status_resp.get("output_height")
@@ -688,27 +606,23 @@ class GenerationService:
             if status == "failed":
                 if ctx is not None:
                     ctx.poll_count = polls
-                    ctx.total_wait_seconds = round(time.time() - submit_time, 1)
+                    ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
                     ctx.final_status = "failed"
                 return GenerationResult(
                     success=False,
-                    error=status_resp.get("error") or tr("Generation failed"),
+                    error=status_resp.get("error") or _generation_failed_message(),
+                    error_code=status_resp.get("code") or ErrorCode.GENERATION_FAILED.value,
                     request_id=request_id,
                 ), polls
 
-            sleep_s = poll_interval
-            hint = status_resp.get("retry_after")
-            if hint is not None:
-                try:
-                    sleep_s = min(max(float(hint), retry_lo), retry_hi)
-                except (TypeError, ValueError):
-                    pass
+            sleep_s = _retry_delay(status_resp.get("retry_after"), poll_interval, retry_lo, retry_hi)
+            sleep_s = min(sleep_s, max(0.0, budget_s - (time.monotonic() - submit_time)))
             if self._wait_with_progress(
                 sleep_s, on_progress, status, polls, max_polls, estimated_time, submit_time
             ):
                 return GenerationResult(
                     success=False,
-                    error=tr("Generation cancelled"),
+                    error=_cancelled_message(),
                     error_code=ErrorCode.GENERATION_CANCELLED.value,
                     request_id=request_id,
                 ), polls
@@ -730,16 +644,23 @@ class GenerationService:
         # Retry once on a flaky link so a single blip doesn't discard a
         # generation that actually finished. Capped at 2 attempts: this asks the
         # server to hit the provider queue, so we must not hammer it.
-        for _attempt in range(2):
+        rescue_attempts = min(
+            get_export_dial("pipeline.generation_service.rescue_retry_attempts", _RESCUE_RETRY_ATTEMPTS),
+            _MAX_RETRY_ATTEMPTS,
+        )
+        rescue_backoff_s = get_export_dial(
+            "pipeline.generation_service.rescue_retry_backoff_s", _RESCUE_RETRY_BACKOFF_S
+        )
+        for _attempt in range(rescue_attempts):
             if self._is_cancelled():
                 break
             try:
                 final = self._client.poll_status(request_id, auth=auth, force_fallback=True)
                 final_status = final.get("status", "unknown")
-                if final_status == "completed":
+                if final_status == "completed" and _image_url(final):
                     if ctx is not None:
                         ctx.poll_count = polls
-                        ctx.total_wait_seconds = round(time.time() - submit_time, 1)
+                        ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
                         ctx.final_status = "completed"
                     return GenerationResult(
                         success=True,
@@ -749,28 +670,36 @@ class GenerationService:
                 if final_status == "failed":
                     if ctx is not None:
                         ctx.poll_count = polls
-                        ctx.total_wait_seconds = round(time.time() - submit_time, 1)
+                        ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
                         ctx.final_status = "failed"
                     return GenerationResult(
                         success=False,
-                        error=final.get("error") or tr("Generation failed"),
+                        error=final.get("error") or _generation_failed_message(),
+                        error_code=final.get("code") or ErrorCode.GENERATION_FAILED.value,
                         request_id=request_id,
                     )
             except Exception:  # nosec B110
                 pass
-            if _attempt == 0 and self._sleep_or_cancelled(1.5):
+            if _attempt < rescue_attempts - 1 and self._sleep_or_cancelled(rescue_backoff_s):
                 break
 
+        if self._is_cancelled():
+            return GenerationResult(False, error=_cancelled_message(),
+                                    error_code=ErrorCode.GENERATION_CANCELLED.value,
+                                    request_id=request_id)
         if ctx is not None:
             ctx.poll_count = polls
-            ctx.total_wait_seconds = round(time.time() - submit_time, 1)
+            ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
             ctx.final_status = "timeout"
 
         return GenerationResult(
             success=False,
-            error=tr(
-                "Generation timed out, please try again. "
-                "If a credit was charged, the server will refund it shortly."
+            error=get_export_copy(
+                "pipeline.generation_service.generation_timed_out",
+                tr(
+                    "Generation timed out, please try again. "
+                    "If a credit was charged, the server will refund it shortly."
+                ),
             ),
             error_code=ErrorCode.GENERATION_TIMED_OUT.value,
             request_id=request_id,

@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 from qgis.PyQt.QtCore import QEasingCurve, QPoint, QPropertyAnimation
-from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -17,22 +15,32 @@ from qgis.PyQt.QtWidgets import (
 from ....core import qt_compat as QtC
 from ....core import telemetry
 from ....core import telemetry_events as te
+from ....core.config_store import get_export_copy, get_export_dial
 from ....core.i18n import tr
 from ....core.prompts.prompt_presets import get_need_page
+from .card_grid import CardGridReflow, card_grid_columns, settle_card_grid
 from .cards import _BeforeAfterCard
 from .common import (
-    _BACK_BTN_SMALL,
-    _EMPTY_MSG,
-    _HALL_SECTION_COUNT,
     _HALL_SECTION_TITLE,
-    _HISTORY_SVG,
     _NEED_TILE_SUB,
     _NEED_TILE_TITLE,
     _STAR_OUTLINE_SVG,
     _TABS_WITH_COUNT,
     _is_alive,
+    card_description,
+    style_library_scroll,
 )
 from .handoff_card import build_segmentation_handoff_card
+from .library_empty_state import build_library_empty_state
+
+# Gap between two cards of a grid, px (AI Agent's library grid).
+_CARD_GRID_GAP = 12
+# Right and bottom breathing room of a page's scroll content (the scrollbar
+# sits in the right margin).
+_PAGE_MARGINS = (0, 0, 12, 20)
+
+# Glide duration for a rail subfamily click scrolling the hall to its section.
+_HALL_SCROLL_ANIM_MS = 240
 
 
 class PagesMixin:
@@ -43,14 +51,16 @@ class PagesMixin:
     @staticmethod
     def _new_card_grid(host: QWidget, columns: int = 3) -> QGridLayout:
         """A card grid whose columns share the width equally, so cards stretch
-        to fill the page and never clip at the right edge when the window
-        resizes."""
+        to fill the page. ``columns`` is the most the grid shows: a narrower
+        window drops to as many columns as fit the cards' minimum width, down
+        to one, instead of clipping the last column."""
         grid = QGridLayout(host)
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(10)
-        grid.setVerticalSpacing(10)
+        grid.setHorizontalSpacing(_CARD_GRID_GAP)
+        grid.setVerticalSpacing(_CARD_GRID_GAP)
         for c in range(columns):
             grid.setColumnStretch(c, 1)
+        CardGridReflow(host, grid, columns)
         return grid
 
     def _build_page(self, key: str) -> QWidget:
@@ -61,9 +71,7 @@ class PagesMixin:
         button so power users with thousands of prompts open instantly.
         Every other tab is a plain vertical list of text cards."""
         scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QtC.FrameNoFrame)
-        scroll.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
+        style_library_scroll(scroll)
 
         content = QWidget()
         category = self._categories_by_key[key]
@@ -75,7 +83,7 @@ class PagesMixin:
             # Whole page tops out around 400px tall and fits the default
             # 1100x720 dialog without any scrollbar.
             outer_v = QVBoxLayout(content)
-            outer_v.setContentsMargins(6, 4, 6, 8)
+            outer_v.setContentsMargins(*_PAGE_MARGINS)
             outer_v.setSpacing(8)
             presets = category["presets"]
             if not presets:
@@ -92,7 +100,7 @@ class PagesMixin:
             # The user's past generations as before/after cards they can reopen,
             # reuse, or add back to the map.
             outer_v = QVBoxLayout(content)
-            outer_v.setContentsMargins(6, 4, 6, 8)
+            outer_v.setContentsMargins(*_PAGE_MARGINS)
             outer_v.setSpacing(8)
             if not self._recent_jobs:
                 self._gallery_state.pop(key, None)
@@ -111,7 +119,7 @@ class PagesMixin:
             # removing any favorite reflows every later card into place with no
             # half-empty row at a section boundary.
             outer_v = QVBoxLayout(content)
-            outer_v.setContentsMargins(6, 4, 6, 8)
+            outer_v.setContentsMargins(*_PAGE_MARGINS)
             outer_v.setSpacing(8)
             fav_presets = category.get("presets", []) or []
             fav_jobs = self._favorite_jobs
@@ -127,7 +135,7 @@ class PagesMixin:
             outer_v.addStretch()
         else:
             layout = QVBoxLayout(content)
-            layout.setContentsMargins(6, 4, 6, 10)
+            layout.setContentsMargins(*_PAGE_MARGINS)
             layout.setSpacing(6)
             presets = category["presets"]
             if not presets:
@@ -158,11 +166,13 @@ class PagesMixin:
         Renders the slider card from the server-hosted demo URL, falling back
         to a text card when the demo is not seeded yet so the grid still
         renders even before any before/after asset exists."""
+        columns = card_grid_columns(grid, columns)
         for idx, preset in enumerate(presets):
             row, col = divmod(idx, columns)
             card = self._build_top_pick_card(preset)
             grid.addWidget(card, row, col)
             self._card_widgets.append((card, page_key))
+        settle_card_grid(grid)
 
     # -- Need drill-in pages (landing redesign) --------------------------
 
@@ -173,33 +183,30 @@ class PagesMixin:
         self._stack.setCurrentWidget(widget)
         self._sync_rail_for_page(widget)
 
-    def _build_back_header(self, title: str, tagline: str = "") -> QWidget:
-        """Compact header: a small borderless back arrow + title (and an
-        optional single-line tagline). Back returns to the landing page."""
+    @staticmethod
+    def _build_page_header(title: str, tagline: str = "") -> QWidget:
+        """Every page's header: the title and one muted line, flush with the
+        cards below. No back arrow: the rail beside it is always there, so
+        an arrow that only led back to Top picks was a second, vaguer way to
+        do what its first row does. Same block on every page, so the title
+        never jumps when the rail switches page."""
         host = QWidget()
-        row = QHBoxLayout(host)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(10)
-        back = QPushButton("←")  # left arrow, glyph outside tr()
-        back.setStyleSheet(_BACK_BTN_SMALL)
-        back.setCursor(QtC.PointingHandCursor)
-        back.setFixedSize(26, 26)
-        back.setToolTip(tr("Back to library"))
-        back.clicked.connect(lambda _c=False: self._switch_to_page(self._landing_page))
-        row.addWidget(back)
-        titles = QVBoxLayout()
-        titles.setContentsMargins(0, 0, 0, 0)
-        titles.setSpacing(1)
+        titles = QVBoxLayout(host)
+        titles.setContentsMargins(2, 0, 0, 0)
+        titles.setSpacing(2)
         lbl = QLabel(title)
         lbl.setStyleSheet(_NEED_TILE_TITLE)
+        lbl.setTextFormat(QtC.PlainText)
+        # Title and tagline wrap so a longer language never widens the page
+        # past the window (the page has no horizontal scroll).
+        lbl.setWordWrap(True)
         titles.addWidget(lbl)
         if tagline:
             sub = QLabel(tagline)
             sub.setStyleSheet(_NEED_TILE_SUB)
-            sub.setWordWrap(False)  # one line, never wrap to two
+            sub.setTextFormat(QtC.PlainText)
+            sub.setWordWrap(True)
             titles.addWidget(sub)
-        row.addLayout(titles)
-        row.addStretch()
         return host
 
     def _ensure_need_page(self, need_key: str) -> QWidget | None:
@@ -223,10 +230,10 @@ class PagesMixin:
 
         page = QWidget()
         outer = QVBoxLayout(page)
-        outer.setContentsMargins(6, 4, 6, 4)
-        outer.setSpacing(10)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(14)
 
-        outer.addWidget(self._build_back_header(data["label"], data["tagline"]))
+        outer.addWidget(self._build_page_header(data["label"], data["tagline"]))
 
         # No subfamily row up here: the navigation rail lists this family's
         # subfamilies indented under the active category row (RailMixin), so
@@ -235,13 +242,11 @@ class PagesMixin:
         # The hall itself: one section per subfamily, stacked so the whole
         # family's structure is visible by scrolling, no click required.
         scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QtC.FrameNoFrame)
-        scroll.setHorizontalScrollBarPolicy(QtC.ScrollBarAlwaysOff)
+        style_library_scroll(scroll)
         content = QWidget()
         hall = QVBoxLayout(content)
-        hall.setContentsMargins(0, 2, 0, 8)
-        hall.setSpacing(20)
+        hall.setContentsMargins(*_PAGE_MARGINS)
+        hall.setSpacing(24)
 
         # Object outlines are AI Segmentation's job now: the card sits where
         # the Segment cards used to be, at the top of the Analyze family.
@@ -255,9 +260,11 @@ class PagesMixin:
             sections.append((cat["key"], section))
 
         if not categories:
-            empty = QLabel(tr("No prompts in this section yet."))
-            empty.setStyleSheet(_EMPTY_MSG)
-            hall.addWidget(empty)
+            hall.addWidget(build_library_empty_state(
+                get_export_copy(
+                    "dialogs.pages_mixin.empty_section", tr("No prompts in this section yet")),
+                suggestions=[self._suggest_top_picks()],
+            ))
 
         hall.addStretch()
         scroll.setWidget(content)
@@ -267,7 +274,8 @@ class PagesMixin:
         # strip's chevron jump); the scroll-spy guard below suppresses row
         # churn while this animation is in flight.
         anim = QPropertyAnimation(scroll.verticalScrollBar(), b"value", page)
-        anim.setDuration(240)
+        anim.setDuration(get_export_dial(
+            "dialogs.pages_mixin.hall_scroll_anim_ms", _HALL_SCROLL_ANIM_MS))
         anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         anim.finished.connect(lambda k=need_key: self._on_hall_scroll_anim_finished(k))
 
@@ -292,27 +300,25 @@ class PagesMixin:
         return page
 
     def _build_hall_section(self, category: dict) -> QWidget:
-        """One hall section: a strong subfamily header (17px title + muted
-        count) followed by its full preset grid. Hierarchy comes from type
-        size and weight alone - no coloured bar. No "see all" either: the
-        section already shows every live prompt."""
+        """One hall section: a strong subfamily title followed by its full
+        preset grid. Hierarchy comes from type size and weight alone - no
+        coloured bar. No count: the rail's subfamily row right beside it
+        already carries it. No "see all" either: the section already shows
+        every live prompt."""
         section = QWidget()
         box = QVBoxLayout(section)
         box.setContentsMargins(0, 0, 0, 0)
-        box.setSpacing(8)
+        box.setSpacing(10)
 
         title_row = QHBoxLayout()
-        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setContentsMargins(2, 0, 0, 0)
         title_row.setSpacing(8)
         # Plain QLabel text (no buddy set) renders "&" literally - unlike
         # QPushButton, it needs no escaping here.
         title = QLabel(category["label"])
         title.setStyleSheet(_HALL_SECTION_TITLE)
-        title_row.addWidget(title)
-        count = QLabel(f"({len(category['presets'])})")
-        count.setStyleSheet(_HALL_SECTION_COUNT)
-        title_row.addWidget(count)
-        title_row.addStretch()
+        title.setWordWrap(True)
+        title_row.addWidget(title, 1)
         box.addLayout(title_row)
 
         grid_host = QWidget()
@@ -412,6 +418,7 @@ class PagesMixin:
             self._on_card_clicked,
             demo_loader=loader,
             absolute_url=_abs if loader is not None else None,
+            hint=card_description(preset),
         )
         star = card.star_button()
         if star is not None:
@@ -438,7 +445,7 @@ class PagesMixin:
         detail = GenerationDetailDialog(
             self,
             job=job,
-            preset=preset,
+            preset=self._preset_for_preview(preset),
             client=self._client,
             demo_loader=self._demo_loader,
             absolute_url=self._absolute_demo_url,
@@ -469,50 +476,59 @@ class PagesMixin:
             self._detail_open = False
             detail.deleteLater()
 
+    def _preset_for_preview(self, preset: dict | None) -> dict | None:
+        """The preset as the preview window shows it: its tag names the family
+        it belongs to ("Land cover") instead of the generic "Template". A copy,
+        so the preset handed back on Use stays the catalog's own."""
+        if preset is None or preset.get("category_label"):
+            return preset
+        family = self._categories_by_key.get(str(preset.get("source_category") or ""))
+        label = str((family or {}).get("label") or "").strip()
+        return dict(preset, category_label=label) if label else preset
+
+    def _suggest_top_picks(self):
+        """Empty-state row: back to the Top picks page."""
+        return (
+            "sparkles",
+            get_export_copy("dialogs.pages_mixin.suggest_top_picks", tr("Browse the top picks")),
+            lambda: self._rail_navigate("popular"),
+        )
+
+    def _suggest_sessions(self):
+        """Empty-state row: open the Sessions page."""
+        return (
+            "clock",
+            get_export_copy("dialogs.pages_mixin.suggest_sessions", tr("Open your sessions")),
+            lambda: self._rail_navigate("user_favorites"),
+        )
+
     def _build_empty_state(self, key: str) -> QWidget | None:
         if key == "recent":
-            icon_path = _HISTORY_SVG
-            message = tr(
-                "Nothing here yet. The generations you run will land here, ready to "
-                "reopen, reuse, or add back to the map."
+            question = get_export_copy(
+                "dialogs.pages_mixin.empty_recent_title", tr("No edits yet"))
+            message = get_export_copy(
+                "dialogs.pages_mixin.empty_recent",
+                tr(
+                    "Nothing here yet. The generations you run will land here, ready to "
+                    "reopen, reuse, or add back to the map."
+                ),
             )
-        elif key == "user_favorites":
-            icon_path = _STAR_OUTLINE_SVG
-            message = tr(
-                "No favorites yet. Open any template or generation and tap the ★ "
-                "in its preview to keep it close."
+            suggestions = [self._suggest_top_picks()]
+            return build_library_empty_state(question, message, suggestions, glyph="clock")
+        if key == "user_favorites":
+            question = get_export_copy(
+                "dialogs.pages_mixin.no_favorites_title", tr("No favorites yet"))
+            message = get_export_copy(
+                "dialogs.pages_mixin.empty_favorites",
+                tr(
+                    "Open a prompt or a past edit and press its star: "
+                    "it will wait for you here."
+                ),
             )
-        else:
-            return None
-
-        # Outer container so we can center horizontally inside the scroll area.
-        outer = QWidget()
-        outer_layout = QHBoxLayout(outer)
-        outer_layout.setContentsMargins(20, 40, 20, 40)
-
-        inner = QWidget()
-        inner.setMaximumWidth(360)
-        layout = QVBoxLayout(inner)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
-        layout.setAlignment(QtC.AlignCenter)
-
-        icon_label = QLabel()
-        icon_label.setPixmap(QIcon(icon_path).pixmap(36, 36))
-        icon_label.setAlignment(QtC.AlignCenter)
-        icon_label.setStyleSheet("background: transparent; border: none;")
-        layout.addWidget(icon_label)
-
-        msg = QLabel(message)
-        msg.setStyleSheet(_EMPTY_MSG)
-        msg.setAlignment(QtC.AlignCenter)
-        msg.setWordWrap(True)
-        layout.addWidget(msg)
-
-        outer_layout.addStretch()
-        outer_layout.addWidget(inner)
-        outer_layout.addStretch()
-        return outer
+            suggestions = [self._suggest_top_picks(), self._suggest_sessions()]
+            return build_library_empty_state(
+                question, message, suggestions, icon=_STAR_OUTLINE_SVG)
+        return None
 
     def _ensure_page(self, key: str) -> QWidget | None:
         """Build the page for `key` on first use and add it to the stack.

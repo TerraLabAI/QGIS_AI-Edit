@@ -108,22 +108,61 @@ def build_vector_layer(
     if raster_crs is not None and raster_crs.isValid():
         mem_layer.setCrs(raster_crs)
     mem_provider = mem_layer.dataProvider()
-    mem_provider.addFeatures(feats)
+    added = _provider_call_ok(mem_provider.addFeatures(feats))
     mem_layer.updateExtents()
     # The memory provider drops features whose attributes overflow a field
     # instead of raising. Guard against that so we never hand back an empty
     # layer while reporting success ("Vectorize done: N" but 0 on the map).
-    if mem_layer.featureCount() != len(feats):
+    if not added or mem_layer.featureCount() != len(feats):
         raise AIEditError(
             ErrorCode.WRITE_ERROR,
             tr("Could not store the vectorized polygons (internal field error)."),
         )
-    default_label = classes[0]["label"] if len(classes) == 1 else ""
+    default_label = classes[0].get("label", "") if len(classes) == 1 else ""
     _configure_attribute_table(mem_layer, default_label)
     set_layer_provenance(mem_layer, source_raster_name, classes)
     apply_class_style(mem_layer, classes)
     log_debug(f"Vectorize layer built: {mem_layer.featureCount()} polygons")
     return mem_layer
+
+
+# Why a run stayed in memory, for the panel notice and telemetry.
+PERSIST_OK = ""
+PERSIST_WRITE_FAILED = "write_failed"
+PERSIST_LOAD_BACK_FAILED = "load_back_failed"
+PERSIST_ERROR = "error"
+
+
+def _free_table_name(gpkg_path: str, table_name: str) -> str:
+    """``table_name``, or ``table_name_2``, ``_3``... when the GeoPackage
+    already holds it.
+
+    Table names carry the second, and the writer overwrites an existing table,
+    so two runs in one second would replace a table already on the map."""
+    if not os.path.exists(gpkg_path):
+        return table_name
+    taken: set[str] = set()
+    try:
+        from osgeo import ogr
+
+        ds = ogr.Open(gpkg_path)
+        try:
+            if ds is not None:
+                taken = {
+                    ds.GetLayerByIndex(i).GetName().lower()
+                    for i in range(ds.GetLayerCount())
+                }
+        finally:
+            # Drop the handle now: Windows keeps the file locked while it lives.
+            ds = None
+    except Exception as err:  # noqa: BLE001 - the write reports real trouble
+        log_warning(f"Vectorize: could not list GeoPackage tables ({err})")
+    candidate = table_name
+    counter = 2
+    while candidate.lower() in taken:
+        candidate = f"{table_name}_{counter}"
+        counter += 1
+    return candidate
 
 
 def make_layer_permanent(
@@ -135,6 +174,21 @@ def make_layer_permanent(
 ) -> QgsVectorLayer | None:
     """Persist the freshly built vector layer into the output GeoPackage and
     return the disk-backed replacement, or None to keep the memory layer.
+    ``persist_layer_to_gpkg`` also says why a run stayed in memory."""
+    layer, _reason = persist_layer_to_gpkg(
+        mem_layer, gpkg_path, table_name, classes, source_raster_name
+    )
+    return layer
+
+
+def persist_layer_to_gpkg(
+    mem_layer: QgsVectorLayer,
+    gpkg_path: str,
+    table_name: str,
+    classes: list[dict],
+    source_raster_name: str = "",
+) -> tuple[QgsVectorLayer | None, str]:
+    """(disk-backed layer, PERSIST_OK) or (None, a PERSIST_* reason).
 
     Memory layers silently vanish when the project closes; GeoPackage is the
     QGIS-native container, so each run becomes one table in ai_edit.gpkg next
@@ -144,6 +198,7 @@ def make_layer_permanent(
     from qgis.core import QgsVectorFileWriter
 
     try:
+        gpkg_path = os.path.abspath(gpkg_path)
         os.makedirs(os.path.dirname(gpkg_path), exist_ok=True)
         # Same Windows trap the GeoTIFF writer already handles: an accented
         # output directory (C:\\Users\\Frédéric) writes fine but reads back as
@@ -152,6 +207,7 @@ def make_layer_permanent(
         gpkg_path = os.path.join(
             ascii_safe_dir(os.path.dirname(gpkg_path)), os.path.basename(gpkg_path)
         )
+        table_name = _free_table_name(gpkg_path, table_name)
         options = QgsVectorFileWriter.SaveVectorOptions()
         options.driverName = "GPKG"
         options.layerName = table_name
@@ -171,18 +227,18 @@ def make_layer_permanent(
         code = res[0] if isinstance(res, tuple) else res
         if code != QgsVectorFileWriter.WriterError.NoError:
             log_warning(f"Vectorize: GeoPackage write failed ({res}), keeping memory layer")
-            return None
+            return None, PERSIST_WRITE_FAILED
         layer = QgsVectorLayer(
             f"{gpkg_path}|layername={table_name}", mem_layer.name(), "ogr"
         )
         if not layer.isValid() or layer.featureCount() != mem_layer.featureCount():
             log_warning("Vectorize: GeoPackage layer failed to load back, keeping memory layer")
-            return None
+            return None, PERSIST_LOAD_BACK_FAILED
     except Exception as err:  # noqa: BLE001 - persistence is best-effort
         log_warning(f"Vectorize: GeoPackage persist skipped ({err})")
-        return None
+        return None, PERSIST_ERROR
 
-    default_label = classes[0]["label"] if len(classes) == 1 else ""
+    default_label = classes[0].get("label", "") if len(classes) == 1 else ""
     _configure_attribute_table(layer, default_label)
     set_layer_provenance(layer, source_raster_name, classes)
     apply_class_style(layer, classes)
@@ -192,7 +248,15 @@ def make_layer_permanent(
     except Exception:  # nosec B110 - cosmetic only
         pass
     log_debug(f"Vectorize layer persisted: {gpkg_path}|{table_name}")
-    return layer
+    return layer, PERSIST_OK
+
+
+def _provider_call_ok(result) -> bool:
+    """PyQGIS answers addFeatures with (ok, features) and deleteFeatures with a
+    bare bool; a tuple is always truthy, so read its first slot."""
+    if isinstance(result, tuple):
+        return bool(result[0]) if result else False
+    return bool(result)
 
 
 def transplant_features(existing: QgsVectorLayer, new_layer: QgsVectorLayer) -> bool:
@@ -204,10 +268,16 @@ def transplant_features(existing: QgsVectorLayer, new_layer: QgsVectorLayer) -> 
     value one field left ("Got QString, expected int" on feature_id). Building
     each feature against the destination's own fields keeps ``fid`` unset (the
     provider assigns it) and every named field aligned. Returns False when the
-    provider rejected the edit."""
+    provider rejected the edit.
+
+    The OGR provider commits each call to disk on its own, so the new features
+    go in first and the old ones are deleted only once that worked: a
+    GeoPackage another program has locked then keeps the previous result
+    instead of losing it."""
+    if not existing.isValid() or not new_layer.isValid() or existing.isEditable():
+        return False
     provider = existing.dataProvider()
     old_ids = [f.id() for f in existing.getFeatures()]
-    delete_ok = provider.deleteFeatures(old_ids) if old_ids else True
 
     dest_fields = existing.fields()
     src_fields = new_layer.fields()
@@ -215,6 +285,8 @@ def transplant_features(existing: QgsVectorLayer, new_layer: QgsVectorLayer) -> 
         (src_idx, dest_fields.indexOf(src_fields.at(src_idx).name()))
         for src_idx in range(src_fields.count())
     ]
+    if any(dest_idx < 0 for _, dest_idx in index_map):
+        return False
     from qgis.core import QgsFeature
 
     fresh: list[QgsFeature] = []
@@ -226,8 +298,33 @@ def transplant_features(existing: QgsVectorLayer, new_layer: QgsVectorLayer) -> 
             if dest_idx >= 0:
                 nf.setAttribute(dest_idx, attrs[src_idx])
         fresh.append(nf)
-    add_ok = provider.addFeatures(fresh)
-    return bool(delete_ok and add_ok)
+    try:
+        add_ok = _provider_call_ok(provider.addFeatures(fresh)) if fresh else True
+    except Exception as err:
+        log_warning(f"Vectorize: replacement insert failed ({err})")
+        _drop_features_not_in(existing, set(old_ids))
+        return False
+    if not add_ok:
+        _drop_features_not_in(existing, set(old_ids))
+        return False
+    if not old_ids:
+        return True
+    if _provider_call_ok(provider.deleteFeatures(old_ids)):
+        return True
+    # The old rows would not go: take the new ones back out so the layer is
+    # not left holding both results.
+    _drop_features_not_in(existing, set(old_ids))
+    return False
+
+
+def _drop_features_not_in(layer: QgsVectorLayer, keep_ids: set) -> None:
+    """Best-effort undo of a partial add: delete every feature not in keep_ids."""
+    try:
+        extra = [f.id() for f in layer.getFeatures() if f.id() not in keep_ids]
+        if extra:
+            layer.dataProvider().deleteFeatures(extra)
+    except Exception as err:  # noqa: BLE001 - the caller already reports failure
+        log_warning(f"Vectorize: could not roll back a partial transplant ({err})")
 
 
 def set_layer_provenance(

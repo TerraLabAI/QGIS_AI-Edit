@@ -5,15 +5,28 @@ which also re-exports every name here for backward compatibility.
 """
 from __future__ import annotations
 
+import math
 import os
 import struct
 import tempfile
 import time
+import uuid
 
 from osgeo import gdal, ogr, osr
 
 from .i18n import tr
 from .logger import log_debug, log_warning
+from .output_paths import (  # noqa: F401 - re-exported for older import paths
+    OUTPUT_DIR_SETTING,
+    ascii_safe_dir,
+    fallback_output_dir,
+    get_output_dir,
+    remove_with_retry,
+    replace_staged_file,
+    set_output_dir,
+)
+from .output_paths import documents_default_dir as _documents_default_dir  # noqa: F401
+from .output_paths import unique_output_path as _unique_output_path
 from .slug import slugify as _slugify
 
 # Professional GeoTIFF layout: tiled so pan/zoom only reads the visible
@@ -107,7 +120,7 @@ def _detect_image_format(data: bytes) -> str | None:
         return "WebP"
     if data[:6] in (b"GIF87a", b"GIF89a"):
         return "GIF"
-    if data[:2] in (b"II", b"MM") and data[2:4] in (b"\x2a\x00", b"\x00\x2a"):
+    if data[:4] in (b"II\x2a\x00", b"MM\x00\x2a", b"II\x2b\x00", b"MM\x00\x2b"):
         return "TIFF"
     if data[:2] == b"BM":
         return "BMP"
@@ -121,58 +134,14 @@ def _detect_image_format(data: bytes) -> str | None:
     return None
 
 
-def ascii_safe_dir(directory: str) -> str:
-    """Return a directory path both GDAL (write) and the QGIS GDAL provider
-    (read-back) accept on Windows.
-
-    Accented Windows usernames put non-ASCII characters in the output path.
-    GDAL writes the GeoTIFF without error, but the QGIS raster provider then
-    loads it as an invalid layer ("Failed to create valid raster layer").
-    Converting the directory to its 8.3 short name yields a pure-ASCII path
-    both accept. No-op on non-Windows, on already-ASCII paths, or when
-    conversion is unavailable.
-
-    Precondition: ``directory`` already exists (``os.makedirs`` it first). A
-    path that is not there cannot be resolved, so it comes back untouched.
-    """
-    if os.name != "nt" or directory.isascii():
-        return directory
-
-    if not os.path.isdir(directory):
-        # GetShortPathNameW answers 0 for a missing path, and 0 again on a
-        # volume with 8.3 names off. Reading the first as the second sends a
-        # caller that has not made its output directory yet to the shared
-        # Public folder, and the user's file lands where they never chose.
-        log_warning("ascii_safe_dir ran before the directory existed; path unchanged")
-        return directory
-
-    try:
-        import ctypes
-        from ctypes import wintypes
-
-        get_short = ctypes.windll.kernel32.GetShortPathNameW
-        get_short.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
-        get_short.restype = wintypes.DWORD
-        buf = ctypes.create_unicode_buffer(4096)
-        n = get_short(directory, buf, len(buf))
-        if 0 < n < len(buf) and buf.value.isascii():
-            return buf.value
-    except Exception as e:  # noqa: BLE001 - Windows-only, never block a write
-        log_warning(f"short-path conversion failed: {e}")
-
-    # 8.3 short names are disabled on this volume. C:\\Users\\Public is ASCII
-    # and writable by every user; fall back to it so the layer still loads.
-    # Output filenames are unique per generation (slug + timestamp), so a
-    # single shared folder cannot collide.
-    public = os.environ.get("PUBLIC")
-    if public and public.isascii():
-        safe = os.path.join(public, "terralab_ai_edit")
-        try:
-            os.makedirs(safe, exist_ok=True)
-            return safe
-        except OSError:
-            pass
-    return directory
+def memory_vector_driver():
+    """OGR in-memory driver. GDAL 3.11 (bundled with QGIS 4) folded the vector
+    'Memory' driver into 'MEM' and warns on every use of the old name; older
+    GDAL only knows 'Memory'."""
+    driver = ogr.GetDriverByName("MEM")
+    if driver is not None and driver.GetMetadataItem("DCAP_VECTOR") == "YES":
+        return driver
+    return ogr.GetDriverByName("Memory")
 
 
 def _create_gtiff(driver, path: str, w: int, h: int, bands: int):
@@ -189,7 +158,8 @@ def _create_gtiff(driver, path: str, w: int, h: int, bands: int):
 
 
 def _rasterize_crop_alpha(
-    dst_ds, alpha_band_index: int, polygon_wkt: str, geotransform: tuple, projection_wkt: str | None
+    dst_ds, alpha_band_index: int, polygon_wkt: str, geotransform: tuple, projection_wkt: str | None,
+    preserve_alpha: bool = True,
 ) -> None:
     """Burn ``polygon_wkt`` into a 0/255 mask on ``dst_ds``'s exact pixel grid
     and write it as the alpha band (P3 reversible crop).
@@ -212,34 +182,40 @@ def _rasterize_crop_alpha(
             srs = candidate
             mask_ds.SetProjection(projection_wkt)
 
-    ogr_ds = ogr.GetDriverByName("Memory").CreateDataSource("crop_mask")
+    ogr_ds = memory_vector_driver().CreateDataSource("crop_mask")
     ogr_layer = ogr_ds.CreateLayer("zone", srs, ogr.wkbPolygon)
     geom = ogr.CreateGeometryFromWkt(polygon_wkt)
     if geom is None:
         raise RuntimeError("crop polygon WKT failed to parse")
     feature = ogr.Feature(ogr_layer.GetLayerDefn())
     feature.SetGeometry(geom)
-    ogr_layer.CreateFeature(feature)
+    _check_gdal(ogr_layer.CreateFeature(feature), "crop feature")
 
     mask_band = mask_ds.GetRasterBand(1)
-    gdal.RasterizeLayer(mask_ds, [1], ogr_layer, burn_values=[255])
+    _check_gdal(gdal.RasterizeLayer(mask_ds, [1], ogr_layer, burn_values=[255]), "crop rasterization")
     raw = mask_band.ReadRaster(0, 0, w, h, w, h, gdal.GDT_Byte)
 
     alpha_band = dst_ds.GetRasterBand(alpha_band_index)
-    alpha_band.WriteRaster(0, 0, w, h, raw, w, h, gdal.GDT_Byte)
+    if raw is None or len(raw) != w * h:
+        raise RuntimeError("Could not read crop mask")
+    if preserve_alpha:
+        existing = alpha_band.ReadRaster(0, 0, w, h, w, h, gdal.GDT_Byte)
+        if existing is None or len(existing) != w * h:
+            raise RuntimeError("Could not read complete alpha band")
+        raw = bytes(value if mask else 0 for value, mask in zip(existing, raw))
+    _check_gdal(alpha_band.WriteRaster(0, 0, w, h, raw, w, h, gdal.GDT_Byte), "crop alpha")
     alpha_band.SetColorInterpretation(gdal.GCI_AlphaBand)
 
-    mask_ds = None
-    ogr_ds = None
+    del mask_ds
+    del ogr_ds
 
 
 def _write_opaque_alpha_band(dst_ds, alpha_band_index: int) -> None:
     """Fallback when rasterizing the crop polygon fails: a fully opaque alpha
     band, so the file still opens with every pixel visible instead of a
     broken/missing band."""
-    w, h = dst_ds.RasterXSize, dst_ds.RasterYSize
     alpha_band = dst_ds.GetRasterBand(alpha_band_index)
-    alpha_band.WriteRaster(0, 0, w, h, b"\xff" * (w * h), w, h, gdal.GDT_Byte)
+    _check_gdal(alpha_band.Fill(255), "fill alpha")
     alpha_band.SetColorInterpretation(gdal.GCI_AlphaBand)
 
 
@@ -257,44 +233,6 @@ def read_crop_polygon_wkt(geotiff_path: str) -> str | None:
         return ds.GetMetadataItem("AI_EDIT_CROP_POLYGON_WKT") or None
     except Exception:  # nosec B110 - crop detection is best-effort
         return None
-
-
-def _unique_output_path(directory: str, base: str, ext: str = "tif") -> str:
-    """First free <base>.<ext> in directory; _2, _3... on same-second collisions."""
-    path = os.path.join(directory, f"{base}.{ext}")
-    counter = 2
-    while os.path.exists(path):
-        path = os.path.join(directory, f"{base}_{counter}.{ext}")
-        counter += 1
-    return path
-
-
-def replace_staged_file(staged: str, destination: str) -> None:
-    """Move a fully-written staging file onto its destination, or delete it.
-
-    Windows refuses to overwrite a file another process holds open: a .tif
-    already loaded as a layer, a .png open in the Photos app. Without the
-    cleanup every failed attempt leaves a stray ``.part`` next to the user's
-    file, and without ``os.replace`` the destination would have to be unlinked
-    first, destroying the old copy when the new one cannot be put in place.
-    """
-    from .errors import AIEditError, ErrorCode
-
-    try:
-        os.replace(staged, destination)
-    except OSError as err:
-        try:
-            os.remove(staged)
-        except OSError:  # nosec B110 - the staging file is disposable
-            pass
-        raise AIEditError(
-            ErrorCode.WRITE_ERROR,
-            tr(
-                "Could not write {name}. It may be open in QGIS or in another "
-                "program. Close it, or pick a different name, and try again."
-            ).format(name=os.path.basename(destination)),
-            cause=err,
-        ) from err
 
 
 _FALLBACK_EXT = {
@@ -316,6 +254,13 @@ def _image_dimensions(data: bytes, fmt: str | None) -> tuple[int, int]:
         if fmt == "PNG" and len(data) >= 24 and data[12:16] == b"IHDR":
             w, h = struct.unpack(">II", data[16:24])
             return int(w), int(h)
+        if fmt == "GIF" and len(data) >= 10:
+            return struct.unpack("<HH", data[6:10])
+        if fmt == "BMP" and len(data) >= 26:
+            w, h = struct.unpack("<ii", data[18:26])
+            return abs(w), abs(h)
+        if fmt == "WebP" and len(data) >= 30 and data[12:16] == b"VP8X":
+            return 1 + int.from_bytes(data[24:27], "little"), 1 + int.from_bytes(data[27:30], "little")
         if fmt == "JPEG":
             i = 2
             while i + 9 < len(data):
@@ -330,6 +275,8 @@ def _image_dimensions(data: bytes, fmt: str | None) -> tuple[int, int]:
                 if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
                     h, w = struct.unpack(">HH", data[i + 5:i + 9])
                     return int(w), int(h)
+                if seg_len < 2:
+                    return 0, 0
                 i += 2 + seg_len
     except Exception:  # nosec B110 - dimensions are best-effort
         pass
@@ -351,7 +298,7 @@ def _rescue_plain_image(
     height: int,
 ) -> str | None:
     """Last-resort save when the GeoTIFF pipeline fails: the paid pixels are
-    already in memory, so write them untouched to tempdir with a PAM sidecar
+    already in memory, so write them untouched to a fallback folder with a PAM sidecar
     (.aux.xml) carrying the georeferencing. Pure file I/O, no GDAL dataset,
     so it survives a broken GDAL/PROJ stack. Returns None if even this fails.
 
@@ -364,8 +311,10 @@ def _rescue_plain_image(
     ext = _FALLBACK_EXT.get(img_format or "")
     if ext is None:
         return None
+    path = None
     try:
-        rescue_dir = tempfile.mkdtemp(prefix="terralab_ai_edit_")
+        # Documents before the temp folder, which Storage Sense empties.
+        rescue_dir = fallback_output_dir()
         path = _unique_output_path(ascii_safe_dir(rescue_dir), file_base, ext)
         with open(path, "wb") as f:
             f.write(image_data)
@@ -377,6 +326,10 @@ def _rescue_plain_image(
                 "plain-image rescue saved without georeferencing "
                 f"(dimensions unknown for {img_format})"
             )
+            return path
+        extent_dict = _valid_extent(extent_dict, ("xmin", "ymin", "xmax", "ymax"))
+        if extent_dict is None:
+            log_warning("plain-image rescue saved without invalid georeferencing")
             return path
         x_res = (extent_dict["xmax"] - extent_dict["xmin"]) / width
         y_res = (extent_dict["ymax"] - extent_dict["ymin"]) / height
@@ -395,6 +348,12 @@ def _rescue_plain_image(
         return path
     except Exception as e:  # noqa: BLE001 - last resort, never raise past here
         log_warning(f"plain-image rescue failed: {e}")
+        # A sidecar failure must not hide the already saved paid pixels.
+        if path and os.path.isfile(path) and os.path.getsize(path) == len(image_data):
+            remove_with_retry(path + ".aux.xml")
+            return path
+        if path:
+            remove_with_retry(path)
         return None
 
 
@@ -468,29 +427,28 @@ def _write_geotiff_gdal(
 ) -> str:
     """GDAL GeoTIFF pipeline (tiled, compressed, overviews, provenance tags)."""
     _restore_qgis_proj_paths()
-    timestamp = int(time.time())
     file_base = file_base or _output_file_base(prompt)
 
-    # Fall back to tempdir if user's output_dir is read-only so a hostile
-    # folder doesn't lose the paid generation.
+    # Fall back to Documents, then tempdir, if the user's output_dir cannot
+    # be created so a hostile folder doesn't lose the paid generation.
     try:
         os.makedirs(output_dir, exist_ok=True)
         resolved_dir = output_dir
     except OSError as e:
-        log_warning(f"output_dir not writable ({e}); using tempdir fallback")
-        resolved_dir = tempfile.mkdtemp(prefix="terralab_ai_edit_")
+        log_warning(f"output_dir not writable ({e}); using fallback folder")
+        resolved_dir = fallback_output_dir()
 
     # Reroute through an ASCII-safe path: a non-ASCII directory (accented
     # Windows username) writes fine via GDAL but loads back as an invalid
     # QGIS layer. The directory exists by now, so 8.3 short names resolve.
     resolved_dir = ascii_safe_dir(resolved_dir)
-    primary_path = _unique_output_path(resolved_dir, file_base)
-    output_path = primary_path
 
     xmin = extent_dict["xmin"]
     ymin = extent_dict["ymin"]
     xmax = extent_dict["xmax"]
     ymax = extent_dict["ymax"]
+    if not all(math.isfinite(v) for v in (xmin, ymin, xmax, ymax)) or xmax <= xmin or ymax <= ymin:
+        raise ValueError("Invalid raster extent")
 
     if not image_data:
         raise RuntimeError(tr("Server returned an empty response (0 bytes)"))
@@ -512,7 +470,14 @@ def _write_geotiff_gdal(
         ))
 
     # /vsimem avoids the Windows WinError 32 from the PNG driver holding the temp file.
-    vsimem_path = f"/vsimem/_temp_{timestamp}.png"
+    # A uuid, not a timestamp: a generation and a history "Add to map" can
+    # write in the same second, and one would unlink the other's buffer.
+    vsimem_path = f"/vsimem/ai_edit_{uuid.uuid4().hex}.img"
+    # Reserving the name creates an empty file, so it happens only once the
+    # payload is known good, inside the block that deletes it on failure.
+    primary_path = _unique_output_path(resolved_dir, file_base)
+    output_path = primary_path
+    src_ds = dst_ds = None
     try:
         gdal.FileFromMemBuffer(vsimem_path, bytes(image_data))
         try:
@@ -542,16 +507,23 @@ def _write_geotiff_gdal(
         # to real RGB so the output is always a 3-band color raster.
         if src_ds.RasterCount == 1 and src_ds.GetRasterBand(1).GetColorTable() is not None:
             log_debug("GeoTIFF: expanding palette image to RGB")
-            expanded = gdal.Translate("", src_ds, format="MEM", rgbExpand="rgb")
+            color_table = src_ds.GetRasterBand(1).GetColorTable()
+            has_alpha = any(color_table.GetColorEntry(i)[3] < 255 for i in range(color_table.GetCount()))
+            expanded = gdal.Translate("", src_ds, format="MEM", rgbExpand="rgba" if has_alpha else "rgb")
             if expanded is not None:
                 src_ds = expanded
             else:
-                log_warning("palette->RGB expansion failed; output may show incorrect colors")
+                raise RuntimeError("Palette image expansion failed")
 
         recv_w = src_ds.RasterXSize
         recv_h = src_ds.RasterYSize
         src_bands = src_ds.RasterCount
-        bands = min(src_bands, 3)
+        if recv_w <= 0 or recv_h <= 0 or src_bands <= 0:
+            raise RuntimeError("Image has no usable pixels")
+        alpha_source = next((i for i in range(1, src_bands + 1)
+                             if src_ds.GetRasterBand(i).GetColorInterpretation() == gdal.GCI_AlphaBand), None)
+        color_sources = [i for i in range(1, min(src_bands, 4) + 1) if i != alpha_source][:3]
+        bands = len(color_sources)
         # Reversible polygon crop (P3): when the zone was drawn with the
         # polygon tool, ctx carries its WKT (canvas CRS, same as crs_wkt/the
         # output raster's own CRS below, so no reprojection is needed here).
@@ -559,7 +531,7 @@ def _write_geotiff_gdal(
         # zone (ctx is None, or zone_polygon_wkt is None: history restore,
         # MCP/dev extents) writes RGB exactly as before, byte-identical.
         crop_polygon_wkt = getattr(ctx, "zone_polygon_wkt", None) if ctx is not None else None
-        dst_bands = bands + 1 if crop_polygon_wkt else bands
+        dst_bands = bands + 1 if crop_polygon_wkt or alpha_source else bands
         log_debug(f"GeoTIFF: received {recv_w}x{recv_h}px, {bands} bands")
 
         ext_width = xmax - xmin
@@ -578,19 +550,25 @@ def _write_geotiff_gdal(
             # Windows MAX_PATH / antivirus lock / network-share perm denied,
             # retry in tempdir.
             log_warning(
-                f"GDAL Create failed at {primary_path} ({create_err}); retrying in tempdir"
+                f"GDAL Create failed at {primary_path} ({create_err}); retrying in fallback folder"
             )
-            fallback_dir = tempfile.mkdtemp(prefix="terralab_ai_edit_")
+            remove_with_retry(primary_path)
+            fallback_dir = fallback_output_dir()
+            if os.path.normcase(os.path.abspath(fallback_dir)) == os.path.normcase(
+                os.path.abspath(output_dir)
+            ):
+                fallback_dir = tempfile.mkdtemp(prefix="terralab_ai_edit_")
             output_path = _unique_output_path(ascii_safe_dir(fallback_dir), file_base)
             dst_ds, create_err = _create_gtiff(driver, output_path, recv_w, recv_h, dst_bands)
         if dst_ds is None:
+            remove_with_retry(output_path)
             msg = tr("Failed to create GeoTIFF at {path}").format(path=output_path)
             raise RuntimeError(f"{msg} ({create_err})")
 
         x_res = ext_width / recv_w
         y_res = ext_height / recv_h
         geotransform = (xmin, x_res, 0, ymax, 0, -y_res)
-        dst_ds.SetGeoTransform(geotransform)
+        _check_gdal(dst_ds.SetGeoTransform(geotransform), "geotransform")
 
         if ctx is not None:
             ctx.output_path = output_path
@@ -600,7 +578,7 @@ def _write_geotiff_gdal(
 
         projection_wkt = _safe_projection_wkt(crs_wkt)
         if projection_wkt:
-            dst_ds.SetProjection(projection_wkt)
+            _check_gdal(dst_ds.SetProjection(projection_wkt), "projection")
         else:
             # Pixels and geotransform are intact; add_geotiff_to_project
             # re-attaches the CRS at load time from the capture WKT.
@@ -657,25 +635,38 @@ def _write_geotiff_gdal(
         # Windows when another package upgrades numpy in the QGIS env) throws
         # "numpy.core.multiarray failed to import" here and the whole save fails
         # even though GDAL itself works. ReadRaster/WriteRaster are pure C.
-        for i in range(1, bands + 1):
-            raw = src_ds.GetRasterBand(i).ReadRaster(
-                0, 0, recv_w, recv_h, recv_w, recv_h, gdal.GDT_Byte
+        for i, source_index in enumerate(color_sources, 1):
+            source_band = src_ds.GetRasterBand(source_index)
+            target_band = dst_ds.GetRasterBand(i)
+            _copy_band(source_band, target_band, recv_w, recv_h)
+            _check_gdal(
+                target_band.SetColorInterpretation(source_band.GetColorInterpretation()), "color interpretation"
             )
-            dst_ds.GetRasterBand(i).WriteRaster(
-                0, 0, recv_w, recv_h, raw, recv_w, recv_h, gdal.GDT_Byte
+        if alpha_source:
+            _copy_band(src_ds.GetRasterBand(alpha_source), dst_ds.GetRasterBand(bands + 1), recv_w, recv_h)
+            _check_gdal(
+                dst_ds.GetRasterBand(bands + 1).SetColorInterpretation(gdal.GCI_AlphaBand), "alpha interpretation"
             )
 
         if crop_polygon_wkt:
+            if not alpha_source:
+                _write_opaque_alpha_band(dst_ds, bands + 1)
             # Reversible polygon crop (P3): the alpha band appended above.
             # Never fails the write over cosmetic cropping; a rasterization
             # error falls back to a fully opaque band instead.
             try:
                 _rasterize_crop_alpha(
-                    dst_ds, bands + 1, crop_polygon_wkt, geotransform, projection_wkt
+                    dst_ds, bands + 1, crop_polygon_wkt, geotransform, projection_wkt,
+                    preserve_alpha=bool(alpha_source),
                 )
             except Exception as err:  # noqa: BLE001 - crop is best-effort
                 log_warning(f"crop alpha rasterization failed ({err}); using opaque band")
-                _write_opaque_alpha_band(dst_ds, bands + 1)
+                if alpha_source:
+                    _copy_band(src_ds.GetRasterBand(alpha_source), dst_ds.GetRasterBand(bands + 1), recv_w, recv_h)
+                else:
+                    _write_opaque_alpha_band(dst_ds, bands + 1)
+                dst_ds.SetMetadataItem("AI_EDIT_CROP", None)
+                dst_ds.SetMetadataItem("AI_EDIT_CROP_POLYGON_WKT", None)
 
         # Internal overviews so big outputs pan/zoom instantly everywhere the
         # file travels (QGIS, ArcGIS...). Best-effort: never fail the paid
@@ -687,19 +678,32 @@ def _write_geotiff_gdal(
                 levels.append(factor)
                 factor *= 2
             if levels:
-                gdal.SetConfigOption("COMPRESS_OVERVIEW", "DEFLATE")
+                # Thread-local: a process-wide option would leak into QGIS's
+                # own pyramid builds running at the same time.
+                previous = gdal.GetThreadLocalConfigOption("COMPRESS_OVERVIEW", None)
+                gdal.SetThreadLocalConfigOption("COMPRESS_OVERVIEW", "DEFLATE")
                 try:
-                    dst_ds.BuildOverviews("AVERAGE", levels)
+                    _check_gdal(dst_ds.BuildOverviews("AVERAGE", levels), "overviews")
                 finally:
-                    gdal.SetConfigOption("COMPRESS_OVERVIEW", None)
+                    gdal.SetThreadLocalConfigOption("COMPRESS_OVERVIEW", previous)
         except Exception as err:  # noqa: BLE001 - cosmetic, file is already valid
             log_warning(f"overview build skipped: {err}")
 
-        dst_ds.FlushCache()
+        _check_gdal(dst_ds.FlushCache(), "flush output")
         dst_ds = None
         src_ds = None
+    except BaseException:
+        # Close before deleting: Windows keeps an open dataset's file locked,
+        # and a half-written .tif must not stay in the user's folder.
+        dst_ds = None
+        src_ds = None
+        remove_with_retry(output_path)
+        raise
     finally:
-        gdal.Unlink(vsimem_path)
+        try:
+            gdal.Unlink(vsimem_path)
+        except RuntimeError as err:
+            log_warning(f"Image buffer cleanup failed: {err}")
 
     # GDAL can return a dataset and still leave no file on disk (silent driver
     # failure). Catch it here so the user gets a clear write error instead of a
@@ -712,37 +716,32 @@ def _write_geotiff_gdal(
     return output_path
 
 
-OUTPUT_DIR_SETTING = "AIEdit/output_dir"
+def _check_gdal(result, operation):
+    """GDAL success is 0 (or None on older FlushCache bindings)."""
+    if result not in (0, None):
+        raise RuntimeError(f"GDAL {operation} failed: {gdal.GetLastErrorMsg()}")
 
 
-def _documents_default_dir() -> str:
-    """~/Documents/AI Edit via QStandardPaths so the OS picks the localized folder."""
+def _copy_band(source, target, width, height):
+    """Copy tile-height strips to bound Python buffers independently of height."""
+    for y in range(0, height, 256):
+        rows = min(256, height - y)
+        raw = source.ReadRaster(0, y, width, rows, width, rows, gdal.GDT_Byte)
+        if raw is None or len(raw) != width * rows:
+            raise RuntimeError("Incomplete raster band read")
+        _check_gdal(target.WriteRaster(0, y, width, rows, raw, width, rows, gdal.GDT_Byte), "band write")
+
+
+def _valid_extent(value, keys):
+    if not isinstance(value, dict):
+        return None
     try:
-        from qgis.PyQt.QtCore import QStandardPaths
-
-        base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
-    except Exception:
-        base = ""
-    if not base:
-        base = os.path.expanduser("~")
-    return os.path.join(base, "AI Edit")
-
-
-def get_output_dir() -> str:
-    """1) QSettings override, 2) <project_dir>/ai_edit_outputs/, 3) ~/Documents/AI Edit/."""
-    from qgis.core import QgsProject, QgsSettings
-
-    settings = QgsSettings()
-    override = (settings.value(OUTPUT_DIR_SETTING, "", type=str) or "").strip()
-    if override:
-        return override
-
-    project = QgsProject.instance()
-    project_path = project.absoluteFilePath()
-    if project_path:
-        return os.path.join(os.path.dirname(project_path), "ai_edit_outputs")
-
-    return _documents_default_dir()
+        coords = [float(value[key]) for key in keys]
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+    if not all(math.isfinite(v) for v in coords) or coords[2] <= coords[0] or coords[3] <= coords[1]:
+        return None
+    return dict(zip(("xmin", "ymin", "xmax", "ymax"), coords))
 
 
 def extent_and_crs_from_job(job: dict) -> tuple[dict, str] | None:
@@ -757,38 +756,21 @@ def extent_and_crs_from_job(job: dict) -> tuple[dict, str] | None:
     """
     from qgis.core import QgsCoordinateReferenceSystem
 
-    authid = (job.get("crs_authid") or "").strip()
+    authid_value = job.get("crs_authid")
+    authid = authid_value.strip() if isinstance(authid_value, str) else ""
     bbox = job.get("bbox")
-    if authid and isinstance(bbox, dict) and all(k in bbox for k in ("xmin", "ymin", "xmax", "ymax")):
+    native = _valid_extent(bbox, ("xmin", "ymin", "xmax", "ymax"))
+    if authid and native:
         crs = QgsCoordinateReferenceSystem(authid)
         if crs.isValid():
-            return {
-                "xmin": float(bbox["xmin"]),
-                "ymin": float(bbox["ymin"]),
-                "xmax": float(bbox["xmax"]),
-                "ymax": float(bbox["ymax"]),
-            }, crs.toWkt()
+            return native, crs.toWkt()
 
     wgs = job.get("bbox_wgs84")
-    if isinstance(wgs, dict) and all(k in wgs for k in ("west", "south", "east", "north")):
+    geographic = _valid_extent(wgs, ("west", "south", "east", "north"))
+    if (geographic and -180 <= geographic["xmin"] < geographic["xmax"] <= 180
+            and -90 <= geographic["ymin"] < geographic["ymax"] <= 90):
         crs = QgsCoordinateReferenceSystem("EPSG:4326")
         if crs.isValid():
-            return {
-                "xmin": float(wgs["west"]),
-                "ymin": float(wgs["south"]),
-                "xmax": float(wgs["east"]),
-                "ymax": float(wgs["north"]),
-            }, crs.toWkt()
+            return geographic, crs.toWkt()
 
     return None
-
-
-def set_output_dir(path: str) -> None:
-    from qgis.core import QgsSettings
-
-    settings = QgsSettings()
-    settings.setValue(OUTPUT_DIR_SETTING, (path or "").strip())
-    try:
-        settings.sync()
-    except Exception:  # nosec B110
-        pass
