@@ -104,7 +104,7 @@ jobs:
       # 0.16 widened its default to hundreds of style rules, which changed the
       # gate under the same version range.
       - name: ruff
-        run: ruff check --isolated --select E4,E7,E9,F src/
+        run: ruff check --isolated --no-cache --select E4,E7,E9,F src/
 
       # The exact config-blind line plugins.qgis.org runs. W504 is the one that
       # has rejected an upload before.
@@ -120,10 +120,10 @@ jobs:
       - name: detect-secrets
         run: |
           set -euo pipefail
-          detect-secrets scan src/ __init__.py > .ds.json
+          detect-secrets scan src/ __init__.py > "$RUNNER_TEMP/ds.json"
           python - <<'PY'
-          import json, sys
-          data = json.load(open(".ds.json"))
+          import json, os, sys
+          data = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "ds.json")))
           hits = data.get("results", {})
           for path, entries in hits.items():
               for e in entries:
