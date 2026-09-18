@@ -100,8 +100,11 @@ jobs:
 
       # --isolated because ruff.toml is private and absent here: the public
       # gate must not silently change rule set with a file it cannot see.
+      # --select pins ruff's long-standing default set (E4, E7, E9, F): ruff
+      # 0.16 widened its default to hundreds of style rules, which changed the
+      # gate under the same version range.
       - name: ruff
-        run: ruff check --isolated src/
+        run: ruff check --isolated --select E4,E7,E9,F src/
 
       # The exact config-blind line plugins.qgis.org runs. W504 is the one that
       # has rejected an upload before.
