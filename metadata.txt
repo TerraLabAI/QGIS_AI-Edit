@@ -6,12 +6,15 @@ qgisMaximumVersion=4.99
 # Qt6 builds of QGIS 3.x refuse to load a plugin that omits this line.
 # QGIS 4 dropped the check and a Qt5 build never runs it.
 supportsQt6=True
-version=1.9.1
+version=1.9.2
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.9.2
+    - Smaller download: the same plugin, without the developer notes in its source
+
     1.9.1
     - Signed in to AI Agent or AI Segmentation? AI Edit now signs you in on the same account
     - A zone you already drew is offered again on the zone step
