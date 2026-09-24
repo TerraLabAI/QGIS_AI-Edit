@@ -6,12 +6,18 @@ qgisMaximumVersion=4.99
 # Qt6 builds of QGIS 3.x refuse to load a plugin that omits this line.
 # QGIS 4 dropped the check and a Qt5 build never runs it.
 supportsQt6=True
-version=1.9.0
+version=1.9.1
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.9.1
+    - Signed in to AI Agent or AI Segmentation? AI Edit now signs you in on the same account
+    - A zone you already drew is offered again on the zone step
+    - QGIS no longer freezes at startup while AI Edit connects
+    - Vectorize works on rasters whose projection is set on the layer only
+
     1.9.0
     - Vectorize results now save straight to a GeoPackage, ready to use in your project
     - The Library page gets full keyboard navigation, a Favorites star, and clearer session names and previews
@@ -35,10 +41,6 @@ changelog=
     - New Reference panel: import an image from a file or from your project
     - Draw a zone as a free shape, and pan while drawing
     - The panel works with the keyboard and reads correctly on a screen reader
-
-    1.6.8
-    - The free plan includes 10 AI edits every month
-    - Runs on QGIS 4
 
 about=
     Show a project before it exists, on the aerial imagery you already have open
