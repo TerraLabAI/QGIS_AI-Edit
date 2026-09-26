@@ -287,10 +287,18 @@ class ClassListWidget(QWidget):
     def selected_classes(self) -> list[dict]:
 
         out = []
+
+
+        taken: set[str] = set()
         for i, row in enumerate(self._rows):
             if not row.check.isChecked():
                 continue
-            label = row.name.text().strip() or _class_number_name(i + 1)
+            base = row.name.text().strip() or _class_number_name(i + 1)
+            label, n = base, 2
+            while label.casefold() in taken:
+                label = f"{base} {n}"
+                n += 1
+            taken.add(label.casefold())
             out.append({"rgb": row.rgb, "label": label})
         return out
 

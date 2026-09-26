@@ -15,8 +15,10 @@ from qgis.core import (
     QgsEditorWidgetSetup,
     QgsFillSymbol,
     QgsProject,
+    QgsProperty,
     QgsRendererCategory,
     QgsSingleSymbolRenderer,
+    QgsSymbolLayer,
     QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import QDate, QLocale, Qt
@@ -398,8 +400,43 @@ def apply_class_style(layer: QgsVectorLayer, classes: list[dict]) -> None:
         categories.append(
             QgsRendererCategory(label, _class_fill_symbol(cls["rgb"]), label)
         )
+
+
+
+    others = _class_fill_symbol((128, 128, 128))
+    fill = others.symbolLayer(0)
+    fill.setDataDefinedProperty(
+        QgsSymbolLayer.Property.FillColor,
+        QgsProperty.fromExpression(
+            "coalesce(color_rgba(color_part(\"class_color\", 'red'), color_part(\"class_color\", 'green'),"
+            " color_part(\"class_color\", 'blue'), 205), '128,128,128,205')"
+        ),
+    )
+    fill.setDataDefinedProperty(
+        QgsSymbolLayer.Property.StrokeColor,
+        QgsProperty.fromExpression("coalesce(\"class_color\", '#808080')"),
+    )
+    categories.append(QgsRendererCategory(None, others, tr("Other")))
     layer.setRenderer(QgsCategorizedSymbolRenderer("class_name", categories))
     layer.triggerRepaint()
+
+
+def refresh_class_setup(
+    layer: QgsVectorLayer, classes: list[dict], source_raster_name: str = ""
+) -> None:
+
+
+
+    apply_class_style(layer, classes)
+    set_layer_provenance(layer, source_raster_name, classes)
+    default_label = classes[0].get("label", "") if len(classes) == 1 else ""
+    _configure_attribute_table(layer, default_label)
+    if layer.providerType() == "ogr":
+        table = layer.source().split("layername=", 1)[-1].split("|", 1)[0]
+        try:
+            layer.saveStyleToDatabase(table, "AI Edit Vectorize", True, "")
+        except Exception:  # nosec B110
+            pass
 
 
 def _configure_attribute_table(layer: QgsVectorLayer, class_label: str) -> None:

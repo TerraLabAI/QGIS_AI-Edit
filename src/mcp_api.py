@@ -47,7 +47,9 @@ from __future__ import annotations
 import copy
 import html
 import math
+import os
 import re
+import time
 from typing import Any
 
 from qgis.core import QgsProject, QgsRasterLayer
@@ -512,12 +514,22 @@ class EditMCPAPI(
 
 
 
+
+
+
         from .core.generation.vectorization_service import vectorize_by_color
+        from .core.generation.vectorize_layer import (
+            AI_EDIT_GPKG_FILENAME,
+            friendly_vector_layer_name,
+            persist_layer_to_gpkg,
+        )
+        from .core.slug import slugify
         from .ui.layer_groups import (
             add_layer_to_ai_edit_top,
             most_recent_ai_edit_output,
             promote_layer_to_own_subgroup,
         )
+        from .ui.raster_writer import get_output_dir
 
         if not (isinstance(target_rgb, (list, tuple)) and len(target_rgb) == 3):
             return {"_error": "target_rgb must be [r, g, b] with values from 0 to 255."}
@@ -580,12 +592,13 @@ class EditMCPAPI(
             except (TypeError, ValueError, OverflowError):
                 return {"_error": "simplify_factor must be a number."}
 
+        label = str(class_label or "")
         try:
             layer = vectorize_by_color(
                 raster,
                 rgb,
-                layer_name=f"{raster.name()} vectorized",
-                class_label=str(class_label or ""),
+                layer_name=friendly_vector_layer_name(label, raster.name()),
+                class_label=label,
                 **options,
             )
         except Exception as err:  # noqa: BLE001
@@ -596,6 +609,20 @@ class EditMCPAPI(
             }
         if layer is None or not layer.isValid():
             return {"_error": "Vectorize produced no usable layer."}
+
+
+
+        classes = [{"rgb": rgb, "label": label}]
+        base = slugify(label or raster.name())[:40] or "result"
+        persisted, _reason = persist_layer_to_gpkg(
+            layer,
+            os.path.join(get_output_dir(), AI_EDIT_GPKG_FILENAME),
+            f"vectorize_{base}_{time.strftime('%Y%m%d_%H%M%S')}",
+            classes,
+            raster.name(),
+        )
+        if persisted is not None:
+            layer = persisted
 
         subgroup = promote_layer_to_own_subgroup(raster.id())
         QgsProject.instance().addMapLayer(layer, False)
@@ -610,6 +637,7 @@ class EditMCPAPI(
             "feature_count": layer.featureCount(),
             "source_raster": raster.name(),
             "target_rgb": list(rgb),
+            "saved_to_file": persisted is not None,
         }
 
 

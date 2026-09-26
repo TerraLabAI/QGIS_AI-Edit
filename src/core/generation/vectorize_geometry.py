@@ -1,10 +1,30 @@
 
 from __future__ import annotations
 
-from qgis.core import QgsDistanceArea, QgsFeature, QgsGeometry
+from qgis.core import Qgis, QgsDistanceArea, QgsFeature, QgsGeometry
 
 from .. import qt_compat as QtC
+from ..logger import log_debug
 from ..raster_writer import read_crop_polygon_wkt
+
+
+def repair_polygon_geometry(geom: QgsGeometry) -> QgsGeometry:
+
+
+
+
+
+
+
+    method = getattr(getattr(Qgis, "MakeValidMethod", None), "Structure", None)
+    if method is not None:
+        try:
+            fixed = geom.makeValid(method)
+            if fixed is not None and not fixed.isEmpty():
+                return fixed
+        except Exception as err:  # noqa: BLE001
+            log_debug(f"Vectorize: structure repair unavailable ({err}), using linework")
+    return geom.makeValid()
 
 
 def _make_measurer(raster_crs, transform_context, ellipsoid: str) -> QgsDistanceArea:
@@ -57,7 +77,7 @@ def _clip_feats_to_crop(
         if geom is None or geom.isEmpty():
             continue
         if not geom.isGeosValid():
-            fixed = geom.makeValid()
+            fixed = repair_polygon_geometry(geom)
             if fixed is not None and not fixed.isEmpty():
                 geom = fixed
         parts = geom.asGeometryCollection() if geom.isMultipart() else [geom]

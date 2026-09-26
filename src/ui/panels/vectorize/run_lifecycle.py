@@ -34,8 +34,6 @@ def _emptying_setting(run: dict | None, good: dict | None) -> str | None:
             return "expand"
         if run["min_pixels"] > good["min_pixels"]:
             return "min_pixels"
-        if run["sieve"] > good["sieve"]:
-            return "sieve"
         if run["tolerance"] < good["tolerance"]:
             return "tolerance"
     return "expand" if run["expand"] < 0 else None
@@ -272,9 +270,8 @@ class RunLifecycleMixin:
         classes = params["classes"]
         try:
             from ....core.generation.vectorize_layer import (
-                apply_class_style,
                 build_vector_layer,
-                set_layer_provenance,
+                refresh_class_setup,
                 transplant_features,
             )
 
@@ -301,16 +298,24 @@ class RunLifecycleMixin:
 
 
 
+                if existing.isEditable():
+
+
+
+                    raise AIEditError(
+                        ErrorCode.LAYER_IN_EDIT_MODE,
+                        tr("Save or discard your edits on the vector layer, then run Vectorize again."),
+                    )
                 transplant_ok = transplant_features(existing, new_layer)
+                if not transplant_ok:
+
+
+
+                    raise AIEditError(
+                        ErrorCode.WRITE_ERROR,
+                        tr("Couldn't save the updated features to the file."),
+                    )
                 if existing.providerType() == "ogr":
-
-
-
-                    if not transplant_ok:
-                        raise AIEditError(
-                            ErrorCode.WRITE_ERROR,
-                            tr("Couldn't save the updated features to the file."),
-                        )
 
 
                     existing.reload()
@@ -319,10 +324,7 @@ class RunLifecycleMixin:
 
 
                 if params["signature"] != self._last_signature:
-                    apply_class_style(existing, classes)
-                    set_layer_provenance(
-                        existing, params.get("raster_name", ""), classes
-                    )
+                    refresh_class_setup(existing, classes, params.get("raster_name", ""))
                 existing.triggerRepaint()
                 final_layer = existing
             else:
@@ -491,6 +493,8 @@ class RunLifecycleMixin:
             error_code = "zero_matches"
         elif code == _EC.WRITE_ERROR:
             error_code = "write_error"
+        elif code == _EC.LAYER_IN_EDIT_MODE:
+            error_code = "layer_in_edit_mode"
         else:
             error_code = "vectorize_failed"
 
@@ -521,11 +525,6 @@ class RunLifecycleMixin:
                     "No shape reaches {n} px. Lower “Min polygon size”."
                 ).format(n=run["min_pixels"])
                 focus = self._min_pixels_spin
-            elif setting == "sieve":
-                text = tr(
-                    "“Remove speckle” at {n} px removed every shape. Lower it."
-                ).format(n=run["sieve"])
-                focus = self._sieve_spin
             elif setting == "tolerance":
                 text = tr(
                     "“Color tolerance” at {n} matches no pixel. Raise it."
@@ -533,11 +532,10 @@ class RunLifecycleMixin:
                 focus = self._tolerance_spin
             else:
                 text = get_export_copy(
-                    "widgets.run_lifecycle.no_shapes_generic",
+                    "widgets.run_lifecycle.no_shapes_generic_v2",
                     tr(
                         "No shapes left with these settings. Set “Expand/Contract” "
-                        "closer to 0, lower “Min polygon size” or “Remove speckle”, "
-                        "or raise “Color tolerance”."
+                        "closer to 0, lower “Min polygon size”, or raise “Color tolerance”."
                     ),
                 )
                 focus = self._min_pixels_spin

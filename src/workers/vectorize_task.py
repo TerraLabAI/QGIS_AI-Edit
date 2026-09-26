@@ -21,6 +21,31 @@ from ..core.i18n import tr
 from ..core.logger import log_warning
 
 
+def _detached_payload(value):
+
+
+
+
+
+
+
+    if isinstance(value, dict):
+        return {key: _detached_payload(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_detached_payload(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_detached_payload(item) for item in value)
+    if type(value).__name__.startswith("Qgs"):
+        try:
+            return type(value)(value)
+        except TypeError:
+            return value
+    try:
+        return copy.deepcopy(value)
+    except (TypeError, copy.Error):
+        return value
+
+
 class VectorizeTask(QgsTask):
 
 
@@ -35,7 +60,7 @@ class VectorizeTask(QgsTask):
 
 
         self._compute_kwargs = dict(compute_kwargs)
-        self._params = copy.deepcopy(params)
+        self._params = _detached_payload(params)
         self._features: list | None = None
         self._failure: tuple[str, str] | None = None
 

@@ -186,11 +186,3 @@ def migrate_settings_key(name: str, key: str, extra_keys: tuple = ()) -> float |
         except Exception as err:  # noqa: BLE001
             log_warning(f"cache migration for {name} failed: {err}")
             return None
-
-
-def reset_cache_file_state() -> None:
-
-    with _lock:
-        _known_text.clear()
-        _known_stat.clear()
-        _migrated.clear()

@@ -16,6 +16,7 @@
 
 
 
+
 from __future__ import annotations
 
 import math
@@ -51,7 +52,7 @@ from ..raster_writer import (
 
 
 
-from .vectorize_geometry import _clip_feats_to_crop, _make_measurer
+from .vectorize_geometry import _clip_feats_to_crop, _make_measurer, repair_polygon_geometry
 from .vectorize_layer import (
     AI_EDIT_GPKG_FILENAME,
     apply_class_style,
@@ -62,6 +63,7 @@ from .vectorize_layer import (
     transplant_features,
 )
 from .vectorize_masks import _numpy_fill_holes, _numpy_morphology, _refine_mask  # noqa: F401
+from .vectorize_topology import simplify_shared
 
 
 __all__ = [
@@ -269,7 +271,7 @@ def _emit_traced_polygon(
         return next_fid
     geoms = [geom]
     if not geom.isGeosValid():
-        fixed = geom.makeValid()
+        fixed = repair_polygon_geometry(geom)
         source_parts = fixed.asGeometryCollection() if fixed.isMultipart() else [fixed]
         parts = []
         for part in source_parts:
@@ -325,12 +327,15 @@ def _trace_mask(
 
     if sieve_threshold > 0:
 
+
+
+
         gdal.SieveFilter(
             srcBand=mask_band,
             maskBand=None,
             dstBand=mask_band,
             threshold=int(sieve_threshold),
-            connectedness=8,
+            connectedness=4,
         )
 
     spatial_ref = _polygon_spatial_ref(proj)
@@ -340,7 +345,7 @@ def _trace_mask(
     ogr_layer = ogr_ds.CreateLayer("polys", spatial_ref, ogr.wkbPolygon)
     ogr_layer.CreateField(ogr.FieldDefn("value", ogr.OFTInteger))
 
-    gdal.Polygonize(mask_band, mask_band, ogr_layer, 0, ["8CONNECTED=8"])
+    gdal.Polygonize(mask_band, mask_band, ogr_layer, 0, [])
 
 
     if is_cancelled is not None and is_cancelled():
@@ -348,9 +353,8 @@ def _trace_mask(
 
     pixel_area = abs(gt[1] * gt[5] - gt[2] * gt[4])
     min_area = pixel_area * float(min_pixels)
-    simplify_tol = (pixel_area ** 0.5) * simplify_factor
 
-    feats: list[QgsFeature] = []
+    raw = []
     ogr_layer.ResetReading()
     for seen, ogr_feat in enumerate(ogr_layer):
         if seen % 256 == 0 and is_cancelled is not None and is_cancelled():
@@ -358,16 +362,26 @@ def _trace_mask(
         if ogr_feat.GetField("value") != 1:
             continue
         geom_ref = ogr_feat.GetGeometryRef()
-        if geom_ref is None:
+        if geom_ref is None or geom_ref.GetArea() < min_area:
             continue
-        geom = QgsGeometry.fromWkt(geom_ref.ExportToWkt())
-        if geom.isEmpty() or geom.area() < min_area:
-            continue
+        raw.append(geom_ref.Clone())
+
+    if simplify_factor > 0 or round_corners:
+        geoms = simplify_shared(
+            raw, gt, float(simplify_factor), round_corners, is_cancelled, (width, height)
+        )
+        if geoms is None:
+            return None
+    else:
+        geoms = [QgsGeometry.fromWkt(g.ExportToWkt()) for g in raw]
+
+    feats: list[QgsFeature] = []
+    for geom in geoms:
         next_fid = _emit_traced_polygon(
             geom,
             min_area=min_area,
-            simplify_tol=simplify_tol,
-            round_corners=round_corners,
+            simplify_tol=0.0,
+            round_corners=False,
             class_label=class_label,
             class_color_hex=class_color_hex,
             measurer=measurer,
@@ -436,60 +450,71 @@ def _trace_classes_batched(
 
 
 
+
     if len(classes) > _MAX_BATCHED_CLASSES:
         return False, None
     height, width = best_idx.shape
     label_array = np.zeros(best_idx.shape, dtype=np.uint8)
     label_classes: dict[int, tuple[str, str]] = {}
 
-    mem_raster_driver = gdal.GetDriverByName("MEM")
-    work_ds = mem_raster_driver.Create("", width, height, 1, gdal.GDT_Byte)
-    work_ds.SetGeoTransform(gt)
-    work_ds.SetProjection(proj)
-    work_band = work_ds.GetRasterBand(1)
     for class_idx, cls in enumerate(classes):
         if is_cancelled is not None and is_cancelled():
             return True, None
-        mask = _class_mask(best_idx, assigned, class_idx, expand_value, fill_holes)
-        if mask is None:
+        stamp = (best_idx == class_idx) & assigned
+        if not np.any(stamp):
             continue
-        if sieve_threshold > 0:
-            work_band.WriteArray(mask)
-
-
-            gdal.SieveFilter(
-                srcBand=work_band,
-                maskBand=None,
-                dstBand=work_band,
-                threshold=int(sieve_threshold),
-                connectedness=8,
-            )
-            mask = work_band.ReadAsArray()
-        stamp = mask != 0
-
-
-
-
-        if bool(np.any(label_array[stamp])):
-            del work_ds
-            return False, None
         label_value = len(label_classes) + 1
         np.copyto(label_array, np.uint8(label_value), where=stamp)
         label_classes[label_value] = (
             cls.get("label", ""),
             "#{:02X}{:02X}{:02X}".format(*cls["rgb"]),
         )
-    del work_band
-    del work_ds
-
     if not label_classes:
         return True, []
+
+
+    other_label = len(label_classes) + 1
+    others = assigned & (best_idx >= len(classes))
+    np.copyto(label_array, np.uint8(other_label), where=others)
+    del others
+
+    mem_raster_driver = gdal.GetDriverByName("MEM")
     label_ds = mem_raster_driver.Create("", width, height, 1, gdal.GDT_Byte)
     label_ds.SetGeoTransform(gt)
     label_ds.SetProjection(proj)
     label_band = label_ds.GetRasterBand(1)
     label_band.WriteArray(label_array)
+
+
+
+
+
+
+    threshold = max(int(sieve_threshold), int(min_pixels))
+    if threshold > 0:
+        gdal.SieveFilter(
+            srcBand=label_band,
+            maskBand=None,
+            dstBand=label_band,
+            threshold=threshold,
+            connectedness=4,
+        )
+        if is_cancelled is not None and is_cancelled():
+            return True, None
+        label_array = label_band.ReadAsArray()
+    if expand_value != 0 or fill_holes:
+
+        for label_value in label_classes:
+            if is_cancelled is not None and is_cancelled():
+                return True, None
+            mask = label_array == label_value
+            refined = _refine_mask(mask, expand_value=expand_value, fill_holes=fill_holes) != 0
+            label_array[mask & ~refined] = 0
+            free = (label_array == 0) | (label_array == other_label)
+            label_array[refined & ~mask & free] = label_value
+        label_band.WriteArray(label_array)
     label_band.FlushCache()
+    del label_array
 
     spatial_ref = _polygon_spatial_ref(proj)
     ogr_driver = memory_vector_driver()
@@ -498,20 +523,19 @@ def _trace_classes_batched(
     ogr_layer.CreateField(ogr.FieldDefn("value", ogr.OFTInteger))
 
 
-    gdal.Polygonize(label_band, label_band, ogr_layer, 0, ["8CONNECTED=8"])
+    gdal.Polygonize(label_band, label_band, ogr_layer, 0, [])
 
 
     if is_cancelled is not None and is_cancelled():
         return True, None
 
-    pixel_area = abs(gt[1] * gt[5] - gt[2] * gt[4])
-    min_area = pixel_area * float(min_pixels)
-    simplify_tol = (pixel_area ** 0.5) * simplify_factor
 
 
 
 
-    by_label: dict[int, list[QgsGeometry]] = {}
+
+    values: list[int] = []
+    raw: list = []
     seen = 0
     ogr_layer.ResetReading()
     for ogr_feat in ogr_layer:
@@ -524,9 +548,22 @@ def _trace_classes_batched(
         geom_ref = ogr_feat.GetGeometryRef()
         if geom_ref is None:
             continue
-        geom = QgsGeometry.fromWkt(geom_ref.ExportToWkt())
-        if geom.isEmpty() or geom.area() < min_area:
-            continue
+        values.append(value)
+        raw.append(geom_ref.Clone())
+
+    if simplify_factor > 0 or round_corners:
+        geoms = simplify_shared(
+            raw, gt, float(simplify_factor), round_corners, is_cancelled, (width, height)
+        )
+        if geoms is None:
+            return True, None
+    else:
+        geoms = [QgsGeometry.fromWkt(g.ExportToWkt()) for g in raw]
+    del raw
+    if is_cancelled is not None and is_cancelled():
+        return True, None
+    by_label: dict[int, list[QgsGeometry]] = {}
+    for value, geom in zip(values, geoms):
         by_label.setdefault(value, []).append(geom)
 
     feats: list[QgsFeature] = []
@@ -535,11 +572,14 @@ def _trace_classes_batched(
         for geom in by_label.get(value, []):
             if next_fid % 256 == 0 and is_cancelled is not None and is_cancelled():
                 return True, None
+
+
+
             next_fid = _emit_traced_polygon(
                 geom,
-                min_area=min_area,
-                simplify_tol=simplify_tol,
-                round_corners=round_corners,
+                min_area=0.0,
+                simplify_tol=0.0,
+                round_corners=False,
                 class_label=class_label,
                 class_color_hex=class_color_hex,
                 measurer=measurer,
@@ -788,7 +828,7 @@ def vectorize_by_color(
     tolerance: int = 40,
     sieve_threshold: int = 10,
     min_pixels: int = 50,
-    simplify_factor: float = 1.5,
+    simplify_factor: float = 1.0,
     layer_name: str | None = None,
     output_rgb: tuple[int, int, int] | None = None,
     round_corners: bool = False,

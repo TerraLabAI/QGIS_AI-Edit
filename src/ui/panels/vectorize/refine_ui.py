@@ -25,6 +25,8 @@ from ...panel_helpers import (
 
 
 
+
+
 _REFINE_TOLERANCE_DEFAULT = 90
 _REFINE_SIMPLIFY_DEFAULT = 1.0
 _REFINE_SIEVE_DEFAULT = 10
@@ -109,6 +111,7 @@ class RefineUiMixin:
             row.addStretch()
             row.addWidget(spin)
             parent_layout.addLayout(row)
+            spin.row_label = lab
             return spin
 
         def _dspin_row(parent_layout, label_text: str, tip: str,
@@ -216,18 +219,26 @@ class RefineUiMixin:
         )
 
         self._sieve_spin.setSuffix(" px")
+
+
+
+        self._sieve_spin.setVisible(False)
+        self._sieve_spin.row_label.setVisible(False)
         self._fill_holes_check = _check_row(
             content_layout,
             get_export_copy("widgets.refine_ui.fill_holes_label", tr("Fill holes:")),
-            get_export_copy("widgets.refine_ui.fill_holes_tip_period", tr("Fill the holes inside each shape.")),
+            get_export_copy(
+                "widgets.refine_ui.fill_holes_tip_covered",
+                tr("Fill the holes inside each shape, except where another checked class sits."),
+            ),
             default=False,
         )
         self._min_pixels_spin = _spin_row(
             content_layout,
             get_export_copy("widgets.refine_ui.min_polygon_size_label", tr("Min polygon size:")),
             get_export_copy(
-                "widgets.refine_ui.min_polygon_size_tip_short",
-                tr("Drop polygons smaller than this after tracing."),
+                "widgets.refine_ui.min_polygon_size_tip_merge",
+                tr("Shapes smaller than this join the class around them, so no hole is left."),
             ),
             0, 100000, _REFINE_MIN_PIXELS_DEFAULT,
         )

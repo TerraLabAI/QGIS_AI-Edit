@@ -6,12 +6,18 @@ qgisMaximumVersion=4.99
 # Qt6 builds of QGIS 3.x refuse to load a plugin that omits this line.
 # QGIS 4 dropped the check and a Qt5 build never runs it.
 supportsQt6=True
-version=1.9.2
+version=1.9.3
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.9.3
+    - Vectorize runs again on QGIS 3.44 instead of stopping with a Python error
+    - Vectorized classes fit together with no gap or overlap, rounded corners included
+    - Shapes under the minimum size join the class around them instead of leaving holes
+    - A class renamed in the attribute table stays visible on the map
+
     1.9.2
     - Smaller download: the same plugin, without the developer notes in its source
 
@@ -32,18 +38,6 @@ changelog=
     - Generate tells you under the button why it is greyed out
     - A generation that stops tells you what to try next
     - The account window fits a laptop screen
-
-    1.7.4
-    - Pick the layer to edit, then draw your zone in it: the AI works from that layer alone
-    - The layer list follows your map view and picks the imagery you are looking at
-    - A Map button captures any rectangle you drag as a reference image
-    - AI Edit runs from the Processing Toolbox, the model designer and batch mode
-
-    1.7.0
-    - Find, reopen and rename your past work from the Prompt Library
-    - New Reference panel: import an image from a file or from your project
-    - Draw a zone as a free shape, and pan while drawing
-    - The panel works with the keyboard and reads correctly on a screen reader
 
 about=
     Show a project before it exists, on the aerial imagery you already have open

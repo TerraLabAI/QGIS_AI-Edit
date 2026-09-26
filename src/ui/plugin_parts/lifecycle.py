@@ -251,11 +251,16 @@ class PluginLifecycleMixin:
 
 
         self._agent_bridge_registered = False
+        self._agent_bridge_unregister = None
         if self.mcp_api is not None:
             try:
-                from ...agent_bridge import register_product
+                from ...agent_bridge import register_product, unregister_product
                 register_product("edit", self.mcp_api)
                 self._agent_bridge_registered = True
+
+
+
+                self._agent_bridge_unregister = unregister_product
             except Exception as err:  # nosec B110
                 log_warning(f"Agent bridge not published: {err}")
 
@@ -553,10 +558,11 @@ class PluginLifecycleMixin:
             self._unregister_processing_provider()
 
         with teardown_step("agent bridge"):
-            if getattr(self, "_agent_bridge_registered", False):
+            unregister = getattr(self, "_agent_bridge_unregister", None)
+            if getattr(self, "_agent_bridge_registered", False) and unregister is not None:
                 self._agent_bridge_registered = False
-                from ...agent_bridge import unregister_product
-                unregister_product("edit")
+                self._agent_bridge_unregister = None
+                unregister("edit")
         with teardown_step("imagery gate"):
             self._finish_imagery_gate()
 

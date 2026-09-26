@@ -156,57 +156,6 @@ def feature_disabled_message(name: str, fallback: str) -> str:
     return value.strip()[:_MAX_FEATURE_NOTE_CHARS]
 
 
-def parse_version(text) -> tuple[int, ...] | None:
-
-    if not isinstance(text, str):
-        return None
-    if len(text) > 100:
-        return None
-    parts = text.strip().lstrip("vV").split(".")
-    out = []
-    for part in parts:
-        part = part.strip()
-        if not part.isascii() or not part.isdigit():
-            return None
-        out.append(int(part))
-    return tuple(out) if out else None
-
-
-def is_update_recommended(installed_version: str) -> bool:
-
-
-    return _parses_higher(get_server_config().get("min_recommended_version"), installed_version)
-
-
-def _parses_higher(candidate, installed_version: str) -> bool:
-
-
-
-    installed = parse_version(installed_version)
-    offered = parse_version(candidate)
-    if installed is None or offered is None:
-        return False
-    width = max(len(installed), len(offered))
-    installed += (0,) * (width - len(installed))
-    offered += (0,) * (width - len(offered))
-    return offered > installed
-
-
-def served_latest_version() -> str | None:
-
-
-    value = get_server_config().get("latest_version")
-    if parse_version(value) is None:
-        return None
-    return value.strip()
-
-
-def is_update_available(installed_version: str) -> bool:
-
-
-    return _parses_higher(served_latest_version(), installed_version)
-
-
 
 _MAX_UPDATE_LINE_CHARS = 160
 
@@ -230,14 +179,6 @@ def served_update_message() -> str | None:
 
 def served_marketplace_url() -> str:
     return _server_url("marketplace_url", MARKETPLACE_URL)
-
-
-def is_update_dismissed(version: str, dismissed_version) -> bool:
-
-
-    if not version or not isinstance(dismissed_version, str):
-        return False
-    return dismissed_version.strip() == version
 
 
 
@@ -274,8 +215,6 @@ def get_activation_key(settings=None) -> str:
 
 
 
-
-
 _consent_memo: bool | None = None
 
 
@@ -293,12 +232,6 @@ def has_consent(settings=None) -> bool:
             QgsSettings().value(f"{SETTINGS_PREFIX}consent_accepted", False, type=bool)
         )
     return _consent_memo
-
-
-def reset_consent_memo() -> None:
-
-    global _consent_memo
-    _consent_memo = None
 
 
 def save_consent(settings=None):

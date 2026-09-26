@@ -287,9 +287,6 @@ _MAX_COPY_CHARS = 400
 _COPY_CTRL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f<>]")
 
 
-_MAX_POOL_ENTRIES = 40
-
-
 def _clean_served_text(value: Any, max_chars: int) -> str | None:
 
 
@@ -352,33 +349,6 @@ def get_activation_copy(
     if served is None:
         return fallback
     return html.escape(served, quote=False) if escape else served
-
-
-def get_export_copy_pool(string_id: str, fallback: tuple[str, ...]) -> tuple[str, ...]:
-
-
-
-
-
-
-
-
-
-    try:
-        container = _read_export_value("copy")
-        if not isinstance(container, dict):
-            return fallback
-        raw = container.get(string_id)
-        if not isinstance(raw, (list, tuple)):
-            return fallback
-        lines = []
-        for item in raw[:_MAX_POOL_ENTRIES]:
-            line = _clean_served_text(item, _MAX_COPY_CHARS)
-            if line is not None:
-                lines.append(line)
-        return tuple(lines) if lines else fallback
-    except Exception:  # nosec B110
-        return fallback
 
 
 def get_export_block(path: str) -> dict | None:

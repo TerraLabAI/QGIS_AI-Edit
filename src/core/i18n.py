@@ -74,21 +74,6 @@ def _read_user_locale() -> str:
         return _user_locale
 
 
-def reset_locale_cache() -> None:
-
-
-
-
-
-
-
-    global _user_locale, _loaded
-    with _locale_lock:
-        _user_locale = None
-        _loaded = False
-        _translations.clear()
-
-
 def _load_translations():
 
     global _loaded
