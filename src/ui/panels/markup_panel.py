@@ -282,6 +282,7 @@ class MarkupPanel(QWidget):
 
     undo_clicked = pyqtSignal()
     done_clicked = pyqtSignal()
+    annotation_count_changed = pyqtSignal(int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -308,9 +309,11 @@ class MarkupPanel(QWidget):
         ))
 
 
+
+
         self._intro_text = get_export_copy(
-            "widgets.markup_panel.intro_short",
-            tr("Sketch where the AI should act."),
+            "widgets.markup_panel.intro_example",
+            tr("Draw a line, then say: add a path along the pink line."),
         )
 
 
@@ -603,6 +606,7 @@ class MarkupPanel(QWidget):
 
         self._annotation_count = max(0, int(count))
         self._refresh_status()
+        self.annotation_count_changed.emit(self._annotation_count)
 
     def annotation_count(self) -> int:
 

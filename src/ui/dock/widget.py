@@ -72,6 +72,8 @@ class AIEditDockWidget(
     launch_clicked = pyqtSignal()
     try_example_requested = pyqtSignal()
     exit_clicked = pyqtSignal()
+    try_again_clicked = pyqtSignal()
+    same_edit_elsewhere_clicked = pyqtSignal()
     zone_clear_requested = pyqtSignal()
 
 

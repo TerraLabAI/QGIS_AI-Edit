@@ -299,7 +299,7 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str, dict | N
         return (
             False,
             get_export_copy(
-                "pipeline.activation_manager.enter_key", tr("Please enter your activation key.")
+                "pipeline.activation_manager.enter_key", tr("You are signed out. Click Sign in to continue.")
             ),
             "NO_KEY",
             None,
@@ -358,7 +358,7 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str, dict | N
                 False,
                 get_export_copy(
                     "pipeline.activation_manager.invalid_key",
-                    tr("Invalid activation key. Check your key and try again."),
+                    tr("Your sign-in is no longer valid. Click Sign in to sign in again."),
                 ),
                 code,
                 None,
@@ -389,7 +389,7 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str, dict | N
             None,
         )
 
-    return True, get_export_copy("pipeline.activation_manager.key_verified", tr("Activation key verified!")), "", result
+    return True, get_export_copy("pipeline.activation_manager.key_verified", tr("Signed in.")), "", result
 
 
 def get_subscribe_url() -> str:

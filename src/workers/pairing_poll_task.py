@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import math
+import threading
 import time
 
 from qgis.core import QgsFeedback, QgsTask
@@ -32,6 +33,8 @@ _RETRY_AFTER_CLAMP_S = (1.0, 15.0)
 
 
 class PairingPollTask(QgsTask):
+
+
 
 
 
@@ -69,7 +72,6 @@ class PairingPollTask(QgsTask):
             QgsTask.Flag.CanCancel,
         )
         self._client = client
-        self._code = code
         if interval_s is None:
             interval_s = get_export_dial("pairing.interval_s", _POLL_INTERVAL_S)
         if total_timeout_s is None:
@@ -84,6 +86,17 @@ class PairingPollTask(QgsTask):
         self.cancelled_by_plugin = False
 
         self._feedback = QgsFeedback()
+
+
+
+        self._codes_lock = threading.Lock()
+        self._deadlines: dict[str, float] = {}
+        self._closed = False
+        self._last_end = "timeout"
+        self._stall_anchor = time.monotonic()
+
+        self.won_code = ""
+        self.add_code(code)
 
     @staticmethod
     def _nonnegative_seconds(value, fallback: float) -> float:
@@ -140,120 +153,173 @@ class PairingPollTask(QgsTask):
             log_warning(f"Pairing poll failed unexpectedly: {err}")
             self._failure = self._unexpected_failure()
             return False
+        finally:
+            self._close()
+
+    def add_code(self, code: str) -> bool:
+
+
+
+        with self._codes_lock:
+            if self._closed:
+                return False
+            if code not in self._deadlines:
+                self._deadlines[code] = time.monotonic() + self._total_timeout_s
+
+                self._stall_anchor = time.monotonic()
+            return True
+
+    def _close(self) -> None:
+        with self._codes_lock:
+            self._closed = True
+
+    def _end_code(self, code: str, failure: tuple[str, str]) -> None:
+
+
+        with self._codes_lock:
+            self._deadlines.pop(code, None)
+        self._failure = failure
+        self._last_end = "failure"
+
+    def _live_codes(self) -> list[str]:
+
+
+
+        with self._codes_lock:
+            now = time.monotonic()
+            for code, deadline in list(self._deadlines.items()):
+                if now >= deadline:
+                    del self._deadlines[code]
+                    self._last_end = "timeout"
+            if not self._deadlines:
+                self._closed = True
+            return list(self._deadlines)
+
+    def _next_deadline(self) -> float:
+        with self._codes_lock:
+            return min(self._deadlines.values(), default=time.monotonic())
 
     def _run_poll(self) -> bool:
-        started = time.monotonic()
-        deadline = started + self._total_timeout_s
-        stall_after_s = get_export_dial("pairing.stall_s", self.STALL_AFTER_S)
         browser_seen = False
         stall_hinted = False
         network_failures = 0
         network_hinted = False
-        while not self.isCanceled() and time.monotonic() < deadline:
-            try:
-                result = self._client.poll_pairing(self._code)
-            except Exception:
-                result = {"error": "poll failed", "code": "NO_NETWORK"}
+        stall_after_s = get_export_dial("pairing.stall_s", self.STALL_AFTER_S)
+        while not self.isCanceled():
+            codes = self._live_codes()
+            if not codes:
+                break
+            sleep_s = self._interval_s
+            for code in codes:
+                try:
+                    result = self._client.poll_pairing(code)
+                except Exception:
+                    result = {"error": "poll failed", "code": "NO_NETWORK"}
 
-            if self.isCanceled():
-                return False
+                if self.isCanceled():
+                    return False
 
-            status = result.get("status") if isinstance(result, dict) else None
-            error_code = (
-                str(result.get("code") or "").strip().upper()
-                if isinstance(result, dict) and "error" in result
-                else ""
-            )
-            if error_code in NETWORK_ERROR_CODES:
-                network_failures += 1
-                if network_failures >= _NETWORK_PROBLEM_AFTER and not network_hinted:
-                    network_hinted = True
-                    self.pairing_network_problem.emit(error_code)
-            else:
-                network_failures = 0
-            if status == "ready":
-                raw_key = result.get("activation_key")
-                key = raw_key.strip() if isinstance(raw_key, str) else ""
-                if _KEY_RE.fullmatch(key):
-                    self._key = key
-                    return True
-
-
-                self._failure = (
-                    get_export_copy(
-                        "pipeline.pairing_poll_task.bad_key",
-                        tr("Unexpected response from the server. Please try again."),
-                    ),
-                    "BAD_KEY",
+                status = result.get("status") if isinstance(result, dict) else None
+                error_code = (
+                    str(result.get("code") or "").strip().upper()
+                    if isinstance(result, dict) and "error" in result
+                    else ""
                 )
-                return False
+                if error_code in NETWORK_ERROR_CODES:
+                    network_failures += 1
+                    if network_failures >= _NETWORK_PROBLEM_AFTER and not network_hinted:
+                        network_hinted = True
+                        self.pairing_network_problem.emit(error_code)
+                else:
+                    network_failures = 0
+                if status == "ready":
+                    raw_key = result.get("activation_key")
+                    key = raw_key.strip() if isinstance(raw_key, str) else ""
+                    if _KEY_RE.fullmatch(key):
+                        self._key = key
+                        self.won_code = code
+                        self._close()
+                        return True
 
-            if status == "no_plan":
 
-
-                self._failure = (
-                    get_export_copy(
-                        "pipeline.pairing_poll_task.no_plan",
-                        tr(
-                            "This account has no active AI Edit plan. "
-                            "Reactivate it on terra-lab.ai, then click Connect again."
+                    self._end_code(code, (
+                        get_export_copy(
+                            "pipeline.pairing_poll_task.bad_key",
+                            tr("Unexpected response from the server. Please try again."),
                         ),
-                    ),
-                    "NO_PLAN",
-                )
-                return False
+                        "BAD_KEY",
+                    ))
+                    continue
 
-            if status == "cancelled":
+                if status == "no_plan":
 
+                    self._end_code(code, (
+                        get_export_copy(
+                            "pipeline.pairing_poll_task.no_plan",
+                            tr(
+                                "This account has no active AI Edit plan. "
+                                "Reactivate it on terra-lab.ai, then click Connect again."
+                            ),
+                        ),
+                        "NO_PLAN",
+                    ))
+                    continue
 
-                self._failure = (
-                    get_export_copy(
-                        "pipeline.pairing_poll_task.cancelled",
-                        tr("Sign-in was cancelled in the browser. Click Connect to try again."),
-                    ),
-                    "CANCELLED",
-                )
-                return False
-
-
-
-
-
+                if status == "cancelled":
 
 
 
-            if status == "pending" and not browser_seen:
-                browser_seen = True
-                self.pairing_browser_seen.emit()
-            elif not browser_seen and not stall_hinted and time.monotonic() - started >= stall_after_s:
+                    self._end_code(code, (
+                        get_export_copy(
+                            "pipeline.pairing_poll_task.cancelled",
+                            tr("Sign-in was cancelled in the browser. Click Connect to try again."),
+                        ),
+                        "CANCELLED",
+                    ))
+                    continue
+
+
+
+
+
+
+
+                if status == "pending" and not browser_seen:
+                    browser_seen = True
+                    self.pairing_browser_seen.emit()
+
+                hint = result.get("retry_after") if isinstance(result, dict) else None
+                if hint is not None:
+                    try:
+                        retry_lo, retry_hi = get_export_dial_pair(
+                            "pipeline.pairing_poll_task.retry_after_clamp_s", _RETRY_AFTER_CLAMP_S
+                        )
+                        hinted_seconds = float(hint)
+                        if math.isfinite(hinted_seconds):
+                            sleep_s = min(sleep_s, min(max(hinted_seconds, retry_lo), retry_hi))
+                    except (TypeError, ValueError, OverflowError):
+                        pass
+
+
+
+                detail = status or (result.get("code") if isinstance(result, dict) else None)
+                log_debug(f"Pairing poll: waiting ({detail or 'unknown'})")
+
+            if (
+                not browser_seen
+                and not stall_hinted
+                and time.monotonic() - self._stall_anchor >= stall_after_s
+            ):
 
 
 
                 stall_hinted = True
                 self.pairing_stalled.emit()
-
-            sleep_s = self._interval_s
-            hint = result.get("retry_after") if isinstance(result, dict) else None
-            if hint is not None:
-                try:
-                    retry_lo, retry_hi = get_export_dial_pair(
-                        "pipeline.pairing_poll_task.retry_after_clamp_s", _RETRY_AFTER_CLAMP_S
-                    )
-                    hinted_seconds = float(hint)
-                    if math.isfinite(hinted_seconds):
-                        sleep_s = min(max(hinted_seconds, retry_lo), retry_hi)
-                except (TypeError, ValueError, OverflowError):
-                    pass
-
-
-
-            detail = status or (result.get("code") if isinstance(result, dict) else None)
-            log_debug(f"Pairing poll: waiting ({detail or 'unknown'})")
-            self._sleep_cancellable(min(sleep_s, max(0.0, deadline - time.monotonic())))
+            self._sleep_cancellable(min(sleep_s, max(0.0, self._next_deadline() - time.monotonic())))
 
         if self.isCanceled():
             return False
-        self._timed_out = True
+        self._timed_out = self._last_end == "timeout"
         return False
 
     def _sleep_cancellable(self, seconds: float) -> None:

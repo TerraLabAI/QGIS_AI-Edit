@@ -184,7 +184,19 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
                 "dialogs.dialog.screen_width_ratio", _SCREEN_WIDTH_RATIO)))
             height = min(height, int(avail.height() * get_export_dial_ratio(
                 "dialogs.dialog.screen_height_ratio", _SCREEN_HEIGHT_RATIO)))
+
+
+
+
+        centre = self.frameGeometry().center() if self.isVisible() else None
         self.resize(max(width, 560), max(height, 420))
+        if centre is not None and screen is not None:
+            frame = self.frameGeometry()
+            frame.moveCenter(centre)
+            avail = screen.availableGeometry()
+            x = max(avail.left(), min(frame.left(), avail.right() - frame.width() + 1))
+            y = max(avail.top(), min(frame.top(), avail.bottom() - frame.height() + 1))
+            self.move(x, y)
 
 
 

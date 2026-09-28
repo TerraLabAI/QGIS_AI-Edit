@@ -5,6 +5,7 @@ from qgis.core import QgsTask
 from qgis.PyQt.QtCore import pyqtSignal
 
 from ..core.canvas_export import ExportPrep, render_clean_base, render_export
+from ..core.canvas_export.render import MapNotLoadedError
 from ..core.config_store import get_export_copy
 from ..core.i18n import tr
 from ..core.log_scrub import scrub_file_paths, scrub_urls
@@ -65,6 +66,11 @@ class ExportWorker(QgsTask):
             if self.isCanceled():
                 return False
             clean_base = render_clean_base(self._prep)
+        except MapNotLoadedError as err:
+
+            log_warning("Canvas export refused: the zone rendered empty")
+            self._failure = str(err)
+            return False
         except Exception as err:  # noqa: BLE001
 
 

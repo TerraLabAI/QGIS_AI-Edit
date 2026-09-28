@@ -47,7 +47,6 @@ from .prompt_container import _PromptContainer
 from .quota_card import QuotaCard
 from .style import _BTN_GHOST
 from .widgets import _GlyphNote, _SubmitTextEdit, _ZoneGestureGlyph, set_link_ink
-from .zone_sources import ZoneOfInterestCard
 
 if TYPE_CHECKING:
     from .widget import AIEditDockWidget
@@ -131,6 +130,8 @@ def build_ui(dock: AIEditDockWidget) -> None:
     layout.addWidget(dock._main_widget)
 
     _build_side_panels(dock, layout)
+
+
 
 
 
@@ -339,9 +340,13 @@ def _build_select_zone_section(dock: AIEditDockWidget, main_layout: QVBoxLayout)
 
 
 
-    dock._select_zone_hint = QLabel(
-        get_export_copy("dock.build.select_zone_hint", tr("Click on the map to outline the area to edit."))
+
+
+
+    dock._select_zone_hint_default = get_export_copy(
+        "dock.build.select_zone_hint", tr("Click on the map to outline the area to edit.")
     )
+    dock._select_zone_hint = QLabel(dock._select_zone_hint_default)
     dock._select_zone_hint.setWordWrap(True)
     dock._select_zone_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
     dock._select_zone_hint.setStyleSheet(
@@ -350,13 +355,6 @@ def _build_select_zone_section(dock: AIEditDockWidget, main_layout: QVBoxLayout)
     )
     sz_layout.addWidget(dock._select_zone_hint)
 
-
-
-
-
-    dock._zone_source_card = ZoneOfInterestCard(dock._select_zone_section)
-    dock._zone_source_card.use_button.clicked.connect(dock._on_zone_card_use_clicked)
-    sz_layout.addWidget(dock._zone_source_card)
 
 
 
@@ -495,6 +493,13 @@ def _build_prompt_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     dock._prompt_layout.addWidget(dock._prompt_guidance_hint)
 
 
+    dock._prompt_cut_notice = QLabel()
+    dock._prompt_cut_notice.setWordWrap(True)
+    dock._prompt_cut_notice.setStyleSheet(tokens.HINT_QSS)
+    dock._prompt_cut_notice.setVisible(False)
+    dock._prompt_layout.addWidget(dock._prompt_cut_notice)
+
+
 
     _build_guide_ai_hint(dock)
 
@@ -533,18 +538,21 @@ def _build_guide_ai_hint(dock: AIEditDockWidget) -> None:
 
 
 
+
+
     body = get_export_copy(
         "dock.build.guide_ai_hint_body_v2",
         tr("{ref} and {markup} show the AI what you mean. The {library} has "
            "ready-made prompts."),
         escape=True,
     )
+    link = '<a href="#{}" style="color: {}; text-decoration: none;"><b>{}</b></a>'
     for token, value in (
-        ("{ref}", "<b>{}</b>".format(get_export_copy(
+        ("{ref}", link.format("ref", tokens.LINK_INK, get_export_copy(
             "dock.prompt_container.reference_chip_plural", tr("References"), escape=True))),
-        ("{markup}", "<b>{}</b>".format(get_export_copy(
+        ("{markup}", link.format("draw", tokens.LINK_INK, get_export_copy(
             "dock.prompt_container.markup_chip_draw", tr("Draw"), escape=True))),
-        ("{library}", "<b>{}</b>".format(get_export_copy(
+        ("{library}", link.format("library", tokens.LINK_INK, get_export_copy(
             "dock.prompt_container.library_btn", tr("Library"), escape=True))),
     ):
         body = body.replace(token, value)
@@ -559,6 +567,20 @@ def _build_guide_ai_hint(dock: AIEditDockWidget) -> None:
     )
     dock._guide_ai_hint.setVisible(False)
     dock._guide_ai_hint.dismissed.connect(dock._on_guide_ai_dismissed)
+    container = dock._prompt_container
+    chip_signals = {
+        "#ref": container.reference_clicked,
+        "#draw": container.markup_clicked,
+        "#library": container.templates_clicked,
+    }
+    for label in dock._guide_ai_hint.findChildren(QLabel):
+        if 'href="#' not in label.text():
+            continue
+        label.setOpenExternalLinks(False)
+        label.setTextInteractionFlags(QtC.LinksAccessibleByMouse)
+        label.linkActivated.connect(
+            lambda href, signals=chip_signals: signals[href].emit() if href in signals else None
+        )
     dock._prompt_layout.addWidget(dock._guide_ai_hint)
 
 

@@ -1,17 +1,17 @@
-# AI Edit for QGIS [![QGIS](https://img.shields.io/badge/QGIS-3.22+-93b023?style=flat-square&logo=qgis&logoColor=white)](https://qgis.org) [![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows&logoColor=white)]() [![macOS](https://img.shields.io/badge/macOS-000000?style=flat-square&logo=apple&logoColor=white)]() [![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black)]()
+# AI Edit for QGIS [![QGIS](https://img.shields.io/badge/QGIS-3.22+-93b023?style=flat-square&logo=qgis&logoColor=white)](https://qgis.org) [![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows&logoColor=white)]() [![macOS](https://img.shields.io/badge/macOS-000000?style=flat-square&logo=apple&logoColor=white)]() [![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black)]() [![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg?style=flat-square)](LICENSE)
 
-Show a project before it exists, on the aerial imagery you already have open in QGIS.
+Generative AI image editing for QGIS. Show a project before it exists, on the aerial imagery you already have open in QGIS.
 
 Select an area, write what you want, and get the result back as a georeferenced layer on the same extent and CRS as your source imagery, tagged as AI-generated. Documentation and tutorials: https://terra-lab.ai/ai-edit
 
 <table>
   <tr>
-    <td align="center"><img src="https://terra-lab.ai/images/ai-edit/before-site-plan.webp" width="380" alt="Orthophoto of a block, before"><br><sub>Orthophoto</sub></td>
-    <td align="center"><img src="https://terra-lab.ai/images/ai-edit/after-site-plan.webp" width="380" alt="The same block redrawn as a clean site plan"><br><sub>"Redraw as a clean site plan"</sub></td>
+    <td align="center"><img src="https://terra-lab.ai/images/ai-edit/beaujoire-source.webp" width="380" alt="Orthophoto of a neighbourhood, before"><br><sub>Orthophoto</sub></td>
+    <td align="center"><img src="https://terra-lab.ai/images/ai-edit/beaujoire-site-plan.webp" width="380" alt="The same neighbourhood redrawn as a clean site plan"><br><sub>"Redraw as a clean site plan"</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="https://terra-lab.ai/images/ai-edit/before-greening-streets.webp" width="380" alt="A street, before"><br><sub>Street today</sub></td>
-    <td align="center"><img src="https://terra-lab.ai/images/ai-edit/after-greening-streets.webp" width="380" alt="The same street planted with trees"><br><sub>"Plant the street with trees"</sub></td>
+    <td align="center"><img src="https://terra-lab.ai/images/ai-edit/before-solar.webp" width="380" alt="Rooftops, before"><br><sub>Rooftops today</sub></td>
+    <td align="center"><img src="https://terra-lab.ai/images/ai-edit/after-solar.webp" width="380" alt="The same rooftops with solar panels"><br><sub>"Add solar panels on the roofs"</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="https://terra-lab.ai/images/ai-edit/before-flooding.webp" width="380" alt="A riverside area, before"><br><sub>Riverside area</sub></td>
@@ -58,4 +58,4 @@ plugin, before anything is sent. See our
 - Plugin page on the QGIS repository: https://plugins.qgis.org/plugins/AI_Edit/
 - Bugs and requests: https://github.com/TerraLabAI/QGIS_AI-Edit/issues
 
-License: GPLv2.
+License: GPL-2.0-or-later. Made by [TerraLab](https://terra-lab.ai).

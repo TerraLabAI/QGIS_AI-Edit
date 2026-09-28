@@ -26,12 +26,23 @@ from ...core.window_focus import bring_qgis_window_to_front
 from ...workers.generic_request_task import GenericRequestTask
 from ...workers.pairing_poll_task import PairingPollTask
 from ..canvas_exporter import has_tuned_config
-from .errors import network_next_step, subscribe_error_url
+from .errors import (
+    _enrich_error_message,
+    dashboard_error_url,
+    network_next_step,
+    subscribe_error_url,
+)
 from .lifecycle import REQUEST_TASK_SIGNALS, drain_task
 
 
 
 _KEY_REVALIDATION_WINDOW_S = 900
+
+
+_PLAN_RETURN_WINDOW_S = 7200
+_PLAN_RETURN_GAP_S = 10.0
+
+_TASKBAR_FLASH_MS = 3000
 
 
 def _key_validation_request(client, key):
@@ -125,6 +136,10 @@ class ActivationMixin:
             self._refresh_tuned_config()
 
 
+        if not getattr(self, "_activation_config_keyed", False):
+            self._warm_activation_config()
+
+
 
         self._refresh_conversations_cache()
 
@@ -172,11 +187,30 @@ class ActivationMixin:
             "error_code": rejection_code,
         })
         telemetry.flush()
+        if rejection_code == "DEVICE_LIMIT_EXCEEDED":
+
+
+
+            self._dock_widget.set_activated(True)
+            self._dock_widget.set_launch_enabled(True)
+            self._dock_widget.set_status(
+                _enrich_error_message(message, rejection_code), is_error=True
+            )
+            return
         self._last_key_validation_unix = 0.0
         clear_activation()
         self._auth_manager.set_activation_key("")
         self._dock_widget.set_activated(False)
-        self._dock_widget.set_activation_message(message, is_error=True)
+        if rejection_code in ("SUBSCRIPTION_INACTIVE", "SUBSCRIPTION_EXPIRED"):
+
+
+            self._dock_widget.set_activation_message_link(
+                message,
+                get_export_copy("flows.activation.inactive_plan_link", tr("Open my dashboard")),
+                dashboard_error_url(),
+            )
+        else:
+            self._dock_widget.set_activation_message(message, is_error=True)
 
     def _on_settings_clicked(self):
 
@@ -278,7 +312,7 @@ class ActivationMixin:
         self._auth_manager.set_activation_key(key)
         self._dock_widget.set_activated(True)
         self._dock_widget.set_activation_message(
-            get_export_copy("flows.activation.key_verified", tr("Activation key verified!")),
+            get_export_copy("flows.activation.key_verified", tr("Signed in.")),
             is_error=False,
         )
 
@@ -286,10 +320,21 @@ class ActivationMixin:
         self._refresh_credits()
 
 
+        if not has_tuned_config():
+            self._refresh_tuned_config()
+
+
 
         self._refresh_conversations_cache()
 
         settings = QSettings()
+
+
+
+        self._returning_sign_in = bool(
+            settings.value("AIEdit/activation_timestamp_unix", "", type=str)
+        ) or settings.value("AIEdit/signed_in_before", False, type=bool)
+        settings.setValue("AIEdit/signed_in_before", True)
         if not settings.value("AIEdit/activation_timestamp_unix", "", type=str):
             settings.setValue("AIEdit/activation_timestamp_unix", str(int(time.time())))
 
@@ -345,8 +390,10 @@ class ActivationMixin:
 
         if not worker.isCanceled() or worker.cancelled_by_plugin:
             return
-        if self._pairing_worker is worker:
-            self._pairing_worker = None
+        if self._pairing_worker is not worker:
+            return
+        self._pairing_worker = None
+        self._retire_pairing_codes()
         if self._dock_widget is None:
             return
         self._dock_widget.show_pairing_idle()
@@ -387,6 +434,20 @@ class ActivationMixin:
 
         self._dock_widget.set_pairing_link(url)
         opened = QDesktopServices.openUrl(QUrl(url))
+        worker = self._pairing_worker
+        if worker is not None and worker.is_active() and worker.add_code(code):
+
+
+
+
+            if code not in self._pairing_codes:
+                self._pairing_codes.append(code)
+            if not opened:
+                self._dock_widget.show_pairing_hint(get_export_copy(
+                    "flows.activation.browser_open_failed",
+                    tr("Couldn't open your browser. Copy the link and open it manually."),
+                ))
+            return
         if not opened:
             self._dock_widget.show_pairing_idle()
             self._dock_widget.set_activation_message(
@@ -398,14 +459,17 @@ class ActivationMixin:
             )
             return
 
-        if self._pairing_worker is not None and self._pairing_worker.is_active():
-
-            return
-
-        self._pairing_worker = PairingPollTask(self._client, code)
-        self._pairing_worker.pairing_succeeded.connect(self._on_pairing_succeeded)
-        self._pairing_worker.pairing_failed.connect(self._on_pairing_failed)
-        self._pairing_worker.pairing_timeout.connect(self._on_pairing_timeout)
+        worker = PairingPollTask(self._client, code)
+        self._pairing_worker = worker
+        self._pairing_codes = [code]
+        worker.pairing_succeeded.connect(lambda key, w=worker: self._on_pairing_succeeded(key, w))
+        worker.pairing_failed.connect(
+            lambda message, err, w=worker: None if self._pairing_superseded(w)
+            else self._on_pairing_failed(message, err)
+        )
+        worker.pairing_timeout.connect(
+            lambda w=worker: None if self._pairing_superseded(w) else self._on_pairing_timeout()
+        )
         self._pairing_worker.pairing_browser_seen.connect(self._on_pairing_browser_seen)
         self._pairing_worker.pairing_stalled.connect(self._on_pairing_stalled)
         self._pairing_worker.pairing_network_problem.connect(self._on_pairing_network_problem)
@@ -422,6 +486,47 @@ class ActivationMixin:
         telemetry.flush()
         log("Pairing started")
 
+    def _pairing_superseded(self, worker) -> bool:
+
+
+        current = self._pairing_worker
+        return current is not None and current is not worker and current.is_active()
+
+    def _retire_pairing_codes(self, keep: str = "") -> None:
+
+
+
+        codes = tuple(c for c in getattr(self, "_pairing_codes", []) if c and c != keep)
+        self._pairing_codes = []
+        if not codes:
+            return
+
+        def retire(c=self._client, codes=codes):
+            result = {}
+            for one in codes:
+                result = c.cancel_pairing(one)
+            return result if isinstance(result, dict) else {}
+
+        task = GenericRequestTask(
+            get_export_copy("flows.activation.cancelling_sign_in", tr("Cancelling sign-in")),
+            retire,
+            silent=True,
+        )
+        self._hold_history_task(task)
+
+    def _end_pairing_on_unload(self) -> None:
+
+
+        worker = self._pairing_worker
+        if worker is None or not worker.is_active():
+            return
+        telemetry.track(te.AI_EDIT_PAIR_FAILED, {
+            "error_code": "PLUGIN_UNLOADED",
+            "duration_ms": self._pairing_duration_ms(),
+            "stalled": bool(getattr(self, "_pairing_stalled", False)),
+        })
+        telemetry.flush()
+
     def _pairing_duration_ms(self) -> int:
 
         start = getattr(self, "_pairing_started_unix", 0.0)
@@ -429,12 +534,21 @@ class ActivationMixin:
             return 0
         return int((time.time() - start) * 1000)
 
-    def _on_pairing_succeeded(self, key: str):
+    def _on_pairing_succeeded(self, key: str, worker=None):
+        if worker is not None and self._pairing_worker is not worker:
+
+
+            self._cancel_pairing_worker()
+        self._retire_pairing_codes(keep=getattr(worker, "won_code", ""))
         self._apply_activation(key)
 
 
         try:
-            bring_qgis_window_to_front(self._iface.mainWindow(), self._dock_widget)
+            bring_qgis_window_to_front(
+                self._iface.mainWindow(),
+                self._dock_widget,
+                get_export_dial("pipeline.window_focus.taskbar_flash_ms", _TASKBAR_FLASH_MS),
+            )
         except Exception:  # nosec B110
             pass
         telemetry.track(te.AI_EDIT_PAIR_SUCCEEDED, {
@@ -452,6 +566,7 @@ class ActivationMixin:
         QtC.safe_single_shot(0, self._dock_widget, self._auto_load_example_after_signup)
 
     def _on_pairing_failed(self, message: str, code: str):
+        self._retire_pairing_codes()
         self._dock_widget.show_pairing_idle()
         self._dock_widget.set_activation_message(message, is_error=True)
         telemetry.track(te.AI_EDIT_PAIR_FAILED, {
@@ -474,12 +589,12 @@ class ActivationMixin:
         log_warning("Pairing stalled: browser never reached /connect")
 
     def _on_pairing_timeout(self):
+        self._retire_pairing_codes()
         self._dock_widget.show_pairing_idle()
         self._dock_widget.set_activation_message(
             get_export_copy(
                 "flows.activation.pairing_timed_out",
-                tr("Sign-in timed out. Click Connect to try again, "
-                   "or enter your key manually."),
+                tr("Sign-in timed out. Click Sign in to try again."),
             ),
             is_error=True,
         )
@@ -492,21 +607,46 @@ class ActivationMixin:
 
     def _on_cancel_pairing(self, code: str = ""):
         self._cancel_pairing_worker()
-        if code:
 
-
-            task = GenericRequestTask(
-                get_export_copy("flows.activation.cancelling_sign_in", tr("Cancelling sign-in")),
-                lambda c=code: self._client.cancel_pairing(c),
-                silent=True,
-            )
-            self._hold_history_task(task)
+        if code and code not in self._pairing_codes:
+            self._pairing_codes.append(code)
+        self._retire_pairing_codes()
         telemetry.track(te.AI_EDIT_PAIR_CANCELLED, {
             "duration_ms": self._pairing_duration_ms(),
             "stalled": bool(getattr(self, "_pairing_stalled", False)),
         })
         telemetry.flush()
         log("Pairing cancelled")
+
+    def _watch_plan_return(self) -> None:
+
+        app = QgsApplication.instance()
+        if app is not None:
+            app.applicationStateChanged.connect(self._on_app_state_changed)
+
+    def _unwatch_plan_return(self) -> None:
+        QtC.safe_disconnect(QgsApplication.instance(), "applicationStateChanged", self._on_app_state_changed)
+
+    def _on_app_state_changed(self, state) -> None:
+
+
+
+
+        if state != QtC.ApplicationActive:
+            return
+        if self._dock_widget is None or not self._auth_manager.has_activation_key():
+            return
+        from ..pro_page_link import last_opened_unix
+
+        now = time.time()
+        opened = last_opened_unix()
+        if not opened or now - opened > get_export_dial("flows.activation.plan_return_window_s", _PLAN_RETURN_WINDOW_S):
+            return
+        if now - getattr(self, "_plan_return_read_unix", 0.0) < _PLAN_RETURN_GAP_S:
+            return
+        self._plan_return_read_unix = now
+        log_debug("QGIS back in front after the plans page: reading the plan again")
+        self._refresh_credits()
 
     def _refresh_credits(self):
 
@@ -560,3 +700,9 @@ class ActivationMixin:
                     tr("Monthly limit reached ({used}/{limit}).").format(used=used, limit=limit),
                     subscribe_error_url(),
                 )
+            elif both_ints and not is_free:
+
+
+                from ..pro_page_link import forget_opened
+
+                forget_opened()

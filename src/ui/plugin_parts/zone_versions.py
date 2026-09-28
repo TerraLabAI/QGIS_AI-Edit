@@ -33,6 +33,11 @@ _ZONE_OUTLINE_WIDTH = 2
 _NOTIFY_EXIT_HISTORY_HINT_S = 6
 
 
+def zone_crs_changed_message() -> str:
+
+    return tr("The map CRS changed after you drew the zone. Draw the zone again.")
+
+
 class ZoneVersionsMixin:
     def _activate_selection_tool(self):
 
@@ -173,6 +178,9 @@ class ZoneVersionsMixin:
 
 
         had_generation = len(self._versions or []) > 1
+
+
+        self._pending_same_edit_template = None
         self._cancel_generation_and_reset_zone()
 
 
@@ -196,6 +204,50 @@ class ZoneVersionsMixin:
                 ),
             )
 
+    def _version_replay_field(self, version: dict, key: str):
+
+
+
+        if key in version:
+            return version.get(key)
+        return (version.get("job") or {}).get(key)
+
+    def _on_new_edit_clicked(self):
+
+
+
+
+        if self._dock_widget is None:
+            return
+        self._on_launch_clicked()
+
+    def _on_same_edit_elsewhere(self):
+
+
+
+
+
+        versions = self._versions or []
+        index = self._selected_version_index
+        if not 0 < index < len(versions):
+
+            index = len(versions) - 1
+        if index <= 0:
+            return
+        version = versions[index]
+        prompt = (version.get("prompt") or "").strip()
+        if not prompt:
+            return
+        template_id = self._version_replay_field(version, "template_id")
+        template_name = self._version_replay_field(version, "template_name")
+        resolution = self._version_replay_field(version, "resolution") or ""
+        self._on_exit_clicked()
+        self._pending_same_edit_template = (
+            (template_id, template_name) if template_id else None
+        )
+        self._dock_widget.prefill_same_edit(prompt, str(resolution))
+        self._on_launch_clicked()
+
     def _on_project_layers_changed(self, *_args):
 
 
@@ -207,6 +259,41 @@ class ZoneVersionsMixin:
         if self._dock_widget is None:
             return
         QtC.safe_single_shot(0, self._dock_widget, self._reset_canvas_if_empty)
+
+    def _on_zone_crs_event(self, *_args):
+
+
+
+
+        if self._dock_widget is None:
+            return
+        QtC.safe_single_shot(0, self._dock_widget, self._clear_zone_if_crs_changed)
+
+    def _clear_zone_if_crs_changed(self):
+        if self._dock_widget is None or not self._selected_extent:
+            return
+        if self._worker is not None and self._worker.is_active():
+            return
+
+
+        if not self._zone_crs_changed():
+            return
+        self._on_zone_delete_requested()
+        self._dock_widget.set_status(zone_crs_changed_message(), is_error=True)
+
+    def _on_project_cleared_zone(self, *_args):
+
+
+        self._zone_crs_tag = None
+
+
+
+        self._zone_cleared_by_project = True
+        if self._dock_widget is not None:
+            QtC.safe_single_shot(
+                0, self._dock_widget,
+                lambda: setattr(self, "_zone_cleared_by_project", False),
+            )
 
     def _reset_canvas_if_empty(self):
 
@@ -238,6 +325,7 @@ class ZoneVersionsMixin:
         )
         if has_visible:
             return
+        had_zone = bool(self._selected_extent)
         self._disarm_swipe()
         self._pills_armed = False
         self._clear_selection_rectangle()
@@ -246,6 +334,10 @@ class ZoneVersionsMixin:
         if self._map_tool is not None:
             self._map_tool.set_has_zone(False)
         self._deactivate_selection_tool()
+        if had_zone and not getattr(self, "_zone_cleared_by_project", False):
+            self._notify(
+                tr("Your zone was cleared: no layer is visible on the map anymore.")
+            )
 
     def _on_base_version_selected(self, index: int):
 
@@ -346,7 +438,7 @@ class ZoneVersionsMixin:
 
     def _markup_layer_id_if_any(self) -> str | None:
 
-        if self._markup_manager is None or self._markup_manager.annotation_count() <= 0:
+        if self._markup_manager is None or self._markup_count_in_zone() <= 0:
             return None
         try:
             markup_layer = self._markup_manager.layer()
@@ -384,6 +476,11 @@ class ZoneVersionsMixin:
         self._selected_extent = extent
         self._selected_polygon = polygon
 
+        try:
+            self._zone_crs_tag = (extent, self._canvas.mapSettings().destinationCrs())
+        except (AttributeError, RuntimeError):
+            self._zone_crs_tag = None
+
 
 
         if self._markup_manager is not None:
@@ -396,6 +493,12 @@ class ZoneVersionsMixin:
                 self._dock_widget.clear_active_template()
             except AttributeError:
                 pass
+
+
+            pending = getattr(self, "_pending_same_edit_template", None)
+            self._pending_same_edit_template = None
+            if pending:
+                self._dock_widget.arm_template(*pending)
 
 
             self._dock_widget.clear_markup_reference()
@@ -424,6 +527,7 @@ class ZoneVersionsMixin:
         self._attach_layers_above(extent)
 
 
+        self._refresh_markup_badge()
         try:
             mupp = self._canvas.mapSettings().mapUnitsPerPixel()
             w_px = int(round(extent.width() / mupp)) if mupp else 0
@@ -612,7 +716,9 @@ class ZoneVersionsMixin:
 
 
             try:
-                self._map_tool.set_zone(QgsRectangle(self._selected_extent))
+                self._map_tool.set_zone(
+                    QgsRectangle(self._selected_extent), getattr(self, "_selected_polygon", None)
+                )
             except Exception as err:  # nosec B110
                 log_warning(f"zone rect arm after pick failed: {err}")
 
@@ -682,17 +788,18 @@ class ZoneVersionsMixin:
             shared_zone_id = self._shared_zone_layer_id()
             if shared_zone_id:
                 skip_ids.add(shared_zone_id)
+            input_layer = self._input_layer()
             above = [
                 layer
                 for layer in layers_above_input(
                     settings.layers(),
-                    self._input_layer(),
+                    input_layer,
                     skip_ids,
                     markup_layer=markup_layer,
                 )
                 if not layer_misses_zone([layer], extent, zone_crs)
             ]
-            self._dock_widget.set_reference_layers_above(above)
+            self._dock_widget.set_reference_layers_above(above, input_layer=input_layer)
         except Exception as err:  # nosec B110
             log_debug(f"Layers above the input not attached: {err}")
 
@@ -784,6 +891,7 @@ class ZoneVersionsMixin:
         self._clear_selection_rectangle()
         self._selected_extent = None
         self._selected_polygon = None
+        self._refresh_markup_badge()
 
         self._last_completed_request_id = None
         self._reset_version_lineage()

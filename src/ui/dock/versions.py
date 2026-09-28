@@ -43,20 +43,25 @@ class DockVersionsMixin:
         if self._progress_widget.isVisibleTo(self):
             self._version_strip.setVisible(False)
         self._update_result_generate_label()
+        self._sync_rerun_row()
 
     def add_version_thumb(self, pixmap, prompt: str = "", meta: dict | None = None) -> int:
 
         index = self._version_strip.add_version(pixmap, prompt, meta)
         self._update_result_generate_label()
+        self._sync_rerun_row()
         return index
 
     def reset_version_strip(self) -> None:
 
         self._version_strip.clear()
+        self._sync_rerun_row()
 
     def select_version(self, index: int) -> None:
 
         self._version_strip.set_selected(index)
+        self._update_result_generate_label()
+        self._sync_rerun_row()
 
     def set_version_strip_locked(self, locked: bool) -> None:
 
@@ -245,6 +250,18 @@ class DockVersionsMixin:
 
         self.base_version_selected.emit(index)
         self._update_result_generate_label()
+        self._sync_rerun_row()
+
+    def _sync_rerun_row(self) -> None:
+
+
+        row = getattr(self, "_result_rerun_row", None)
+        if row is None:
+            return
+        has_result = self._version_strip.count() > 1
+        self._result_try_again_btn.setVisible(self._version_strip.selected_index() > 0)
+        row.setVisible(has_result)
+        row._fit(row.width())
 
     def set_resolution_credit_costs(self, costs: dict[str, int]):
 
@@ -268,12 +285,18 @@ class DockVersionsMixin:
         if self._reference_widget is not None:
             self._reference_widget.add_qimages(items)
 
-    def set_reference_layers_above(self, layers: list) -> int:
+    def set_reference_layers_above(self, layers: list, input_layer=None) -> int:
+
 
 
         if self._reference_widget is None:
             return 0
-        return self._reference_widget.set_layers_above(layers)
+        return self._reference_widget.set_layers_above(layers, input_layer=input_layer)
+
+    def wait_reference_layers_above(self) -> None:
+
+        if self._reference_widget is not None:
+            self._reference_widget.wait_layers_above()
 
     def clear_markup_reference(self) -> None:
 

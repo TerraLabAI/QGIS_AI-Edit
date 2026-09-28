@@ -35,7 +35,27 @@ _COARSE_ZONE_M_PER_PX = 10.0
 _NUMBERS_RE = re.compile(r"\d+")
 
 
-def _min_prompt_warning() -> str:
+
+
+_CJK_RE = re.compile(
+    "[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff]"
+)
+_MIN_PROMPT_CJK_CHARS = 4
+
+
+def _cjk_char_count(prompt: str) -> int:
+    return len(_CJK_RE.findall(prompt))
+
+
+def _min_cjk_prompt_warning() -> str:
+
+    min_cjk = get_export_dial("limits.min_prompt_cjk_chars", _MIN_PROMPT_CJK_CHARS)
+    return tr("Please describe what you want to change (at least {chars} characters).").replace(
+        "{chars}", str(min_cjk)
+    )
+
+
+def _min_prompt_warning(prompt: str = "") -> str:
 
 
 
@@ -45,6 +65,8 @@ def _min_prompt_warning() -> str:
 
 
 
+    if _cjk_char_count(prompt):
+        return _min_cjk_prompt_warning()
     min_chars = get_export_dial("limits.min_prompt_chars", _MIN_PROMPT_CHARS)
     min_words = get_export_dial("limits.min_prompt_words", _MIN_PROMPT_WORDS)
     sentence = tr("Please describe what you want to change (at least 10 characters, 2 words).")
@@ -85,7 +107,9 @@ class DockPromptMixin:
 
 
 
-        prompt = self._enforce_prompt_max_length(self._prompt_input).strip()
+        prompt, cut = self._enforce_prompt_max_length(self._prompt_input)
+        self._show_prompt_cut_notice(cut, len(prompt))
+        prompt = prompt.strip()
         self._update_generate_enabled(prompt)
         self._clear_active_template_if_empty(prompt)
         self._update_prompt_guidance_hint(prompt)
@@ -202,10 +226,12 @@ class DockPromptMixin:
             return
 
 
-        msg = get_export_copy("guidance.coarse_zone", tr(
-            "Zoomed out: the AI won't see small features (buildings, cars, "
-            "trees) at this scale. Zoom in for object-level detail."
-        ))
+        metres = ground_resolution_m
+        value = format_count(round(metres)) if metres >= 10 else f"{metres:.1f}"
+        msg = get_export_copy("guidance.coarse_zone_m", tr(
+            "At this zoom one pixel covers about {m} m. Zoom in or draw a "
+            "smaller zone for buildings, trees or roads."
+        )).replace("{m}", value)
         self._zone_guidance_hint.setText(msg)
         self._zone_guidance_hint.setVisible(True)
 
@@ -289,7 +315,12 @@ class DockPromptMixin:
 
     def _on_result_prompt_changed(self):
 
-        result = self._enforce_prompt_max_length(self._result_prompt_input).strip()
+        result, cut = self._enforce_prompt_max_length(self._result_prompt_input)
+        if cut:
+
+            max_chars = get_export_dial("limits.max_prompt_chars", MAX_PROMPT_CHARS)
+            self._show_status_box(self._prompt_cut_text(max_chars), "warning")
+        result = result.strip()
         self._update_result_generate_enabled(result)
         self._clear_active_template_if_empty(result_prompt=result)
         self._update_result_guidance_hint(result)
@@ -325,29 +356,56 @@ class DockPromptMixin:
         return None
 
     @staticmethod
-    def _enforce_prompt_max_length(text_edit: QTextEdit) -> str:
+    def _prompt_cut_text(max_chars: int) -> str:
+        return tr("Prompt cut to {count} characters, the most AI Edit accepts.").replace(
+            "{count}", format_count(max_chars)
+        )
+
+    def _show_prompt_cut_notice(self, cut: bool, length: int) -> None:
+
+
+        label = getattr(self, "_prompt_cut_notice", None)
+        if label is None:
+            return
+        max_chars = get_export_dial("limits.max_prompt_chars", MAX_PROMPT_CHARS)
+        if cut:
+            label.setText(self._prompt_cut_text(max_chars))
+            label.setVisible(True)
+        elif label.isVisible() and length < max_chars:
+            label.setVisible(False)
+
+    @staticmethod
+    def _enforce_prompt_max_length(text_edit: QTextEdit) -> tuple[str, bool]:
+
+
 
 
         max_chars = get_export_dial("limits.max_prompt_chars", MAX_PROMPT_CHARS)
         plain = text_edit.toPlainText()
         if len(plain) <= max_chars:
-            return plain
+            return plain, False
         plain = plain[:max_chars]
         cursor_pos = text_edit.textCursor().position()
         text_edit.blockSignals(True)
         try:
             text_edit.setPlainText(plain)
             cursor = text_edit.textCursor()
-            cursor.setPosition(min(cursor_pos, max_chars))
+
+            cursor.setPosition(min(cursor_pos, len(plain.encode("utf-16-le")) // 2))
             text_edit.setTextCursor(cursor)
         finally:
             text_edit.blockSignals(False)
-        return plain
+        return plain, True
 
     @staticmethod
     def _prompt_meets_minimum(prompt: str) -> bool:
 
 
+
+
+        cjk = _cjk_char_count(prompt)
+        if cjk and cjk >= get_export_dial("limits.min_prompt_cjk_chars", _MIN_PROMPT_CJK_CHARS):
+            return True
         min_chars = get_export_dial("limits.min_prompt_chars", _MIN_PROMPT_CHARS)
         min_words = get_export_dial("limits.min_prompt_words", _MIN_PROMPT_WORDS)
         return len(prompt) >= min_chars and len(prompt.split()) >= min_words
@@ -391,7 +449,7 @@ class DockPromptMixin:
         if not prompt:
             return
         if not self._prompt_meets_minimum(prompt):
-            self._show_status_box(_min_prompt_warning(), "warning")
+            self._show_status_box(_min_prompt_warning(prompt), "warning")
             return
 
         self._prompt_input.setPlainText(prompt)
@@ -410,7 +468,7 @@ class DockPromptMixin:
         if not prompt:
             return
         if not self._prompt_meets_minimum(prompt):
-            self._show_status_box(_min_prompt_warning(), "warning")
+            self._show_status_box(_min_prompt_warning(prompt), "warning")
             return
         self._hide_status_box()
         self._dismiss_markup_prompt_tip()
@@ -466,6 +524,12 @@ class DockPromptMixin:
         enabled = reason is None and not self._imagery_loading
         self._generate_btn.setEnabled(enabled)
         self.set_generate_block_reason(reason)
+        if reason == GENERATE_BLOCK_PROMPT_TOO_SHORT and _cjk_char_count(text):
+
+
+            label = getattr(self, "_generate_reason_label", None)
+            if label is not None and label.isVisible():
+                label.setText(_min_cjk_prompt_warning())
         self._update_generate_style()
         self._update_generate_button_text()
 

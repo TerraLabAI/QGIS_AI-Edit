@@ -24,8 +24,24 @@ from .generation_upload import GenerationUploadMixin
 _RETRYABLE_POLL_CODES = frozenset(
     {"TIMEOUT", "NO_NETWORK", "DNS_ERROR", "CONNECTION_REFUSED", "PROXY_ERROR", "SSL_ERROR",
 
-     "RATE_LIMITED"}
+     "RATE_LIMITED",
+
+
+     "SERVER_ERROR", "UPSTREAM_UNAVAILABLE", "RATE_LIMITER_DOWN",
+     "BAD_GATEWAY", "SERVICE_UNAVAILABLE", "GATEWAY_TIMEOUT"}
 )
+
+
+_GATEWAY_HTTP_STATUSES = frozenset({502, 503, 504})
+
+
+
+_RETRYABLE_SUBMIT_CODES = frozenset(
+    {"UPSTREAM_UNAVAILABLE", "BAD_GATEWAY", "SERVICE_UNAVAILABLE", "GATEWAY_TIMEOUT"}
+)
+
+
+_AMBIGUOUS_SUBMIT_CODES = frozenset({"TIMEOUT", "SERVER_ERROR"}) | _RETRYABLE_SUBMIT_CODES
 _MAX_CONSECUTIVE_POLL_ERRORS = 5
 
 _POLL_BACKOFF_CAP_S = 12.0
@@ -111,6 +127,32 @@ def _generation_failed_message() -> str:
 
 def _status_check_failed_message() -> str:
     return get_export_copy("pipeline.generation_service.status_check_failed", tr("Status check failed"))
+
+
+def _is_gateway_failure(resp: dict) -> bool:
+    status = resp.get("http_status")
+    return isinstance(status, int) and not isinstance(status, bool) and status in _GATEWAY_HTTP_STATUSES
+
+
+def _unconfirmed_result(request_id: str | None, code: str) -> GenerationResult:
+
+
+
+
+    log_warning(f"Run could not be followed (last code {code}); request_id={request_id}")
+    return GenerationResult(
+        success=False,
+        error=get_export_copy(
+            "pipeline.generation_service.result_unconfirmed",
+            tr(
+                "We lost contact with the server during your edit. It may still "
+                "finish: check Recent in your library in a few minutes before "
+                "trying again."
+            ),
+        ),
+        error_code=ErrorCode.RESULT_UNCONFIRMED.value,
+        request_id=request_id,
+    )
 
 
 class GenerationService(GenerationUploadMixin):
@@ -379,7 +421,13 @@ class GenerationService(GenerationUploadMixin):
             code = resp.get("code", "")
 
 
-            if code in NETWORK_ERROR_CODES and _attempt < submit_attempts - 1:
+
+            retryable = (
+                code in NETWORK_ERROR_CODES
+                or code in _RETRYABLE_SUBMIT_CODES
+                or _is_gateway_failure(resp)
+            )
+            if retryable and _attempt < submit_attempts - 1:
                 log_warning(f"Submit attempt {_attempt + 1} failed ({code}); retrying")
                 step = _SUBMIT_RETRY_STEPS[min(_attempt, len(_SUBMIT_RETRY_STEPS) - 1)]
                 if self._sleep_or_cancelled(submit_backoff_s * step):
@@ -389,6 +437,11 @@ class GenerationService(GenerationUploadMixin):
                         error_code=ErrorCode.GENERATION_CANCELLED.value,
                     )
                 continue
+
+
+            if code in _AMBIGUOUS_SUBMIT_CODES or _is_gateway_failure(resp):
+                log_warning(f"Submit ended on {code}: {resp.get('error')}")
+                return _unconfirmed_result(None, code)
             return GenerationResult(
                 success=False, error=resp["error"], error_code=code
             )
@@ -401,18 +454,7 @@ class GenerationService(GenerationUploadMixin):
         request_id = resp.get("request_id")
         if not isinstance(request_id, str) or not request_id.strip():
             log_warning(f"Submit returned no request_id; resp keys={list(resp.keys())}")
-            return GenerationResult(
-                success=False,
-                error=get_export_copy(
-                    "pipeline.generation_service.no_request_id",
-                    tr(
-                        "The server did not confirm your request. If a credit was "
-                        "charged it will be refunded shortly. Check the Recent tab "
-                        "before retrying."
-                    ),
-                ),
-                error_code=ErrorCode.SERVER_ERROR.value,
-            )
+            return _unconfirmed_result(None, "NO_REQUEST_ID")
         submit_time = time.monotonic()
         log_debug(
             f"Submitted: request_id={request_id}, "
@@ -548,7 +590,7 @@ class GenerationService(GenerationUploadMixin):
 
 
 
-                if code in retryable_codes:
+                if code in retryable_codes or _is_gateway_failure(status_resp):
                     consecutive_poll_errors += 1
                     if consecutive_poll_errors <= max_poll_errors:
                         backoff = min(
@@ -570,6 +612,22 @@ class GenerationService(GenerationUploadMixin):
                                 request_id=request_id,
                             ), polls
                         continue
+
+
+
+
+                    rescued = self._try_rescue(request_id, auth, ctx, polls, submit_time)
+                    if rescued is not None:
+                        return rescued, polls
+                    if self._is_cancelled():
+                        return GenerationResult(False, error=_cancelled_message(),
+                                                error_code=ErrorCode.GENERATION_CANCELLED.value,
+                                                request_id=request_id), polls
+                    if ctx is not None:
+                        ctx.poll_count = polls
+                        ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
+                        ctx.final_status = "error"
+                    return _unconfirmed_result(request_id, code), polls
 
                 if ctx is not None:
                     ctx.poll_count = polls
@@ -637,6 +695,43 @@ class GenerationService(GenerationUploadMixin):
         submit_time: float,
     ) -> GenerationResult:
 
+        rescued = self._try_rescue(request_id, auth, ctx, polls, submit_time)
+        if rescued is not None:
+            return rescued
+
+        if self._is_cancelled():
+            return GenerationResult(False, error=_cancelled_message(),
+                                    error_code=ErrorCode.GENERATION_CANCELLED.value,
+                                    request_id=request_id)
+        if ctx is not None:
+            ctx.poll_count = polls
+            ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
+            ctx.final_status = "timeout"
+
+
+
+        return GenerationResult(
+            success=False,
+            error=get_export_copy(
+                "pipeline.generation_service.generation_timed_out",
+                tr(
+                    "This edit is taking longer than expected. Your result may "
+                    "still arrive in Recent in your library in a few minutes."
+                ),
+            ),
+            error_code=ErrorCode.GENERATION_TIMED_OUT.value,
+            request_id=request_id,
+        )
+
+    def _try_rescue(
+        self,
+        request_id: str,
+        auth: dict,
+        ctx,
+        polls: int,
+        submit_time: float,
+    ) -> GenerationResult | None:
+
 
 
 
@@ -682,25 +777,4 @@ class GenerationService(GenerationUploadMixin):
                 pass
             if _attempt < rescue_attempts - 1 and self._sleep_or_cancelled(rescue_backoff_s):
                 break
-
-        if self._is_cancelled():
-            return GenerationResult(False, error=_cancelled_message(),
-                                    error_code=ErrorCode.GENERATION_CANCELLED.value,
-                                    request_id=request_id)
-        if ctx is not None:
-            ctx.poll_count = polls
-            ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
-            ctx.final_status = "timeout"
-
-        return GenerationResult(
-            success=False,
-            error=get_export_copy(
-                "pipeline.generation_service.generation_timed_out",
-                tr(
-                    "Generation timed out, please try again. "
-                    "If a credit was charged, the server will refund it shortly."
-                ),
-            ),
-            error_code=ErrorCode.GENERATION_TIMED_OUT.value,
-            request_id=request_id,
-        )
+        return None

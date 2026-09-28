@@ -174,6 +174,9 @@ class _ResultToolsRow(QWidget):
             self._box.setDirection(direction)
 
 
+            self.updateGeometry()
+
+
 def set_compare_icon(btn: QPushButton) -> None:
 
     btn.setIcon(_swipe_icon(qcolor(INK if btn.isChecked() else INK_2)))
@@ -222,6 +225,35 @@ def build_result_tools_row(dock: AIEditDockWidget) -> QWidget:
     for btn in (compare, vectorize):
         btn.setStyleSheet(RESULT_TOOL_QSS)
         btn.setIconSize(QSize(_GLYPH_PX, _GLYPH_PX))
+        btn.setMinimumHeight(BTN_SMALL_PX)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        row.add_button(btn)
+    row.finish()
+    row.setVisible(False)
+    return row
+
+
+def build_rerun_row(dock: AIEditDockWidget) -> QWidget:
+
+
+
+
+    row = _ResultToolsRow()
+    dock._result_rerun_row = row
+
+    try_again = QPushButton(tr("Try again"))
+    try_again.setToolTip(tr("Same prompt, same base: a new variation"))
+    try_again.clicked.connect(dock.try_again_clicked.emit)
+    dock._result_try_again_btn = try_again
+
+    elsewhere = QPushButton(tr("Same edit elsewhere"))
+    elsewhere.setToolTip(tr("Keep this result, draw a new zone with this prompt"))
+    elsewhere.clicked.connect(dock.same_edit_elsewhere_clicked.emit)
+    dock._result_elsewhere_btn = elsewhere
+
+    for btn in (try_again, elsewhere):
+        btn.setAccessibleName(btn.text())
+        btn.setStyleSheet(RESULT_TOOL_QSS)
         btn.setMinimumHeight(BTN_SMALL_PX)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         row.add_button(btn)

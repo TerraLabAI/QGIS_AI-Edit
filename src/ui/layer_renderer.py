@@ -23,7 +23,7 @@ from qgis.core import (
     QgsRectangle,
     QgsVectorLayer,
 )
-from qgis.PyQt.QtCore import QEventLoop, QSize, QTimer
+from qgis.PyQt.QtCore import QEventLoop, QObject, QSize, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QImage, QPainter
 
 from ..core.config_store import get_export_dial
@@ -398,12 +398,7 @@ def _render_at_extent(
     settle: bool = True,
 ) -> QImage | None:
 
-    settings = QgsMapSettings()
-    settings.setLayers(layers)
-    settings.setDestinationCrs(dest_crs)
-    settings.setExtent(extent)
-    settings.setOutputSize(_output_size(extent, max_px))
-    settings.setBackgroundColor(QColor(255, 255, 255))
+    settings = _zone_settings(layers, extent, dest_crs, max_px)
     settings.setFlag(QgsMapSettings.Flag.Antialiasing, True)
 
     _hq_flag = getattr(QgsMapSettings.Flag, "HighQualityImageTransforms", None)
@@ -420,6 +415,18 @@ def _render_at_extent(
         log_warning("Layer render produced no image")
         return None
     return image
+
+
+def _zone_settings(layers, extent, dest_crs, max_px, background=None) -> QgsMapSettings:
+
+
+    settings = QgsMapSettings()
+    settings.setLayers(layers)
+    settings.setDestinationCrs(dest_crs)
+    settings.setExtent(extent)
+    settings.setOutputSize(_output_size(extent, max_px))
+    settings.setBackgroundColor(background if background is not None else QColor(255, 255, 255))
+    return settings
 
 
 def _enable_online_resampling(layers: list) -> None:
@@ -597,3 +604,174 @@ def _run_painter_render(settings: QgsMapSettings) -> QImage | None:
         _stop_render_job(job)
         painter.end()
     return None if failed else image
+
+
+
+
+
+_stopping_jobs: set = set()
+
+
+def _park_job(job) -> None:
+    if job is None:
+        return
+    try:
+        if not job.isActive():
+            return
+        _stopping_jobs.add(job)
+        job.finished.connect(lambda j=job: _stopping_jobs.discard(j))
+        job.cancelWithoutBlocking()
+    except Exception as err:  # nosec B110
+        log_warning(f"Could not stop the render job: {err}")
+
+
+class ZoneLayerRender(QObject):
+
+
+
+
+
+
+
+
+
+
+
+    done = pyqtSignal(object)
+
+    def __init__(self, layers, extent, crs, transparent=False, parent=None):
+        super().__init__(parent)
+        self._layers = [lyr for lyr in layers or [] if lyr is not None]
+        self._settings = None
+        if self._layers and extent is not None and _usable(extent):
+            dest_crs = crs if (crs is not None and crs.isValid()) else _resolve_crs(self._layers[0])
+            background = QColor(0, 0, 0, 0) if transparent else None
+            max_px = get_export_dial("render.max_px", MAX_RENDER_PX)
+            self._settings = _zone_settings(
+                self._layers, QgsRectangle(extent), dest_crs, max_px, background)
+            self._settings.setFlag(QgsMapSettings.Flag.Antialiasing, True)
+            hq_flag = getattr(QgsMapSettings.Flag, "HighQualityImageTransforms", None)
+            if hq_flag is not None:
+                self._settings.setFlag(hq_flag, True)
+            self._settings.setOutputDpi(get_export_dial("render.dpi", _RENDER_DPI))
+        self._job = None
+        self._prev = None
+        self._passes_left = 0
+        self._finished = False
+        self._guard = QTimer(self)
+        self._guard.setSingleShot(True)
+        self._guard.timeout.connect(self._on_timeout)
+        self._wait = QTimer(self)
+        self._wait.setSingleShot(True)
+        self._wait.timeout.connect(self._next_pass)
+
+    def start(self) -> None:
+        if self._settings is None:
+            self._finish(None)
+            return
+        remote = any(is_remote_layer(lyr) for lyr in self._layers)
+        if remote:
+            _enable_online_resampling(self._layers)
+        self._passes_left = (
+            get_export_dial("render.settle_attempts", _SETTLE_MAX_ATTEMPTS) if remote else 1)
+        self._next_pass()
+
+    def cancel(self) -> None:
+
+        self._finished = True
+        self._guard.stop()
+        self._wait.stop()
+        job, self._job = self._job, None
+        _park_job(job)
+
+    def _next_pass(self) -> None:
+        if self._finished:
+            return
+        self._passes_left -= 1
+        try:
+            job = QgsMapRendererParallelJob(self._settings)
+            job.finished.connect(self._on_job_finished)
+            self._job = job
+            job.start()
+        except Exception as err:  # nosec B110
+            log_warning(f"Layer render failed: {err}")
+            self._finish(self._prev)
+            return
+        self._guard.start(get_export_dial("render.timeout_ms", _RENDER_TIMEOUT_MS))
+
+    def _on_job_finished(self) -> None:
+        job = self._job
+        if self._finished or job is None:
+            return
+        self._guard.stop()
+        self._job = None
+        image = job.renderedImage()
+        if image is None or image.isNull():
+            self._finish(self._prev)
+            return
+        image = QImage(image)
+        if self._passes_left <= 0 or (self._prev is not None and image == self._prev):
+            self._finish(image)
+            return
+        self._prev = image
+        for lyr in self._layers:
+            try:
+                provider = lyr.dataProvider()
+                if provider is not None:
+                    provider.reloadData()
+            except Exception:  # nosec B110
+                pass
+        self._wait.start(get_export_dial("render.settle_wait_ms", _SETTLE_WAIT_MS))
+
+    def _on_timeout(self) -> None:
+
+
+        log_warning("Layer render timed out; the partial frame is discarded")
+        job, self._job = self._job, None
+        _park_job(job)
+        self._finish(self._prev)
+
+    def _finish(self, image) -> None:
+        if self._finished:
+            return
+        self._finished = True
+        self.done.emit(image)
+
+
+def drawn_fraction(image) -> float:
+
+
+    if image is None or image.isNull():
+        return 0.0
+    try:
+        from ..core import qt_compat as QtC
+
+        argb = image.convertToFormat(QtC.FormatARGB32)
+        bits = argb.constBits()
+        size = argb.sizeInBytes() if hasattr(argb, "sizeInBytes") else argb.byteCount()
+        try:
+            bits.setsize(size)
+        except AttributeError:
+            pass
+        raw = bytes(bits)
+
+        alpha = raw[3::4]
+        if not alpha:
+            return 0.0
+        return (len(alpha) - alpha.count(0)) / len(alpha)
+    except Exception:  # noqa: BLE001
+        return 1.0
+
+
+def compose_over(overlay, base=None):
+
+    out = QImage(overlay.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    out.fill(QColor(255, 255, 255))
+    painter = QPainter(out)
+    try:
+        if base is not None and not base.isNull():
+            painter.drawImage(out.rect(), base)
+        painter.drawImage(0, 0, overlay)
+    finally:
+        painter.end()
+    return out

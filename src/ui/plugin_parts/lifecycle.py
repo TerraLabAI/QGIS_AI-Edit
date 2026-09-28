@@ -353,6 +353,8 @@ class PluginLifecycleMixin:
         )
         self._dock_widget.set_library_dependencies(self._client, self._auth_manager)
 
+        self._watch_plan_return()
+
 
         def _load_stale_catalog():
             try:
@@ -409,6 +411,11 @@ class PluginLifecycleMixin:
         self._dock_widget.launch_clicked.connect(self._on_launch_clicked)
         self._dock_widget.try_example_requested.connect(self._on_try_example)
         self._dock_widget.exit_clicked.connect(self._on_exit_clicked)
+
+
+        self._dock_widget._result_exit_btn.clicked.connect(self._on_new_edit_clicked)
+        self._dock_widget.try_again_clicked.connect(self._on_try_again)
+        self._dock_widget.same_edit_elsewhere_clicked.connect(self._on_same_edit_elsewhere)
         self._dock_widget.zone_clear_requested.connect(self._on_zone_delete_requested)
         self._dock_widget.zone_source_picked.connect(self._on_zone_source_picked)
         self._dock_widget.markup_clicked.connect(self._on_markup_clicked)
@@ -468,6 +475,17 @@ class PluginLifecycleMixin:
 
 
         QgsProject.instance().layersRemoved.connect(self._on_project_layers_changed)
+
+
+        QgsProject.instance().layerTreeRoot().visibilityChanged.connect(
+            self._on_project_layers_changed
+        )
+
+
+
+
+        self._canvas.destinationCrsChanged.connect(self._on_zone_crs_event)
+        QgsProject.instance().cleared.connect(self._on_project_cleared_zone)
 
 
 
@@ -566,6 +584,8 @@ class PluginLifecycleMixin:
         with teardown_step("imagery gate"):
             self._finish_imagery_gate()
 
+        with teardown_step("plan return watch"):
+            self._unwatch_plan_return()
         with teardown_step("sibling sign-in"):
             from ...core import sibling_sign_in
             sibling_sign_in.cancel("ai-edit")
@@ -586,6 +606,10 @@ class PluginLifecycleMixin:
             if self._export_worker is not None and self._export_worker.is_active():
                 drain_task(self._export_worker, EXPORT_TASK_SIGNALS)
         self._export_worker = None
+
+
+        with teardown_step("pairing wait"):
+            self._end_pairing_on_unload()
 
 
 
@@ -612,6 +636,16 @@ class PluginLifecycleMixin:
             )
         except Exception:  # nosec B110
             pass
+        for signal, slot in (
+            (lambda: QgsProject.instance().layerTreeRoot().visibilityChanged,
+             self._on_project_layers_changed),
+            (lambda: QgsProject.instance().cleared, self._on_project_cleared_zone),
+            (lambda: self._canvas.destinationCrsChanged, self._on_zone_crs_event),
+        ):
+            try:
+                signal().disconnect(slot)
+            except Exception:  # nosec B110
+                pass
 
 
 

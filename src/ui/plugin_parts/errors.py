@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import re
 
 from ...core.auth.activation_manager import (
     build_utm_url,
@@ -14,8 +15,9 @@ from ...core.config_store import (
     get_export_dial_list,
     get_export_text,
 )
-from ...core.errors import NETWORK_ERROR_CODES, PROMPT_BLOCKED_CODES
+from ...core.errors import NETWORK_ERROR_CODES, PROMPT_BLOCKED_CODES, ErrorCode
 from ...core.i18n import tr
+from ...core.logger import log_warning
 
 
 __all__ = [
@@ -104,12 +106,12 @@ def _localize_server_error(error: str, code: str) -> str:
         "SSL_ERROR": tr("Secure connection failed."),
         "PROXY_ERROR": tr("Proxy connection failed."),
         "CONNECTION_REFUSED": tr("Could not connect to the service."),
-        "AUTH_ERROR": tr("Authentication failed. Check your activation key."),
+        "AUTH_ERROR": tr("Your sign-in has expired. Sign in again to continue."),
 
 
-        "NO_KEY": tr("No activation key. Enter your key to use AI Edit."),
-        "INVALID_KEY": tr("Invalid activation key."),
-        "KEY_REVOKED": tr("This activation key has been revoked."),
+        "NO_KEY": tr("You are signed out. Sign in to use AI Edit."),
+        "INVALID_KEY": tr("Your sign-in is no longer valid. Sign in again."),
+        "KEY_REVOKED": tr("This sign-in was revoked. Sign in again."),
         "SUBSCRIPTION_EXPIRED": tr("Your subscription has expired."),
         "SUBSCRIPTION_INACTIVE": tr("Your subscription is inactive."),
         "FREE_TIER_EXPIRED": tr("Your free trial has ended."),
@@ -123,7 +125,7 @@ def _localize_server_error(error: str, code: str) -> str:
         "SIGN_FAILED": tr("Could not prepare upload, please retry shortly."),
         "UPLOAD_TOKEN_INVALID": tr("Upload session expired, please retry."),
         "UPLOAD_TOKEN_MISMATCH": tr("Upload session does not match your account."),
-        "WRONG_PRODUCT": tr("This activation key is for a different product."),
+        "WRONG_PRODUCT": tr("This sign-in is for a different TerraLab product. Sign in again from AI Edit."),
         "WRONG_REQUEST": tr("Unknown or unauthorized request."),
         "AUTH_MIGRATION_REQUIRED": tr("Account migration required, please re-login from the website."),
         "NOT_READY": tr("Result not ready yet."),
@@ -156,7 +158,32 @@ def _localize_server_error(error: str, code: str) -> str:
 
     if code.upper() in PROMPT_BLOCKED_CODES:
         return tr("This prompt is not allowed: its content goes against our rules.")
-    return html.escape(error or "")
+
+
+
+
+
+
+    if not error or code.upper() in _PLUGIN_OWN_CODES:
+        return html.escape(error or "")
+    if code.upper() in _SERVER_INTERNAL_CODES or _TECHNICAL_TEXT_RE.search(error):
+        log_warning(f"Unmapped server error {code}: {error}")
+        return tr("The service could not complete this request.")
+    return html.escape(error)
+
+
+_PLUGIN_OWN_CODES = frozenset(member.value for member in ErrorCode)
+
+_SERVER_INTERNAL_CODES = frozenset({
+    "DB_ERROR", "JOB_INSERT_FAILED", "MISCONFIGURED", "NOT_CONFIGURED",
+    "SIGN_FAILED", "STORAGE_UNAVAILABLE", "RATE_LIMITER_DOWN", "REFUND_CHECK_FAILED",
+    "CANCEL_UPSTREAM_FAILED", "PROVIDER_BAD_RESPONSE", "UPSTREAM_EMPTY",
+    "UPSTREAM_UNAVAILABLE", "WRONG_STATUS", "NOT_SEEDED",
+})
+_TECHNICAL_TEXT_RE = re.compile(
+    r"HTTP \d{3}|Traceback|Exception|Errno|\bstack\b|\bundefined\b|\bnull\b|[A-Za-z]:\\|/Users/|/home/",
+    re.IGNORECASE,
+)
 
 
 
@@ -183,6 +210,7 @@ _USER_FIXABLE_CODES = frozenset({
     "SUBSCRIPTION_EXPIRED", "SUBSCRIPTION_INACTIVE", "FREE_TIER_EXPIRED",
     "DEVICE_LIMIT_EXCEEDED",
     "GENERATION_CANCELLED",
+    "REFERENCE_LIMIT", "WRONG_PRODUCT", "NO_ACCOUNT", "AUTH_MIGRATION_REQUIRED",
 })
 
 
@@ -209,6 +237,7 @@ _SERVER_FAULT_CODES = frozenset({
     "TIMEOUT", "GENERATION_TIMED_OUT",
     "SERVER_ERROR", "RATE_LIMITER_DOWN", "STORAGE_UNAVAILABLE", "SIGN_FAILED",
     "UPSTREAM_UNAVAILABLE", "UPSTREAM_EMPTY", "PROVIDER_ERROR", "PROVIDER_BAD_RESPONSE",
+    "RESULT_UNCONFIRMED",
 })
 
 

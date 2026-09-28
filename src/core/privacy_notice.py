@@ -15,6 +15,8 @@
 
 
 
+
+
 from __future__ import annotations
 
 PRIVACY_NOTICE_VERSION = 1
@@ -29,6 +31,30 @@ PRIVACY_NOTICE_KEY = "AIEdit/privacy_notice_accepted_version"
 
 
 _accepted_memo: bool | None = None
+
+
+
+_on_accepted_hooks: list = []
+
+
+def add_privacy_notice_accepted_hook(callback) -> None:
+    if callback not in _on_accepted_hooks:
+        _on_accepted_hooks.append(callback)
+
+
+def remove_privacy_notice_accepted_hook(callback) -> None:
+    try:
+        _on_accepted_hooks.remove(callback)
+    except ValueError:
+        pass
+
+
+def _run_accepted_hooks() -> None:
+    for callback in list(_on_accepted_hooks):
+        try:
+            callback()
+        except Exception:  # nosec B110
+            pass
 
 
 def _read_version(settings) -> int:
@@ -63,6 +89,7 @@ def save_privacy_notice_accepted(settings=None) -> None:
     from qgis.PyQt.QtCore import QSettings
     QSettings().setValue(PRIVACY_NOTICE_KEY, PRIVACY_NOTICE_VERSION)
     _accepted_memo = True
+    _run_accepted_hooks()
 
 
 def reset_privacy_notice_memo() -> None:

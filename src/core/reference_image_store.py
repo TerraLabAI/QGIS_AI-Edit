@@ -229,6 +229,9 @@ class ReferenceImageStore:
         self._notes: dict[str, str] = {}
 
 
+        self._auto_notes: dict[str, str] = {}
+
+
 
 
         self._markup_id: str | None = None
@@ -299,8 +302,12 @@ class ReferenceImageStore:
         try:
             src_size = os.path.getsize(source_path)
         except OSError as err:
+            log_debug(f"Reference image unreadable: {err}")
             raise ReferenceImageStoreError(
-                tr("Cannot read file: {err}").format(err=err)
+                get_export_copy(
+                    "pipeline.reference_image_store.unreadable",
+                    tr("This file cannot be read. Check that it still exists and that you can open it."),
+                )
             ) from err
 
         if src_size > get_export_dial("reference_encode.max_source_bytes", MAX_SOURCE_BYTES):
@@ -431,6 +438,22 @@ class ReferenceImageStore:
         else:
             self._notes.pop(ref_id, None)
 
+    def set_auto_note(self, ref_id: str, note: str) -> None:
+
+
+        if isinstance(ref_id, str) and ref_id in self._refs and isinstance(note, str) and note:
+            self._auto_notes[ref_id] = note
+
+    def move_to_end(self, ref_ids: list[str]) -> None:
+
+
+        tail = [ref_id for ref_id in ref_ids if ref_id in self._refs]
+        if not tail:
+            return
+        keep = {k: v for k, v in self._refs.items() if k not in tail}
+        keep.update((ref_id, self._refs[ref_id]) for ref_id in tail)
+        self._refs = keep
+
     def get_note(self, ref_id: str) -> str:
         return self._notes.get(ref_id, "") if isinstance(ref_id, str) else ""
 
@@ -439,7 +462,8 @@ class ReferenceImageStore:
 
 
         return [
-            self._notes.get(record.id, "").strip()
+            (self._notes.get(record.id, "").strip()
+             or self._auto_notes.get(record.id, "").strip())
             for record in self._refs.values()
             if include_markup or record.id != self._markup_id
         ]
@@ -450,6 +474,7 @@ class ReferenceImageStore:
             return
         record = self._refs.pop(ref_id, None)
         self._notes.pop(ref_id, None)
+        self._auto_notes.pop(ref_id, None)
         if record is None:
             return
         if ref_id == self._markup_id:
@@ -499,6 +524,7 @@ class ReferenceImageStore:
 
         self._refs.clear()
         self._notes.clear()
+        self._auto_notes.clear()
         self._markup_id = None
         self._retry_pending_deletes()
         tmp_dir = self._tmp_dir

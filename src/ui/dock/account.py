@@ -16,7 +16,7 @@ from ...core.paywall_state import total_free_generations
 from ...core.pro_ceiling import pro_ceiling_enabled
 from ...core.resolution_labels import DEFAULT_RESOLUTION_CREDIT_COSTS
 from .blocked_reasons import LAUNCH_BLOCK_NO_KEY
-from .design_tokens import FONT_HINT, GREEN_TEXT, RED_TEXT
+from .design_tokens import FONT_HINT, GREEN_TEXT, LINK_INK, RED_TEXT
 
 _PAIRING_COPY_REVERT_MS = 1400
 
@@ -95,6 +95,10 @@ class DockAccountMixin:
             self._update_layer_warning()
 
     def set_activated(self, activated: bool):
+
+
+
+        just_signed_in = activated and not getattr(self, "_activated", False)
         self._activated = activated
         self._activation_widget.setVisible(not activated)
         self._main_widget.setVisible(activated)
@@ -117,13 +121,21 @@ class DockAccountMixin:
         if activated:
             self.hide_trial_info()
             self._update_layer_warning()
-            self.set_launch_state()
+            if just_signed_in:
+                self.set_launch_state()
 
             self._stop_pairing_wait()
         else:
             self._setup_header.setVisible(True)
-            self._connect_section.setVisible(True)
-            self._stop_pairing_wait()
+            if self._pairing_active:
+
+
+
+                self._connect_section.setVisible(False)
+                self._pairing_wait_section.setVisible(True)
+            else:
+                self._connect_section.setVisible(True)
+                self._stop_pairing_wait()
             self._activation_message.setVisible(False)
             self.hide_trial_info()
         self._sync_pro_pill()
@@ -168,8 +180,37 @@ class DockAccountMixin:
         self._activation_message.setStyleSheet(
             f"font-size: {FONT_HINT}px; color: {color}; background: transparent; border: none;"
         )
+        self._activation_message.setTextFormat(QtC.AutoText)
         self._activation_message.setText(text)
         self._activation_message.setVisible(True)
+
+    def set_activation_message_link(self, text: str, link_text: str, url: str) -> None:
+
+
+
+
+        import html
+
+        self.set_activation_message(text, is_error=True)
+        self._activation_message_url = url
+        self._activation_message.setTextFormat(QtC.RichText)
+        self._activation_message.setText(
+            f'{html.escape(text)} <a href="terralab:activation-dashboard" style="color: {LINK_INK};'
+            f' font-weight: 600;">{html.escape(link_text)}</a>'
+        )
+
+    def _on_activation_message_link(self, _href: str) -> None:
+        url = getattr(self, "_activation_message_url", "")
+        if not url:
+            return
+        from ...core import telemetry
+        from ...core import telemetry_events as te
+        from ..external_url import open_external
+
+        telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {"source": "activation_limit_cta"})
+
+        telemetry.flush()
+        open_external(url)
 
     def set_credits(
         self,
@@ -318,6 +359,7 @@ class DockAccountMixin:
             "",
             "",
             get_export_copy("dock.build.manage_plan_btn", tr("Manage plan")),
+            self.pro_limit_reset_note(),
         )
 
     def show_prewall_info(self, cta_url: str):
@@ -483,6 +525,11 @@ class DockAccountMixin:
         if self._pairing_active:
             text = tr("Still waiting, but AI Edit cannot reach the server to check your sign-in.")
             self._pairing_status.setText(f"{text} {next_step}".strip())
+
+    def show_pairing_hint(self, text: str):
+
+        if self._pairing_active:
+            self._pairing_status.setText(text)
 
     def _stop_pairing_wait(self):
 

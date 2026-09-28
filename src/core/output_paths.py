@@ -66,14 +66,20 @@ def ascii_safe_dir(directory: str) -> str:
 
 
 
-    public = os.environ.get("PUBLIC")
-    if public and public.isascii():
-        safe = os.path.join(public, "terralab_ai_edit")
+
+
+
+    for env_name in ("LOCALAPPDATA", "PUBLIC"):
+        root = os.environ.get(env_name)
+        if not root or not root.isascii():
+            continue
+        safe = os.path.join(root, "terralab_ai_edit")
         try:
             os.makedirs(safe, exist_ok=True)
-            return safe
         except OSError:
-            pass
+            continue
+        log_warning(f"Output folder has non-ASCII characters; writing to {safe} instead")
+        return safe
     return directory
 
 

@@ -416,6 +416,11 @@ class DockToolsFooterMixin:
     def set_markup_annotation_count(self, count: int) -> None:
         self._markup_panel.set_annotation_count(count)
 
+    def set_markup_badge_count(self, count: int) -> None:
+
+        for container in (self._prompt_container, self._result_prompt_container):
+            container.set_markup_count(count)
+
     def set_markup_zone_present(self, has_zone: bool) -> None:
         self._markup_panel.set_zone_present(has_zone)
 

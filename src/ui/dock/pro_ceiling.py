@@ -14,6 +14,7 @@ from qgis.PyQt.QtWidgets import QApplication, QPushButton
 
 from ...core import qt_compat as QtC
 from ...core.config_store import get_activation_copy, get_export_copy, get_export_dial
+from ...core.date_format import format_reset_date
 from ...core.i18n import tr
 from ...core.number_format import format_count
 from ...core.pro_ceiling import pro_ceiling_contact_email
@@ -77,7 +78,19 @@ class DockProCeilingMixin:
             copy_cta_text(),
             pro_ceiling_contact_email(),
             get_export_copy("dock.build.manage_plan_btn", tr("Manage plan")),
+            self.pro_limit_reset_note(),
         )
+
+    def pro_limit_reset_note(self) -> str:
+
+
+
+        reset = getattr(self, "_reset_date", None)
+        date_str = format_reset_date(reset) if isinstance(reset, str) and reset else ""
+        if not date_str:
+            return ""
+        note = get_activation_copy("pro_ceiling.reset_note", tr("Credits renew on {date}"))
+        return note.replace("{date}", date_str)
 
     def pro_limit_title(self, fallback: str) -> str:
 

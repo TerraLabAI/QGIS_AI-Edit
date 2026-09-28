@@ -358,6 +358,29 @@ class MarkupLayerManager(QObject):
             self._layer = None
             return 0
 
+    def annotation_count_in_zone(
+        self, rect: QgsRectangle | None, polygon: QgsGeometry | None = None
+    ) -> int:
+
+
+
+        if polygon is not None and not polygon.isEmpty():
+            shape = polygon
+        elif rect is not None and not rect.isEmpty():
+            shape = QgsGeometry.fromRect(rect)
+        else:
+            return self.annotation_count()
+        if not self._alive():
+            return 0
+        try:
+            return sum(
+                1 for feat in self._layer.getFeatures()
+                if feat.hasGeometry() and feat.geometry().intersects(shape)
+            )
+        except RuntimeError:
+            self._layer = None
+            return 0
+
 
 
     def set_clip_zone(

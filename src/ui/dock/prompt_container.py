@@ -363,6 +363,17 @@ class _PromptContainer(QFrame):
         )
         self._ref_count.hide()
 
+
+
+        self._markup_style_badged = self._attach_style_badged
+        self._markup_count = QLabel("", self._markup_chip)
+        self._markup_count.setAttribute(QtC.WA_TransparentForMouseEvents)
+        self._markup_count.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._markup_count.setFixedHeight(16)
+        self._markup_count.setMinimumWidth(16)
+        self._markup_count.setStyleSheet(self._ref_count.styleSheet())
+        self._markup_count.hide()
+
         layout.addLayout(footer_row)
         self._footer_row = footer_row
         self.setStyleSheet(self._base_style)
@@ -593,17 +604,33 @@ class _PromptContainer(QFrame):
             self._ref_count.hide()
             self._attach_btn.setStyleSheet(self._CHIP_BTN_HOVERPROP_STYLE)
 
+    def set_markup_count(self, count: int) -> None:
+
+
+        if count > 0:
+            self._markup_count.setText(str(count))
+            self._markup_count.adjustSize()
+            self._markup_chip.setStyleSheet(self._markup_style_badged)
+            self._markup_count.show()
+            self._markup_count.raise_()
+            QtC.safe_single_shot(0, self, self._position_ref_badge)
+        else:
+            self._markup_count.hide()
+            self._markup_chip.setStyleSheet(self._CHIP_BTN_HOVERPROP_STYLE)
+
     def _position_ref_badge(self) -> None:
 
 
-        if self._ref_count.isHidden():
-            return
-        btn = self._attach_btn
-        badge = self._ref_count
-        x = btn.width() - badge.width() - 4
-        y = (btn.height() - badge.height()) // 2
-        badge.move(max(0, x), max(0, y))
-        badge.raise_()
+        for btn, badge in (
+            (self._attach_btn, self._ref_count),
+            (self._markup_chip, self._markup_count),
+        ):
+            if badge.isHidden():
+                continue
+            x = btn.width() - badge.width() - 4
+            y = (btn.height() - badge.height()) // 2
+            badge.move(max(0, x), max(0, y))
+            badge.raise_()
 
 
 

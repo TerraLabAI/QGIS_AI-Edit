@@ -5177,5 +5177,329 @@ Kami senang mendengar dari Anda!</translation>
         <source>{n} strokes. Click Done to guide the edit with them.</source>
         <translation>{n} goresan. Klik Selesai untuk memandu edit dengannya.</translation>
     </message>
+    <message>
+        <source>1 layer above not sent: plan limit</source>
+        <translation>1 layer di atas tidak dikirim: batas paket</translation>
+    </message>
+    <message>
+        <source>&lt; 0.1 km²</source>
+        <translation>&lt; 0.1 km²</translation>
+    </message>
+    <message>
+        <source>AI Edit needs an image under your data.</source>
+        <translation>AI Edit memerlukan citra di bawah data Anda.</translation>
+    </message>
+    <message>
+        <source>Add at least 3 points</source>
+        <translation>Tambahkan minimal 3 titik</translation>
+    </message>
+    <message>
+        <source>Add satellite imagery here</source>
+        <translation>Tambahkan citra satelit di sini</translation>
+    </message>
+    <message>
+        <source>At this zoom one pixel covers about {m} m. Zoom in or draw a smaller zone for buildings, trees or roads.</source>
+        <translation>Pada zoom ini satu piksel mencakup sekitar {m} m. Perbesar atau gambar zona yang lebih kecil untuk bangunan, pohon, atau jalan.</translation>
+    </message>
+    <message>
+        <source>Cancel to pick another layer.</source>
+        <translation>Batal untuk memilih layer lain.</translation>
+    </message>
+    <message>
+        <source>Cancelled before starting the run.</source>
+        <translation>Dibatalkan sebelum proses dimulai.</translation>
+    </message>
+    <message>
+        <source>Cancelled before tracing.</source>
+        <translation>Dibatalkan sebelum penelusuran.</translation>
+    </message>
+    <message>
+        <source>Capturing your zone...</source>
+        <translation>Menangkap zona Anda...</translation>
+    </message>
+    <message>
+        <source>Click to add points, or drag a box</source>
+        <translation>Klik untuk menambah titik, atau seret kotak</translation>
+    </message>
+    <message>
+        <source>Could not get your settings from the server.</source>
+        <translation>Tidak dapat mengambil pengaturan Anda dari server.</translation>
+    </message>
+    <message>
+        <source>Could not get your settings from the server. Press Generate to try again.</source>
+        <translation>Tidak dapat mengambil pengaturan Anda dari server. Tekan Hasilkan untuk mencoba lagi.</translation>
+    </message>
+    <message>
+        <source>Could not start the edit. No credit was used. Press Generate to try again.</source>
+        <translation>Tidak dapat memulai edit. Tidak ada kredit yang terpakai. Tekan Hasilkan untuk mencoba lagi.</translation>
+    </message>
+    <message>
+        <source>Credits renew on {date}</source>
+        <translation>Kredit diperbarui pada {date}</translation>
+    </message>
+    <message>
+        <source>Double-click, right-click or press Enter to finish</source>
+        <translation>Klik dua kali, klik kanan, atau tekan Enter untuk menyelesaikan</translation>
+    </message>
+    <message>
+        <source>Draw a line, then say: add a path along the pink line.</source>
+        <translation>Gambar sebuah garis, lalu ucapkan: tambahkan jalur di sepanjang garis merah muda.</translation>
+    </message>
+    <message>
+        <source>Draw a zone on the map to start.</source>
+        <translation>Gambar zona di peta untuk memulai.</translation>
+    </message>
+    <message>
+        <source>Fill the holes inside each shape, except where another checked class sits.</source>
+        <translation>Isi lubang di dalam setiap bentuk, kecuali tempat kelas tercentang lainnya berada.</translation>
+    </message>
+    <message>
+        <source>Generating your image...</source>
+        <translation>Menghasilkan citra Anda...</translation>
+    </message>
+    <message>
+        <source>Getting ready...</source>
+        <translation>Menyiapkan...</translation>
+    </message>
+    <message>
+        <source>Image to edit</source>
+        <translation>Citra yang akan diedit</translation>
+    </message>
+    <message>
+        <source>Invalid server response</source>
+        <translation>Respons server tidak valid</translation>
+    </message>
+    <message>
+        <source>Keep clicking to add points</source>
+        <translation>Terus klik untuk menambah titik</translation>
+    </message>
+    <message>
+        <source>Keep this result, draw a new zone with this prompt</source>
+        <translation>Simpan hasil ini, gambar zona baru dengan prompt ini</translation>
+    </message>
+    <message>
+        <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size”, or raise “Color tolerance”.</source>
+        <translation>Tidak ada bentuk yang tersisa dengan pengaturan ini. Atur “Expand/Contract” mendekati 0, turunkan “Min polygon size”, atau naikkan “Color tolerance”.</translation>
+    </message>
+    <message>
+        <source>Open my dashboard</source>
+        <translation>Buka dasbor saya</translation>
+    </message>
+    <message>
+        <source>Other</source>
+        <translation>Lainnya</translation>
+    </message>
+    <message>
+        <source>Outline an area, say what to change, get a new map layer.</source>
+        <translation>Buat garis area, ucapkan apa yang ingin diubah, dapatkan layer peta baru.</translation>
+    </message>
+    <message>
+        <source>Pick a zone, a selection or a polygon layer already in the project</source>
+        <translation>Pilih zona, seleksi, atau layer poligon yang sudah ada di proyek</translation>
+    </message>
+    <message>
+        <source>Pick the layer to edit first.</source>
+        <translation>Pilih layer yang akan diedit terlebih dahulu.</translation>
+    </message>
+    <message>
+        <source>Pick {base} first, then try again.</source>
+        <translation>Pilih {base} terlebih dahulu, lalu coba lagi.</translation>
+    </message>
+    <message>
+        <source>Please describe what you want to change (at least {chars} characters).</source>
+        <translation>Jelaskan apa yang ingin Anda ubah (minimal {chars} karakter).</translation>
+    </message>
+    <message>
+        <source>Prompt cut to {count} characters, the most AI Edit accepts.</source>
+        <translation>Prompt dipotong menjadi {count} karakter, batas maksimum AI Edit.</translation>
+    </message>
+    <message>
+        <source>Same edit elsewhere</source>
+        <translation>Edit yang sama di tempat lain</translation>
+    </message>
+    <message>
+        <source>Same prompt, same base: a new variation</source>
+        <translation>Prompt sama, base sama: variasi baru</translation>
+    </message>
+    <message>
+        <source>Save or discard your edits on the vector layer, then run Vectorize again.</source>
+        <translation>Simpan atau buang edit Anda pada layer vektor, lalu jalankan Vektorisasi lagi.</translation>
+    </message>
+    <message>
+        <source>Shapes smaller than this join the class around them, so no hole is left.</source>
+        <translation>Bentuk yang lebih kecil dari ini bergabung dengan kelas di sekitarnya, sehingga tidak ada lubang yang tersisa.</translation>
+    </message>
+    <message>
+        <source>Sign in again to generate.</source>
+        <translation>Masuk lagi untuk menghasilkan.</translation>
+    </message>
+    <message>
+        <source>Sign-in timed out. Click Sign in to try again.</source>
+        <translation>Waktu masuk habis. Klik Masuk untuk mencoba lagi.</translation>
+    </message>
+    <message>
+        <source>Signed in (from {}).</source>
+        <translation>Telah masuk (dari {}).</translation>
+    </message>
+    <message>
+        <source>Signed in as {} (from {}).</source>
+        <translation>Telah masuk sebagai {} (dari {}).</translation>
+    </message>
+    <message>
+        <source>Signed in.</source>
+        <translation>Telah masuk.</translation>
+    </message>
+    <message>
+        <source>Signed out</source>
+        <translation>Belum masuk</translation>
+    </message>
+    <message>
+        <source>That shape is too thin or too small to edit. Pick another one.</source>
+        <translation>Bentuk itu terlalu tipis atau terlalu kecil untuk diedit. Pilih bentuk lain.</translation>
+    </message>
+    <message>
+        <source>That zone cannot be placed on this map. Draw one instead.</source>
+        <translation>Zona itu tidak dapat ditempatkan di peta ini. Gambar zona baru sebagai gantinya.</translation>
+    </message>
+    <message>
+        <source>That zone is no longer in the project. Pick another one.</source>
+        <translation>Zona itu tidak lagi ada di proyek. Pilih zona lain.</translation>
+    </message>
+    <message>
+        <source>The image was generated but could not be saved to your output folder. It is kept in your prompt library: open the Recent tab and download the AI result, or change the output folder and try again.</source>
+        <translation>Citra berhasil dibuat tetapi tidak dapat disimpan ke folder output Anda. Citra masih ada di pustaka prompt Anda: buka tab Terbaru dan unduh hasil AI, atau ganti folder output dan coba lagi.</translation>
+    </message>
+    <message>
+        <source>The layer the AI edits. Visible layers above it are sent as references.</source>
+        <translation>Layer yang diedit AI. Layer yang terlihat di atasnya dikirim sebagai referensi.</translation>
+    </message>
+    <message>
+        <source>The map CRS changed after you drew the zone. Draw the zone again.</source>
+        <translation>CRS peta berubah setelah Anda menggambar zona. Gambar zona lagi.</translation>
+    </message>
+    <message>
+        <source>The map had not finished loading, so nothing was sent and no credit was used. Wait for the map to appear, then press Generate again.</source>
+        <translation>Peta belum selesai dimuat, jadi tidak ada yang dikirim dan tidak ada kredit yang terpakai. Tunggu peta muncul, lalu tekan Hasilkan lagi.</translation>
+    </message>
+    <message>
+        <source>The result could not be downloaded to QGIS.</source>
+        <translation>Hasil tidak dapat diunduh ke QGIS.</translation>
+    </message>
+    <message>
+        <source>The result was saved but could not be added to the map. It is in Recent in your library.</source>
+        <translation>Hasil berhasil disimpan tetapi tidak dapat ditambahkan ke peta. Hasil ada di Terbaru di pustaka Anda.</translation>
+    </message>
+    <message>
+        <source>The service could not complete this request.</source>
+        <translation>Layanan tidak dapat menyelesaikan permintaan ini.</translation>
+    </message>
+    <message>
+        <source>The service is busy. Please try again shortly.</source>
+        <translation>Layanan sedang sibuk. Silakan coba lagi dalam beberapa saat.</translation>
+    </message>
+    <message>
+        <source>The version this came from is not in this session.</source>
+        <translation>Versi asal hasil ini tidak ada di sesi ini.</translation>
+    </message>
+    <message>
+        <source>This edit is taking longer than expected. Your result may still arrive in Recent in your library in a few minutes.</source>
+        <translation>Edit ini berlangsung lebih lama dari perkiraan. Hasil Anda mungkin tetap tiba di Terbaru di pustaka Anda dalam beberapa menit.</translation>
+    </message>
+    <message>
+        <source>This file cannot be read. Check that it still exists and that you can open it.</source>
+        <translation>File ini tidak dapat dibaca. Periksa apakah file masih ada dan dapat Anda buka.</translation>
+    </message>
+    <message>
+        <source>This sign-in is for a different TerraLab product. Sign in again from AI Edit.</source>
+        <translation>Sesi masuk ini untuk produk TerraLab lainnya. Masuk lagi dari AI Edit.</translation>
+    </message>
+    <message>
+        <source>This sign-in was revoked. Sign in again.</source>
+        <translation>Sesi masuk ini telah dicabut. Masuk lagi.</translation>
+    </message>
+    <message>
+        <source>This zone cannot be used.</source>
+        <translation>Zona ini tidak dapat digunakan.</translation>
+    </message>
+    <message>
+        <source>This zone could not be checked. Draw it again.</source>
+        <translation>Zona ini tidak dapat diperiksa. Gambar lagi.</translation>
+    </message>
+    <message>
+        <source>We lost contact with the server during your edit. It may still finish: check Recent in your library in a few minutes before trying again.</source>
+        <translation>Kami kehilangan kontak dengan server selama edit berlangsung. Edit mungkin tetap selesai: periksa Terbaru di pustaka Anda dalam beberapa menit sebelum mencoba lagi.</translation>
+    </message>
+    <message>
+        <source>You are signed in. Outline an area on the example map to make an edit.</source>
+        <translation>Anda telah masuk. Buat garis area pada peta contoh untuk membuat edit.</translation>
+    </message>
+    <message>
+        <source>You are signed out. Click Sign in to continue.</source>
+        <translation>Anda belum masuk. Klik Masuk untuk melanjutkan.</translation>
+    </message>
+    <message>
+        <source>You are signed out. Sign in again to use AI Edit.</source>
+        <translation>Anda belum masuk. Masuk lagi untuk menggunakan AI Edit.</translation>
+    </message>
+    <message>
+        <source>You are signed out. Sign in to use AI Edit.</source>
+        <translation>Anda belum masuk. Masuk untuk menggunakan AI Edit.</translation>
+    </message>
+    <message>
+        <source>You've used this month's {limit} free credits. They renew at your next monthly reset.</source>
+        <translation>Anda telah menggunakan {limit} kredit gratis bulan ini. Kredit diperbarui saat reset bulanan berikutnya.</translation>
+    </message>
+    <message>
+        <source>Your account changed. Please try again.</source>
+        <translation>Akun Anda berubah. Silakan coba lagi.</translation>
+    </message>
+    <message>
+        <source>Your output folder could not be used, so the result was saved in {folder}. You can pick another folder in the settings.</source>
+        <translation>Folder output Anda tidak dapat digunakan, jadi hasil disimpan di {folder}. Anda dapat memilih folder lain di pengaturan.</translation>
+    </message>
+    <message>
+        <source>Your result may still appear in Recent in your library.</source>
+        <translation>Hasil Anda mungkin tetap muncul di Terbaru di pustaka Anda.</translation>
+    </message>
+    <message>
+        <source>Your sign-in has expired. Sign in again to continue.</source>
+        <translation>Sesi masuk Anda telah kedaluwarsa. Masuk lagi untuk melanjutkan.</translation>
+    </message>
+    <message>
+        <source>Your sign-in is no longer valid. Click Sign in to sign in again.</source>
+        <translation>Sesi masuk Anda tidak lagi valid. Klik Masuk untuk masuk lagi.</translation>
+    </message>
+    <message>
+        <source>Your sign-in is no longer valid. Sign in again.</source>
+        <translation>Sesi masuk Anda tidak lagi valid. Masuk lagi.</translation>
+    </message>
+    <message>
+        <source>Your zone was cleared: no layer is visible on the map anymore.</source>
+        <translation>Zona Anda telah dihapus: tidak ada layer yang terlihat di peta lagi.</translation>
+    </message>
+    <message>
+        <source>or use an existing zone</source>
+        <translation>atau gunakan zona yang sudah ada</translation>
+    </message>
+    <message>
+        <source>{area} km²</source>
+        <translation>{area} km²</translation>
+    </message>
+    <message>
+        <source>{area}, very large</source>
+        <translation>{area}, sangat besar</translation>
+    </message>
+    <message>
+        <source>{layer} ({count} selected)</source>
+        <translation>{layer} ({count} dipilih)</translation>
+    </message>
+    <message>
+        <source>{name} draws nothing inside your zone</source>
+        <translation>{name} tidak menggambar apa pun di dalam zona Anda</translation>
+    </message>
+    <message>
+        <source>{n} layers above not sent: plan limit</source>
+        <translation>{n} layer di atas tidak dikirim: batas paket</translation>
+    </message>
 </context>
 </TS>

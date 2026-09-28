@@ -17,6 +17,10 @@
 
 from __future__ import annotations
 
+import os
+import re
+from urllib.parse import parse_qs, unquote
+
 
 
 
@@ -59,6 +63,7 @@ def layers_above_input(
     input_id = _layer_id(input_layer) if input_layer is not None else ""
     if not input_id:
         return []
+    input_source = layer_source_key(input_layer)
     skip = {layer_id for layer_id in (ai_edit_layer_ids or ()) if layer_id}
     if markup_layer is not None:
         skip.add(_layer_id(markup_layer))
@@ -69,6 +74,50 @@ def layers_above_input(
         layer_id = _layer_id(layer)
         if layer_id == input_id:
             return above
-        if layer_id and layer_id not in skip:
-            above.append(layer)
+        if not layer_id or layer_id in skip:
+            continue
+
+
+
+        if input_source and _is_raster(layer) and layer_source_key(layer) == input_source:
+            continue
+        above.append(layer)
     return []
+
+
+
+
+_TILE_HOST_RE = re.compile(r"://(?:mt|khm|[abcd])\d?\.")
+
+
+def _is_raster(layer) -> bool:
+    try:
+        from qgis.core import QgsRasterLayer
+    except ImportError:
+        return False
+    return isinstance(layer, QgsRasterLayer)
+
+
+def layer_source_key(layer) -> str:
+
+
+
+
+
+    try:
+        provider = layer.dataProvider()
+        name = ((provider.name() if provider is not None else "") or "").lower()
+        source = layer.source() or ""
+    except (AttributeError, RuntimeError):
+        return ""
+    if not source:
+        return ""
+    if "url=" in source:
+        params = parse_qs(source, keep_blank_values=True)
+        url = unquote((params.get("url") or [""])[0]).strip().lower()
+        if url:
+            return f"{name}:" + _TILE_HOST_RE.sub("://", url)
+    path = source.split("|", 1)[0].strip()
+    if path and os.path.exists(path):
+        return f"{name}:" + os.path.normcase(os.path.abspath(path))
+    return f"{name}:{source.strip()}"

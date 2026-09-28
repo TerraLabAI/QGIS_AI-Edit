@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Callable
 
 from ..core.i18n import get_locale
@@ -24,6 +25,23 @@ _LOGIN_LINK_WAIT_MS = 6_000
 
 
 _pending: set = set()
+
+
+
+
+
+
+_last_opened_unix = 0.0
+
+
+def last_opened_unix() -> float:
+    return _last_opened_unix
+
+
+def forget_opened() -> None:
+
+    global _last_opened_unix
+    _last_opened_unix = 0.0
 
 
 def _is_openable(url) -> bool:
@@ -45,6 +63,8 @@ def open_pro_page(
 
     from .external_url import open_external
 
+    global _last_opened_unix
+    _last_opened_unix = time.time()
     state = {"done": False}
 
     def settle(url: str, checkout_link: str) -> None:

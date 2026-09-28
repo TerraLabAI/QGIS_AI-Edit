@@ -86,7 +86,7 @@ class ToolPanelsMixin:
         if self._markup_manager is None:
             self._markup_manager = MarkupLayerManager(self._canvas, self._dock_widget)
             self._markup_manager.annotation_count_changed.connect(
-                self._dock_widget.set_markup_annotation_count
+                self._on_markup_count_changed
             )
             self._markup_manager.outside_zone_attempted.connect(
                 self._on_markup_outside_zone
@@ -99,9 +99,7 @@ class ToolPanelsMixin:
         self._dock_widget.set_markup_state()
         self._dock_widget.set_markup_zone_present(self._selected_extent is not None)
         self._markup_manager.set_clip_zone(self._selected_extent, self._selected_polygon)
-        self._dock_widget.set_markup_annotation_count(
-            self._markup_manager.annotation_count()
-        )
+        self._on_markup_count_changed(self._markup_manager.annotation_count())
 
 
         if self._markup_event_filter is None:
@@ -119,6 +117,29 @@ class ToolPanelsMixin:
             except (TypeError, RuntimeError):
                 pass
         telemetry.track(te.MARKUP_OPENED)
+
+    def _markup_count_in_zone(self) -> int:
+
+
+
+        if self._markup_manager is None:
+            return 0
+        return self._markup_manager.annotation_count_in_zone(
+            getattr(self, "_selected_extent", None),
+            getattr(self, "_selected_polygon", None),
+        )
+
+    def _refresh_markup_badge(self) -> None:
+        if self._dock_widget is not None:
+            self._dock_widget.set_markup_badge_count(self._markup_count_in_zone())
+
+    def _on_markup_count_changed(self, count: int) -> None:
+
+
+        if self._dock_widget is None:
+            return
+        self._dock_widget.set_markup_annotation_count(count)
+        self._refresh_markup_badge()
 
     def _on_markup_tool_changed(self, tool_key: str):
 
@@ -381,7 +402,9 @@ class ToolPanelsMixin:
             return
         if getattr(self._map_tool, "_zone_rect", None) is None and self._selected_extent is not None:
             try:
-                self._map_tool.set_zone(QgsRectangle(self._selected_extent))
+                self._map_tool.set_zone(
+                    QgsRectangle(self._selected_extent), getattr(self, "_selected_polygon", None)
+                )
             except Exception as err:  # nosec B110
                 log_warning(f"zone rect restore for pills failed: {err}")
         can_compare = self._swipe_controller is not None and self._swipe_controller.can_swipe_now()

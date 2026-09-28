@@ -137,6 +137,9 @@ class PrivacyNoticeDialog(QDialog):
         self.setFixedWidth(DIALOG_W)
         self._setup_ui()
 
+        from ...core.telemetry import discard_pre_notice_events
+        self.rejected.connect(discard_pre_notice_events)
+
     def _setup_ui(self):
 
 

@@ -44,7 +44,12 @@ from .design_tokens import (
 )
 from .prompt_container import _PromptContainer
 from .quota_card import QuotaCard
-from .tool_bar import build_result_tools_row, build_tool_toggles, tool_available
+from .tool_bar import (
+    build_rerun_row,
+    build_result_tools_row,
+    build_tool_toggles,
+    tool_available,
+)
 from .widgets import _SubmitTextEdit
 
 if TYPE_CHECKING:
@@ -223,6 +228,9 @@ def _build_result_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
 
     dock._result_prompt_layout.addSpacing(4)
     dock._result_prompt_layout.addWidget(dock._version_strip)
+
+
+    dock._result_prompt_layout.addWidget(build_rerun_row(dock))
     dock._result_prompt_layout.addWidget(build_result_tools_row(dock))
 
 

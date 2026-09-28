@@ -7,6 +7,8 @@
 
 
 
+
+
 from __future__ import annotations
 
 import os
@@ -17,7 +19,14 @@ from datetime import datetime, timezone
 from qgis.core import QgsApplication, QgsTask
 from qgis.PyQt.QtCore import QThread
 
-from .privacy_notice import has_accepted_privacy_notice
+from .privacy_notice import (
+    add_privacy_notice_accepted_hook,
+    has_accepted_privacy_notice,
+    remove_privacy_notice_accepted_hook,
+)
+
+
+_PRE_NOTICE_CAP = 200
 
 
 def _os_props() -> dict:
@@ -113,6 +122,8 @@ def set_telemetry_enabled(enabled: bool) -> None:
 
 
     _telemetry_enabled_memo = bool(enabled)
+    if not enabled:
+        discard_pre_notice_events()
 
 
 
@@ -152,6 +163,14 @@ _NO_CONTENT_EVENTS = frozenset({
     "history_restored",
     "history_exported",
     "markup_opened",
+
+
+
+    "zone_drawn",
+    "ai_edit_guidance_tip_shown",
+
+
+    "basemap_cta_clicked",
     "vectorize_panel_opened",
     "vectorize_suggestion_clicked",
     "vectorize_completed",
@@ -239,6 +258,10 @@ class TelemetryCollector:
 
         self._pending_pre_auth: list = []
         self._inflight: list[_TelemetryFlushTask] = []
+
+
+
+        self._pre_notice: list = []
         self._session_props = self._build_session_props()
 
     def _build_session_props(self) -> dict:
@@ -280,8 +303,9 @@ class TelemetryCollector:
     def track(self, event: str, properties: dict | None = None):
 
 
-        if not has_accepted_privacy_notice() or not is_telemetry_enabled():
+        if not is_telemetry_enabled():
             return
+        accepted = has_accepted_privacy_notice()
         evt = {
             "event": event,
             "timestamp": self._now_iso(),
@@ -291,7 +315,22 @@ class TelemetryCollector:
             },
         }
         with self._lock:
-            self._batch.append(evt)
+            if accepted:
+                self._batch.append(evt)
+            elif len(self._pre_notice) < _PRE_NOTICE_CAP:
+                self._pre_notice.append(evt)
+
+    def accept_pre_notice(self) -> None:
+
+
+        with self._lock:
+            if is_telemetry_enabled():
+                self._batch[:0] = self._pre_notice
+            self._pre_notice = []
+
+    def discard_pre_notice(self) -> None:
+        with self._lock:
+            self._pre_notice = []
 
     def flush(self):
 
@@ -375,6 +414,8 @@ class TelemetryCollector:
 
     def shutdown(self):
 
+        self.discard_pre_notice()
+
 
 
 
@@ -404,6 +445,7 @@ _collector: TelemetryCollector | None = None
 def init_telemetry(client, auth_manager, plugin_version: str = ""):
     global _collector
     _collector = TelemetryCollector(client, auth_manager, plugin_version)
+    add_privacy_notice_accepted_hook(_on_privacy_notice_accepted)
     try:
         from .config_store import get_store
         store = get_store()
@@ -411,6 +453,17 @@ def init_telemetry(client, auth_manager, plugin_version: str = ""):
             store.set_telemetry_collector(_collector)
     except Exception:  # nosec B110
         pass
+
+
+def _on_privacy_notice_accepted() -> None:
+    if _collector:
+        _collector.accept_pre_notice()
+
+
+def discard_pre_notice_events() -> None:
+
+    if _collector:
+        _collector.discard_pre_notice()
 
 
 def track(event: str, properties: dict | None = None):
@@ -430,4 +483,5 @@ def shutdown_telemetry():
             _collector.shutdown()
         except Exception:  # nosec B110
             pass
+    remove_privacy_notice_accepted_hook(_on_privacy_notice_accepted)
     _collector = None

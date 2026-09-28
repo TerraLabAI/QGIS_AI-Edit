@@ -108,7 +108,7 @@ class AuthManager:
                 False,
                 get_export_copy(
                     "pipeline.auth_manager.no_key",
-                    tr("No activation key. Enter your key to use AI Edit."),
+                    tr("You are signed out. Sign in again to use AI Edit."),
                 ),
                 ErrorCode.NO_KEY.value,
             )
@@ -158,7 +158,10 @@ class AuthManager:
             if code == "INVALID_KEY":
                 return (
                     False,
-                    get_export_copy("pipeline.auth_manager.invalid_key", tr("Invalid activation key.")),
+                    get_export_copy(
+                        "pipeline.auth_manager.invalid_key",
+                        tr("Your sign-in is no longer valid. Sign in again."),
+                    ),
                     ErrorCode.INVALID_KEY.value,
                 )
             if code == "SUBSCRIPTION_INACTIVE":
@@ -172,7 +175,7 @@ class AuthManager:
                     False,
                     get_export_copy(
                         "pipeline.auth_manager.no_key",
-                        tr("No activation key. Enter your key to use AI Edit."),
+                        tr("You are signed out. Sign in again to use AI Edit."),
                     ),
                     ErrorCode.NO_KEY.value,
                 )
@@ -213,7 +216,7 @@ class AuthManager:
 
         if not self._activation_key:
             return {
-                "error": get_export_copy("pipeline.auth_manager.no_key_short", tr("No activation key")),
+                "error": get_export_copy("pipeline.auth_manager.no_key_short", tr("Signed out")),
                 "code": ErrorCode.NO_KEY.value,
             }
         with self._usage_lock:

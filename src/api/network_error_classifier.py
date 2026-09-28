@@ -250,7 +250,7 @@ def _classify_network_error(
             )
         return (
             "AUTH_ERROR",
-            tr("Authentication failed. Check your activation key."),
+            tr("Your sign-in has expired. Sign in again to continue."),
         )
 
 

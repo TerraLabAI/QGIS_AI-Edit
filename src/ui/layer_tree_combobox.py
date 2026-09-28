@@ -56,8 +56,23 @@ class _IndentDelegate(QStyledItemDelegate):
 _DEPRIORITIZED_GROUP_NAMES = {"ai-edit", "ai edit"}
 
 
+
+
+
+
+_PLUGIN_GROUP_NAMES = {"ai segmentation", "ai agent", "ai vectorize"}
+
+
+def _normalized_group_name(name: str) -> str:
+    return " ".join((name or "").replace("-", " ").replace("_", " ").lower().split())
+
+
 def _is_deprioritized_group(name: str) -> bool:
     return (name or "").strip().lower() in _DEPRIORITIZED_GROUP_NAMES
+
+
+def _is_plugin_group(name: str) -> bool:
+    return _normalized_group_name(name) in _PLUGIN_GROUP_NAMES
 
 
 class LayerTreeComboBox(QComboBox):
@@ -75,6 +90,8 @@ class LayerTreeComboBox(QComboBox):
         self._current_layer_id = None
         self._layer_ids = []
         self._deprioritized_ids = set()
+        self._plugin_group_ids = set()
+        self._group_paths = {}
         self._refreshing = False
         self._frozen = False
 
@@ -176,6 +193,12 @@ class LayerTreeComboBox(QComboBox):
 
         if frozen == self._frozen:
             return
+        if frozen and self._refresh_timer.isActive():
+
+
+
+            self._refresh_timer.stop()
+            self._refresh()
         self._frozen = frozen
         if not frozen:
             self._refresh()
@@ -245,9 +268,12 @@ class LayerTreeComboBox(QComboBox):
             self.clear()
             self._layer_ids = []
             self._deprioritized_ids = set()
+            self._plugin_group_ids = set()
+            self._group_paths = {}
 
             root = QgsProject.instance().layerTreeRoot()
             self._traverse(root)
+            self._label_same_names()
 
 
             restored = False
@@ -283,8 +309,9 @@ class LayerTreeComboBox(QComboBox):
 
 
         selectable = [i for i in range(self.count()) if self.itemData(i) is not None]
-        preferred = [i for i in selectable if self.itemData(i) not in self._deprioritized_ids]
-        pool = preferred or selectable
+        not_output = [i for i in selectable if self.itemData(i) not in self._deprioritized_ids]
+        preferred = [i for i in not_output if self.itemData(i) not in self._plugin_group_ids]
+        pool = preferred or not_output or selectable
         if not pool:
             return None
         try:
@@ -383,10 +410,31 @@ class LayerTreeComboBox(QComboBox):
         except Exception:
             return False
 
-    def _traverse(self, node, depth=0, deprioritized=False):
+    def _label_same_names(self) -> None:
 
 
 
+
+        names: dict = {}
+        for i in range(self.count()):
+            if self.itemData(i) is not None:
+                names.setdefault(self.itemText(i), []).append(i)
+        for text, indexes in names.items():
+            if len(indexes) < 2:
+                continue
+            for i in indexes:
+                path = self._group_paths.get(self.itemData(i)) or []
+                if not path:
+                    continue
+                self.setItemText(i, f"{text} ({path[-1]})")
+                self.setItemData(i, " / ".join(path + [text]), Qt.ItemDataRole.ToolTipRole)
+
+    def _traverse(self, node, depth=0, deprioritized=False, plugin_group=False, path=None):
+
+
+
+
+        path = path or []
         from qgis.core import QgsApplication
 
         visible_children = []
@@ -414,7 +462,9 @@ class LayerTreeComboBox(QComboBox):
                     item.setData(depth, depth_role)
                 self._traverse(
                     child, depth + 1,
-                    deprioritized or _is_deprioritized_group(child.name()))
+                    deprioritized or _is_deprioritized_group(child.name()),
+                    plugin_group or _is_plugin_group(child.name()),
+                    path + [child.name()])
 
             elif QgsLayerTree.isLayer(child):
                 layer = child.layer()
@@ -429,6 +479,9 @@ class LayerTreeComboBox(QComboBox):
                 self._layer_ids.append(layer.id())
                 if deprioritized:
                     self._deprioritized_ids.add(layer.id())
+                if plugin_group:
+                    self._plugin_group_ids.add(layer.id())
+                self._group_paths[layer.id()] = path
 
     def _on_index_changed(self, index):
 

@@ -47,6 +47,9 @@ Key_Backspace = _resolve(Qt, "Key", "Key_Backspace")
 Key_Delete = _resolve(Qt, "Key", "Key_Delete")
 
 
+ApplicationActive = _resolve(Qt, "ApplicationState", "ApplicationActive")
+
+
 WindowShortcut = _resolve(Qt, "ShortcutContext", "WindowShortcut")
 WidgetWithChildrenShortcut = _resolve(
     Qt, "ShortcutContext", "WidgetWithChildrenShortcut"
@@ -91,6 +94,7 @@ RightArrow = _resolve(Qt, "ArrowType", "RightArrow")
 
 RichText = _resolve(Qt, "TextFormat", "RichText")
 PlainText = _resolve(Qt, "TextFormat", "PlainText")
+AutoText = _resolve(Qt, "TextFormat", "AutoText")
 
 
 LinksAccessibleByMouse = _resolve(Qt, "TextInteractionFlag", "LinksAccessibleByMouse")

@@ -522,12 +522,14 @@ class TerraLabClient:
             )
         return self._request("GET", path, timeout_ms=_startup_timeout_ms())
 
-    def get_config(self, product: str) -> dict:
+    def get_config(self, product: str, auth: dict | None = None) -> dict:
 
-        return self._request(
-            "GET", _with_context(f"/api/plugin/config?product={quote(product, safe='')}"),
-            timeout_ms=_startup_timeout_ms(),
-        )
+
+
+        path = _with_context(f"/api/plugin/config?product={quote(product, safe='')}")
+        if auth:
+            return self._request("GET", path, auth=auth, timeout_ms=_startup_timeout_ms())
+        return self._request("GET", path, timeout_ms=_startup_timeout_ms())
 
     def get_plugin_login_link(
         self, target: str, cta_source: str, auth: dict, locale: str | None = None

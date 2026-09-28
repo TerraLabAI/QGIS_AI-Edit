@@ -595,6 +595,12 @@ class ReferencePanel(QWidget):
 
         self._cards_start = self._list_layout.count()
 
+        self._left_out_label = QLabel()
+        self._left_out_label.setWordWrap(True)
+        self._left_out_label.setStyleSheet(_HINT_LABEL_QSS + "QLabel { padding: 0px 2px; }")
+        self._left_out_label.setVisible(False)
+        self._list_layout.addWidget(self._left_out_label)
+
         self._prompt_tip = self._build_prompt_tip()
         self._list_layout.addWidget(self._prompt_tip)
 
@@ -814,6 +820,15 @@ class ReferencePanel(QWidget):
             if limit and records else ""
         )
         self._count_label.setVisible(bool(limit and records))
+        try:
+            left_out = int(self._strip.layers_above_left_out())
+        except (AttributeError, TypeError, ValueError):
+            left_out = 0
+        self._left_out_label.setText(
+            tr("{n} layers above not sent: plan limit").format(n=left_out)
+            if left_out > 1 else
+            tr("1 layer above not sent: plan limit"))
+        self._left_out_label.setVisible(left_out > 0)
         number = 0
         for position, record in enumerate(records):
             is_markup = self._store.is_markup(record.id)
@@ -894,8 +909,13 @@ class ReferencePanel(QWidget):
 
 
     def _at_add_limit(self) -> bool:
+
         limit = self._limit()
-        return self._at_hard_cap() or (limit > 0 and self._store.count() >= limit)
+        try:
+            count = int(self._strip.user_count())
+        except (AttributeError, TypeError, ValueError):
+            count = self._store.count()
+        return self._at_hard_cap() or (limit > 0 and count >= limit)
 
     def _set_receiving(self, receiving: bool) -> None:
 

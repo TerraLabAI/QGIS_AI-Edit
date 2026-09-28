@@ -26,15 +26,32 @@
 
 
 
+
+
 from __future__ import annotations
 
+import time
+import uuid
+
 from qgis.core import QgsNetworkAccessManager, QgsNetworkReplyContent
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QByteArray, QEventLoop, QTimer
 from qgis.PyQt.QtNetwork import QNetworkRequest
 
 from ..core import qt_compat as QtC
 
 _POLL_MS = 20
+_Attribute = getattr(QNetworkRequest, "Attribute", QNetworkRequest)
+_User = _Attribute.User
+
+
+_TOKEN_ATTR = _Attribute(int(getattr(_User, "value", _User)) + 71)
+
+_AUTO_DELETE_ATTR = getattr(_Attribute, "AutoDeleteReplyOnFinishAttribute", None)
+
+
+_DEADLINE_MARGIN_S = 30.0
+_DEFAULT_DEADLINE_S = 600.0
 
 
 class BlockingRequest:
@@ -71,6 +88,9 @@ class BlockingRequest:
         else:
             content = QgsNetworkAccessManager.blockingGet(request, "", force_refresh, None)
         self._reply = content
+        if content is None:
+            self._error = "No reply from the network stack"
+            return QtC.BlockingNetworkError
         if content.error() == QtC.NetworkNoError:
             self._error = ""
             return QtC.BlockingNoError
@@ -83,31 +103,79 @@ class BlockingRequest:
 
 
 
-        reply = QgsNetworkAccessManager.instance().put(request, body)
+
+
+
+
+
+
+
+
+
+        nam = QgsNetworkAccessManager.instance()
+        token = uuid.uuid4().hex
+        request.setAttribute(_TOKEN_ATTR, token)
+        if _AUTO_DELETE_ATTR is not None:
+            request.setAttribute(_AUTO_DELETE_ATTR, True)
+        try:
+            timeout_s = request.transferTimeout() / 1000.0
+        except AttributeError:
+            timeout_s = 0
+        deadline = time.monotonic() + (timeout_s if timeout_s > 0 else _DEFAULT_DEADLINE_S) + _DEADLINE_MARGIN_S
         loop = QEventLoop()
         poll = QTimer()
         poll.setInterval(_POLL_MS)
-        state = {"reply": reply}
+        state = {"content": None, "reply": None, "aborted": False}
 
-        def _tick():
-            current = state["reply"]
+        def _abort():
+            state["aborted"] = True
+            reply = state["reply"]
             try:
-                if current is None or current.isFinished():
-                    loop.quit()
-                elif feedback is not None and feedback.isCanceled():
-                    current.abort()
+                if reply is not None and not sip.isdeleted(reply):
+                    reply.abort()
             except RuntimeError:
+                pass  # nosec B110
+
+        def _finished(content):
+            try:
+                if state["content"] is None and content.request().attribute(_TOKEN_ATTR) == token:
+                    state["content"] = QgsNetworkReplyContent(content)
+                    loop.quit()
+            except Exception:  # noqa: BLE001
                 loop.quit()
 
+        def _tick():
+            try:
+                if state["content"] is not None:
+                    loop.quit()
+                elif time.monotonic() > deadline:
+                    _abort()
+                    loop.quit()
+                elif feedback is not None and feedback.isCanceled():
+
+
+
+                    _abort()
+                    loop.quit()
+            except Exception:  # noqa: BLE001
+                loop.quit()
+
+        signal = nam.finished[QgsNetworkReplyContent]
+        signal.connect(_finished)
         poll.timeout.connect(_tick)
         try:
-            if not reply.isFinished():
+            state["reply"] = nam.put(request, body)
+            if state["content"] is None:
                 poll.start()
                 loop.exec()
-            content = QgsNetworkReplyContent(reply)
-            content.setContent(reply.readAll())
-            return content
         finally:
             poll.stop()
-            state["reply"] = None
-            reply.deleteLater()
+            signal.disconnect(_finished)
+            reply, state["reply"] = state["reply"], None
+            if _AUTO_DELETE_ATTR is None and reply is not None:
+                try:
+                    if not sip.isdeleted(reply):
+                        reply.deleteLater()
+                except RuntimeError:
+                    pass  # nosec B110
+        return state["content"]

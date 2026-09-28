@@ -10,10 +10,11 @@ from qgis.core import (
     QgsMapSettings,
     QgsRectangle,
 )
-from qgis.PyQt.QtCore import QBuffer, QSize
+from qgis.PyQt.QtCore import QBuffer, QSize, Qt
 from qgis.PyQt.QtGui import QColor, QImage, QPainter
 
 from .. import qt_compat as QtC
+from ..i18n import tr
 from ..logger import log_debug, log_warning
 from .export_config import _get_align, _get_max_dimension, chosen_input_format
 from .render_set import drop_layers
@@ -22,6 +23,97 @@ from .sizing import (
     _adjust_extent_to_aspect,
     _aspect_dims,
 )
+
+
+
+
+_MARKUP_OVERLAY_MAX_PX = 1024
+
+
+
+
+
+_BLANK_SAMPLE_PX = 64
+_BLANK_MIN_SHARE = 0.999
+_BLANK_MAX_CONTENT_PX = 64
+
+
+class MapNotLoadedError(RuntimeError):
+    pass
+
+
+def map_not_loaded_message() -> str:
+    return tr(
+        "The map had not finished loading, so nothing was sent and no credit was used. "
+        "Wait for the map to appear, then press Generate again."
+    )
+
+
+def is_blank_render(image: QImage, background_color) -> bool:
+
+
+
+
+
+
+
+
+    if image is None or image.isNull():
+        return True
+    bg = QColor(background_color)
+    bg_rgb = (bg.red(), bg.green(), bg.blue())
+    try:
+        return _is_blank_full(image, bg_rgb)
+    except Exception as e:  # noqa: BLE001
+        log_warning(f"full blank-render scan unavailable ({e}); sampling instead")
+        return _is_blank_sampled(image, bg_rgb)
+
+
+def _is_blank_full(image: QImage, bg_rgb) -> bool:
+    import numpy as np
+
+    argb = image.convertToFormat(QtC.FormatARGB32)
+    w, h, stride = argb.width(), argb.height(), argb.bytesPerLine()
+    if w <= 0 or h <= 0:
+        return True
+    bits = argb.constBits()
+    try:
+        bits.setsize(stride * h)
+    except AttributeError:
+        pass
+    rows = np.frombuffer(bits, dtype=np.uint8, count=stride * h).reshape(h, stride)
+
+    px = rows[:, : w * 4].reshape(h, w, 4).astype(np.int16)
+    near_bg = (
+        (np.abs(px[..., 2] - bg_rgb[0]) <= 2)
+        & (np.abs(px[..., 1] - bg_rgb[1]) <= 2)
+        & (np.abs(px[..., 0] - bg_rgb[2]) <= 2)
+    )
+    content = int(np.count_nonzero(~(near_bg | (px[..., 3] == 0))))
+    return content <= _BLANK_MAX_CONTENT_PX
+
+
+def _is_blank_sampled(image: QImage, bg_rgb) -> bool:
+    thumb = image.scaled(
+        _BLANK_SAMPLE_PX,
+        _BLANK_SAMPLE_PX,
+        Qt.AspectRatioMode.IgnoreAspectRatio,
+        Qt.TransformationMode.FastTransformation,
+    ).convertToFormat(QtC.FormatARGB32)
+    total = thumb.width() * thumb.height()
+    if total <= 0:
+        return True
+    empty = 0
+    for y in range(thumb.height()):
+        for x in range(thumb.width()):
+            px = QColor.fromRgba(thumb.pixel(x, y))
+            if px.alpha() == 0 or (
+                abs(px.red() - bg_rgb[0]) <= 2
+                and abs(px.green() - bg_rgb[1]) <= 2
+                and abs(px.blue() - bg_rgb[2]) <= 2
+            ):
+                empty += 1
+    return empty / total >= _BLANK_MIN_SHARE
 
 
 class ExportPrep:
@@ -236,6 +328,11 @@ def _render_settings_to_image(
             pass
     job.start()
     job.waitForFinished()
+    try:
+        for err in job.errors():
+            log_warning(f"Export render layer error: {err.message}")
+    except Exception:  # nosec B110
+        pass
 
     image = job.renderedImage()
     if image is None or image.isNull():
@@ -269,15 +366,31 @@ def _render_markup_overlay(
 
 
 
+
+
+
+
+    scale = min(1.0, _MARKUP_OVERLAY_MAX_PX / float(max(out_w, out_h)))
+    small_w = max(1, round(out_w * scale))
+    small_h = max(1, round(out_h * scale))
     settings = _clone_map_settings(base_settings)
     settings.setLayers([markup_layer])
     settings.setExtent(extent)
-    settings.setOutputSize(QSize(out_w, out_h))
+    settings.setOutputSize(QSize(small_w, small_h))
+    if scale < 1.0:
+        settings.setOutputDpi(settings.outputDpi() * scale)
     transparent = QColor(0, 0, 0, 0)
     settings.setBackgroundColor(transparent)
-    image = _render_settings_to_image(settings, out_w, out_h, transparent)
+    image = _render_settings_to_image(settings, small_w, small_h, transparent)
     if image is None or image.isNull():
         return None
+    if (small_w, small_h) != (out_w, out_h):
+        image = image.scaled(
+            out_w,
+            out_h,
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            QtC.SmoothTransformation,
+        )
     return image
 
 
@@ -341,6 +454,9 @@ def render_export(
     image = _render_settings_to_image(
         prep.settings, prep.out_w, prep.out_h, prep.background_color, progress_cb
     )
+
+    if is_blank_render(image, prep.background_color):
+        raise MapNotLoadedError(map_not_loaded_message())
     if _marks_are_baked(prep):
         prep.clean_base_encoded = _encode_clean_base(image, prep)
 
@@ -393,9 +509,13 @@ def _clone_map_settings(src: QgsMapSettings) -> QgsMapSettings:
 
 
 
+
+
+
     try:
         dst = QgsMapSettings(src)
         dst.setDevicePixelRatio(1.0)
+        dst.setRotation(0.0)
         return dst
     except (TypeError, AttributeError):
         dst = QgsMapSettings()
@@ -403,7 +523,6 @@ def _clone_map_settings(src: QgsMapSettings) -> QgsMapSettings:
     dst.setDestinationCrs(src.destinationCrs())
     dst.setBackgroundColor(src.backgroundColor())
     for setter, getter in (
-        ("setRotation", "rotation"),
         ("setEllipsoid", "ellipsoid"),
         ("setOutputDpi", "outputDpi"),
         ("setLayerStyleOverrides", "layerStyleOverrides"),
@@ -425,4 +544,5 @@ def _clone_map_settings(src: QgsMapSettings) -> QgsMapSettings:
         dst.setDevicePixelRatio(1.0)
     except Exception:  # nosec B110
         pass
+    dst.setRotation(0.0)
     return dst

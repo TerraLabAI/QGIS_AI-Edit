@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 
-from qgis.PyQt.QtCore import QEvent, QSettings, QSize, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import QEvent, QEventLoop, QSettings, QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QFont, QPixmap
 from qgis.PyQt.QtWidgets import (
     QApplication,
@@ -29,6 +29,7 @@ from ..core import telemetry
 from ..core import telemetry_events as te
 from ..core.config_store import get_export_copy, get_export_dial, get_export_dial_ratio
 from ..core.i18n import tr
+from ..core.logger import log_debug
 from ..core.reference_image_store import (
     ReferenceImage,
     ReferenceImageStore,
@@ -38,6 +39,10 @@ from ..core.reference_image_store import (
 from .dock import design_tokens as tokens
 from .icons import icon_for, pixmap_for
 from .layer_renderer import (
+    _EXCLUDE_USER_INPUT,
+    ZoneLayerRender,
+    compose_over,
+    drawn_fraction,
     layer_misses_zone,
     load_transient_layers,
     render_layers_to_qimage,
@@ -66,6 +71,28 @@ _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 _PREVIEW_MAX_SCREEN_RATIO = 0.8
 
 _ERROR_CLEAR_MS = 4000
+
+
+
+
+_MIN_LAYER_ABOVE_COVERAGE = 0.005
+
+_LAYERS_ABOVE_WAIT_MS = 20000
+
+
+def layer_above_note(name: str, over_input: bool) -> str:
+
+
+    name = (name or "").strip()[:80]
+    if over_input:
+        return (
+            f'Map layer "{name}" from the user\'s project, drawn on top of the '
+            "same area as the image to edit, aligned pixel for pixel with it."
+        )
+    return (
+        f'Map layer "{name}" from the user\'s project, drawn over the image to '
+        "edit and aligned pixel for pixel with it."
+    )
 
 
 def free_tier_max_references() -> int:
@@ -491,6 +518,29 @@ def _image_is_empty(image) -> bool:
         return False
 
 
+class _CountView:
+
+
+    def __init__(self, n: int):
+        self._n = n
+
+    def count(self) -> int:
+        return self._n
+
+
+def _is_raster_layer(layer) -> bool:
+    from qgis.core import QgsRasterLayer
+
+    return isinstance(layer, QgsRasterLayer)
+
+
+def _safe_layer_id(layer) -> str:
+    try:
+        return layer.id()
+    except (AttributeError, RuntimeError):
+        return ""
+
+
 class ReferenceImagesWidget(QWidget):
 
 
@@ -500,6 +550,8 @@ class ReferenceImagesWidget(QWidget):
 
 
     upsell_requested = pyqtSignal()
+
+    layers_above_done = pyqtSignal()
 
     def __init__(self, store: ReferenceImageStore, parent=None):
         super().__init__(parent)
@@ -521,6 +573,17 @@ class ReferenceImagesWidget(QWidget):
 
 
         self._above_ref_ids: list[str] = []
+
+
+        self._above_layer_ids: dict[str, str] = {}
+
+
+        self._above_queue: list = []
+        self._above_input = None
+        self._above_base = None
+        self._above_render = None
+        self._above_current = None
+        self._above_left_out = 0
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -567,11 +630,20 @@ class ReferenceImagesWidget(QWidget):
 
 
     def clear(self) -> None:
+        self._cancel_layers_above()
         self._store.clear()
         self._above_ref_ids = []
+        self._above_layer_ids = {}
+        self._above_left_out = 0
         self._refresh()
 
-    def set_layers_above(self, layers: list) -> int:
+    def set_layers_above(self, layers: list, input_layer=None) -> int:
+
+
+
+
+
+
 
 
 
@@ -586,22 +658,148 @@ class ReferenceImagesWidget(QWidget):
 
         if self._readonly:
             return 0
+        self._cancel_layers_above()
         for ref_id in self._above_ref_ids:
             self._store.remove(ref_id)
         self._above_ref_ids = []
-        for layer in layers or []:
-            if self._store.count() >= self.add_limit():
-                break
-            try:
-
-
-
-                record = self._render_and_store([layer], layer.name(), drop_if_empty=True)
-            except (ReferenceImageStoreError, RuntimeError):
-                continue
-            self._above_ref_ids.append(record.id)
+        self._above_layer_ids = {}
+        self._above_left_out = 0
+        self._above_queue = [layer for layer in (layers or []) if layer is not None]
+        self._above_input = input_layer
+        self._above_base = None
         self._refresh()
-        return len(self._above_ref_ids)
+        if not self._above_queue:
+            return 0
+        queued = len(self._above_queue)
+        needs_base = input_layer is not None and any(
+            not _is_raster_layer(layer) for layer in self._above_queue)
+        if needs_base:
+            self._start_above_render([input_layer], transparent=False, base=True)
+        else:
+            self._render_next_above()
+        return queued
+
+    def layers_above_pending(self) -> bool:
+
+        return self._above_render is not None
+
+    def layers_above_left_out(self) -> int:
+
+        return self._above_left_out
+
+    def wait_layers_above(self, timeout_ms: int | None = None) -> None:
+
+
+        if not self.layers_above_pending():
+            return
+        loop = QEventLoop()
+        timer = QTimer()
+        timer.setSingleShot(True)
+        timer.timeout.connect(loop.quit)
+        self.layers_above_done.connect(loop.quit)
+        timer.start(timeout_ms or _LAYERS_ABOVE_WAIT_MS)
+        try:
+            if self.layers_above_pending():
+                loop.exec(_EXCLUDE_USER_INPUT)
+        finally:
+            timer.stop()
+            try:
+                self.layers_above_done.disconnect(loop.quit)
+            except (TypeError, RuntimeError):
+                pass
+        if self.layers_above_pending():
+
+            self._cancel_layers_above()
+
+    def user_count(self) -> int:
+
+        return self._store.count() - len(self._above_ref_ids)
+
+    def _free_slots_for_above(self) -> int:
+        return max(0, self.add_limit() - self._store.count())
+
+    def _start_above_render(self, layers: list, transparent: bool, base: bool = False) -> None:
+        render = ZoneLayerRender(
+            layers, self._target_extent, self._target_crs, transparent=transparent, parent=self)
+        self._above_render = render
+        render.done.connect(
+            lambda image, r=render, b=base: self._on_above_rendered(r, image, b))
+        render.start()
+
+    def _render_next_above(self) -> None:
+
+        while self._above_queue:
+            if self._free_slots_for_above() <= 0:
+                self._above_left_out = len(self._above_queue)
+                self._above_queue = []
+                break
+            layer = self._above_queue.pop(0)
+            try:
+                layer.id()
+            except RuntimeError:
+                continue
+            self._above_current = layer
+            self._start_above_render([layer], transparent=True)
+            return
+        self._above_render = None
+        self._above_input = None
+        self._above_base = None
+        self._refresh()
+        self.layers_above_done.emit()
+
+    def _on_above_rendered(self, render, image, base: bool) -> None:
+        if render is not self._above_render:
+            return
+        render.deleteLater()
+        if base:
+            self._above_base = image
+            self._render_next_above()
+            return
+        layer = self._above_current
+        try:
+            self._store_layer_above(layer, image)
+        except (ReferenceImageStoreError, RuntimeError) as err:
+            log_debug(f"Layer above not attached: {err}")
+        self._render_next_above()
+
+    def _store_layer_above(self, layer, image) -> None:
+        if image is None or image.isNull():
+            return
+        coverage = drawn_fraction(image)
+        if coverage < get_export_dial_ratio(
+                "references.layer_above_min_coverage", _MIN_LAYER_ABOVE_COVERAGE):
+            log_debug(f"Layer above dropped: {layer.name()} paints {coverage:.2%} of the zone")
+            return
+        over_input = not _is_raster_layer(layer) and self._above_base is not None
+        card = compose_over(image, self._above_base if over_input else None)
+        record = self._store.add_from_qimage(card, layer.name(), source_kind="layer")
+        self._store.set_auto_note(record.id, layer_above_note(layer.name(), over_input))
+        self._above_ref_ids.append(record.id)
+        self._above_layer_ids[record.id] = layer.id()
+        telemetry.track(te.REFERENCE_ADDED, {"source_kind": "layer", "whole_layer": False})
+        self._refresh()
+
+    def _cancel_layers_above(self) -> None:
+        render, self._above_render = self._above_render, None
+        if render is not None:
+            render.cancel()
+            render.deleteLater()
+        self._above_queue = []
+        self._above_input = None
+        self._above_base = None
+        self.layers_above_done.emit()
+
+    def _give_way_for_user(self) -> None:
+
+
+        if not self._above_ref_ids:
+            return
+        if reference_add_reason(self._store, self._free_tier) == "ok":
+            return
+        ref_id = self._above_ref_ids.pop()
+        self._above_layer_ids.pop(ref_id, None)
+        self._store.remove(ref_id)
+        self._above_left_out += 1
 
     def clear_markup_image(self) -> None:
 
@@ -624,7 +822,8 @@ class ReferenceImagesWidget(QWidget):
 
 
 
-        return self._store.count() >= max_references()
+
+        return self.user_count() >= max_references()
 
     def set_free_tier(self, free_tier: bool) -> None:
 
@@ -646,8 +845,17 @@ class ReferenceImagesWidget(QWidget):
             return min(free_tier_max_references(), max_references())
         return max_references()
 
-    def _check_can_add(self) -> str:
+    def _check_can_add(self, give_way: bool = False) -> str:
 
+
+
+
+
+        if self._above_ref_ids:
+            reason = reference_add_reason(_CountView(self.user_count()), self._free_tier)
+            if reason == "ok" and give_way:
+                self._give_way_for_user()
+            return reason
         return reference_add_reason(self._store, self._free_tier)
 
     def add_paths(self, paths: list[str]) -> None:
@@ -736,6 +944,9 @@ class ReferenceImagesWidget(QWidget):
         has_images = self._store.count() > 0
         self.setVisible(has_images)
 
+
+        self._store.move_to_end(self._above_ref_ids)
+
         while self._thumbs_row.count():
             item = self._thumbs_row.takeAt(0)
             widget = item.widget()
@@ -767,7 +978,17 @@ class ReferenceImagesWidget(QWidget):
         failures: list[tuple[str, str]] = []
         stop = ""
         for layer in layers:
-            stop = self._check_can_add()
+
+
+            owned = next((ref_id for ref_id, layer_id in self._above_layer_ids.items()
+                          if layer_id == _safe_layer_id(layer)), None)
+            if owned is not None:
+                self._above_layer_ids.pop(owned, None)
+                if owned in self._above_ref_ids:
+                    self._above_ref_ids.remove(owned)
+                added += 1
+                continue
+            stop = self._check_can_add(give_way=True)
             if stop != "ok":
                 break
             try:
@@ -798,7 +1019,7 @@ class ReferenceImagesWidget(QWidget):
         failures: list[tuple[str, str]] = []
         stop = ""
         for path in paths:
-            stop = self._check_can_add()
+            stop = self._check_can_add(give_way=True)
             if stop != "ok":
                 break
             ext = os.path.splitext(path)[1].lower()
@@ -898,7 +1119,7 @@ class ReferenceImagesWidget(QWidget):
 
         if self._readonly:
             return
-        reason = self._check_can_add()
+        reason = self._check_can_add(give_way=image is not None and not image.isNull())
         if reason == "free_limit":
             self.upsell_requested.emit()
             return
@@ -953,6 +1174,7 @@ class ReferenceImagesWidget(QWidget):
         self._store.remove(ref_id)
         if ref_id in self._above_ref_ids:
             self._above_ref_ids.remove(ref_id)
+        self._above_layer_ids.pop(ref_id, None)
         self._refresh()
 
     def _build_preview_title(self, image_path: str) -> str:

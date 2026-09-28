@@ -5177,5 +5177,329 @@ Adoraríamos receber seu retorno!</translation>
         <source>{n} strokes. Click Done to guide the edit with them.</source>
         <translation>{n} traços. Clique em Concluir para guiar a edição com eles.</translation>
     </message>
+    <message>
+        <source>1 layer above not sent: plan limit</source>
+        <translation>1 camada acima não enviada: limite do plano</translation>
+    </message>
+    <message>
+        <source>&lt; 0.1 km²</source>
+        <translation>&lt; 0,1 km²</translation>
+    </message>
+    <message>
+        <source>AI Edit needs an image under your data.</source>
+        <translation>O AI Edit precisa de uma imagem abaixo dos seus dados.</translation>
+    </message>
+    <message>
+        <source>Add at least 3 points</source>
+        <translation>Adicione pelo menos 3 pontos</translation>
+    </message>
+    <message>
+        <source>Add satellite imagery here</source>
+        <translation>Adicione imagens de satélite aqui</translation>
+    </message>
+    <message>
+        <source>At this zoom one pixel covers about {m} m. Zoom in or draw a smaller zone for buildings, trees or roads.</source>
+        <translation>Neste zoom, um pixel cobre cerca de {m} m. Aproxime ou desenhe uma zona menor para prédios, árvores ou estradas.</translation>
+    </message>
+    <message>
+        <source>Cancel to pick another layer.</source>
+        <translation>Cancele para escolher outra camada.</translation>
+    </message>
+    <message>
+        <source>Cancelled before starting the run.</source>
+        <translation>Cancelado antes de iniciar a execução.</translation>
+    </message>
+    <message>
+        <source>Cancelled before tracing.</source>
+        <translation>Cancelado antes do traçado.</translation>
+    </message>
+    <message>
+        <source>Capturing your zone...</source>
+        <translation>Capturando sua zona...</translation>
+    </message>
+    <message>
+        <source>Click to add points, or drag a box</source>
+        <translation>Clique para adicionar pontos ou arraste uma caixa</translation>
+    </message>
+    <message>
+        <source>Could not get your settings from the server.</source>
+        <translation>Não foi possível obter suas configurações do servidor.</translation>
+    </message>
+    <message>
+        <source>Could not get your settings from the server. Press Generate to try again.</source>
+        <translation>Não foi possível obter suas configurações do servidor. Pressione Gerar para tentar novamente.</translation>
+    </message>
+    <message>
+        <source>Could not start the edit. No credit was used. Press Generate to try again.</source>
+        <translation>Não foi possível iniciar a edição. Nenhum crédito foi usado. Pressione Gerar para tentar novamente.</translation>
+    </message>
+    <message>
+        <source>Credits renew on {date}</source>
+        <translation>Os créditos renovam em {date}</translation>
+    </message>
+    <message>
+        <source>Double-click, right-click or press Enter to finish</source>
+        <translation>Clique duas vezes, clique com o botão direito ou pressione Enter para finalizar</translation>
+    </message>
+    <message>
+        <source>Draw a line, then say: add a path along the pink line.</source>
+        <translation>Desenhe uma linha e diga: adicione um caminho ao longo da linha rosa.</translation>
+    </message>
+    <message>
+        <source>Draw a zone on the map to start.</source>
+        <translation>Desenhe uma zona no mapa para começar.</translation>
+    </message>
+    <message>
+        <source>Fill the holes inside each shape, except where another checked class sits.</source>
+        <translation>Preencha os buracos dentro de cada forma, exceto onde estiver outra classe marcada.</translation>
+    </message>
+    <message>
+        <source>Generating your image...</source>
+        <translation>Gerando sua imagem...</translation>
+    </message>
+    <message>
+        <source>Getting ready...</source>
+        <translation>Preparando...</translation>
+    </message>
+    <message>
+        <source>Image to edit</source>
+        <translation>Imagem para editar</translation>
+    </message>
+    <message>
+        <source>Invalid server response</source>
+        <translation>Resposta inválida do servidor</translation>
+    </message>
+    <message>
+        <source>Keep clicking to add points</source>
+        <translation>Continue clicando para adicionar pontos</translation>
+    </message>
+    <message>
+        <source>Keep this result, draw a new zone with this prompt</source>
+        <translation>Mantenha este resultado, desenhe uma nova zona com este prompt</translation>
+    </message>
+    <message>
+        <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size”, or raise “Color tolerance”.</source>
+        <translation>Nenhuma forma restante com essas configurações. Defina “Expandir/Contrair” mais próximo de 0, reduza “Tamanho mínimo do polígono” ou aumente “Tolerância de cor”.</translation>
+    </message>
+    <message>
+        <source>Open my dashboard</source>
+        <translation>Abrir meu painel</translation>
+    </message>
+    <message>
+        <source>Other</source>
+        <translation>Outro</translation>
+    </message>
+    <message>
+        <source>Outline an area, say what to change, get a new map layer.</source>
+        <translation>Contorne uma área, diga o que mudar e obtenha uma nova camada de mapa.</translation>
+    </message>
+    <message>
+        <source>Pick a zone, a selection or a polygon layer already in the project</source>
+        <translation>Escolha uma zona, uma seleção ou uma camada de polígonos já existente no projeto</translation>
+    </message>
+    <message>
+        <source>Pick the layer to edit first.</source>
+        <translation>Escolha primeiro a camada para editar.</translation>
+    </message>
+    <message>
+        <source>Pick {base} first, then try again.</source>
+        <translation>Escolha {base} primeiro e tente novamente.</translation>
+    </message>
+    <message>
+        <source>Please describe what you want to change (at least {chars} characters).</source>
+        <translation>Descreva o que você quer mudar (pelo menos {chars} caracteres).</translation>
+    </message>
+    <message>
+        <source>Prompt cut to {count} characters, the most AI Edit accepts.</source>
+        <translation>Prompt reduzido para {count} caracteres, o máximo que o AI Edit aceita.</translation>
+    </message>
+    <message>
+        <source>Same edit elsewhere</source>
+        <translation>Mesma edição em outro lugar</translation>
+    </message>
+    <message>
+        <source>Same prompt, same base: a new variation</source>
+        <translation>Mesmo prompt, mesma base: uma nova variação</translation>
+    </message>
+    <message>
+        <source>Save or discard your edits on the vector layer, then run Vectorize again.</source>
+        <translation>Salve ou descarte suas edições na camada vetorial e execute a Vetorização novamente.</translation>
+    </message>
+    <message>
+        <source>Shapes smaller than this join the class around them, so no hole is left.</source>
+        <translation>Formas menores do que isto se unem à classe ao redor, para que não sobre nenhum buraco.</translation>
+    </message>
+    <message>
+        <source>Sign in again to generate.</source>
+        <translation>Entre novamente para gerar.</translation>
+    </message>
+    <message>
+        <source>Sign-in timed out. Click Sign in to try again.</source>
+        <translation>O login expirou. Clique em Entrar para tentar novamente.</translation>
+    </message>
+    <message>
+        <source>Signed in (from {}).</source>
+        <translation>Conectado (de {}).</translation>
+    </message>
+    <message>
+        <source>Signed in as {} (from {}).</source>
+        <translation>Conectado como {} (de {}).</translation>
+    </message>
+    <message>
+        <source>Signed in.</source>
+        <translation>Conectado.</translation>
+    </message>
+    <message>
+        <source>Signed out</source>
+        <translation>Desconectado</translation>
+    </message>
+    <message>
+        <source>That shape is too thin or too small to edit. Pick another one.</source>
+        <translation>Essa forma é muito fina ou pequena demais para editar. Escolha outra.</translation>
+    </message>
+    <message>
+        <source>That zone cannot be placed on this map. Draw one instead.</source>
+        <translation>Essa zona não pode ser colocada neste mapa. Desenhe uma em vez disso.</translation>
+    </message>
+    <message>
+        <source>That zone is no longer in the project. Pick another one.</source>
+        <translation>Essa zona não está mais no projeto. Escolha outra.</translation>
+    </message>
+    <message>
+        <source>The image was generated but could not be saved to your output folder. It is kept in your prompt library: open the Recent tab and download the AI result, or change the output folder and try again.</source>
+        <translation>A imagem foi gerada, mas não pôde ser salva na sua pasta de saída. Ela fica na sua biblioteca de prompts: abra a aba Recentes e baixe o resultado da IA, ou mude a pasta de saída e tente novamente.</translation>
+    </message>
+    <message>
+        <source>The layer the AI edits. Visible layers above it are sent as references.</source>
+        <translation>A camada que a IA edita. Camadas visíveis acima dela são enviadas como referências.</translation>
+    </message>
+    <message>
+        <source>The map CRS changed after you drew the zone. Draw the zone again.</source>
+        <translation>O CRS do mapa mudou depois que você desenhou a zona. Desenhe a zona novamente.</translation>
+    </message>
+    <message>
+        <source>The map had not finished loading, so nothing was sent and no credit was used. Wait for the map to appear, then press Generate again.</source>
+        <translation>O mapa ainda não tinha terminado de carregar, então nada foi enviado e nenhum crédito foi usado. Aguarde o mapa aparecer e pressione Gerar novamente.</translation>
+    </message>
+    <message>
+        <source>The result could not be downloaded to QGIS.</source>
+        <translation>O resultado não pôde ser baixado para o QGIS.</translation>
+    </message>
+    <message>
+        <source>The result was saved but could not be added to the map. It is in Recent in your library.</source>
+        <translation>O resultado foi salvo, mas não pôde ser adicionado ao mapa. Ele está em Recentes na sua biblioteca.</translation>
+    </message>
+    <message>
+        <source>The service could not complete this request.</source>
+        <translation>O serviço não pôde concluir esta solicitação.</translation>
+    </message>
+    <message>
+        <source>The service is busy. Please try again shortly.</source>
+        <translation>O serviço está ocupado. Tente novamente em instantes.</translation>
+    </message>
+    <message>
+        <source>The version this came from is not in this session.</source>
+        <translation>A versão de onde isto veio não está nesta sessão.</translation>
+    </message>
+    <message>
+        <source>This edit is taking longer than expected. Your result may still arrive in Recent in your library in a few minutes.</source>
+        <translation>Esta edição está demorando mais do que o esperado. Seu resultado ainda pode chegar em Recentes na sua biblioteca em alguns minutos.</translation>
+    </message>
+    <message>
+        <source>This file cannot be read. Check that it still exists and that you can open it.</source>
+        <translation>Este arquivo não pode ser lido. Verifique se ele ainda existe e se você consegue abri-lo.</translation>
+    </message>
+    <message>
+        <source>This sign-in is for a different TerraLab product. Sign in again from AI Edit.</source>
+        <translation>Este login é para um produto TerraLab diferente. Entre novamente pelo AI Edit.</translation>
+    </message>
+    <message>
+        <source>This sign-in was revoked. Sign in again.</source>
+        <translation>Este login foi revogado. Entre novamente.</translation>
+    </message>
+    <message>
+        <source>This zone cannot be used.</source>
+        <translation>Esta zona não pode ser usada.</translation>
+    </message>
+    <message>
+        <source>This zone could not be checked. Draw it again.</source>
+        <translation>Esta zona não pôde ser verificada. Desenhe-a novamente.</translation>
+    </message>
+    <message>
+        <source>We lost contact with the server during your edit. It may still finish: check Recent in your library in a few minutes before trying again.</source>
+        <translation>Perdemos contato com o servidor durante sua edição. Ela ainda pode terminar: verifique Recentes na sua biblioteca em alguns minutos antes de tentar novamente.</translation>
+    </message>
+    <message>
+        <source>You are signed in. Outline an area on the example map to make an edit.</source>
+        <translation>Você está conectado. Contorne uma área no mapa de exemplo para fazer uma edição.</translation>
+    </message>
+    <message>
+        <source>You are signed out. Click Sign in to continue.</source>
+        <translation>Você está desconectado. Clique em Entrar para continuar.</translation>
+    </message>
+    <message>
+        <source>You are signed out. Sign in again to use AI Edit.</source>
+        <translation>Você está desconectado. Entre novamente para usar o AI Edit.</translation>
+    </message>
+    <message>
+        <source>You are signed out. Sign in to use AI Edit.</source>
+        <translation>Você está desconectado. Entre para usar o AI Edit.</translation>
+    </message>
+    <message>
+        <source>You've used this month's {limit} free credits. They renew at your next monthly reset.</source>
+        <translation>Você usou os {limit} créditos gratuitos deste mês. Eles renovam na sua próxima redefinição mensal.</translation>
+    </message>
+    <message>
+        <source>Your account changed. Please try again.</source>
+        <translation>Sua conta mudou. Tente novamente.</translation>
+    </message>
+    <message>
+        <source>Your output folder could not be used, so the result was saved in {folder}. You can pick another folder in the settings.</source>
+        <translation>Sua pasta de saída não pôde ser usada, então o resultado foi salvo em {folder}. Você pode escolher outra pasta nas configurações.</translation>
+    </message>
+    <message>
+        <source>Your result may still appear in Recent in your library.</source>
+        <translation>Seu resultado ainda pode aparecer em Recentes na sua biblioteca.</translation>
+    </message>
+    <message>
+        <source>Your sign-in has expired. Sign in again to continue.</source>
+        <translation>Seu login expirou. Entre novamente para continuar.</translation>
+    </message>
+    <message>
+        <source>Your sign-in is no longer valid. Click Sign in to sign in again.</source>
+        <translation>Seu login não é mais válido. Clique em Entrar para entrar novamente.</translation>
+    </message>
+    <message>
+        <source>Your sign-in is no longer valid. Sign in again.</source>
+        <translation>Seu login não é mais válido. Entre novamente.</translation>
+    </message>
+    <message>
+        <source>Your zone was cleared: no layer is visible on the map anymore.</source>
+        <translation>Sua zona foi removida: nenhuma camada está mais visível no mapa.</translation>
+    </message>
+    <message>
+        <source>or use an existing zone</source>
+        <translation>ou use uma zona existente</translation>
+    </message>
+    <message>
+        <source>{area} km²</source>
+        <translation>{area} km²</translation>
+    </message>
+    <message>
+        <source>{area}, very large</source>
+        <translation>{area}, muito grande</translation>
+    </message>
+    <message>
+        <source>{layer} ({count} selected)</source>
+        <translation>{layer} ({count} selecionados)</translation>
+    </message>
+    <message>
+        <source>{name} draws nothing inside your zone</source>
+        <translation>{name} não desenha nada dentro da sua zona</translation>
+    </message>
+    <message>
+        <source>{n} layers above not sent: plan limit</source>
+        <translation>{n} camadas acima não enviadas: limite do plano</translation>
+    </message>
 </context>
 </TS>

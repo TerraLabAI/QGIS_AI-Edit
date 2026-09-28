@@ -251,17 +251,20 @@ class QuotaCard(QWidget):
                         self._escape if escape else None)
 
     def show_contact(self, title: str, body: str, ghost_text: str, escape: str,
-                     manage_text: str = "") -> None:
+                     manage_text: str = "", note: str = "") -> None:
+
 
         self.state = "paid_out"
         self._title.setText(title)
+        self._note.setText(note)
         self._body.setText(body)
         self.ghost_button.setText(ghost_text)
         self.ghost_button.setVisible(bool(ghost_text))
         self.manage_button.setText(manage_text)
         self.manage_button.setVisible(bool(manage_text))
         self._escape.setText(escape)
-        self._show_only(self._title, self._body if body else None, self._actions,
+        self._show_only(self._title, self._note if note else None,
+                        self._body if body else None, self._actions,
                         self._escape if escape else None)
 
     def clear(self) -> None:

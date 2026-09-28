@@ -5177,5 +5177,329 @@ We'd love to hear from you!</source>
         <source>{n} strokes. Click Done to guide the edit with them.</source>
         <translation>{n} 条笔画。单击 Done 以用它们指导编辑。</translation>
     </message>
+    <message>
+        <source>1 layer above not sent: plan limit</source>
+        <translation>上方有 1 个图层未发送：套餐限制</translation>
+    </message>
+    <message>
+        <source>&lt; 0.1 km²</source>
+        <translation>&lt; 0.1 km²</translation>
+    </message>
+    <message>
+        <source>AI Edit needs an image under your data.</source>
+        <translation>AI Edit 需要数据下方有一幅图像。</translation>
+    </message>
+    <message>
+        <source>Add at least 3 points</source>
+        <translation>至少添加 3 个点</translation>
+    </message>
+    <message>
+        <source>Add satellite imagery here</source>
+        <translation>在此添加卫星影像</translation>
+    </message>
+    <message>
+        <source>At this zoom one pixel covers about {m} m. Zoom in or draw a smaller zone for buildings, trees or roads.</source>
+        <translation>在此缩放级别下，一个像素约覆盖 {m} 米。请放大地图，或绘制更小的区域来处理建筑物、树木或道路。</translation>
+    </message>
+    <message>
+        <source>Cancel to pick another layer.</source>
+        <translation>取消以选择其他图层。</translation>
+    </message>
+    <message>
+        <source>Cancelled before starting the run.</source>
+        <translation>已在运行开始前取消。</translation>
+    </message>
+    <message>
+        <source>Cancelled before tracing.</source>
+        <translation>已在追踪前取消。</translation>
+    </message>
+    <message>
+        <source>Capturing your zone...</source>
+        <translation>正在捕获您的区域……</translation>
+    </message>
+    <message>
+        <source>Click to add points, or drag a box</source>
+        <translation>点击添加点，或拖动绘制矩形</translation>
+    </message>
+    <message>
+        <source>Could not get your settings from the server.</source>
+        <translation>无法从服务器获取您的设置。</translation>
+    </message>
+    <message>
+        <source>Could not get your settings from the server. Press Generate to try again.</source>
+        <translation>无法从服务器获取您的设置。点击“生成”重试。</translation>
+    </message>
+    <message>
+        <source>Could not start the edit. No credit was used. Press Generate to try again.</source>
+        <translation>无法开始编辑。未使用额度。点击“生成”重试。</translation>
+    </message>
+    <message>
+        <source>Credits renew on {date}</source>
+        <translation>额度将于 {date} 刷新</translation>
+    </message>
+    <message>
+        <source>Double-click, right-click or press Enter to finish</source>
+        <translation>双击、右键单击或按 Enter 完成</translation>
+    </message>
+    <message>
+        <source>Draw a line, then say: add a path along the pink line.</source>
+        <translation>绘制一条线，然后说：沿粉色线添加路径。</translation>
+    </message>
+    <message>
+        <source>Draw a zone on the map to start.</source>
+        <translation>在地图上绘制一个区域以开始。</translation>
+    </message>
+    <message>
+        <source>Fill the holes inside each shape, except where another checked class sits.</source>
+        <translation>填充每个形状内部的孔洞，但其他已检查类别所在的位置除外。</translation>
+    </message>
+    <message>
+        <source>Generating your image...</source>
+        <translation>正在生成您的图像……</translation>
+    </message>
+    <message>
+        <source>Getting ready...</source>
+        <translation>正在准备……</translation>
+    </message>
+    <message>
+        <source>Image to edit</source>
+        <translation>要编辑的图像</translation>
+    </message>
+    <message>
+        <source>Invalid server response</source>
+        <translation>服务器响应无效</translation>
+    </message>
+    <message>
+        <source>Keep clicking to add points</source>
+        <translation>继续点击以添加点</translation>
+    </message>
+    <message>
+        <source>Keep this result, draw a new zone with this prompt</source>
+        <translation>保留此结果，使用此提示词绘制新区域</translation>
+    </message>
+    <message>
+        <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size”, or raise “Color tolerance”.</source>
+        <translation>使用这些设置后没有剩余形状。请将“扩张/收缩”调得更接近 0，降低“最小多边形大小”，或提高“颜色容差”。</translation>
+    </message>
+    <message>
+        <source>Open my dashboard</source>
+        <translation>打开我的控制面板</translation>
+    </message>
+    <message>
+        <source>Other</source>
+        <translation>其他</translation>
+    </message>
+    <message>
+        <source>Outline an area, say what to change, get a new map layer.</source>
+        <translation>勾勒一个区域，说明要更改的内容，获取新的地图图层。</translation>
+    </message>
+    <message>
+        <source>Pick a zone, a selection or a polygon layer already in the project</source>
+        <translation>选择项目中已有的区域、选区或多边形图层</translation>
+    </message>
+    <message>
+        <source>Pick the layer to edit first.</source>
+        <translation>请先选择要编辑的图层。</translation>
+    </message>
+    <message>
+        <source>Pick {base} first, then try again.</source>
+        <translation>请先选择 {base}，然后重试。</translation>
+    </message>
+    <message>
+        <source>Please describe what you want to change (at least {chars} characters).</source>
+        <translation>请描述您想要更改的内容（至少 {chars} 个字符）。</translation>
+    </message>
+    <message>
+        <source>Prompt cut to {count} characters, the most AI Edit accepts.</source>
+        <translation>提示词已截断为 {count} 个字符，这是 AI Edit 接受的最大长度。</translation>
+    </message>
+    <message>
+        <source>Same edit elsewhere</source>
+        <translation>在其他位置进行相同编辑</translation>
+    </message>
+    <message>
+        <source>Same prompt, same base: a new variation</source>
+        <translation>相同提示词、相同底图：生成新变体</translation>
+    </message>
+    <message>
+        <source>Save or discard your edits on the vector layer, then run Vectorize again.</source>
+        <translation>请保存或放弃对矢量图层的编辑，然后再次运行矢量化。</translation>
+    </message>
+    <message>
+        <source>Shapes smaller than this join the class around them, so no hole is left.</source>
+        <translation>小于此大小的形状将并入周围的类别，因此不会留下孔洞。</translation>
+    </message>
+    <message>
+        <source>Sign in again to generate.</source>
+        <translation>请重新登录以生成。</translation>
+    </message>
+    <message>
+        <source>Sign-in timed out. Click Sign in to try again.</source>
+        <translation>登录超时。点击“登录”重试。</translation>
+    </message>
+    <message>
+        <source>Signed in (from {}).</source>
+        <translation>已登录（来自 {}）。</translation>
+    </message>
+    <message>
+        <source>Signed in as {} (from {}).</source>
+        <translation>已以 {} 身份登录（来自 {}）。</translation>
+    </message>
+    <message>
+        <source>Signed in.</source>
+        <translation>已登录。</translation>
+    </message>
+    <message>
+        <source>Signed out</source>
+        <translation>已退出登录</translation>
+    </message>
+    <message>
+        <source>That shape is too thin or too small to edit. Pick another one.</source>
+        <translation>该形状太细或太小，无法编辑。请选择其他形状。</translation>
+    </message>
+    <message>
+        <source>That zone cannot be placed on this map. Draw one instead.</source>
+        <translation>该区域无法放置在此地图上。请改为绘制一个区域。</translation>
+    </message>
+    <message>
+        <source>That zone is no longer in the project. Pick another one.</source>
+        <translation>该区域已不在项目中。请选择其他区域。</translation>
+    </message>
+    <message>
+        <source>The image was generated but could not be saved to your output folder. It is kept in your prompt library: open the Recent tab and download the AI result, or change the output folder and try again.</source>
+        <translation>图像已生成，但无法保存到您的输出文件夹。它已保存在您的提示词库中：打开“最近”选项卡并下载 AI 结果，或更改输出文件夹后重试。</translation>
+    </message>
+    <message>
+        <source>The layer the AI edits. Visible layers above it are sent as references.</source>
+        <translation>AI 编辑的图层。其上方的可见图层将作为参考发送。</translation>
+    </message>
+    <message>
+        <source>The map CRS changed after you drew the zone. Draw the zone again.</source>
+        <translation>绘制区域后，地图 CRS 发生了变化。请重新绘制该区域。</translation>
+    </message>
+    <message>
+        <source>The map had not finished loading, so nothing was sent and no credit was used. Wait for the map to appear, then press Generate again.</source>
+        <translation>地图尚未加载完成，因此没有发送任何内容，也未使用额度。请等待地图显示，然后再次点击“生成”。</translation>
+    </message>
+    <message>
+        <source>The result could not be downloaded to QGIS.</source>
+        <translation>无法将结果下载到 QGIS。</translation>
+    </message>
+    <message>
+        <source>The result was saved but could not be added to the map. It is in Recent in your library.</source>
+        <translation>结果已保存，但无法添加到地图中。它位于您库中的“最近”部分。</translation>
+    </message>
+    <message>
+        <source>The service could not complete this request.</source>
+        <translation>服务无法完成此请求。</translation>
+    </message>
+    <message>
+        <source>The service is busy. Please try again shortly.</source>
+        <translation>服务繁忙。请稍后重试。</translation>
+    </message>
+    <message>
+        <source>The version this came from is not in this session.</source>
+        <translation>此内容所属的版本不在当前会话中。</translation>
+    </message>
+    <message>
+        <source>This edit is taking longer than expected. Your result may still arrive in Recent in your library in a few minutes.</source>
+        <translation>此次编辑耗时超过预期。您的结果可能会在几分钟后出现在库中的“最近”部分。</translation>
+    </message>
+    <message>
+        <source>This file cannot be read. Check that it still exists and that you can open it.</source>
+        <translation>无法读取此文件。请确认文件仍然存在，并且可以打开。</translation>
+    </message>
+    <message>
+        <source>This sign-in is for a different TerraLab product. Sign in again from AI Edit.</source>
+        <translation>此登录属于其他 TerraLab 产品。请从 AI Edit 重新登录。</translation>
+    </message>
+    <message>
+        <source>This sign-in was revoked. Sign in again.</source>
+        <translation>此登录已被撤销。请重新登录。</translation>
+    </message>
+    <message>
+        <source>This zone cannot be used.</source>
+        <translation>无法使用此区域。</translation>
+    </message>
+    <message>
+        <source>This zone could not be checked. Draw it again.</source>
+        <translation>无法检查此区域。请重新绘制。</translation>
+    </message>
+    <message>
+        <source>We lost contact with the server during your edit. It may still finish: check Recent in your library in a few minutes before trying again.</source>
+        <translation>编辑期间与服务器失去联系。编辑可能仍会完成：请在几分钟后检查库中的“最近”，然后再尝试。</translation>
+    </message>
+    <message>
+        <source>You are signed in. Outline an area on the example map to make an edit.</source>
+        <translation>您已登录。在示例地图上勾勒一个区域以进行编辑。</translation>
+    </message>
+    <message>
+        <source>You are signed out. Click Sign in to continue.</source>
+        <translation>您已退出登录。点击“登录”继续。</translation>
+    </message>
+    <message>
+        <source>You are signed out. Sign in again to use AI Edit.</source>
+        <translation>您已退出登录。请重新登录以使用 AI Edit。</translation>
+    </message>
+    <message>
+        <source>You are signed out. Sign in to use AI Edit.</source>
+        <translation>您已退出登录。请登录以使用 AI Edit。</translation>
+    </message>
+    <message>
+        <source>You've used this month's {limit} free credits. They renew at your next monthly reset.</source>
+        <translation>您已用完本月的 {limit} 个免费额度。额度将在下次每月重置时刷新。</translation>
+    </message>
+    <message>
+        <source>Your account changed. Please try again.</source>
+        <translation>您的账户已发生变化。请重试。</translation>
+    </message>
+    <message>
+        <source>Your output folder could not be used, so the result was saved in {folder}. You can pick another folder in the settings.</source>
+        <translation>无法使用您的输出文件夹，因此结果已保存到 {folder}。您可以在设置中选择其他文件夹。</translation>
+    </message>
+    <message>
+        <source>Your result may still appear in Recent in your library.</source>
+        <translation>您的结果可能仍会出现在库中的“最近”部分。</translation>
+    </message>
+    <message>
+        <source>Your sign-in has expired. Sign in again to continue.</source>
+        <translation>您的登录已过期。请重新登录以继续。</translation>
+    </message>
+    <message>
+        <source>Your sign-in is no longer valid. Click Sign in to sign in again.</source>
+        <translation>您的登录已失效。点击“登录”重新登录。</translation>
+    </message>
+    <message>
+        <source>Your sign-in is no longer valid. Sign in again.</source>
+        <translation>您的登录已失效。请重新登录。</translation>
+    </message>
+    <message>
+        <source>Your zone was cleared: no layer is visible on the map anymore.</source>
+        <translation>您的区域已清除：地图上不再有可见图层。</translation>
+    </message>
+    <message>
+        <source>or use an existing zone</source>
+        <translation>或使用现有区域</translation>
+    </message>
+    <message>
+        <source>{area} km²</source>
+        <translation>{area} km²</translation>
+    </message>
+    <message>
+        <source>{area}, very large</source>
+        <translation>{area}，非常大</translation>
+    </message>
+    <message>
+        <source>{layer} ({count} selected)</source>
+        <translation>{layer}（已选择 {count} 个）</translation>
+    </message>
+    <message>
+        <source>{name} draws nothing inside your zone</source>
+        <translation>{name} 在您的区域内未绘制任何内容</translation>
+    </message>
+    <message>
+        <source>{n} layers above not sent: plan limit</source>
+        <translation>上方有 {n} 个图层未发送：套餐限制</translation>
+    </message>
 </context>
 </TS>

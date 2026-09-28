@@ -191,13 +191,16 @@ class OnboardingMixin:
 
         if self._dock_widget is None:
             return
-        if not is_feature_enabled("demo"):
-            return
         root = QgsProject.instance().layerTreeRoot()
         has_visible = any(
             node.isVisible() for node in root.findLayers() if node.layer() is not None
         )
         if has_visible:
+
+
+            self._arm_first_zone_after_signup(own_map=True)
+            return
+        if not is_feature_enabled("demo"):
             return
         self._on_try_example(trigger="auto")
 
@@ -284,7 +287,7 @@ class OnboardingMixin:
         )
         telemetry.flush()
 
-    def _arm_first_zone_after_signup(self):
+    def _arm_first_zone_after_signup(self, own_map: bool = False):
 
 
 
@@ -293,15 +296,20 @@ class OnboardingMixin:
         self._disarm_swipe()
         self._activate_selection_tool()
         self._dock_widget.set_selecting_zone_state()
-        self._dock_widget._show_status_box(
 
-            get_export_copy(
+        if own_map:
+            text = tr("Draw a zone on the map to start.")
+        elif getattr(self, "_returning_sign_in", False):
+
+            text = tr("You are signed in. Outline an area on the example map to "
+                      "make an edit.")
+        else:
+            text = get_export_copy(
                 "flows.onboarding.account_created_v2",
                 tr("Account created. Outline an area on the example map to "
                    "make your first edit."),
-            ),
-            "success",
-        )
+            )
+        self._dock_widget._show_status_box(text, "success")
 
     def _add_backdrop_layer(self, use_ign: bool):
 

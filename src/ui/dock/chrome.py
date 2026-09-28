@@ -112,10 +112,12 @@ class DockChromeMixin:
             tr("Free plan, {n} AI edits every month. Signing up takes 15 "
                "seconds in your browser.").replace(
                    "{n}", str(advertised_free_generations())),
+
+
+
             get_export_copy(
-                "dock.chrome.signin_hint_line2",
-                tr("Then type what to change on your imagery, and get the result "
-                   "back as a georeferenced layer."),
+                "dock.chrome.signin_hint_steps",
+                tr("Outline an area, say what to change, get a new map layer."),
             ),
         ):
             row = QHBoxLayout()
@@ -205,6 +207,8 @@ class DockChromeMixin:
         self._activation_message.setWordWrap(True)
         self._activation_message.setStyleSheet(HINT_QSS)
         self._activation_message.setVisible(False)
+
+        self._activation_message.linkActivated.connect(self._on_activation_message_link)
         layout.addWidget(self._activation_message)
 
         return widget
@@ -377,6 +381,17 @@ class DockChromeMixin:
             isinstance(node.layer(), QgsRasterLayer) for node in root.findLayers()
         )
         self._warning_show_layers_mode = has_layers
+
+
+        from ...core.zone_of_interest import ZONE_PROPERTY
+        from ..layer_groups import MARKUP_LAYER_PROPERTY
+
+        has_visible_data = not has_layers and any(
+            node.isVisible() for node in root.findLayers()
+            if node.layer() is not None
+            and not node.layer().customProperty(ZONE_PROPERTY)
+            and not node.layer().customProperty(MARKUP_LAYER_PROPERTY)
+        )
         if has_layers:
             self._warning_title.setText(
                 get_export_copy("dock.chrome.warning_title_hidden_layers", tr("Your layers are hidden"))
@@ -407,10 +422,20 @@ class DockChromeMixin:
                 )
             )
             if not self._warning_error_text_active:
-                self._warning_text.setText(get_export_copy(
-                    "dock.chrome.warning_text_no_layer",
-                    tr("Add a layer, or start with a sample."),
-                ))
+                self._warning_text.setText(
+                    tr("AI Edit needs an image under your data.") if has_visible_data
+                    else get_export_copy(
+                        "dock.chrome.warning_text_no_layer",
+                        tr("Add a layer, or start with a sample."),
+                    )
+                )
+
+
+
+        self._basemap_btn.setText(
+            tr("Add satellite imagery here") if has_visible_data
+            else get_export_copy("dock.chrome.basemap_btn", tr("Load a sample image"))
+        )
 
     def _reveal_topmost_layer(self) -> None:
 
@@ -553,7 +578,11 @@ class DockChromeMixin:
         else:
 
 
-            tools = getattr(self, "_result_tools_row", None)
+
+
+            tools = getattr(self, "_result_rerun_row", None) or getattr(
+                self, "_result_tools_row", None
+            )
             idx = (
                 self._result_prompt_layout.indexOf(tools) if isinstance(tools, QWidget) else -1
             )

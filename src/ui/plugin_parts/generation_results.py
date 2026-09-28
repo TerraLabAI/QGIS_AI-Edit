@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from qgis.core import Qgis
+from qgis.core import Qgis, QgsProject
 from qgis.PyQt.QtWidgets import QPushButton
 
 from ...core import telemetry
@@ -30,6 +30,12 @@ from .errors import (
     _report_policy,
     _resolve_class_label,
     subscribe_error_url,
+)
+
+
+
+_NAMES_RECENT_ALREADY = frozenset(
+    {"RESULT_UNCONFIRMED", "GENERATION_TIMED_OUT", "WRITE_ERROR", "DOWNLOAD_FAILED"}
 )
 
 
@@ -127,6 +133,20 @@ class GenerationResultsMixin:
 
 
             telemetry.flush()
+        elif normalized_code == "RESOLUTION_NOT_ALLOWED":
+
+
+
+
+
+            dock = self._dock_widget
+            dock.set_status(_enrich_error_message(message, code), is_error=True)
+            dock.set_status_action(
+                get_export_copy("upsell.upgrade_button", tr("Upgrade to Pro")),
+                lambda: dock._open_pro_from("resolution_lock"),
+            )
+            dock._track_upsell_view("resolution_lock")
+            self._refresh_credits()
         elif _is_prompt_blocked(normalized_code):
 
 
@@ -188,7 +208,20 @@ class GenerationResultsMixin:
 
 
 
-            if normalized_code in get_export_dial_list(
+
+
+
+
+            has_request_id = bool(snap.get("request_id"))
+            if has_request_id and normalized_code != "GENERATION_FAILED":
+                if normalized_code not in _NAMES_RECENT_ALREADY:
+                    recent_note = get_export_copy(
+                        "flows.generation_results.check_recent",
+                        tr("Your result may still appear in Recent in your library."),
+                        escape=True,
+                    )
+                    enriched = f"{enriched} {recent_note}"
+            elif normalized_code in get_export_dial_list(
                 "error_policy.credit_reassure_extra",
                 _CREDIT_REASSURE_CODES,
                 normalize=str.upper,
@@ -364,7 +397,9 @@ class GenerationResultsMixin:
             if self._dock_widget is not None:
                 self._dock_widget.hide_privacy_notice()
             self._dock_widget.set_generation_complete(layer.name(), layer.id())
+            self._show_result_layer_node(layer)
             self._warn_if_result_hidden(layer)
+            self._tell_output_moved(result_info.get("output_moved_dir") or "")
 
 
 
@@ -381,6 +416,17 @@ class GenerationResultsMixin:
                 "layer_id": layer.id(),
                 "request_id": self._last_completed_request_id,
                 "prompt": result_prompt,
+
+
+
+                "parent_request_id": (
+                    self._versions[base_index].get("request_id")
+                    if 0 <= base_index < len(self._versions)
+                    else None
+                ),
+                "template_id": template_id,
+                "template_name": template_name,
+                "resolution": getattr(self, "_last_suggested_res", "") or "",
             })
             self._selected_version_index = len(self._versions) - 1
 
@@ -503,10 +549,50 @@ class GenerationResultsMixin:
             )
             telemetry.flush()
             self._dock_widget.set_generating(False)
-            msg = tr("Error adding layer: {error}").format(error=e)
+
+            msg = tr(
+                "The result was saved but could not be added to the map. "
+                "It is in Recent in your library."
+            )
             self._dock_widget.set_status(msg, is_error=True)
             self._show_error_report(msg, result_info.get("request_id") or "")
             log_warning(f"Failed to add layer: {e}")
+
+    def _tell_output_moved(self, moved_dir: str) -> None:
+
+
+
+
+
+
+        if not moved_dir:
+            return
+        log_warning(f"Result written outside the output folder: {_scrub_paths(moved_dir)}")
+        try:
+            self._iface.messageBar().pushMessage(
+                "AI Edit",
+                tr(
+                    "Your output folder could not be used, so the result was "
+                    "saved in {folder}. You can pick another folder in the settings."
+                ).format(folder=moved_dir),
+                level=Qgis.MessageLevel.Info,
+                duration=15,
+            )
+        except Exception as err:  # nosec B110
+            log_warning(f"Output folder notice failed: {err}")
+
+    def _show_result_layer_node(self, layer) -> None:
+
+
+
+
+
+        try:
+            node = QgsProject.instance().layerTreeRoot().findLayer(layer.id())
+            if node is not None:
+                node.setItemVisibilityCheckedParentRecursive(True)
+        except Exception as err:  # noqa: BLE001
+            log_warning(f"result visibility fix skipped: {err}")
 
     def _warn_if_result_hidden(self, layer) -> None:
 

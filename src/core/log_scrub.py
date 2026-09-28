@@ -28,7 +28,12 @@ _USER_PATH_RE = re.compile(r"(?i)([/\\]+(?:Users|home)[/\\]+)[^/\\]+")
 
 
 
-_URL_RE = re.compile(r"https?://\S+|\b[\w-]+(?:\.[\w-]+){2,}(?::\d+)?", re.IGNORECASE)
+
+
+_URL_RE = re.compile(
+    r"https?://\S+|\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b|\b[\w-]+(?:\.[\w-]+)+\.[A-Za-z][\w-]*(?::\d+)?",
+    re.IGNORECASE,
+)
 
 
 def _local_username_re() -> re.Pattern | None:

@@ -6,12 +6,18 @@ qgisMaximumVersion=4.99
 # Qt6 builds of QGIS 3.x refuse to load a plugin that omits this line.
 # QGIS 4 dropped the check and a Qt5 build never runs it.
 supportsQt6=True
-version=1.9.3
+version=1.10.0
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.10.0
+    - Drag a box on the map to draw a zone, with a hint on the map; right-click finishes
+    - The demo map opens with a ready zone and prompt, plus three one-click starting prompts
+    - Try again makes a new variation; Same edit elsewhere reuses your prompt on a new zone
+    - Closing the panel keeps your zone and prompt, and new results show up ticked on the map
+
     1.9.3
     - Vectorize runs again on QGIS 3.44 instead of stopping with a Python error
     - Vectorized classes fit together with no gap or overlap, rounded corners included
@@ -32,12 +38,6 @@ changelog=
     - The Library page gets full keyboard navigation, a Favorites star, and clearer session names and previews
     - Undo now works while drawing a zone, removing your last stroke like Ctrl+Z
     - Layers shown above the one you edit, like labels or polygons, now guide the AI as references
-
-    1.7.5
-    - A new plugin version now appears on the panel and installs in one click
-    - Generate tells you under the button why it is greyed out
-    - A generation that stops tells you what to try next
-    - The account window fits a laptop screen
 
 about=
     Show a project before it exists, on the aerial imagery you already have open

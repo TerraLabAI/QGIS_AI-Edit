@@ -17,7 +17,7 @@ from ...core.privacy_notice import (
     save_privacy_notice_accepted,
 )
 from ...workers.generic_request_task import GenericRequestTask
-from ..canvas_exporter import set_server_config
+from ..canvas_exporter import has_tuned_config, set_server_config
 from .errors import _enrich_error_message, _localize_server_error
 
 
@@ -36,13 +36,7 @@ class StartupMixin:
         if self._dock_widget.isVisible():
 
 
-
-
-            self._toggling_dock = True
-            try:
-                self._dock_widget.hide()
-            finally:
-                self._toggling_dock = False
+            self._dock_widget.hide()
             log_debug("Dock hidden (toggle)")
         else:
 
@@ -227,9 +221,13 @@ class StartupMixin:
 
 
 
+
+
+        auth = self._auth_manager.get_auth_header() if self._auth_manager else {}
+        self._activation_config_keyed = bool(auth)
         loader = GenericRequestTask(
             "AI Edit config warm",
-            lambda c=self._client: c.get_config("ai-edit"),
+            lambda c=self._client, a=auth: c.get_config("ai-edit", a or None),
             silent=True,
         )
         loader.succeeded.connect(self._on_activation_config_warmed)
@@ -305,9 +303,33 @@ class StartupMixin:
         if isinstance(config, dict):
             self._on_export_config_loaded(config)
 
+        waiting = getattr(self, "_generate_waiting_for_config", None)
+        self._generate_waiting_for_config = None
+        if waiting is None or self._dock_widget is None:
+            return
+        if not has_tuned_config():
+
+            self._dock_widget.set_status(
+                tr("Could not get your settings from the server. Press Generate to try again."),
+                is_error=True,
+            )
+            return
+        prompt, is_retry = waiting
+        self._on_generate(prompt, is_retry=is_retry)
+
     def _on_tuned_config_failed(self, message: str, code: str):
         self._tuned_config_task = None
         log_debug(f"Tuned config refresh failed ({code}): {message}")
+        if getattr(self, "_generate_waiting_for_config", None) is None:
+            return
+        self._generate_waiting_for_config = None
+        if self._dock_widget is not None:
+            self._dock_widget.set_status(
+                _enrich_error_message(
+                    tr("Could not get your settings from the server."), code
+                ),
+                is_error=True,
+            )
 
     def _on_bootstrap_failed(self, message: str, code: str):
 
@@ -485,14 +507,7 @@ class StartupMixin:
             return
 
 
-        if self._toggling_dock:
-            return
-        self._clear_selection_rectangle()
-        self._selected_extent = None
-        self._selected_polygon = None
-        self._selection_tool_was_active = False
-        if self._map_tool:
-            self._map_tool.set_has_zone(False)
+
 
     def _check_for_plugin_update(self):
 

@@ -114,6 +114,8 @@ class AIEditPlugin(
 
         self._pairing_worker = None
 
+        self._pairing_codes: list[str] = []
+
         self._last_key_validation_unix: float = 0.0
 
         self._markup_manager: MarkupLayerManager | None = None
@@ -148,10 +150,6 @@ class AIEditPlugin(
 
         self._launch_shortcut: QShortcut | None = None
         self._in_tool_panel: str | None = None
-
-
-
-        self._toggling_dock = False
         self._selection_tool_was_active = False
 
 

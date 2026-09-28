@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import copy
 import math
+import os
 import re
 import time
 
@@ -16,7 +17,7 @@ from ..core.errors import ErrorCode
 from ..core.generation.pipeline_context import save_debug_artifacts
 from ..core.i18n import tr
 from ..core.log_scrub import scrub_user_paths
-from ..core.logger import log_debug
+from ..core.logger import log_debug, log_warning
 from ..core.raster_writer import write_geotiff
 from ..core.reference_image_store import (
     encode_references_b64,
@@ -58,6 +59,27 @@ def _ctx_snapshot(ctx) -> dict:
 
 
 _HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+
+
+
+
+
+
+def _moved_output_dir(geotiff_path: str, requested_dir: str) -> str:
+    try:
+        actual = os.path.dirname(os.path.abspath(geotiff_path))
+        if not requested_dir:
+            return ""
+        wanted = os.path.abspath(requested_dir)
+        try:
+            same = os.path.samefile(actual, wanted)
+        except OSError:
+            same = os.path.normcase(os.path.normpath(actual)) == os.path.normcase(os.path.normpath(wanted))
+        return "" if same else actual
+    except (TypeError, ValueError):
+        return ""
 
 
 class GenerationTask(QgsTask):
@@ -493,10 +515,12 @@ class GenerationTask(QgsTask):
                     tr("If a credit was charged, it will be refunded."),
                 )
             )
+
+            log_warning(
+                f"Result download failed after {download_attempts} attempts: {last_download_err}"
+            )
             return self._mark_failed(
-                tr(
-                    "Failed to download result image after {attempts} attempts: {err}."
-                ).format(attempts=download_attempts, err=last_download_err) + " " + credit_note,
+                tr("The result could not be downloaded to QGIS.") + " " + credit_note,
                 ErrorCode.DOWNLOAD_FAILED.value,
             )
 
@@ -551,13 +575,16 @@ class GenerationTask(QgsTask):
 
             except Exception:  # nosec B110
                 pass
+
+
+            log_warning(f"Writing the result GeoTIFF failed: {scrub_user_paths(str(e))}")
             return self._mark_failed(
                 tr(
                     "The image was generated but could not be saved to your "
-                    "output folder ({err}). It is kept in your prompt library: "
-                    "open the Recent tab and download the AI result, or change "
-                    "the output folder and try again."
-                ).format(err=e),
+                    "output folder. It is kept in your prompt library: open the "
+                    "Recent tab and download the AI result, or change the output "
+                    "folder and try again."
+                ),
                 ErrorCode.WRITE_ERROR.value,
             )
 
@@ -615,6 +642,7 @@ class GenerationTask(QgsTask):
         self._success_payload = {
             "geotiff_path": geotiff_path,
             "before_geotiff_path": before_path,
+            "output_moved_dir": _moved_output_dir(geotiff_path, self._output_dir),
             "prompt": self._prompt,
             "crs_wkt": self._crs_wkt,
             **_ctx_snapshot(self._ctx),

@@ -32,6 +32,7 @@ from ..canvas_exporter import (
 )
 from ..raster_writer import get_output_dir
 from .lifecycle import teardown_step
+from .zone_versions import zone_crs_changed_message
 
 
 def _served_size(result) -> tuple[int, int] | None:
@@ -165,6 +166,50 @@ class GenerationMixin:
 
         self._on_generate(prompt, is_retry=True)
 
+    def _on_try_again(self):
+
+
+
+
+
+
+
+        versions = self._versions or []
+        index = self._selected_version_index
+        if not 0 < index < len(versions):
+            return
+        version = versions[index]
+        prompt = (version.get("prompt") or "").strip()
+        if not prompt:
+            return
+        parent_rid = self._version_replay_field(version, "parent_request_id")
+        parent_index = next(
+            (i for i, v in enumerate(versions) if v.get("request_id") == parent_rid),
+            None,
+        )
+        if parent_index is None:
+
+            self._dock_widget.set_status(
+                tr("The version this came from is not in this session."), is_error=True
+            )
+            return
+        if parent_index > 0 and self._version_needs_layer(versions[parent_index]):
+
+            self._dock_widget.set_status(
+                tr("Pick {base} first, then try again.").replace(
+                    "{base}", self._dock_widget._version_strip.label_for(parent_index)
+                ),
+                is_error=True,
+            )
+            return
+        self._selected_version_index = parent_index
+        self._dock_widget.select_version(parent_index)
+        self._dock_widget.arm_template(
+            self._version_replay_field(version, "template_id"),
+            self._version_replay_field(version, "template_name"),
+        )
+        self._on_retry(prompt)
+
     def _show_markup_hidden_bar(self, prompt: str, is_retry: bool) -> None:
 
 
@@ -212,6 +257,12 @@ class GenerationMixin:
         if not self._selected_extent:
             self._dock_widget.set_status(tr("No zone selected"), is_error=True)
             return
+        if self._zone_crs_changed():
+
+
+            self._on_zone_delete_requested()
+            self._dock_widget.set_status(zone_crs_changed_message(), is_error=True)
+            return
 
 
 
@@ -245,12 +296,16 @@ class GenerationMixin:
             return
 
 
+
         if not has_tuned_config():
+            self._generate_waiting_for_config = (prompt, is_retry)
             self._refresh_tuned_config()
-            self._dock_widget.set_status(
-                tr("Getting your settings from the server. Press Generate again in a few seconds."),
-                is_error=False,
-            )
+            if self._tuned_config_task is None:
+
+                self._generate_waiting_for_config = None
+                self._dock_widget.set_status(tr("Sign in again to generate."), is_error=True)
+                return
+            self._dock_widget.set_status(tr("Getting ready..."), is_error=False)
             return
 
 
@@ -301,7 +356,8 @@ class GenerationMixin:
 
 
         markup_layer = None
-        if self._markup_manager is not None and self._markup_manager.annotation_count() > 0:
+
+        if self._markup_manager is not None and self._markup_count_in_zone() > 0:
             try:
                 markup_layer = self._markup_manager.layer()
             except RuntimeError:
@@ -494,6 +550,19 @@ class GenerationMixin:
             }))
             telemetry.flush()
 
+    def _zone_crs_changed(self) -> bool:
+
+
+
+
+        tag = getattr(self, "_zone_crs_tag", None)
+        if not tag or tag[0] is not self._selected_extent or self._canvas is None:
+            return False
+        try:
+            return tag[1] != self._canvas.mapSettings().destinationCrs()
+        except RuntimeError:
+            return False
+
     def _on_export_failed(self, error_msg: str):
         if self._pending_generation is None:
 
@@ -502,6 +571,17 @@ class GenerationMixin:
         self._pending_generation = None
         self._dock_widget.set_generating(False)
         self._restore_failed_iteration()
+        from ...core.canvas_export.render import map_not_loaded_message
+
+        if error_msg == map_not_loaded_message():
+
+            self._dock_widget.set_status(error_msg, is_error=True)
+            telemetry.track(
+                te.EXPORT_FAILED,
+                build_failure_props("export", "map_not_loaded", "blank render"),
+            )
+            telemetry.flush()
+            return
         msg = tr("Could not capture your zone: {error}").format(error=error_msg)
         self._dock_widget.set_status(msg, is_error=True)
         telemetry.track(
@@ -564,7 +644,9 @@ class GenerationMixin:
         with teardown_step("hand-off dock unlock", stage="generation"):
             self._dock_widget.set_generating(False)
             self._restore_failed_iteration()
-        msg = tr("Could not start the generation: {error}").format(error=detail)
+
+
+        msg = tr("Could not start the edit. No credit was used. Press Generate to try again.")
         with teardown_step("hand-off status", stage="generation"):
             self._dock_widget.set_status(msg, is_error=True)
         with teardown_step("hand-off telemetry", stage="generation"):
@@ -636,6 +718,9 @@ class GenerationMixin:
 
 
 
+        tag = getattr(self, "_zone_crs_tag", None)
+        if tag and tag[0] is self._selected_extent:
+            self._zone_crs_tag = (actual_extent, tag[1])
         self._selected_extent = actual_extent
         self._show_selection_rectangle(actual_extent, self._selected_polygon)
 
@@ -690,6 +775,12 @@ class GenerationMixin:
         plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         from ...workers.generation_worker import GenerationWorker
 
+
+
+        try:
+            self._dock_widget.wait_reference_layers_above()
+        except (AttributeError, RuntimeError):
+            pass
         self._worker = GenerationWorker(
             client=self._client,
             auth_manager=self._auth_manager,

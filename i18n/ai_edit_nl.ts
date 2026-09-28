@@ -5177,5 +5177,329 @@ We horen graag van u!</translation>
         <source>{n} strokes. Click Done to guide the edit with them.</source>
         <translation>{n} streken. Klik op Klaar om de bewerking ermee te sturen.</translation>
     </message>
+    <message>
+        <source>1 layer above not sent: plan limit</source>
+        <translation>1 laag erboven niet verzonden: limiet van je abonnement</translation>
+    </message>
+    <message>
+        <source>&lt; 0.1 km²</source>
+        <translation>&lt; 0,1 km²</translation>
+    </message>
+    <message>
+        <source>AI Edit needs an image under your data.</source>
+        <translation>AI Edit heeft een afbeelding onder je gegevens nodig.</translation>
+    </message>
+    <message>
+        <source>Add at least 3 points</source>
+        <translation>Voeg minstens 3 punten toe</translation>
+    </message>
+    <message>
+        <source>Add satellite imagery here</source>
+        <translation>Voeg hier satellietbeelden toe</translation>
+    </message>
+    <message>
+        <source>At this zoom one pixel covers about {m} m. Zoom in or draw a smaller zone for buildings, trees or roads.</source>
+        <translation>Bij deze zoom beslaat één pixel ongeveer {m} m. Zoom in of teken een kleiner gebied voor gebouwen, bomen of wegen.</translation>
+    </message>
+    <message>
+        <source>Cancel to pick another layer.</source>
+        <translation>Annuleer om een andere laag te kiezen.</translation>
+    </message>
+    <message>
+        <source>Cancelled before starting the run.</source>
+        <translation>Geannuleerd voordat de bewerking begon.</translation>
+    </message>
+    <message>
+        <source>Cancelled before tracing.</source>
+        <translation>Geannuleerd voordat het traceren begon.</translation>
+    </message>
+    <message>
+        <source>Capturing your zone...</source>
+        <translation>Je gebied wordt vastgelegd...</translation>
+    </message>
+    <message>
+        <source>Click to add points, or drag a box</source>
+        <translation>Klik om punten toe te voegen of sleep een kader</translation>
+    </message>
+    <message>
+        <source>Could not get your settings from the server.</source>
+        <translation>Je instellingen konden niet van de server worden opgehaald.</translation>
+    </message>
+    <message>
+        <source>Could not get your settings from the server. Press Generate to try again.</source>
+        <translation>Je instellingen konden niet van de server worden opgehaald. Druk op Generate om het opnieuw te proberen.</translation>
+    </message>
+    <message>
+        <source>Could not start the edit. No credit was used. Press Generate to try again.</source>
+        <translation>De bewerking kon niet worden gestart. Er is geen tegoed gebruikt. Druk op Generate om het opnieuw te proberen.</translation>
+    </message>
+    <message>
+        <source>Credits renew on {date}</source>
+        <translation>Tegoeden worden vernieuwd op {date}</translation>
+    </message>
+    <message>
+        <source>Double-click, right-click or press Enter to finish</source>
+        <translation>Dubbelklik, klik met de rechtermuisknop of druk op Enter om te voltooien</translation>
+    </message>
+    <message>
+        <source>Draw a line, then say: add a path along the pink line.</source>
+        <translation>Teken een lijn en zeg vervolgens: voeg een pad langs de roze lijn toe.</translation>
+    </message>
+    <message>
+        <source>Draw a zone on the map to start.</source>
+        <translation>Teken een gebied op de kaart om te beginnen.</translation>
+    </message>
+    <message>
+        <source>Fill the holes inside each shape, except where another checked class sits.</source>
+        <translation>Vul de gaten binnen elke vorm, behalve waar een andere geselecteerde klasse ligt.</translation>
+    </message>
+    <message>
+        <source>Generating your image...</source>
+        <translation>Je afbeelding wordt gegenereerd...</translation>
+    </message>
+    <message>
+        <source>Getting ready...</source>
+        <translation>Bezig met voorbereiden...</translation>
+    </message>
+    <message>
+        <source>Image to edit</source>
+        <translation>Afbeelding om te bewerken</translation>
+    </message>
+    <message>
+        <source>Invalid server response</source>
+        <translation>Ongeldige serverreactie</translation>
+    </message>
+    <message>
+        <source>Keep clicking to add points</source>
+        <translation>Blijf klikken om punten toe te voegen</translation>
+    </message>
+    <message>
+        <source>Keep this result, draw a new zone with this prompt</source>
+        <translation>Bewaar dit resultaat en teken een nieuw gebied met deze prompt</translation>
+    </message>
+    <message>
+        <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size”, or raise “Color tolerance”.</source>
+        <translation>Met deze instellingen zijn er geen vormen over. Zet “Expand/Contract” dichter bij 0, verlaag “Min polygon size” of verhoog “Color tolerance”.</translation>
+    </message>
+    <message>
+        <source>Open my dashboard</source>
+        <translation>Mijn dashboard openen</translation>
+    </message>
+    <message>
+        <source>Other</source>
+        <translation>Andere</translation>
+    </message>
+    <message>
+        <source>Outline an area, say what to change, get a new map layer.</source>
+        <translation>Omlijn een gebied, zeg wat er moet veranderen en krijg een nieuwe maplaag.</translation>
+    </message>
+    <message>
+        <source>Pick a zone, a selection or a polygon layer already in the project</source>
+        <translation>Kies een gebied, selectie of polygonenlaag die al in het project staat</translation>
+    </message>
+    <message>
+        <source>Pick the layer to edit first.</source>
+        <translation>Kies eerst de laag die je wilt bewerken.</translation>
+    </message>
+    <message>
+        <source>Pick {base} first, then try again.</source>
+        <translation>Kies eerst {base} en probeer het daarna opnieuw.</translation>
+    </message>
+    <message>
+        <source>Please describe what you want to change (at least {chars} characters).</source>
+        <translation>Beschrijf wat je wilt veranderen (minstens {chars} tekens).</translation>
+    </message>
+    <message>
+        <source>Prompt cut to {count} characters, the most AI Edit accepts.</source>
+        <translation>Prompt ingekort tot {count} tekens, het maximum dat AI Edit accepteert.</translation>
+    </message>
+    <message>
+        <source>Same edit elsewhere</source>
+        <translation>Dezelfde bewerking elders</translation>
+    </message>
+    <message>
+        <source>Same prompt, same base: a new variation</source>
+        <translation>Dezelfde prompt, dezelfde basis: een nieuwe variant</translation>
+    </message>
+    <message>
+        <source>Save or discard your edits on the vector layer, then run Vectorize again.</source>
+        <translation>Sla je bewerkingen op de vectorlaag op of verwijder ze, en voer Vectorize daarna opnieuw uit.</translation>
+    </message>
+    <message>
+        <source>Shapes smaller than this join the class around them, so no hole is left.</source>
+        <translation>Vormen die kleiner zijn dan dit worden onderdeel van de klasse eromheen, zodat er geen gat overblijft.</translation>
+    </message>
+    <message>
+        <source>Sign in again to generate.</source>
+        <translation>Meld je opnieuw aan om te genereren.</translation>
+    </message>
+    <message>
+        <source>Sign-in timed out. Click Sign in to try again.</source>
+        <translation>De aanmelding is verlopen. Klik op Sign in om het opnieuw te proberen.</translation>
+    </message>
+    <message>
+        <source>Signed in (from {}).</source>
+        <translation>Aangemeld (vanuit {}).</translation>
+    </message>
+    <message>
+        <source>Signed in as {} (from {}).</source>
+        <translation>Aangemeld als {} (vanuit {}).</translation>
+    </message>
+    <message>
+        <source>Signed in.</source>
+        <translation>Aangemeld.</translation>
+    </message>
+    <message>
+        <source>Signed out</source>
+        <translation>Afgemeld</translation>
+    </message>
+    <message>
+        <source>That shape is too thin or too small to edit. Pick another one.</source>
+        <translation>Die vorm is te dun of te klein om te bewerken. Kies een andere.</translation>
+    </message>
+    <message>
+        <source>That zone cannot be placed on this map. Draw one instead.</source>
+        <translation>Dat gebied kan niet op deze kaart worden geplaatst. Teken er een.</translation>
+    </message>
+    <message>
+        <source>That zone is no longer in the project. Pick another one.</source>
+        <translation>Dat gebied staat niet meer in het project. Kies een ander.</translation>
+    </message>
+    <message>
+        <source>The image was generated but could not be saved to your output folder. It is kept in your prompt library: open the Recent tab and download the AI result, or change the output folder and try again.</source>
+        <translation>De afbeelding is gegenereerd maar kon niet in je uitvoermap worden opgeslagen. Ze staat in je promptbibliotheek: open het tabblad Recent en download het AI-resultaat, of wijzig de uitvoermap en probeer het opnieuw.</translation>
+    </message>
+    <message>
+        <source>The layer the AI edits. Visible layers above it are sent as references.</source>
+        <translation>De laag die de AI bewerkt. Zichtbare lagen erboven worden als referentie verzonden.</translation>
+    </message>
+    <message>
+        <source>The map CRS changed after you drew the zone. Draw the zone again.</source>
+        <translation>Het CRS van de kaart is gewijzigd nadat je het gebied tekende. Teken het gebied opnieuw.</translation>
+    </message>
+    <message>
+        <source>The map had not finished loading, so nothing was sent and no credit was used. Wait for the map to appear, then press Generate again.</source>
+        <translation>De kaart was nog niet volledig geladen, dus er is niets verzonden en er is geen tegoed gebruikt. Wacht tot de kaart verschijnt en druk daarna opnieuw op Generate.</translation>
+    </message>
+    <message>
+        <source>The result could not be downloaded to QGIS.</source>
+        <translation>Het resultaat kon niet naar QGIS worden gedownload.</translation>
+    </message>
+    <message>
+        <source>The result was saved but could not be added to the map. It is in Recent in your library.</source>
+        <translation>Het resultaat is opgeslagen maar kon niet aan de kaart worden toegevoegd. Je vindt het bij Recent in je bibliotheek.</translation>
+    </message>
+    <message>
+        <source>The service could not complete this request.</source>
+        <translation>De service kon dit verzoek niet voltooien.</translation>
+    </message>
+    <message>
+        <source>The service is busy. Please try again shortly.</source>
+        <translation>De service is bezig. Probeer het over een moment opnieuw.</translation>
+    </message>
+    <message>
+        <source>The version this came from is not in this session.</source>
+        <translation>De versie waar dit vandaan kwam, bevindt zich niet in deze sessie.</translation>
+    </message>
+    <message>
+        <source>This edit is taking longer than expected. Your result may still arrive in Recent in your library in a few minutes.</source>
+        <translation>Deze bewerking duurt langer dan verwacht. Je resultaat kan over een paar minuten nog bij Recent in je bibliotheek verschijnen.</translation>
+    </message>
+    <message>
+        <source>This file cannot be read. Check that it still exists and that you can open it.</source>
+        <translation>Dit bestand kan niet worden gelezen. Controleer of het nog bestaat en of je het kunt openen.</translation>
+    </message>
+    <message>
+        <source>This sign-in is for a different TerraLab product. Sign in again from AI Edit.</source>
+        <translation>Deze aanmelding is voor een ander TerraLab-product. Meld je opnieuw aan vanuit AI Edit.</translation>
+    </message>
+    <message>
+        <source>This sign-in was revoked. Sign in again.</source>
+        <translation>Deze aanmelding is ingetrokken. Meld je opnieuw aan.</translation>
+    </message>
+    <message>
+        <source>This zone cannot be used.</source>
+        <translation>Dit gebied kan niet worden gebruikt.</translation>
+    </message>
+    <message>
+        <source>This zone could not be checked. Draw it again.</source>
+        <translation>Dit gebied kon niet worden gecontroleerd. Teken het opnieuw.</translation>
+    </message>
+    <message>
+        <source>We lost contact with the server during your edit. It may still finish: check Recent in your library in a few minutes before trying again.</source>
+        <translation>We zijn tijdens je bewerking het contact met de server kwijtgeraakt. De bewerking kan nog worden voltooid: controleer over een paar minuten Recent in je bibliotheek voordat je het opnieuw probeert.</translation>
+    </message>
+    <message>
+        <source>You are signed in. Outline an area on the example map to make an edit.</source>
+        <translation>Je bent aangemeld. Omlijn een gebied op de voorbeeldkaart om een bewerking te maken.</translation>
+    </message>
+    <message>
+        <source>You are signed out. Click Sign in to continue.</source>
+        <translation>Je bent afgemeld. Klik op Sign in om door te gaan.</translation>
+    </message>
+    <message>
+        <source>You are signed out. Sign in again to use AI Edit.</source>
+        <translation>Je bent afgemeld. Meld je opnieuw aan om AI Edit te gebruiken.</translation>
+    </message>
+    <message>
+        <source>You are signed out. Sign in to use AI Edit.</source>
+        <translation>Je bent afgemeld. Meld je aan om AI Edit te gebruiken.</translation>
+    </message>
+    <message>
+        <source>You've used this month's {limit} free credits. They renew at your next monthly reset.</source>
+        <translation>Je hebt de {limit} gratis tegoeden van deze maand gebruikt. Ze worden vernieuwd bij je volgende maandelijkse reset.</translation>
+    </message>
+    <message>
+        <source>Your account changed. Please try again.</source>
+        <translation>Je account is gewijzigd. Probeer het opnieuw.</translation>
+    </message>
+    <message>
+        <source>Your output folder could not be used, so the result was saved in {folder}. You can pick another folder in the settings.</source>
+        <translation>Je uitvoermap kon niet worden gebruikt, dus het resultaat is opgeslagen in {folder}. Je kunt een andere map kiezen in de instellingen.</translation>
+    </message>
+    <message>
+        <source>Your result may still appear in Recent in your library.</source>
+        <translation>Je resultaat kan nog verschijnen bij Recent in je bibliotheek.</translation>
+    </message>
+    <message>
+        <source>Your sign-in has expired. Sign in again to continue.</source>
+        <translation>Je aanmelding is verlopen. Meld je opnieuw aan om door te gaan.</translation>
+    </message>
+    <message>
+        <source>Your sign-in is no longer valid. Click Sign in to sign in again.</source>
+        <translation>Je aanmelding is niet meer geldig. Klik op Sign in om je opnieuw aan te melden.</translation>
+    </message>
+    <message>
+        <source>Your sign-in is no longer valid. Sign in again.</source>
+        <translation>Je aanmelding is niet meer geldig. Meld je opnieuw aan.</translation>
+    </message>
+    <message>
+        <source>Your zone was cleared: no layer is visible on the map anymore.</source>
+        <translation>Je gebied is gewist: er is geen laag meer zichtbaar op de kaart.</translation>
+    </message>
+    <message>
+        <source>or use an existing zone</source>
+        <translation>of gebruik een bestaand gebied</translation>
+    </message>
+    <message>
+        <source>{area} km²</source>
+        <translation>{area} km²</translation>
+    </message>
+    <message>
+        <source>{area}, very large</source>
+        <translation>{area}, zeer groot</translation>
+    </message>
+    <message>
+        <source>{layer} ({count} selected)</source>
+        <translation>{layer} ({count} geselecteerd)</translation>
+    </message>
+    <message>
+        <source>{name} draws nothing inside your zone</source>
+        <translation>{name} tekent niets binnen je gebied</translation>
+    </message>
+    <message>
+        <source>{n} layers above not sent: plan limit</source>
+        <translation>{n} lagen erboven niet verzonden: limiet van je abonnement</translation>
+    </message>
 </context>
 </TS>

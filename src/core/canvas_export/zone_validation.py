@@ -25,26 +25,15 @@ def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> N
 
 
 
+
+
+
+
+
     if map_crs is None or not map_crs.isValid():
         raise AIEditError(
             ErrorCode.INVALID_CRS,
             tr("This project's CRS is invalid. Set a project CRS before drawing a zone."),
-        )
-    if not map_crs.authid():
-        raise AIEditError(
-            ErrorCode.INVALID_CRS,
-            tr(
-                "AI Edit needs a standard CRS (EPSG code). "
-                "Your project uses a custom CRS without an authority ID."
-            ),
-        )
-    if abs(float(map_rotation)) > 0.01:
-        raise AIEditError(
-            ErrorCode.MAP_ROTATED,
-            tr(
-                "Map rotation is not supported. "
-                "Reset rotation to 0 in the map navigation controls and try again."
-            ),
         )
 
     geographic_extent = extent

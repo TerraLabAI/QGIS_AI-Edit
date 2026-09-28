@@ -99,7 +99,7 @@ class DockGenerationStateMixin:
             self._layer_combo_qss = qss
             combo.setStyleSheet(qss)
         combo.setToolTip(
-            get_export_copy("dock.generation_state.layer_combo_locked_tooltip", tr("Exit to pick another layer."))
+            get_export_copy("dock.generation_state.layer_combo_locked_tooltip", tr("Cancel to pick another layer."))
             if locked else get_export_copy(
                 "dock.build.layer_combo_above_tooltip",
                 tr("The layer the AI edits. Visible layers above it are sent as references."),
@@ -781,3 +781,23 @@ class DockGenerationStateMixin:
         self._result_prompt_input.moveCursor(QtC.CursorEnd)
         self._update_result_generate_enabled()
         self._adjust_result_prompt_height()
+
+    def arm_template(self, template_id=None, template_name=None) -> None:
+
+
+
+        self._active_template_id = str(template_id or "") or None
+        self._active_template_name = str(template_name or "") or None
+
+    def prefill_same_edit(self, prompt_text: str, resolution: str = "") -> None:
+
+
+
+        from ...core.entitlements import is_tier_allowed
+
+        self._prompt_input.setPlainText(prompt_text or "")
+        self._prompt_input.moveCursor(QtC.CursorEnd)
+        if resolution and is_tier_allowed(resolution, self._is_free_tier):
+            self._selected_resolution = resolution
+            self._refresh_resolution_triggers()
+            self._update_generate_button_text()

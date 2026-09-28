@@ -209,12 +209,27 @@ def _rasterize_crop_alpha(
         existing = alpha_band.ReadRaster(0, 0, w, h, w, h, gdal.GDT_Byte)
         if existing is None or len(existing) != w * h:
             raise RuntimeError("Could not read complete alpha band")
-        raw = bytes(value if mask else 0 for value, mask in zip(existing, raw))
+        raw = _keep_alpha_inside_mask(existing, raw)
     _check_gdal(alpha_band.WriteRaster(0, 0, w, h, raw, w, h, gdal.GDT_Byte), "crop alpha")
     alpha_band.SetColorInterpretation(gdal.GCI_AlphaBand)
 
     del mask_ds
     del ogr_ds
+
+
+
+
+
+def _keep_alpha_inside_mask(existing: bytes, mask: bytes) -> bytes:
+    try:
+        import numpy as np
+
+        alpha = np.frombuffer(existing, dtype=np.uint8)
+        inside = np.frombuffer(mask, dtype=np.uint8) != 0
+        return np.where(inside, alpha, np.uint8(0)).astype(np.uint8).tobytes()
+    except Exception as e:  # noqa: BLE001
+        log_warning(f"numpy alpha merge unavailable ({e}); using the slow path")
+        return bytes(value if flag else 0 for value, flag in zip(existing, mask))
 
 
 def _write_opaque_alpha_band(dst_ds, alpha_band_index: int) -> None:
@@ -543,6 +558,26 @@ def _write_geotiff_gdal(
         src_bands = src_ds.RasterCount
         if recv_w <= 0 or recv_h <= 0 or src_bands <= 0:
             raise RuntimeError("Image has no usable pixels")
+        if ctx is not None:
+            ctx.received_image_width = recv_w
+            ctx.received_image_height = recv_h
+
+
+
+
+        crop_window = _aspect_crop_window(recv_w, recv_h, xmax - xmin, ymax - ymin)
+        if crop_window is not None:
+            crop_x, crop_y, crop_w, crop_h = crop_window
+            log_warning(
+                f"Result shape {recv_w}x{recv_h} differs from the zone; "
+                f"centre-cropped to {crop_w}x{crop_h}"
+            )
+            cropped = gdal.Translate("", src_ds, format="MEM", srcWin=[crop_x, crop_y, crop_w, crop_h])
+            if cropped is None:
+                raise RuntimeError("Result crop to the zone shape failed")
+            _track_aspect_mismatch(recv_w, recv_h, crop_w, crop_h)
+            src_ds = cropped
+            recv_w, recv_h = crop_w, crop_h
         alpha_source = next((i for i in range(1, src_bands + 1)
                              if src_ds.GetRasterBand(i).GetColorInterpretation() == gdal.GCI_AlphaBand), None)
         color_sources = [i for i in range(1, min(src_bands, 4) + 1) if i != alpha_source][:3]
@@ -562,10 +597,8 @@ def _write_geotiff_gdal(
         log_debug(f"GeoTIFF extent: {ext_width:.2f}x{ext_height:.2f} map units")
 
         if ctx is not None:
-            ctx.received_image_width = recv_w
-            ctx.received_image_height = recv_h
             ctx.received_size_bytes = len(image_data)
-            ctx.crop_offsets = (0, 0, recv_w, recv_h)
+            ctx.crop_offsets = crop_window or (0, 0, recv_w, recv_h)
 
         driver = gdal.GetDriverByName("GTiff")
         dst_ds, create_err = _create_gtiff(driver, output_path, recv_w, recv_h, dst_bands)
@@ -734,6 +767,44 @@ def _write_geotiff_gdal(
         )
 
     return output_path
+
+
+
+
+_ASPECT_TOLERANCE = 0.02
+
+
+def _aspect_crop_window(recv_w, recv_h, ext_width, ext_height):
+
+
+    if ext_width <= 0 or ext_height <= 0:
+        return None
+    zone_aspect = ext_width / ext_height
+    recv_aspect = recv_w / recv_h
+    if abs(recv_aspect / zone_aspect - 1.0) <= _ASPECT_TOLERANCE:
+        return None
+    if recv_aspect > zone_aspect:
+        crop_w = max(1, min(recv_w, round(recv_h * zone_aspect)))
+        crop_h = recv_h
+    else:
+        crop_w = recv_w
+        crop_h = max(1, min(recv_h, round(recv_w / zone_aspect)))
+    return ((recv_w - crop_w) // 2, (recv_h - crop_h) // 2, crop_w, crop_h)
+
+
+def _track_aspect_mismatch(recv_w, recv_h, crop_w, crop_h):
+
+    try:
+        from . import telemetry
+        from . import telemetry_events as te
+
+        telemetry.track(te.PLUGIN_ERROR, {
+            "stage": "write",
+            "error_code": "result_aspect_mismatch",
+            "error_message": f"received {recv_w}x{recv_h}, cropped to {crop_w}x{crop_h}",
+        })
+    except Exception:  # nosec B110
+        pass
 
 
 def _check_gdal(result, operation):

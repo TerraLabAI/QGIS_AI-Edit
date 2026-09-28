@@ -5177,5 +5177,329 @@ We'd love to hear from you!</source>
         <source>{n} strokes. Click Done to guide the edit with them.</source>
         <translation>{n} 本のストローク。完了をクリックすると編集のガイドに使用されます。</translation>
     </message>
+    <message>
+        <source>1 layer above not sent: plan limit</source>
+        <translation>上にあるlayer 1件は送信されません: プランの上限</translation>
+    </message>
+    <message>
+        <source>&lt; 0.1 km²</source>
+        <translation>&lt; 0.1 km²</translation>
+    </message>
+    <message>
+        <source>AI Edit needs an image under your data.</source>
+        <translation>AI Editには、データの下に画像が必要です。</translation>
+    </message>
+    <message>
+        <source>Add at least 3 points</source>
+        <translation>ポイントを3つ以上追加してください</translation>
+    </message>
+    <message>
+        <source>Add satellite imagery here</source>
+        <translation>ここに衛星画像を追加</translation>
+    </message>
+    <message>
+        <source>At this zoom one pixel covers about {m} m. Zoom in or draw a smaller zone for buildings, trees or roads.</source>
+        <translation>このズームでは1ピクセルが約{m} mをカバーします。建物、樹木、道路には、ズームインするか、より小さいゾーンを描いてください。</translation>
+    </message>
+    <message>
+        <source>Cancel to pick another layer.</source>
+        <translation>キャンセルして別のlayerを選択してください。</translation>
+    </message>
+    <message>
+        <source>Cancelled before starting the run.</source>
+        <translation>実行を開始する前にキャンセルしました。</translation>
+    </message>
+    <message>
+        <source>Cancelled before tracing.</source>
+        <translation>トレース前にキャンセルしました。</translation>
+    </message>
+    <message>
+        <source>Capturing your zone...</source>
+        <translation>ゾーンを取得しています...</translation>
+    </message>
+    <message>
+        <source>Click to add points, or drag a box</source>
+        <translation>クリックしてポイントを追加、またはボックスをドラッグ</translation>
+    </message>
+    <message>
+        <source>Could not get your settings from the server.</source>
+        <translation>サーバーから設定を取得できませんでした。</translation>
+    </message>
+    <message>
+        <source>Could not get your settings from the server. Press Generate to try again.</source>
+        <translation>サーバーから設定を取得できませんでした。生成を押して再試行してください。</translation>
+    </message>
+    <message>
+        <source>Could not start the edit. No credit was used. Press Generate to try again.</source>
+        <translation>編集を開始できませんでした。クレジットは消費されていません。生成を押して再試行してください。</translation>
+    </message>
+    <message>
+        <source>Credits renew on {date}</source>
+        <translation>クレジットは{date}に更新されます</translation>
+    </message>
+    <message>
+        <source>Double-click, right-click or press Enter to finish</source>
+        <translation>ダブルクリック、右クリック、またはEnterキーを押して完了</translation>
+    </message>
+    <message>
+        <source>Draw a line, then say: add a path along the pink line.</source>
+        <translation>線を描いてから、こう言います: ピンクの線に沿ってパスを追加して。</translation>
+    </message>
+    <message>
+        <source>Draw a zone on the map to start.</source>
+        <translation>開始するには、マップ上にゾーンを描いてください。</translation>
+    </message>
+    <message>
+        <source>Fill the holes inside each shape, except where another checked class sits.</source>
+        <translation>各図形の内側の穴を埋めます。ただし、別のチェック済みクラスがある場所は除きます。</translation>
+    </message>
+    <message>
+        <source>Generating your image...</source>
+        <translation>画像を生成しています...</translation>
+    </message>
+    <message>
+        <source>Getting ready...</source>
+        <translation>準備しています...</translation>
+    </message>
+    <message>
+        <source>Image to edit</source>
+        <translation>編集する画像</translation>
+    </message>
+    <message>
+        <source>Invalid server response</source>
+        <translation>サーバー応答が無効です</translation>
+    </message>
+    <message>
+        <source>Keep clicking to add points</source>
+        <translation>クリックを続けてポイントを追加</translation>
+    </message>
+    <message>
+        <source>Keep this result, draw a new zone with this prompt</source>
+        <translation>この結果を保持し、このpromptで新しいゾーンを描く</translation>
+    </message>
+    <message>
+        <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size”, or raise “Color tolerance”.</source>
+        <translation>この設定では図形が残りません。“Expand/Contract”を0に近づける、“Min polygon size”を下げる、または“Color tolerance”を上げてください。</translation>
+    </message>
+    <message>
+        <source>Open my dashboard</source>
+        <translation>ダッシュボードを開く</translation>
+    </message>
+    <message>
+        <source>Other</source>
+        <translation>その他</translation>
+    </message>
+    <message>
+        <source>Outline an area, say what to change, get a new map layer.</source>
+        <translation>エリアを囲み、変更内容を伝えると、新しいマップlayerが得られます。</translation>
+    </message>
+    <message>
+        <source>Pick a zone, a selection or a polygon layer already in the project</source>
+        <translation>プロジェクト内のゾーン、選択範囲、またはポリゴンlayerを選択</translation>
+    </message>
+    <message>
+        <source>Pick the layer to edit first.</source>
+        <translation>先に編集するlayerを選択してください。</translation>
+    </message>
+    <message>
+        <source>Pick {base} first, then try again.</source>
+        <translation>先に{base}を選択してから、再試行してください。</translation>
+    </message>
+    <message>
+        <source>Please describe what you want to change (at least {chars} characters).</source>
+        <translation>変更したい内容を入力してください（{chars}文字以上）。</translation>
+    </message>
+    <message>
+        <source>Prompt cut to {count} characters, the most AI Edit accepts.</source>
+        <translation>promptは{count}文字に短縮されました。AI Editが受け付ける最大数です。</translation>
+    </message>
+    <message>
+        <source>Same edit elsewhere</source>
+        <translation>同じ編集を別の場所で</translation>
+    </message>
+    <message>
+        <source>Same prompt, same base: a new variation</source>
+        <translation>同じprompt、同じベース: 新しいバリエーション</translation>
+    </message>
+    <message>
+        <source>Save or discard your edits on the vector layer, then run Vectorize again.</source>
+        <translation>ベクターlayerの編集を保存または破棄してから、ベクター化を再度実行してください。</translation>
+    </message>
+    <message>
+        <source>Shapes smaller than this join the class around them, so no hole is left.</source>
+        <translation>これより小さい図形は周囲のクラスに統合され、穴が残りません。</translation>
+    </message>
+    <message>
+        <source>Sign in again to generate.</source>
+        <translation>生成するには再度サインインしてください。</translation>
+    </message>
+    <message>
+        <source>Sign-in timed out. Click Sign in to try again.</source>
+        <translation>サインインがタイムアウトしました。サインインをクリックして再試行してください。</translation>
+    </message>
+    <message>
+        <source>Signed in (from {}).</source>
+        <translation>サインインしました（{}から）。</translation>
+    </message>
+    <message>
+        <source>Signed in as {} (from {}).</source>
+        <translation>{}としてサインインしました（{}から）。</translation>
+    </message>
+    <message>
+        <source>Signed in.</source>
+        <translation>サインインしました。</translation>
+    </message>
+    <message>
+        <source>Signed out</source>
+        <translation>サインアウトしました</translation>
+    </message>
+    <message>
+        <source>That shape is too thin or too small to edit. Pick another one.</source>
+        <translation>その図形は細すぎるか小さすぎるため編集できません。別のものを選択してください。</translation>
+    </message>
+    <message>
+        <source>That zone cannot be placed on this map. Draw one instead.</source>
+        <translation>そのゾーンはこのマップに配置できません。代わりに描いてください。</translation>
+    </message>
+    <message>
+        <source>That zone is no longer in the project. Pick another one.</source>
+        <translation>そのゾーンはプロジェクトにありません。別のものを選択してください。</translation>
+    </message>
+    <message>
+        <source>The image was generated but could not be saved to your output folder. It is kept in your prompt library: open the Recent tab and download the AI result, or change the output folder and try again.</source>
+        <translation>画像は生成されましたが、出力フォルダーに保存できませんでした。promptライブラリに保存されています: 最近タブを開いてAIの結果をダウンロードするか、出力フォルダーを変更して再試行してください。</translation>
+    </message>
+    <message>
+        <source>The layer the AI edits. Visible layers above it are sent as references.</source>
+        <translation>AIが編集するlayerです。その上にある表示中のlayerは参照として送信されます。</translation>
+    </message>
+    <message>
+        <source>The map CRS changed after you drew the zone. Draw the zone again.</source>
+        <translation>ゾーンを描いた後にマップのCRSが変更されました。ゾーンを描き直してください。</translation>
+    </message>
+    <message>
+        <source>The map had not finished loading, so nothing was sent and no credit was used. Wait for the map to appear, then press Generate again.</source>
+        <translation>マップの読み込みが完了していなかったため、何も送信されず、クレジットも消費されていません。マップが表示されるのを待ってから、生成を再度押してください。</translation>
+    </message>
+    <message>
+        <source>The result could not be downloaded to QGIS.</source>
+        <translation>結果をQGISにダウンロードできませんでした。</translation>
+    </message>
+    <message>
+        <source>The result was saved but could not be added to the map. It is in Recent in your library.</source>
+        <translation>結果は保存されましたが、マップに追加できませんでした。ライブラリの最近にあります。</translation>
+    </message>
+    <message>
+        <source>The service could not complete this request.</source>
+        <translation>サービスがこのリクエストを完了できませんでした。</translation>
+    </message>
+    <message>
+        <source>The service is busy. Please try again shortly.</source>
+        <translation>サービスが混み合っています。しばらくしてから再試行してください。</translation>
+    </message>
+    <message>
+        <source>The version this came from is not in this session.</source>
+        <translation>これの元になったバージョンは、このセッションにありません。</translation>
+    </message>
+    <message>
+        <source>This edit is taking longer than expected. Your result may still arrive in Recent in your library in a few minutes.</source>
+        <translation>この編集は想定より時間がかかっています。数分後にライブラリの最近に結果が届く可能性があります。</translation>
+    </message>
+    <message>
+        <source>This file cannot be read. Check that it still exists and that you can open it.</source>
+        <translation>このファイルは読み取れません。ファイルが存在し、開けることを確認してください。</translation>
+    </message>
+    <message>
+        <source>This sign-in is for a different TerraLab product. Sign in again from AI Edit.</source>
+        <translation>このサインインは別のTerraLab製品のものです。AI Editから再度サインインしてください。</translation>
+    </message>
+    <message>
+        <source>This sign-in was revoked. Sign in again.</source>
+        <translation>このサインインは取り消されました。再度サインインしてください。</translation>
+    </message>
+    <message>
+        <source>This zone cannot be used.</source>
+        <translation>このゾーンは使用できません。</translation>
+    </message>
+    <message>
+        <source>This zone could not be checked. Draw it again.</source>
+        <translation>このゾーンを確認できませんでした。描き直してください。</translation>
+    </message>
+    <message>
+        <source>We lost contact with the server during your edit. It may still finish: check Recent in your library in a few minutes before trying again.</source>
+        <translation>編集中にサーバーとの接続が切れました。まだ完了する可能性があります: 再試行する前に、数分後にライブラリの最近を確認してください。</translation>
+    </message>
+    <message>
+        <source>You are signed in. Outline an area on the example map to make an edit.</source>
+        <translation>サインインしています。例のマップでエリアを囲んで編集を行ってください。</translation>
+    </message>
+    <message>
+        <source>You are signed out. Click Sign in to continue.</source>
+        <translation>サインアウトしています。続行するにはサインインをクリックしてください。</translation>
+    </message>
+    <message>
+        <source>You are signed out. Sign in again to use AI Edit.</source>
+        <translation>サインアウトしています。AI Editを使用するには再度サインインしてください。</translation>
+    </message>
+    <message>
+        <source>You are signed out. Sign in to use AI Edit.</source>
+        <translation>サインアウトしています。AI Editを使用するにはサインインしてください。</translation>
+    </message>
+    <message>
+        <source>You've used this month's {limit} free credits. They renew at your next monthly reset.</source>
+        <translation>今月の無料クレジット{limit}を使い切りました。次回の月次リセットで更新されます。</translation>
+    </message>
+    <message>
+        <source>Your account changed. Please try again.</source>
+        <translation>アカウントが変更されました。再試行してください。</translation>
+    </message>
+    <message>
+        <source>Your output folder could not be used, so the result was saved in {folder}. You can pick another folder in the settings.</source>
+        <translation>出力フォルダーを使用できなかったため、結果は{folder}に保存されました。設定で別のフォルダーを選択できます。</translation>
+    </message>
+    <message>
+        <source>Your result may still appear in Recent in your library.</source>
+        <translation>結果はライブラリの最近にまだ表示される場合があります。</translation>
+    </message>
+    <message>
+        <source>Your sign-in has expired. Sign in again to continue.</source>
+        <translation>サインインの有効期限が切れました。続行するには再度サインインしてください。</translation>
+    </message>
+    <message>
+        <source>Your sign-in is no longer valid. Click Sign in to sign in again.</source>
+        <translation>サインインは無効になりました。サインインをクリックして再度サインインしてください。</translation>
+    </message>
+    <message>
+        <source>Your sign-in is no longer valid. Sign in again.</source>
+        <translation>サインインは無効になりました。再度サインインしてください。</translation>
+    </message>
+    <message>
+        <source>Your zone was cleared: no layer is visible on the map anymore.</source>
+        <translation>ゾーンはクリアされました: マップに表示中のlayerがなくなりました。</translation>
+    </message>
+    <message>
+        <source>or use an existing zone</source>
+        <translation>または既存のゾーンを使用</translation>
+    </message>
+    <message>
+        <source>{area} km²</source>
+        <translation>{area} km²</translation>
+    </message>
+    <message>
+        <source>{area}, very large</source>
+        <translation>{area}、非常に大きい</translation>
+    </message>
+    <message>
+        <source>{layer} ({count} selected)</source>
+        <translation>{layer}（{count}件選択中）</translation>
+    </message>
+    <message>
+        <source>{name} draws nothing inside your zone</source>
+        <translation>{name}はゾーン内に何も描画しません</translation>
+    </message>
+    <message>
+        <source>{n} layers above not sent: plan limit</source>
+        <translation>上にあるlayer {n}件は送信されません: プランの上限</translation>
+    </message>
 </context>
 </TS>
