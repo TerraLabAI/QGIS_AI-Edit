@@ -46,6 +46,7 @@ from ...core.auth.activation_manager import (
 )
 from ...core.config_store import get_export_copy
 from ...core.i18n import tr
+from ...core.product_identity import PRODUCT_ID
 from ...workers.generic_request_task import GenericRequestTask
 from ..dock.design_tokens import (
     BTN_PRIMARY_QSS,
@@ -66,11 +67,9 @@ from .settings.account_page import AVATAR_PX, AccountPageMixin
 from .settings.billing_page import BillingPageMixin
 from .settings.category_tile import NAV_GLYPH_CATEGORIES
 from .settings.help_pages import HelpPagesMixin
-from .settings.plan_state import find_product_subscription, resolve_account_plan
+from .settings.plan_state import resolve_account_plan
 from .settings.widgets import nav_qss, sidebar_qss
 
-
-PRODUCT_ID = "ai-edit"
 PRODUCT_NAME = "AI Edit"
 
 
@@ -417,10 +416,6 @@ class AccountSettingsDialog(
     def _on_failed(self, message: str, code: str = "", *_rest):
         self._paint_account_error(message, code)
         self._paint_billing_message(tr("Plan not loaded"))
-
-    @staticmethod
-    def _find_subscription(data: dict) -> dict | None:
-        return find_product_subscription(data, PRODUCT_ID)
 
 
 

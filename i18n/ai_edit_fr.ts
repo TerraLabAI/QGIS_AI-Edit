@@ -5501,5 +5501,13 @@ Nous serions ravis d'avoir votre retour !</translation>
         <source>{n} layers above not sent: plan limit</source>
         <translation>{n} couches au-dessus non envoyées : limite du plan</translation>
     </message>
+    <message>
+        <source>Download incomplete: the image ends early ({got} bytes)</source>
+        <translation>Téléchargement incomplet : l'image se termine trop tôt ({got} octets)</translation>
+    </message>
+    <message>
+        <source>Your image could not be sent: the connection is too slow or was cut. Try again, or pick a lower resolution.</source>
+        <translation>Votre image n'a pas pu être envoyée : la connexion est trop lente ou a été coupée. Réessayez, ou choisissez une résolution plus basse.</translation>
+    </message>
 </context>
 </TS>

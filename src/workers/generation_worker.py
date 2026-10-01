@@ -31,7 +31,8 @@ DEFAULT_ESTIMATED_TIME = 25
 _LONGER_THAN_USUAL_RATIO = 1.5
 
 
-_DOWNLOAD_RETRY_DELAYS_S = (2, 6, 15)
+
+_DOWNLOAD_RETRY_DELAYS_S = (3, 10, 30)
 
 
 
@@ -318,6 +319,66 @@ class GenerationTask(QgsTask):
         if self.isCanceled():
             return False
 
+        stop = self._prepare_run()
+        if stop is not None:
+            return stop
+
+        result = self._submit_and_wait()
+
+        if self.isCanceled():
+            return False
+
+        if not result.success:
+
+
+
+
+
+            return self._mark_failed(
+                result.error
+                or get_export_copy("pipeline.generation_worker.generation_failed", tr("Generation failed")),
+                result.error_code or ErrorCode.GENERATION_FAILED.value,
+            )
+
+        stop, image_data, last_download_err, stream_fallback_used, download_attempts = (
+            self._download_result(result)
+        )
+        if stop is not None:
+            return stop
+
+        if image_data is None:
+            return self._settle_failed_download(
+                result, last_download_err, stream_fallback_used, download_attempts
+            )
+
+        if self.isCanceled():
+            return False
+
+        self._detect_flat_output(image_data)
+
+        stop, geotiff_path = self._write_result(image_data)
+        if stop is not None:
+            return stop
+
+        if self.isCanceled():
+            return False
+        self._log_pipeline_summary()
+        self._save_debug_run(image_data)
+        before_path = self._write_before_image(geotiff_path)
+
+        self._success_payload = {
+            "geotiff_path": geotiff_path,
+            "before_geotiff_path": before_path,
+            "output_moved_dir": _moved_output_dir(geotiff_path, self._output_dir),
+            "prompt": self._prompt,
+            "crs_wkt": self._crs_wkt,
+            **_ctx_snapshot(self._ctx),
+        }
+        return True
+
+    def _prepare_run(self) -> bool | None:
+
+
         self.progress.emit(get_export_copy("pipeline.generation_worker.preparing", tr("Preparing...")), 0)
 
 
@@ -360,6 +421,10 @@ class GenerationTask(QgsTask):
 
         if self.isCanceled():
             return False
+        return None
+
+    def _submit_and_wait(self):
+
 
         self.progress.emit(
             get_export_copy("pipeline.generation_worker.sending_image", tr("Sending your image to the AI...")), 5
@@ -417,7 +482,7 @@ class GenerationTask(QgsTask):
                 except Exception:  # nosec B110
                     pass
 
-        result = self._service.generate(
+        return self._service.generate(
             image_b64=self._image_b64,
             prompt=self._prompt,
             auth=self._auth_manager.get_auth_header(),
@@ -432,20 +497,9 @@ class GenerationTask(QgsTask):
             is_cancelled=self.isCanceled,
         )
 
-        if self.isCanceled():
-            return False
-
-        if not result.success:
+    def _download_result(self, result) -> tuple:
 
 
-
-
-
-            return self._mark_failed(
-                result.error
-                or get_export_copy("pipeline.generation_worker.generation_failed", tr("Generation failed")),
-                result.error_code or ErrorCode.GENERATION_FAILED.value,
-            )
 
         self.progress.emit(
             get_export_copy("pipeline.generation_worker.grabbing_masterpiece", tr("Grabbing your masterpiece...")),
@@ -459,9 +513,11 @@ class GenerationTask(QgsTask):
             get_export_dial("pipeline.generation_worker.download_retry_attempts", _DOWNLOAD_RETRY_ATTEMPTS),
             _MAX_DOWNLOAD_RETRY_ATTEMPTS,
         )
+
+        resume: dict = {}
         for attempt in range(1, download_attempts + 1):
             if self.isCanceled():
-                return False
+                return False, None, last_download_err, stream_fallback_used, download_attempts
             url = result.image_url
             if attempt > 1 and url:
 
@@ -471,7 +527,7 @@ class GenerationTask(QgsTask):
                 url = f"{url}{'&' if '?' in url else '?'}stream=1"
                 stream_fallback_used = True
             try:
-                image_data = self._client.download_image(url)
+                image_data = self._client.download_image(url, resume=resume)
                 if not isinstance(image_data, (bytes, bytearray)) or not image_data:
                     image_data = None
                     raise ValueError("Empty or invalid image response")
@@ -483,50 +539,52 @@ class GenerationTask(QgsTask):
 
                 if self.isCanceled() or getattr(e, "code", "") == ErrorCode.GENERATION_CANCELLED.value:
                     self._ended_on_cancel = True
-                    return False
+                    return False, None, last_download_err, stream_fallback_used, download_attempts
                 if attempt < download_attempts:
                     backoff = _DOWNLOAD_RETRY_DELAYS_S[
                         min(attempt - 1, len(_DOWNLOAD_RETRY_DELAYS_S) - 1)
                     ]
                     log_debug(f"Download attempt {attempt} failed: {e}; retry in {backoff}s")
                     if self._sleep_cancellable(backoff):
-                        return False
+                        return False, None, last_download_err, stream_fallback_used, download_attempts
+        return None, image_data, last_download_err, stream_fallback_used, download_attempts
 
-        if image_data is None:
+    def _settle_failed_download(
+        self, result, last_download_err, stream_fallback_used, download_attempts
+    ) -> bool:
 
-            if self.isCanceled():
-                return False
-            request_id = getattr(result, "request_id", None) or (
-                self._ctx.request_id if self._ctx is not None else None
-            )
-            refunded = self._refund_if_needed(
-                request_id,
-                "download_failed",
-                error_code=getattr(last_download_err, "code", None),
-                error_message=str(last_download_err) if last_download_err else None,
-                stream_fallback_used=stream_fallback_used,
-            )
-
-            credit_note = (
-                get_export_copy("pipeline.generation_worker.credit_refunded", tr("Credit refunded."))
-                if refunded
-                else get_export_copy(
-                    "pipeline.generation_worker.credit_refund_pending",
-                    tr("If a credit was charged, it will be refunded."),
-                )
-            )
-
-            log_warning(
-                f"Result download failed after {download_attempts} attempts: {last_download_err}"
-            )
-            return self._mark_failed(
-                tr("The result could not be downloaded to QGIS.") + " " + credit_note,
-                ErrorCode.DOWNLOAD_FAILED.value,
-            )
 
         if self.isCanceled():
             return False
+        request_id = getattr(result, "request_id", None) or (
+            self._ctx.request_id if self._ctx is not None else None
+        )
+        refunded = self._refund_if_needed(
+            request_id,
+            "download_failed",
+            error_code=getattr(last_download_err, "code", None),
+            error_message=str(last_download_err) if last_download_err else None,
+            stream_fallback_used=stream_fallback_used,
+        )
 
+        credit_note = (
+            get_export_copy("pipeline.generation_worker.credit_refunded", tr("Credit refunded."))
+            if refunded
+            else get_export_copy(
+                "pipeline.generation_worker.credit_refund_pending",
+                tr("If a credit was charged, it will be refunded."),
+            )
+        )
+
+        log_warning(
+            f"Result download failed after {download_attempts} attempts: {last_download_err}"
+        )
+        return self._mark_failed(
+            tr("The result could not be downloaded to QGIS.") + " " + credit_note,
+            ErrorCode.DOWNLOAD_FAILED.value,
+        )
+
+    def _detect_flat_output(self, image_data: bytes) -> None:
 
 
 
@@ -537,6 +595,9 @@ class GenerationTask(QgsTask):
             and not self._ctx.vector_classes
         ):
             self._ctx.flat_classes, self._ctx.flat_foreground = self._analyze_flat_output(image_data)
+
+    def _write_result(self, image_data: bytes) -> tuple:
+
 
         self.progress.emit(
             get_export_copy("pipeline.generation_worker.dropping_on_map", tr("Dropping it on the map...")), 97
@@ -586,10 +647,10 @@ class GenerationTask(QgsTask):
                     "folder and try again."
                 ),
                 ErrorCode.WRITE_ERROR.value,
-            )
+            ), None
+        return None, geotiff_path
 
-        if self.isCanceled():
-            return False
+    def _log_pipeline_summary(self) -> None:
         if self._ctx is not None:
             try:
                 for w in self._ctx.validate():
@@ -598,6 +659,7 @@ class GenerationTask(QgsTask):
             except Exception:  # nosec B110
                 pass
 
+    def _save_debug_run(self, image_data: bytes) -> None:
 
         if self._debug_mode and self._ctx is not None:
             try:
@@ -620,6 +682,7 @@ class GenerationTask(QgsTask):
             except Exception:  # nosec B110
                 pass
 
+    def _write_before_image(self, geotiff_path: str) -> str:
 
 
 
@@ -638,16 +701,7 @@ class GenerationTask(QgsTask):
         except Exception as before_err:  # noqa: BLE001
             log_debug(f"before GeoTIFF write skipped: {before_err}")
             before_path = ""
-
-        self._success_payload = {
-            "geotiff_path": geotiff_path,
-            "before_geotiff_path": before_path,
-            "output_moved_dir": _moved_output_dir(geotiff_path, self._output_dir),
-            "prompt": self._prompt,
-            "crs_wkt": self._crs_wkt,
-            **_ctx_snapshot(self._ctx),
-        }
-        return True
+        return before_path
 
     def finished(self, result: bool) -> None:
         if self.isCanceled():

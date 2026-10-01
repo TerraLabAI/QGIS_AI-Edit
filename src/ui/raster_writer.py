@@ -18,22 +18,9 @@ from ..core.i18n import tr
 from ..core.logger import log_warning
 from ..core.prompts.prompt_presets import lookup_template_by_prompt
 from ..core.raster_writer import (
-    _FALLBACK_EXT,
-    _FOREIGN_PROJ_MARKERS,
-    _GDAL_SAFE_FORMATS,
-    _GTIFF_CREATION_OPTIONS,
     BEFORE_PATH_PROPERTY,
     OUTPUT_DIR_SETTING,
-    _create_gtiff,
-    _detect_image_format,
-    _documents_default_dir,
-    _image_dimensions,
-    _output_file_base,
-    _rescue_plain_image,
-    _restore_qgis_proj_paths,
-    _safe_projection_wkt,
     _unique_output_path,
-    _write_geotiff_gdal,
     ascii_safe_dir,
     before_file_base,
     extent_and_crs_from_job,
@@ -44,26 +31,9 @@ from ..core.raster_writer import (
     set_output_dir,
     write_geotiff,
 )
-from ..core.slug import slugify as _slugify
 from .layer_groups import add_layer_to_ai_edit_top
 
-
 __all__ = [
-    "_create_gtiff",
-    "_detect_image_format",
-    "_documents_default_dir",
-    "_FALLBACK_EXT",
-    "_FOREIGN_PROJ_MARKERS",
-    "_GDAL_SAFE_FORMATS",
-    "_GTIFF_CREATION_OPTIONS",
-    "_image_dimensions",
-    "_output_file_base",
-    "_rescue_plain_image",
-    "_restore_qgis_proj_paths",
-    "_safe_projection_wkt",
-    "_slugify",
-    "_unique_output_path",
-    "_write_geotiff_gdal",
     "add_geotiff_to_project",
     "ascii_safe_dir",
     "before_file_base",

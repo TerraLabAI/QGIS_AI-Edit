@@ -10,38 +10,29 @@ import weakref
 from typing import Callable
 
 from ..config_store import get_export_copy, get_export_dial, get_export_dial_list, get_export_dial_pair
-from ..errors import NETWORK_ERROR_CODES, ErrorCode
+from ..errors import ErrorCode, ErrorCodeTrait, codes_with_trait
 from ..i18n import tr
 from ..logger import log_debug, log_warning
 from .generation_result import GenerationResult
-from .generation_upload import GenerationUploadMixin
+from .generation_upload import _MAX_RETRY_ATTEMPTS, GenerationUploadMixin
 
 
 
 
 
 
-_RETRYABLE_POLL_CODES = frozenset(
-    {"TIMEOUT", "NO_NETWORK", "DNS_ERROR", "CONNECTION_REFUSED", "PROXY_ERROR", "SSL_ERROR",
 
-     "RATE_LIMITED",
-
-
-     "SERVER_ERROR", "UPSTREAM_UNAVAILABLE", "RATE_LIMITER_DOWN",
-     "BAD_GATEWAY", "SERVICE_UNAVAILABLE", "GATEWAY_TIMEOUT"}
-)
+_RETRYABLE_POLL_CODES = codes_with_trait(ErrorCodeTrait.POLL_RETRY)
 
 
 _GATEWAY_HTTP_STATUSES = frozenset({502, 503, 504})
 
 
 
-_RETRYABLE_SUBMIT_CODES = frozenset(
-    {"UPSTREAM_UNAVAILABLE", "BAD_GATEWAY", "SERVICE_UNAVAILABLE", "GATEWAY_TIMEOUT"}
-)
+_RETRYABLE_SUBMIT_CODES = codes_with_trait(ErrorCodeTrait.SUBMIT_RETRY)
 
 
-_AMBIGUOUS_SUBMIT_CODES = frozenset({"TIMEOUT", "SERVER_ERROR"}) | _RETRYABLE_SUBMIT_CODES
+_AMBIGUOUS_SUBMIT_CODES = codes_with_trait(ErrorCodeTrait.SUBMIT_UNCONFIRMED)
 _MAX_CONSECUTIVE_POLL_ERRORS = 5
 
 _POLL_BACKOFF_CAP_S = 12.0
@@ -56,24 +47,13 @@ _POLL_BUDGET_ESTIMATE_FACTOR = 3.0
 
 
 
-
-
-_MAX_INLINE_BODY_BYTES = 4_200_000
-
-
-
-
-
 _POLL_HARD_CAP = 1000
 
 
 
 
 _SUBMIT_RETRY_ATTEMPTS = 3
-_SUBMIT_RETRY_STEPS = (1, 5)
-
-
-_MAX_RETRY_ATTEMPTS = 5
+_SUBMIT_RETRY_STEPS = (3, 12)
 _SUBMIT_RETRY_BACKOFF_S = 1.0
 
 _RESCUE_RETRY_ATTEMPTS = 2
@@ -422,11 +402,7 @@ class GenerationService(GenerationUploadMixin):
 
 
 
-            retryable = (
-                code in NETWORK_ERROR_CODES
-                or code in _RETRYABLE_SUBMIT_CODES
-                or _is_gateway_failure(resp)
-            )
+            retryable = code in _RETRYABLE_SUBMIT_CODES or _is_gateway_failure(resp)
             if retryable and _attempt < submit_attempts - 1:
                 log_warning(f"Submit attempt {_attempt + 1} failed ({code}); retrying")
                 step = _SUBMIT_RETRY_STEPS[min(_attempt, len(_SUBMIT_RETRY_STEPS) - 1)]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import NamedTuple
+
 from qgis.PyQt.QtCore import QTimer
 from qgis.PyQt.QtGui import QTextCursor
 
@@ -31,6 +33,41 @@ _PROGRESS_ANIMATE_MS = 30
 _PREP_CAP_CANVAS_PCT = 5
 
 _PREP_CAP_OTHER_PCT = 10
+
+DOCK_SCREEN_LAUNCH = "launch"
+DOCK_SCREEN_ZONE = "zone"
+DOCK_SCREEN_PROMPT = "prompt"
+DOCK_SCREEN_GENERATING = "generating"
+DOCK_SCREEN_RESULT = "result"
+
+
+class DockScreenLayout(NamedTuple):
+
+
+    launch: bool
+    zone: bool
+    prompt: bool
+    progress: bool
+    result: bool
+    generate_row: bool
+    strip_home: str
+    locked: bool
+    layer_header: str
+    tip_held: bool | None
+
+
+DOCK_SCREEN_LAYOUTS = {
+    DOCK_SCREEN_LAUNCH: DockScreenLayout(
+        True, False, False, False, False, False, "launch", False, "launch", None),
+    DOCK_SCREEN_ZONE: DockScreenLayout(
+        False, True, False, False, False, False, "result", False, "editable", None),
+    DOCK_SCREEN_PROMPT: DockScreenLayout(
+        False, False, True, False, False, True, "result", False, "locked", False),
+    DOCK_SCREEN_GENERATING: DockScreenLayout(
+        False, False, True, True, False, False, "generating", True, "locked", True),
+    DOCK_SCREEN_RESULT: DockScreenLayout(
+        False, False, False, False, True, False, "result", False, "locked", True),
+}
 
 
 class DockGenerationStateMixin:
@@ -112,20 +149,45 @@ class DockGenerationStateMixin:
 
         header.setVisible(tree_has_visible_raster(QgsProject.instance().layerTreeRoot()))
 
+    def _apply_dock_screen(self, screen: str) -> None:
+
+
+
+
+
+
+        layout = DOCK_SCREEN_LAYOUTS[screen]
+        self._launch_section.setVisible(layout.launch)
+        self._select_zone_section.setVisible(layout.zone)
+        self._prompt_section.setVisible(layout.prompt)
+        self._progress_widget.setVisible(layout.progress)
+        self._result_section.setVisible(layout.result)
+        if layout.result:
+            self._result_prompt_widget.setVisible(True)
+        self._generate_note_box.setVisible(layout.generate_row and not has_seen_privacy_notice())
+        self._generate_btn.setVisible(layout.generate_row)
+        self._exit_btn.setVisible(layout.generate_row)
+        if not layout.generate_row:
+            self.set_generate_block_reason(None)
+        self._prompt_container.set_readonly(layout.locked)
+        if self._reference_widget is not None:
+            self._reference_widget.set_readonly(layout.locked)
+
+
+        if getattr(self, "_reference_panel", None) is not None:
+            self._reference_panel.set_readonly(layout.locked)
+        self._place_version_strip(layout.strip_home)
+        self._version_strip.set_readonly(layout.locked)
+        if layout.tip_held is not None:
+            self._set_guide_ai_tip_held(layout.tip_held)
+        self._set_layer_header_state(layout.layer_header)
+
     def set_zone_selected(self):
 
         self._zone_selected = True
         self._hide_status_box()
-        self._launch_section.setVisible(False)
-        self._select_zone_section.setVisible(False)
-        self._result_section.setVisible(False)
-        self._set_layer_header_state("locked")
-        self._prompt_section.setVisible(True)
-        self._prompt_container.set_readonly(False)
         self._place_reference_widget("prompt")
-        self._generate_note_box.setVisible(not has_seen_privacy_notice())
-        self._generate_btn.setVisible(True)
-        self._exit_btn.setVisible(True)
+        self._apply_dock_screen(DOCK_SCREEN_PROMPT)
         self._refresh_resolution_triggers()
         self._update_generate_enabled()
         self._update_generate_button_text()
@@ -245,24 +307,10 @@ class DockGenerationStateMixin:
             self._reference_widget.clear()
             self._reference_widget.setVisible(False)
 
-        self._launch_section.setVisible(True)
-        self._set_layer_header_state("launch")
-        self._select_zone_section.setVisible(False)
-        self._prompt_section.setVisible(False)
-        self._progress_widget.setVisible(False)
-        self._result_section.setVisible(False)
 
 
 
-
-        self._place_version_strip("launch")
-        self._version_strip.set_readonly(False)
-        self._generate_note_box.setVisible(False)
-        self._generate_btn.setVisible(False)
-        self.set_generate_block_reason(None)
-        self._exit_btn.setVisible(False)
-
-        self._prompt_container.set_readonly(False)
+        self._apply_dock_screen(DOCK_SCREEN_LAUNCH)
         self._prompt_input.clear()
         self._prompt_input.setFixedHeight(60)
         self._result_prompt_input.clear()
@@ -335,17 +383,8 @@ class DockGenerationStateMixin:
         if self._reference_widget is not None:
             self._reference_widget.setVisible(False)
 
-        self._launch_section.setVisible(False)
-        self._select_zone_section.setVisible(True)
-        self._set_layer_header_state("editable")
-        self._prompt_section.setVisible(False)
-        self._progress_widget.setVisible(False)
-        self._result_section.setVisible(False)
-        self._generate_note_box.setVisible(False)
-        self._generate_btn.setVisible(False)
-        self.set_generate_block_reason(None)
 
-        self._exit_btn.setVisible(False)
+        self._apply_dock_screen(DOCK_SCREEN_ZONE)
 
 
         self.refresh_zone_sources()
@@ -366,48 +405,25 @@ class DockGenerationStateMixin:
             self._hide_after_success()
         self.setUpdatesEnabled(False)
         try:
-            self._progress_widget.setVisible(generating)
-            self._result_section.setVisible(False)
             self._warning_widget.setVisible(False)
-
-            self.sync_update_banner()
-
             if generating:
+                self._hide_status_box()
+
+
+
+                self._place_reference_widget("prompt")
+                self._apply_dock_screen(DOCK_SCREEN_GENERATING)
+
+                self.sync_update_banner()
                 self._progress_bar.setRange(0, 100)
 
 
 
                 self._progress_bar.setValue(1)
                 self._progress_target = 1
-                self._hide_status_box()
-                self._launch_section.setVisible(False)
-                self._select_zone_section.setVisible(False)
-                self._prompt_section.setVisible(True)
-                self._prompt_container.set_readonly(True)
 
 
 
-                self._place_reference_widget("prompt")
-                if self._reference_widget is not None:
-                    self._reference_widget.set_readonly(True)
-
-
-                if getattr(self, "_reference_panel", None) is not None:
-                    self._reference_panel.set_readonly(True)
-
-
-                self._place_version_strip("generating")
-                self._version_strip.set_readonly(True)
-                self._generate_note_box.setVisible(False)
-
-
-                self._set_guide_ai_tip_held(True)
-                self._generate_btn.setVisible(False)
-                self.set_generate_block_reason(None)
-
-
-
-                self._exit_btn.setVisible(False)
                 self._progress_loader.start_run()
                 self._start_prep_ticker("canvas")
 
@@ -415,11 +431,6 @@ class DockGenerationStateMixin:
                 self._scroll_panel_to_top()
             else:
                 self._stop_progress_animation()
-                self._prompt_container.set_readonly(False)
-                if self._reference_widget is not None:
-                    self._reference_widget.set_readonly(False)
-                if getattr(self, "_reference_panel", None) is not None:
-                    self._reference_panel.set_readonly(False)
                 self._refresh_resolution_triggers()
                 if self._version_strip.count() > 1:
 
@@ -428,15 +439,9 @@ class DockGenerationStateMixin:
 
                     self._show_result_layout()
                 else:
-                    self._generate_note_box.setVisible(not has_seen_privacy_notice())
-                    self._generate_btn.setVisible(True)
-                    self._exit_btn.setVisible(True)
-                    self._prompt_section.setVisible(True)
-                    self._set_guide_ai_tip_held(False)
 
-
-                    self._place_version_strip("result")
-                    self._version_strip.set_readonly(False)
+                    self._apply_dock_screen(DOCK_SCREEN_PROMPT)
+                self.sync_update_banner()
         finally:
             self.setUpdatesEnabled(True)
 
@@ -444,19 +449,8 @@ class DockGenerationStateMixin:
 
 
 
-        self._launch_section.setVisible(False)
-        self._select_zone_section.setVisible(False)
-        self._prompt_section.setVisible(False)
-        self._generate_btn.setVisible(False)
-        self.set_generate_block_reason(None)
-        self._exit_btn.setVisible(False)
-        self._generate_note_box.setVisible(False)
-        self._set_guide_ai_tip_held(True)
-        self._result_section.setVisible(True)
-        self._result_prompt_widget.setVisible(True)
+        self._apply_dock_screen(DOCK_SCREEN_RESULT)
         self._result_prompt_container.set_readonly(False)
-        self._place_version_strip("result")
-        self._version_strip.set_readonly(False)
         self._place_reference_widget("result")
         self._update_result_generate_enabled()
 
@@ -664,23 +658,12 @@ class DockGenerationStateMixin:
 
         self._stop_progress_animation()
         self._progress_bar.setValue(100)
-        self._progress_widget.setVisible(False)
         self._hide_status_box()
 
 
 
 
         self._clear_vectorize_suggestion()
-
-        self._launch_section.setVisible(False)
-        self._select_zone_section.setVisible(False)
-        self._prompt_section.setVisible(False)
-        self._generate_btn.setVisible(False)
-        self.set_generate_block_reason(None)
-
-
-        self._exit_btn.setVisible(False)
-        self._generate_note_box.setVisible(False)
 
 
 
@@ -699,15 +682,9 @@ class DockGenerationStateMixin:
 
 
 
-        self._prompt_container.set_readonly(False)
-        self._result_section.setVisible(True)
+
+        self._apply_dock_screen(DOCK_SCREEN_RESULT)
         self._scroll_panel_to_top()
-
-
-
-        self._result_prompt_widget.setVisible(True)
-        self._place_version_strip("result")
-        self._version_strip.set_readonly(False)
         self._refresh_resolution_triggers()
 
         self._place_reference_widget("result")
@@ -745,23 +722,11 @@ class DockGenerationStateMixin:
 
 
         self._stop_progress_animation()
-        self._progress_widget.setVisible(False)
         self._hide_status_box()
         self._clear_vectorize_suggestion()
-        self._launch_section.setVisible(False)
-        self._select_zone_section.setVisible(False)
-        self._prompt_section.setVisible(False)
-        self._generate_btn.setVisible(False)
-        self.set_generate_block_reason(None)
-        self._exit_btn.setVisible(False)
-        self._generate_note_box.setVisible(False)
-        self._prompt_container.set_readonly(False)
-        self._result_section.setVisible(True)
+        self._apply_dock_screen(DOCK_SCREEN_RESULT)
         self._scroll_panel_to_top()
-        self._result_prompt_widget.setVisible(True)
         self._result_prompt_container.set_readonly(False)
-        self._place_version_strip("result")
-        self._version_strip.set_readonly(False)
         self._place_reference_widget("result")
         self._hide_after_success()
         self._refresh_resolution_triggers()

@@ -10,8 +10,9 @@ from qgis.PyQt.QtCore import QDir
 from qgis.PyQt.QtWidgets import QFileDialog, QHBoxLayout, QLineEdit, QWidget
 
 from ...core.i18n import tr
+from ...core.output_paths import OUTPUT_DIR_SETTING, documents_default_dir
 from ..onboarding_hint import reset_hints
-from ..raster_writer import _documents_default_dir, get_output_dir, set_output_dir
+from ..raster_writer import get_output_dir, set_output_dir
 
 
 class AccountPreferencesMixin:
@@ -59,19 +60,19 @@ class AccountPreferencesMixin:
 
         self._output_dir_edit = QLineEdit(field)
         self._output_dir_edit.setStyleSheet(INPUT_QSS)
-        current = QgsSettings().value("AIEdit/output_dir", "", type=str)
+        current = QgsSettings().value(OUTPUT_DIR_SETTING, "", type=str)
         self._output_dir_edit.setText(QDir.toNativeSeparators(current or ""))
 
 
         self._output_dir_edit.setPlaceholderText(QDir.toNativeSeparators(
-            _documents_default_dir() if current else get_output_dir()))
+            documents_default_dir() if current else get_output_dir()))
 
 
         self._output_dir_edit.setToolTip(
             tr(
                 "Where AI Edit writes its generated GeoTIFFs. "
                 "Leave empty to use {folder} (or the saved project folder)."
-            ).format(folder=QDir.toNativeSeparators(_documents_default_dir()))
+            ).format(folder=QDir.toNativeSeparators(documents_default_dir()))
         )
         self._output_dir_edit.editingFinished.connect(self._on_output_dir_edited)
 
@@ -105,7 +106,7 @@ class AccountPreferencesMixin:
         from qgis.core import QgsSettings
 
         set_output_dir(text.strip())
-        stored = QgsSettings().value("AIEdit/output_dir", "", type=str) or ""
+        stored = QgsSettings().value(OUTPUT_DIR_SETTING, "", type=str) or ""
         shown = QDir.toNativeSeparators(stored)
         if self._output_dir_edit.text() != shown:
             self._output_dir_edit.blockSignals(True)

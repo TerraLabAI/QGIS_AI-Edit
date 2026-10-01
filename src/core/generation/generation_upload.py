@@ -10,7 +10,15 @@ from ..i18n import tr
 from ..logger import log_debug, log_warning
 from .generation_result import GenerationResult
 
+
+
+
+
+
+
 _MAX_INLINE_BODY_BYTES = 4_200_000
+
+
 _MAX_RETRY_ATTEMPTS = 5
 
 
@@ -21,8 +29,18 @@ _INLINE_BASE64_THRESHOLD = 4 * 1024 * 1024
 
 
 
+
 _UPLOAD_RETRY_ATTEMPTS = 3
-_UPLOAD_RETRY_BACKOFF_S = 0.5
+_UPLOAD_RETRY_BACKOFF_S = 2.0
+_UPLOAD_RETRY_STEPS = (1, 3)
+
+_UPLOAD_URL_RETRY_DELAY_S = 2.0
+
+
+def _is_network_failure(code) -> bool:
+    from ..errors import NETWORK_ERROR_CODES
+
+    return str(code or "").strip().upper() in NETWORK_ERROR_CODES
 
 
 class GenerationUploadMixin:
@@ -57,6 +75,12 @@ class GenerationUploadMixin:
 
         try:
             resp = self._client.request_upload_url(auth, image_format or "png")
+            if isinstance(resp, dict) and _is_network_failure(resp.get("code")):
+                if self._sleep_or_cancelled(_UPLOAD_URL_RETRY_DELAY_S):
+                    return None
+                resp = self._client.request_upload_url(auth, image_format or "png")
+                if isinstance(resp, dict) and _is_network_failure(resp.get("code")):
+                    self._run.upload_lost_to_network = True
         except Exception as e:
             log_warning(f"Upload URL request raised: {e}")
             return None
@@ -129,11 +153,13 @@ class GenerationUploadMixin:
             if ok:
                 break
             log_warning(f"Presigned upload attempt {_attempt + 1} failed: {err}")
-            if _attempt < upload_attempts - 1 and self._sleep_or_cancelled(
-                upload_backoff_s * (_attempt + 1)
-            ):
+            step = _UPLOAD_RETRY_STEPS[min(_attempt, len(_UPLOAD_RETRY_STEPS) - 1)]
+            if _attempt < upload_attempts - 1 and self._sleep_or_cancelled(upload_backoff_s * step):
                 return None
         if not ok:
+
+            if _is_network_failure(str(err or "").split(":", 1)[0]):
+                self._run.upload_lost_to_network = True
             log_warning(f"Presigned upload failed after retries: {err}; falling back to inline")
             return None
         return token
@@ -168,6 +194,9 @@ class GenerationUploadMixin:
 
 
 
+
+
+        self._run.upload_lost_to_network = False
         ctx_inline_bytes = sum(len(c) for c in (context_images or [])) + extra_inline_bytes
         guidance_bytes = len(guidance_image) if guidance_image else 0
         upload_token = self._try_upload_token_flow(
@@ -211,6 +240,20 @@ class GenerationUploadMixin:
                 f"main={main_inline_bytes}, guidance={guidance_inline_bytes}, "
                 f"context={ctx_inline_bytes}"
             )
+            if getattr(self._run, "upload_lost_to_network", False):
+
+
+                return GenerationResult(
+                    success=False,
+                    error=get_export_copy(
+                        "pipeline.generation_service.upload_lost",
+                        tr(
+                            "Your image could not be sent: the connection is too slow "
+                            "or was cut. Try again, or pick a lower resolution."
+                        ),
+                    ),
+                    error_code=ErrorCode.NO_NETWORK.value,
+                )
             return GenerationResult(
                 success=False,
                 error=get_export_copy(

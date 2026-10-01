@@ -167,22 +167,6 @@ def _free_table_name(gpkg_path: str, table_name: str) -> str:
     return candidate
 
 
-def make_layer_permanent(
-    mem_layer: QgsVectorLayer,
-    gpkg_path: str,
-    table_name: str,
-    classes: list[dict],
-    source_raster_name: str = "",
-) -> QgsVectorLayer | None:
-
-
-
-    layer, _reason = persist_layer_to_gpkg(
-        mem_layer, gpkg_path, table_name, classes, source_raster_name
-    )
-    return layer
-
-
 def persist_layer_to_gpkg(
     mem_layer: QgsVectorLayer,
     gpkg_path: str,

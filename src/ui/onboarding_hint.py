@@ -15,11 +15,9 @@
 from __future__ import annotations
 
 import html
-import os
 import weakref
 
 from qgis.PyQt.QtCore import QSettings, QSize, pyqtSignal
-from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -36,11 +34,6 @@ from ..core.i18n import tr
 
 
 
-ICONS_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "resources",
-    "icons",
-)
 
 _SETTINGS_PREFIX = "AIEdit/hints/"
 
@@ -155,14 +148,11 @@ def guide_url(content: str, anchor: str = "") -> str:
 
 
 
-    from ..core.auth.activation_manager import get_guide_url
+    from ..core.auth.activation_manager import PLUGIN_UTM_QUERY, get_guide_url
 
     base = get_guide_url()
     sep = "&" if "?" in base else "?"
-    url = (
-        f"{base}{sep}utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit"
-        f"&utm_content={content}"
-    )
+    url = f"{base}{sep}{PLUGIN_UTM_QUERY}&utm_content={content}"
     return f"{url}#{anchor}" if anchor else url
 
 
@@ -174,10 +164,10 @@ def open_guide(content: str, anchor: str = "") -> None:
 
 
 
-    from qgis.PyQt.QtCore import QUrl
-    from qgis.PyQt.QtGui import QDesktopServices
+    from .external_url import open_external
 
-    QDesktopServices.openUrl(QUrl(guide_url(content, anchor)))
+
+    open_external(guide_url(content, anchor))
     try:
         from ..core import telemetry
         from ..core import telemetry_events as te
@@ -557,8 +547,3 @@ class DismissibleHint(QWidget):
 
         if href == GUIDE_LINK_HREF:
             self.link_activated.emit()
-
-
-def search_icon() -> QIcon:
-
-    return QIcon(os.path.join(ICONS_DIR, "search.svg"))

@@ -231,11 +231,6 @@ class ReferenceImageStore:
 
         self._auto_notes: dict[str, str] = {}
 
-
-
-
-        self._markup_id: str | None = None
-
     def _session_dir(self) -> str:
 
         if self._tmp_dir is None or not os.path.isdir(self._tmp_dir):
@@ -419,15 +414,6 @@ class ReferenceImageStore:
         )
         return record
 
-    def mark_as_markup(self, ref_id: str | None) -> None:
-
-        self._markup_id = ref_id if isinstance(ref_id, str) and ref_id in self._refs else None
-
-    def is_markup(self, ref_id: str) -> bool:
-
-
-        return self._markup_id is not None and ref_id == self._markup_id
-
     def set_note(self, ref_id: str, note: str) -> None:
 
 
@@ -457,15 +443,13 @@ class ReferenceImageStore:
     def get_note(self, ref_id: str) -> str:
         return self._notes.get(ref_id, "") if isinstance(ref_id, str) else ""
 
-    def snapshot_notes(self, include_markup: bool = False) -> list[str]:
-
+    def snapshot_notes(self) -> list[str]:
 
 
         return [
             (self._notes.get(record.id, "").strip()
              or self._auto_notes.get(record.id, "").strip())
             for record in self._refs.values()
-            if include_markup or record.id != self._markup_id
         ]
 
     def remove(self, ref_id: str) -> None:
@@ -477,8 +461,6 @@ class ReferenceImageStore:
         self._auto_notes.pop(ref_id, None)
         if record is None:
             return
-        if ref_id == self._markup_id:
-            self._markup_id = None
         self._retry_pending_deletes()
         if not self._delete_file(record.path):
             log_warning(f"Reference image {ref_id} is in use; deletion deferred")
@@ -486,7 +468,6 @@ class ReferenceImageStore:
 
     def clear(self) -> None:
 
-        self._markup_id = None
         for ref_id in list(self._refs.keys()):
             self.remove(ref_id)
 
@@ -497,25 +478,17 @@ class ReferenceImageStore:
     def count(self) -> int:
         return len(self._refs)
 
-    def snapshot_paths(self, include_markup: bool = False) -> list[str]:
+    def snapshot_paths(self) -> list[str]:
 
 
 
+        return [record.path for record in self._refs.values()]
+
+    def get_all_b64(self) -> list[str]:
 
 
 
-
-        return [
-            record.path
-            for record in self._refs.values()
-            if include_markup or record.id != self._markup_id
-        ]
-
-    def get_all_b64(self, include_markup: bool = False) -> list[str]:
-
-
-
-        return encode_references_b64(self.snapshot_paths(include_markup=include_markup))
+        return encode_references_b64(self.snapshot_paths())
 
     def total_size_bytes(self) -> int:
         return sum(r.size_bytes for r in self._refs.values())
@@ -525,7 +498,6 @@ class ReferenceImageStore:
         self._refs.clear()
         self._notes.clear()
         self._auto_notes.clear()
-        self._markup_id = None
         self._retry_pending_deletes()
         tmp_dir = self._tmp_dir
         if tmp_dir is None:

@@ -24,6 +24,7 @@ from qgis.PyQt.QtCore import QObject, QPoint, QPointF, QRect, QRectF, Qt, QTimer
 from qgis.PyQt.QtGui import QColor, QCursor, QFont, QFontMetrics, QImage, QPainter, QPen
 
 from ...core.config_store import get_export_copy, get_export_dial
+from ...core.extent_transform import transform_extent
 from ...core.i18n import tr
 from ...core.raster_writer import BEFORE_PATH_PROPERTY
 from ..dock.design_tokens import FIXED_INK, qcolor
@@ -736,15 +737,11 @@ class SwipeController(QObject):
         if self._overlay is None or self._overlay._top_layer_pixel_bounds() is not None:  # noqa: SLF001
             return
         try:
-            from qgis.core import QgsCoordinateTransform
 
-            extent = target.extent()
-            dest = canvas.mapSettings().destinationCrs()
-            if target.crs() != dest:
-                extent = QgsCoordinateTransform(
-                    target.crs(), dest, QgsProject.instance()
-                ).transformBoundingBox(extent)
-            if extent.isEmpty():
+
+            extent = transform_extent(
+                target.extent(), target.crs(), canvas.mapSettings().destinationCrs())
+            if extent is None or extent.isEmpty():
                 return
             canvas.setExtent(extent.buffered(extent.width() * 0.05))
             canvas.refresh()

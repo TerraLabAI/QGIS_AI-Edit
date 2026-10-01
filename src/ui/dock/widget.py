@@ -12,7 +12,6 @@ from ...core.qt_compat import QShortcut
 from ...core.reference_image_store import ReferenceImageStore
 from ...core.resolution_labels import DEFAULT_RESOLUTION_CREDIT_COSTS
 from ..keyboard_focus import apply_keyboard_focus_policy
-from ..panel_helpers import make_section_header
 from .account import DockAccountMixin
 from .blocked_reasons import DockBlockedReasonsMixin
 from .build import build_ui
@@ -28,13 +27,9 @@ from .update_banner import DockUpdateBannerMixin
 from .versions import DockVersionsMixin
 from .zone_sources import DockZoneSourcesMixin
 
-
 __all__ = [
-    "_make_section_header",
     "AIEditDockWidget",
 ]
-
-_make_section_header = make_section_header
 
 
 class AIEditDockWidget(

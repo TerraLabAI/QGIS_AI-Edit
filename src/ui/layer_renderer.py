@@ -12,7 +12,6 @@ import os
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
-    QgsCoordinateTransform,
     QgsMapRendererCustomPainterJob,
     QgsMapRendererParallelJob,
     QgsMapSettings,
@@ -27,6 +26,7 @@ from qgis.PyQt.QtCore import QEventLoop, QObject, QSize, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QImage, QPainter
 
 from ..core.config_store import get_export_dial
+from ..core.extent_transform import transform_extent
 from ..core.logger import log_warning
 
 
@@ -170,7 +170,7 @@ def layer_misses_zone(layers: list, zone_extent, zone_crs) -> bool:
     if not layers or zone_extent is None or not _usable(zone_extent):
         return False
     dest_crs = zone_crs if (zone_crs is not None and zone_crs.isValid()) else _resolve_crs(layers[0])
-    zone = _reproject_extent(QgsRectangle(zone_extent), zone_crs, dest_crs)
+    zone = _extent_in_render_crs(QgsRectangle(zone_extent), zone_crs, dest_crs)
     if zone is None or not _usable(zone):
         return False
     own = _combined_layer_extent(layers, dest_crs)
@@ -274,17 +274,16 @@ def _resolve_crs(layer) -> QgsCoordinateReferenceSystem:
     return fallback
 
 
-def _reproject_extent(extent, src_crs, dest_crs):
 
 
-    if src_crs is None or not src_crs.isValid() or src_crs == dest_crs:
+def _extent_in_render_crs(extent, src_crs, dest_crs):
+
+    if src_crs is None or not src_crs.isValid():
         return extent
-    try:
-        xform = QgsCoordinateTransform(src_crs, dest_crs, QgsProject.instance())
-        return xform.transformBoundingBox(extent)
-    except Exception:  # nosec B110
+    moved = transform_extent(extent, src_crs, dest_crs)
+    if moved is None:
         log_warning("Fallback extent reprojection failed")
-        return None
+    return moved
 
 
 def _output_size(extent: QgsRectangle, max_px: int) -> QSize:
@@ -318,7 +317,7 @@ def _combined_layer_extent(layers: list, dest_crs) -> QgsRectangle | None:
         layer_extent = QgsRectangle(lyr.extent())
         if not _usable(layer_extent):
             continue
-        layer_extent = _reproject_extent(layer_extent, lyr.crs(), dest_crs)
+        layer_extent = _extent_in_render_crs(layer_extent, lyr.crs(), dest_crs)
         if layer_extent is None or not _usable(layer_extent):
             continue
         if extent is None:
@@ -359,7 +358,7 @@ def render_layers_to_qimage(
 
     if force_extent is not None and _usable(force_extent):
         dest_crs = force_crs if (force_crs is not None and force_crs.isValid()) else _resolve_crs(layers[0])
-        extent = _reproject_extent(QgsRectangle(force_extent), force_crs, dest_crs)
+        extent = _extent_in_render_crs(QgsRectangle(force_extent), force_crs, dest_crs)
         if extent is None or not _usable(extent):
             log_warning("Forced extent could not be reprojected to the render CRS")
             return None
@@ -379,7 +378,7 @@ def render_layers_to_qimage(
 
     if extent is None or not _usable(extent):
         if fallback_extent is not None and _usable(fallback_extent):
-            extent = _reproject_extent(QgsRectangle(fallback_extent), fallback_crs, dest_crs)
+            extent = _extent_in_render_crs(QgsRectangle(fallback_extent), fallback_crs, dest_crs)
             if extent is None or not _usable(extent):
                 log_warning("Fallback extent could not be reprojected to the layer CRS")
                 return None

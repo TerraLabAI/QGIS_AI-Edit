@@ -326,13 +326,6 @@ class DockUpdateBannerMixin:
         except Exception:
             pass  # nosec B110
 
-    @staticmethod
-    def _installed_plugin_version() -> str:
-
-        from ..update_gate import installed_plugin_version
-
-        return installed_plugin_version()
-
     def _on_open_plugin_manager(self, _link: str = "") -> None:
 
 

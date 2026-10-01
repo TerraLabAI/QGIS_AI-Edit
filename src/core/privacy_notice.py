@@ -29,7 +29,6 @@ PRIVACY_NOTICE_KEY = "AIEdit/privacy_notice_accepted_version"
 
 
 
-
 _accepted_memo: bool | None = None
 
 
@@ -90,9 +89,3 @@ def save_privacy_notice_accepted(settings=None) -> None:
     QSettings().setValue(PRIVACY_NOTICE_KEY, PRIVACY_NOTICE_VERSION)
     _accepted_memo = True
     _run_accepted_hooks()
-
-
-def reset_privacy_notice_memo() -> None:
-
-    global _accepted_memo
-    _accepted_memo = None

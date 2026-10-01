@@ -347,6 +347,8 @@ class HistoryMixin:
 
 
 
+
+
         request_id = str(request_id or "").strip()
         if not request_id:
             return {"_error": "request_id is required. Read one from list_generations()."}
@@ -359,6 +361,20 @@ class HistoryMixin:
                     "list_generations(refresh=True) first to bring in work done elsewhere."
                 ),
             )
+
+
+        if not job.get("output_url"):
+            return {
+                "_error": "This edit's image is no longer available: it has no link to fetch it from.",
+                "request_id": request_id,
+            }
+        from .core.raster_writer import extent_and_crs_from_job
+
+        if extent_and_crs_from_job(job) is None:
+            return {
+                "_error": "This edit has no location, so its image cannot be placed on the map.",
+                "request_id": request_id,
+            }
         handler = getattr(self._plugin, "_on_history_add_to_map", None)
         if not callable(handler):
             return {"_error": "Adding past work to the map is not available in this build."}

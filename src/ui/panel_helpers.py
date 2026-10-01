@@ -45,24 +45,6 @@ from .icons import icon_for, pixmap_for, render_pixmap
 _CLOSE_GLYPH_PX = 16
 _STATUS_GLYPH_PX = 14
 
-SECTION_HEADER_QSS = (
-    "font-weight: bold; font-size: 12px; color: palette(text);"
-    " margin: 0px; padding: 0px 0px 2px 0px;"
-)
-
-SECTION_HEADER_EXTRA_TOP_QSS = (
-    "font-weight: bold; font-size: 12px; color: palette(text); padding-top: 6px;"
-)
-
-
-def make_section_header(text: str, extra_top: bool = False) -> QLabel:
-
-    label = QLabel(text)
-    label.setStyleSheet(SECTION_HEADER_EXTRA_TOP_QSS if extra_top else SECTION_HEADER_QSS)
-    label.setContentsMargins(0, 0, 0, 0)
-    return label
-
-
 _PICKED_CHECK_PX = 12
 _PICKED_CHECK_INSET = 5
 
@@ -180,18 +162,6 @@ class PanelHeader(QWidget):
             sub.setStyleSheet(T.HINT_QSS)
             col.addWidget(sub)
 
-    def set_close_visible(self, visible: bool) -> None:
-
-
-
-
-
-
-
-
-        if self.close_button is not None:
-            self.close_button.setVisible(visible)
-
 
 def build_panel_header(title: str, subtitle: str | None = None,
                        close_tip: str = "", show_close: bool = True) -> PanelHeader:
@@ -240,7 +210,6 @@ class PanelSection(QWidget):
 
 
 FIELD_LABEL_QSS = T.BODY_QSS
-PANEL_HINT_QSS = T.HINT_QSS
 
 
 

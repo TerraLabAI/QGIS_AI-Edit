@@ -14,7 +14,7 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from ....core.config_store import get_export_copy
-from ....core.errors import NETWORK_ERROR_CODES, TRANSIENT_SERVER_ERROR_CODES
+from ....core.errors import NETWORK_ERROR_CODES, SIGN_IN_REFUSED_CODES, TRANSIENT_SERVER_ERROR_CODES
 from ....core.i18n import tr
 from ...dock.design_tokens import (
     BTN_DANGER_GHOST_QSS,
@@ -282,7 +282,7 @@ def _account_error_copy(message: str, code: str) -> tuple[str, str, bool]:
                             tr("Check your connection, then retry.")),
             True,
         )
-    if key in ("INVALID_KEY", "KEY_REVOKED", "NO_AUTH"):
+    if key in SIGN_IN_REFUSED_CODES:
         return (
             get_export_copy("dialogs.account_settings_dialog.signed_out_title",
                             tr("This computer is no longer signed in")),

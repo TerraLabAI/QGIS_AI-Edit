@@ -10,6 +10,12 @@ from ...core import telemetry_events as te
 from ...core.config_store import get_export_copy, get_export_dial
 from ...core.i18n import tr
 from ...core.number_format import format_count
+from ...core.prompts.prompt_minimum import (
+    MIN_PROMPT_CHARS,
+    MIN_PROMPT_WORDS,
+    PromptMinimumCheck,
+    check_prompt_minimum,
+)
 from ...core.prompts.prompt_presets import detect_prompt_guidance
 from ..onboarding_hint import (
     BLUE_TINT,
@@ -18,13 +24,7 @@ from ..onboarding_hint import (
     dismiss_hint,
     is_hint_dismissed,
 )
-from .blocked_reasons import (
-    _MIN_PROMPT_CHARS,
-    _MIN_PROMPT_WORDS,
-    GENERATE_BLOCK_NO_ZONE,
-    GENERATE_BLOCK_PROMPT_EMPTY,
-    GENERATE_BLOCK_PROMPT_TOO_SHORT,
-)
+from .blocked_reasons import GENERATE_BLOCK_NO_ZONE, cjk_prompt_minimum_text
 from .design_tokens import BTN_GHOST_WIDE_QSS, BTN_PRIMARY_WIDE_QSS
 from .style import MAX_PROMPT_CHARS
 from .zone_sources import large_zone_km2
@@ -35,27 +35,7 @@ _COARSE_ZONE_M_PER_PX = 10.0
 _NUMBERS_RE = re.compile(r"\d+")
 
 
-
-
-_CJK_RE = re.compile(
-    "[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff]"
-)
-_MIN_PROMPT_CJK_CHARS = 4
-
-
-def _cjk_char_count(prompt: str) -> int:
-    return len(_CJK_RE.findall(prompt))
-
-
-def _min_cjk_prompt_warning() -> str:
-
-    min_cjk = get_export_dial("limits.min_prompt_cjk_chars", _MIN_PROMPT_CJK_CHARS)
-    return tr("Please describe what you want to change (at least {chars} characters).").replace(
-        "{chars}", str(min_cjk)
-    )
-
-
-def _min_prompt_warning(prompt: str = "") -> str:
+def _min_prompt_warning(check: PromptMinimumCheck) -> str:
 
 
 
@@ -65,12 +45,11 @@ def _min_prompt_warning(prompt: str = "") -> str:
 
 
 
-    if _cjk_char_count(prompt):
-        return _min_cjk_prompt_warning()
-    min_chars = get_export_dial("limits.min_prompt_chars", _MIN_PROMPT_CHARS)
-    min_words = get_export_dial("limits.min_prompt_words", _MIN_PROMPT_WORDS)
+    if check.cjk_chars:
+        return cjk_prompt_minimum_text(check.dials)
+    min_chars, min_words = check.dials.min_chars, check.dials.min_words
     sentence = tr("Please describe what you want to change (at least 10 characters, 2 words).")
-    if (min_chars, min_words) != (_MIN_PROMPT_CHARS, _MIN_PROMPT_WORDS):
+    if (min_chars, min_words) != (MIN_PROMPT_CHARS, MIN_PROMPT_WORDS):
         if len(_NUMBERS_RE.findall(sentence)) >= 2:
             live = iter((str(min_chars), str(min_words)))
             sentence = _NUMBERS_RE.sub(lambda m: next(live, m.group(0)), sentence, count=2)
@@ -397,19 +376,6 @@ class DockPromptMixin:
             text_edit.blockSignals(False)
         return plain, True
 
-    @staticmethod
-    def _prompt_meets_minimum(prompt: str) -> bool:
-
-
-
-
-        cjk = _cjk_char_count(prompt)
-        if cjk and cjk >= get_export_dial("limits.min_prompt_cjk_chars", _MIN_PROMPT_CJK_CHARS):
-            return True
-        min_chars = get_export_dial("limits.min_prompt_chars", _MIN_PROMPT_CHARS)
-        min_words = get_export_dial("limits.min_prompt_words", _MIN_PROMPT_WORDS)
-        return len(prompt) >= min_chars and len(prompt.split()) >= min_words
-
     _PROMPT_MAX_HEIGHT = 400
 
     def _adjust_prompt_height(self):
@@ -448,8 +414,9 @@ class DockPromptMixin:
         prompt = self._result_prompt_input.toPlainText().strip()
         if not prompt:
             return
-        if not self._prompt_meets_minimum(prompt):
-            self._show_status_box(_min_prompt_warning(prompt), "warning")
+        check = check_prompt_minimum(prompt)
+        if not check.ok:
+            self._show_status_box(_min_prompt_warning(check), "warning")
             return
 
         self._prompt_input.setPlainText(prompt)
@@ -467,8 +434,9 @@ class DockPromptMixin:
         prompt = self.get_prompt()
         if not prompt:
             return
-        if not self._prompt_meets_minimum(prompt):
-            self._show_status_box(_min_prompt_warning(prompt), "warning")
+        check = check_prompt_minimum(prompt)
+        if not check.ok:
+            self._show_status_box(_min_prompt_warning(check), "warning")
             return
         self._hide_status_box()
         self._dismiss_markup_prompt_tip()
@@ -517,26 +485,21 @@ class DockPromptMixin:
         text = self.get_prompt() if prompt is None else prompt
 
 
-        reason = self._generate_block_reason(text)
+        check = check_prompt_minimum(text)
+        reason = self._generate_block_reason(check)
 
 
 
         enabled = reason is None and not self._imagery_loading
         self._generate_btn.setEnabled(enabled)
-        self.set_generate_block_reason(reason)
-        if reason == GENERATE_BLOCK_PROMPT_TOO_SHORT and _cjk_char_count(text):
-
-
-            label = getattr(self, "_generate_reason_label", None)
-            if label is not None and label.isVisible():
-                label.setText(_min_cjk_prompt_warning())
+        self.set_generate_block_reason(reason, check)
         self._update_generate_style()
         self._update_generate_button_text()
 
 
         self._update_markup_prompt_tip()
 
-    def _generate_block_reason(self, prompt: str) -> str | None:
+    def _generate_block_reason(self, check: PromptMinimumCheck) -> str | None:
 
 
 
@@ -545,11 +508,7 @@ class DockPromptMixin:
 
         if not self._zone_selected:
             return GENERATE_BLOCK_NO_ZONE
-        if not prompt:
-            return GENERATE_BLOCK_PROMPT_EMPTY
-        if not self._prompt_meets_minimum(prompt):
-            return GENERATE_BLOCK_PROMPT_TOO_SHORT
-        return None
+        return check.reason
 
     def set_imagery_loading(self, loading: bool):
 

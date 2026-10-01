@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from qgis.core import QgsMapSettings, QgsRectangle
+from qgis.core import QgsRectangle
 
 from ..config_store import ServerDialMap
 
@@ -11,7 +11,6 @@ __all__ = [
     "_adjust_extent_to_aspect",
     "_aspect_dims",
     "_RESOLUTION_TARGET_PX",
-    "get_zone_pixel_size",
 ]
 
 
@@ -65,26 +64,6 @@ def _adjust_extent_to_aspect(
         cy - new_half_h,
         extent.xMaximum(),
         cy + new_half_h,
-    )
-
-
-def get_zone_pixel_size(
-    map_settings: QgsMapSettings, extent: QgsRectangle
-) -> tuple[int, int]:
-
-    canvas_extent = map_settings.extent()
-    canvas_size = map_settings.outputSize()
-
-    dimensions = (canvas_extent.width(), canvas_extent.height(), extent.width(), extent.height())
-    if not all(math.isfinite(v) and v > 0 for v in dimensions):
-        return (0, 0)
-
-    px_per_map_unit_x = canvas_size.width() / canvas_extent.width()
-    px_per_map_unit_y = canvas_size.height() / canvas_extent.height()
-
-    return (
-        round(abs(extent.width() * px_per_map_unit_x)),
-        round(abs(extent.height() * px_per_map_unit_y)),
     )
 
 

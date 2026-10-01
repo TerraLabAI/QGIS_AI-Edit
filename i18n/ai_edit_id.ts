@@ -5501,5 +5501,13 @@ Kami senang mendengar dari Anda!</translation>
         <source>{n} layers above not sent: plan limit</source>
         <translation>{n} layer di atas tidak dikirim: batas paket</translation>
     </message>
+    <message>
+        <source>Download incomplete: the image ends early ({got} bytes)</source>
+        <translation>Unduhan tidak lengkap: gambar berakhir lebih awal ({got} byte)</translation>
+    </message>
+    <message>
+        <source>Your image could not be sent: the connection is too slow or was cut. Try again, or pick a lower resolution.</source>
+        <translation>Gambar Anda tidak dapat dikirim: koneksi terlalu lambat atau terputus. Coba lagi, atau pilih resolusi yang lebih rendah.</translation>
+    </message>
 </context>
 </TS>

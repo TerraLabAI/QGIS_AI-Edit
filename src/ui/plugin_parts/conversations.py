@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import time
+
 from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.i18n import tr
@@ -18,15 +20,42 @@ from ...core.prompts.conversation_summary import conversation_entries
 from ...workers.generic_request_task import GenericRequestTask
 
 
+_HISTORY_REUSE_S = 60.0
+
+
+
+_THUMB_BACKFILL_MAX = 24
+
+
+def _small_image_url(job: dict, side: str) -> str:
+
+
+
+    return job.get(f"{side}_thumb_url") or job.get(f"{side}_preview_url") or ""
+
+
 class ConversationsMixin:
 
 
-    def _refresh_conversations_cache(self) -> None:
+    def _refresh_conversations_cache(self, reuse_recent: bool = False) -> None:
+
+
+
+
 
 
         dock = self._dock_widget
         if dock is None:
             return
+        if reuse_recent:
+            done = getattr(self, "_conversations_refreshed", None)
+            if (
+                done is not None
+                and done[0] == self._history_account_revision()
+                and time.monotonic() - done[1] < _HISTORY_REUSE_S
+            ):
+                log_debug("history refresh skipped: refreshed under a minute ago")
+                return
         if self._client is None or not self._auth_manager.has_activation_key():
             log_debug("history refresh skipped: no client or key yet")
             return
@@ -89,6 +118,7 @@ class ConversationsMixin:
             f"history refresh: {len(jobs)} jobs"
             f" (has_more={bool(payload.get('has_more'))})"
         )
+        self._conversations_refreshed = (account_revision, time.monotonic())
 
 
         self._sessions_has_more = bool(payload.get("has_more"))
@@ -120,12 +150,12 @@ class ConversationsMixin:
             members = entry.get("members") or []
             for member in members:
                 rid = member.get("request_id") or ""
-                url = member.get("output_thumb_url") or member.get("output_url")
+                url = _small_image_url(member, "output")
                 if rid and url and not conversation_thumbs.has_thumb(rid):
                     wanted.append((rid, url))
             session_id = entry.get("session_id") or ""
             oldest = members[-1] if members else {}
-            in_url = oldest.get("input_thumb_url") or oldest.get("input_url")
+            in_url = _small_image_url(oldest, "input")
             if (
                 session_id
                 and in_url
@@ -134,6 +164,9 @@ class ConversationsMixin:
                 wanted.append((f"in-{session_id}", in_url))
         if not wanted:
             return
+
+
+        wanted = wanted[:_THUMB_BACKFILL_MAX]
         client = self._client
 
         def _work(items=tuple(wanted)):

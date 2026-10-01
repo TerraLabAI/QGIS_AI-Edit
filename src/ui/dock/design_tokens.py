@@ -41,12 +41,11 @@ def is_dark_theme() -> bool:
 _LIGHT_PALETTE = {
     "page": "#f7f8fa", "canvas": "#eef0f3", "surface": "#ffffff", "inset": "#f4f6f8",
     "hover": "#eff1f4", "hover_2": "#e2e5ea", "field": "#eef0f3",
-    "ink": "#1f2124", "ink_2": "#5b5f66", "ink_3": "#6b7079", "ink_hover": "#33363b",
-    "line": "#e2e5ea", "line_strong": "#cdd2d9", "line_soft": "#eef0f3",
+    "ink": "#1f2124", "ink_2": "#5b5f66", "ink_3": "#6b7079",
+    "line": "#e2e5ea", "line_strong": "#cdd2d9",
     "green": "#199a4d", "green_tint": "#e8f5ed",
-    "orange": "#ef720d", "orange_tint": "#fdf1e5",
+    "orange": "#ef720d",
     "red": "#e3474c", "red_tint": "#fcecec",
-    "accent_ink": "#437010",
     "line_input": "#80868f",
     "green_text": "#2e7d32", "orange_text": "#b45309", "red_text": "#c62828",
     "accent_tint": "rgba(139, 172, 39, 0.10)",
@@ -55,12 +54,11 @@ _LIGHT_PALETTE = {
 _DARK_PALETTE = {
     "page": "#17181a", "canvas": "#1c1d1f", "surface": "#232427", "inset": "#1f2022",
     "hover": "#2a2b2e", "hover_2": "#313236", "field": "#2b2c2f",
-    "ink": "#f2f3f4", "ink_2": "#a5a8ad", "ink_3": "#92959b", "ink_hover": "#d7dade",
-    "line": "#2e3033", "line_strong": "#3a3c40", "line_soft": "#27282b",
+    "ink": "#f2f3f4", "ink_2": "#a5a8ad", "ink_3": "#92959b",
+    "line": "#2e3033", "line_strong": "#3a3c40",
     "green": "#3cbb72", "green_tint": "rgba(60, 187, 114, 0.14)",
-    "orange": "#f68f3c", "orange_tint": "rgba(246, 143, 60, 0.14)",
+    "orange": "#f68f3c",
     "red": "#ee5c61", "red_tint": "rgba(238, 92, 97, 0.14)",
-    "accent_ink": "#a3c644",
     "line_input": "#7a7d83",
     "green_text": "#66bb6a", "orange_text": "#f5a623", "red_text": "#f26b69",
     "accent_tint": "rgba(139, 172, 39, 0.16)",
@@ -82,16 +80,13 @@ FIELD = _PALETTE["field"]
 INK = _PALETTE["ink"]
 INK_2 = _PALETTE["ink_2"]
 INK_3 = _PALETTE["ink_3"]
-INK_HOVER = _PALETTE["ink_hover"]
 
 LINE = _PALETTE["line"]
 LINE_STRONG = _PALETTE["line_strong"]
-LINE_SOFT = _PALETTE["line_soft"]
 
 GREEN = _PALETTE["green"]
 GREEN_TINT = _PALETTE["green_tint"]
 ORANGE = _PALETTE["orange"]
-ORANGE_TINT = _PALETTE["orange_tint"]
 RED = _PALETTE["red"]
 RED_TINT = _PALETTE["red_tint"]
 
@@ -107,8 +102,6 @@ LINE_INPUT = _PALETTE["line_input"]
 ACCENT = "#43a047"
 
 ACCENT_DARK = "#57b35b"
-
-ACCENT_DISABLED = "rgba(67, 160, 71, 0.40)"
 
 
 PRIMARY_DISABLED_FILL = "#45474c" if DARK else "#e2e5ea"
@@ -126,7 +119,6 @@ ACCENT_BORDER = BRAND_BLUE
 LINK_INK = "#1565c0" if not DARK else "#42a5f5"
 
 BRAND_GREEN = "#8bac27"
-ACCENT_INK = _PALETTE["accent_ink"]
 
 
 ON_BLUE = "#000000"
@@ -173,9 +165,6 @@ RADIUS_PILL_WIDE = BTN_PRIMARY_WIDE_PX // 2
 RADIUS_PILL_SMALL = BTN_SMALL_PX // 2
 ROW_PX = 28
 CHIP_PX = 22
-
-MOTION_HOVER_MS = 120
-MOTION_FOLD_MS = 300
 
 MONO_FAMILY = "Consolas, 'DejaVu Sans Mono', Menlo, monospace"
 
@@ -427,9 +416,6 @@ def progress_bar_qss(ratio: float = 0.0) -> str:
         f"QProgressBar::chunk {{ background: {progress_fill_color(ratio)};"
         f" border-radius: {radius}px; }}"
     )
-
-
-PROGRESS_QSS = progress_bar_qss(0.0)
 
 
 

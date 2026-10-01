@@ -193,9 +193,6 @@ class ToolPanelsMixin:
         if self._markup_manager is not None:
             self._markup_manager.clear_all()
 
-
-        self._dock_widget.clear_markup_reference()
-
     def _on_markup_undo(self):
         if self._in_tool_panel == "markup" and self._markup_manager is not None:
             self._markup_manager.undo_last()

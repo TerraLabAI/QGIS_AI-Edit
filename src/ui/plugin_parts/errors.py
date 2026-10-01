@@ -15,7 +15,13 @@ from ...core.config_store import (
     get_export_dial_list,
     get_export_text,
 )
-from ...core.errors import NETWORK_ERROR_CODES, PROMPT_BLOCKED_CODES, ErrorCode
+from ...core.errors import (
+    NETWORK_ERROR_CODES,
+    PROMPT_BLOCKED_CODES,
+    ErrorCode,
+    ErrorCodeTrait,
+    codes_with_trait,
+)
 from ...core.i18n import tr
 from ...core.logger import log_warning
 
@@ -174,12 +180,7 @@ def _localize_server_error(error: str, code: str) -> str:
 
 _PLUGIN_OWN_CODES = frozenset(member.value for member in ErrorCode)
 
-_SERVER_INTERNAL_CODES = frozenset({
-    "DB_ERROR", "JOB_INSERT_FAILED", "MISCONFIGURED", "NOT_CONFIGURED",
-    "SIGN_FAILED", "STORAGE_UNAVAILABLE", "RATE_LIMITER_DOWN", "REFUND_CHECK_FAILED",
-    "CANCEL_UPSTREAM_FAILED", "PROVIDER_BAD_RESPONSE", "UPSTREAM_EMPTY",
-    "UPSTREAM_UNAVAILABLE", "WRONG_STATUS", "NOT_SEEDED",
-})
+_SERVER_INTERNAL_CODES = codes_with_trait(ErrorCodeTrait.SERVER_INTERNAL)
 _TECHNICAL_TEXT_RE = re.compile(
     r"HTTP \d{3}|Traceback|Exception|Errno|\bstack\b|\bundefined\b|\bnull\b|[A-Za-z]:\\|/Users/|/home/",
     re.IGNORECASE,
@@ -199,19 +200,9 @@ _TECHNICAL_TEXT_RE = re.compile(
 
 
 
-_USER_FIXABLE_CODES = frozenset({
-    "AUTH_ERROR",
-    "NO_KEY", "INVALID_KEY", "KEY_REVOKED", "AUTH_LOCKED",
-    "INVALID_CRS", "ANTIMERIDIAN", "POLAR", "TOO_LARGE",
-    "MAP_ROTATED", "ZONE_TOO_SMALL", "PAYLOAD_TOO_LARGE",
-    "BAD_REQUEST", "BAD_INPUT", "INVALID_INPUT", "RESOLUTION_NOT_ALLOWED",
-    "QUOTA_EXCEEDED", "LIMIT_REACHED", "USAGE_LIMIT_REACHED",
-    "MONTHLY_LIMIT_REACHED", "TRIAL_EXHAUSTED",
-    "SUBSCRIPTION_EXPIRED", "SUBSCRIPTION_INACTIVE", "FREE_TIER_EXPIRED",
-    "DEVICE_LIMIT_EXCEEDED",
-    "GENERATION_CANCELLED",
-    "REFERENCE_LIMIT", "WRONG_PRODUCT", "NO_ACCOUNT", "AUTH_MIGRATION_REQUIRED",
-})
+
+_USER_FIXABLE_CODES = codes_with_trait(ErrorCodeTrait.REPORT_NONE)
+_TRANSIENT_CODES = codes_with_trait(ErrorCodeTrait.REPORT_LINK)
 
 
 
@@ -219,39 +210,14 @@ _USER_FIXABLE_CODES = frozenset({
 
 
 
-
-_CONNECTIVITY_CODES = NETWORK_ERROR_CODES - frozenset({"TIMEOUT"})
-
-_TRANSIENT_CODES = _CONNECTIVITY_CODES | frozenset({
-    "RATE_LIMITED", "NOT_READY", "NOT_AVAILABLE",
-    "UPLOAD_TOKEN_INVALID", "UPLOAD_TOKEN_MISMATCH",
-})
+_SERVER_FAULT_CODES = codes_with_trait(ErrorCodeTrait.REPORT_DIALOG)
 
 
 
 
 
 
-
-_SERVER_FAULT_CODES = frozenset({
-    "TIMEOUT", "GENERATION_TIMED_OUT",
-    "SERVER_ERROR", "RATE_LIMITER_DOWN", "STORAGE_UNAVAILABLE", "SIGN_FAILED",
-    "UPSTREAM_UNAVAILABLE", "UPSTREAM_EMPTY", "PROVIDER_ERROR", "PROVIDER_BAD_RESPONSE",
-    "RESULT_UNCONFIRMED",
-})
-
-
-
-
-
-
-_CREDIT_REASSURE_CODES = frozenset({
-    "GENERATION_FAILED", "SERVER_ERROR", "PROVIDER_ERROR", "PROVIDER_BAD_RESPONSE",
-    "UPSTREAM_UNAVAILABLE", "UPSTREAM_EMPTY", "EMPTY_RESPONSE",
-    "IMAGE_FORMAT_UNSUPPORTED", "STORAGE_UNAVAILABLE", "RATE_LIMITED",
-    "RATE_LIMITER_DOWN", "MISCONFIGURED", "DB_ERROR", "NOT_AVAILABLE",
-    "NOT_READY",
-})
+_CREDIT_REASSURE_CODES = codes_with_trait(ErrorCodeTrait.CREDIT_NOTE)
 
 
 def _is_prompt_blocked(normalized_code: str) -> bool:
@@ -318,10 +284,7 @@ def _report_policy(normalized_code: str) -> str:
 
 
 
-_DASHBOARD_CTA_CODES = (
-    "INVALID_KEY", "KEY_REVOKED",
-    "SUBSCRIPTION_EXPIRED", "SUBSCRIPTION_INACTIVE", "FREE_TIER_EXPIRED",
-)
+_DASHBOARD_CTA_CODES = codes_with_trait(ErrorCodeTrait.ACCOUNT_LINK)
 
 
 def _served_cta(code: str) -> str:
@@ -462,22 +425,9 @@ _MODEL_FAILURE_HINTS = (
     "cannot be processed",
 )
 
-_NON_MODEL_FAILURE_CODES = NETWORK_ERROR_CODES | frozenset({
-    "QUOTA_EXCEEDED",
-    "LIMIT_REACHED",
-    "USAGE_LIMIT_REACHED",
-    "MONTHLY_LIMIT_REACHED",
-    "TRIAL_EXHAUSTED",
-    "NO_KEY",
-    "INVALID_KEY",
-    "KEY_REVOKED",
-    "AUTH_LOCKED",
-    "SUBSCRIPTION_EXPIRED",
-    "SUBSCRIPTION_INACTIVE",
-    "FREE_TIER_EXPIRED",
-    "AUTH_ERROR",
-    "GENERATION_CANCELLED",
-})
+
+
+_NON_MODEL_FAILURE_CODES = codes_with_trait(ErrorCodeTrait.NOT_MODEL_FAILURE)
 
 
 
@@ -547,7 +497,7 @@ _BUSY_HINTS = (
 
 _BUSY_CODES = ServerDialSet(
     "error_codes.busy_extra",
-    {"RATE_LIMITED", "RESOURCE_EXHAUSTED", "PROVIDER_BUSY", "SERVICE_BUSY"},
+    codes_with_trait(ErrorCodeTrait.BUSY),
     normalize=str.upper,
 )
 

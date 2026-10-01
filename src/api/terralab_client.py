@@ -9,9 +9,11 @@ from qgis.PyQt.QtNetwork import QNetworkRequest
 
 from ..core import qt_compat as QtC
 from ..core.config_store import get_export_copy, get_export_dial
+from ..core.errors import NETWORK_ERROR_CODES
 from ..core.i18n import tr
 from ..core.logger import log_debug, log_warning
-from ..core.request_context import request_context
+from ..core.product_identity import PRODUCT_ID
+from ..core.request_context import plugin_version, request_context
 from .blocking_request import BlockingRequest
 from .image_download import _TIMEOUT_DOWNLOAD
 from .network_error_classifier import (
@@ -45,7 +47,13 @@ _TIMEOUT_API = 30_000
 
 
 
-_TIMEOUT_STARTUP = 8_000
+
+_TIMEOUT_STARTUP = 15_000
+
+
+
+_READ_RETRY_DELAYS_S = (2.0, 6.0)
+_READ_RETRY_STATUSES = frozenset({502, 503, 504})
 _SUBMIT_TIMEOUTS_MS = {
     "1K": 45_000,
     "2K": 60_000,
@@ -123,6 +131,22 @@ def _client_context_value() -> bytes:
         except Exception:  # nosec B110
             _client_context["header"] = b""
     return _client_context["header"] or b""
+
+
+_client_identity: dict[str, tuple | None] = {"headers": None}
+
+
+def _client_identity_headers() -> tuple:
+    if _client_identity["headers"] is None:
+        try:
+            version = "".join(ch for ch in plugin_version() if ch.isalnum() or ch in "._-")
+        except Exception:  # nosec B110
+            version = ""
+        if version:
+            _client_identity["headers"] = ((b"X-Plugin-Version", version.encode("ascii", errors="ignore")),)
+        else:
+            _client_identity["headers"] = ()
+    return _client_identity["headers"]
 
 
 class TerraLabClient:
@@ -367,14 +391,16 @@ class TerraLabClient:
             path += "&force_fallback=true"
         return self._request("GET", path, auth=auth)
 
-    def get_usage(self, auth: dict, timeout_ms: int | None = None) -> dict:
+    def get_usage(self, auth: dict, timeout_ms: int | None = None, retry: bool = True) -> dict:
 
 
-        return self._request("GET", "/api/plugin/usage", auth=auth, timeout_ms=timeout_ms)
+        if not retry:
+            return self._request("GET", "/api/plugin/usage", auth=auth, timeout_ms=timeout_ms)
+        return self._read("/api/plugin/usage", auth=auth, timeout_ms=timeout_ms)
 
     def get_favorites(self, auth: dict) -> dict:
 
-        return self._request("GET", "/api/plugin/favorites", auth=auth)
+        return self._read("/api/plugin/favorites", auth=auth)
 
     def get_generation_history(
         self, auth: dict, limit: int = 24, favorites_only: bool = False,
@@ -390,7 +416,7 @@ class TerraLabClient:
             path += "&favorites_only=true"
         if before:
             path += f"&before={quote(before, safe='')}"
-        return self._request("GET", path, auth=auth)
+        return self._read(path, auth=auth)
 
     def set_generation_favorite(
         self, auth: dict, request_id: str, is_favorite: bool
@@ -501,35 +527,25 @@ class TerraLabClient:
         path = "/api/plugin/account"
         if include_usage:
             path += "?include=usage"
-        return self._request("GET", path, auth=auth, timeout_ms=_startup_timeout_ms())
+        return self._read(path, auth=auth, timeout_ms=_startup_timeout_ms())
 
     def get_export_config(self) -> dict:
 
-        return self._request(
-            "GET",
-            _with_context("/api/ai-edit/export-config"),
-            timeout_ms=_startup_timeout_ms(),
-        )
+        return self._read(_with_context("/api/ai-edit/export-config"), timeout_ms=_startup_timeout_ms())
 
     def get_bootstrap(self, auth: dict | None = None) -> dict:
 
 
 
         path = _with_context("/api/plugin/bootstrap")
-        if auth:
-            return self._request(
-                "GET", path, auth=auth, timeout_ms=_startup_timeout_ms()
-            )
-        return self._request("GET", path, timeout_ms=_startup_timeout_ms())
+        return self._read(path, auth=auth or None, timeout_ms=_startup_timeout_ms())
 
     def get_config(self, product: str, auth: dict | None = None) -> dict:
 
 
 
         path = _with_context(f"/api/plugin/config?product={quote(product, safe='')}")
-        if auth:
-            return self._request("GET", path, auth=auth, timeout_ms=_startup_timeout_ms())
-        return self._request("GET", path, timeout_ms=_startup_timeout_ms())
+        return self._read(path, auth=auth or None, timeout_ms=_startup_timeout_ms())
 
     def get_plugin_login_link(
         self, target: str, cta_source: str, auth: dict, locale: str | None = None
@@ -578,7 +594,7 @@ class TerraLabClient:
 
 
 
-        body = json_body({"code": code, "product": "ai-edit"})
+        body = json_body({"code": code, "product": PRODUCT_ID})
         return self._request(
             "POST",
             "/api/plugin/pair/cancel",
@@ -586,16 +602,13 @@ class TerraLabClient:
             timeout_ms=get_export_dial("pipeline.terralab_client.quick_post_timeout_ms", _TIMEOUT_QUICK_POST_MS),
         )
 
-    def send_telemetry_batch(self, events: list, auth: dict) -> dict:
+    def send_telemetry_batch(self, events: list, auth: dict, timeout_ms: int | None = None) -> dict:
+
 
         body = json_body({"events": events})
-        return self._request(
-            "POST",
-            "/api/plugin/track",
-            auth=auth,
-            body=body,
-            timeout_ms=get_export_dial("pipeline.terralab_client.quick_post_timeout_ms", _TIMEOUT_QUICK_POST_MS),
-        )
+        if timeout_ms is None:
+            timeout_ms = get_export_dial("pipeline.terralab_client.quick_post_timeout_ms", _TIMEOUT_QUICK_POST_MS)
+        return self._request("POST", "/api/plugin/track", auth=auth, body=body, timeout_ms=timeout_ms)
 
     def refund_generation(
         self, request_id: str, reason: str, auth: dict, error_code: str | None = None
@@ -659,13 +672,29 @@ class TerraLabClient:
             timeout_ms=get_export_dial("pipeline.terralab_client.write_timeout_ms", _TIMEOUT_WRITE_MS),
         )
 
-    def download_image(self, url: str) -> bytes:
+    def download_image(self, url: str, resume: dict | None = None) -> bytes:
+
 
         from .image_download import download_image
 
-        return download_image(url, BlockingRequest)
+        return download_image(url, BlockingRequest, resume=resume)
 
 
+
+    def _read(self, path: str, auth: dict | None = None, timeout_ms: int | None = None) -> dict:
+
+
+
+
+        result = self._request("GET", path, auth=auth, timeout_ms=timeout_ms)
+        for delay in _READ_RETRY_DELAYS_S:
+            if not _should_retry_read(result):
+                return result
+            log_debug(f"Read retry in {delay:.0f}s after {result.get('code')}")
+            if _wait_cancellable(delay):
+                return _cancelled_result()
+            result = self._request("GET", path, auth=auth, timeout_ms=timeout_ms)
+        return result
 
     def _request(
         self,
@@ -703,6 +732,8 @@ class TerraLabClient:
         context_header = _client_context_value()
         if context_header:
             req.setRawHeader(b"X-Client-Context", context_header)
+        for name, value in _client_identity_headers():
+            req.setRawHeader(name, value)
         trace_id = uuid.uuid4().hex
         req.setRawHeader(b"X-Client-Request-ID", trace_id.encode("ascii"))
         feedback = _current_feedback()
@@ -743,6 +774,26 @@ class TerraLabClient:
             log_warning(f"Invalid API response id={trace_id} bytes={len(raw)}")
             return {"error": "Invalid server response", "code": "SERVER_ERROR"}
         return parsed
+
+
+def _should_retry_read(result) -> bool:
+    if not isinstance(result, dict) or "error" not in result:
+        return False
+    if result.get("http_status") in _READ_RETRY_STATUSES:
+        return True
+    code = str(result.get("code") or "").strip().upper()
+    return code != CANCELLED_CODE and code in NETWORK_ERROR_CODES
+
+
+def _wait_cancellable(seconds: float) -> bool:
+
+    feedback = _current_feedback()
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if _is_feedback_cancelled(feedback):
+            return True
+        time.sleep(min(0.2, max(0.0, deadline - time.monotonic())))
+    return _is_feedback_cancelled(feedback)
 
 
 def _get_submit_timeout_ms(resolution: str) -> int:

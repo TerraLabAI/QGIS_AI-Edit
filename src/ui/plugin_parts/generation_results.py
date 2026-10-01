@@ -9,12 +9,13 @@ from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.auth.activation_manager import get_wall_url, mark_privacy_notice_seen
 from ...core.config_store import get_export_copy, get_export_dial_list
-from ...core.errors import build_failure_props
+from ...core.errors import QUOTA_ERROR_CODES, build_failure_props
 from ...core.i18n import tr
 from ...core.log_scrub import scrub_user_paths as _scrub_paths
 from ...core.logger import log, log_warning
 from ...core.number_format import format_count
 from ...core.prompts import history_cache, prompt_history
+from ...core.version_lineage import result_version_record
 from ..dialogs.error_report_dialog import REPORT_PROBLEM_HREF
 from ..layer_groups import bring_ai_edit_group_to_front
 from ..layer_occlusion import layers_hiding_layer
@@ -76,13 +77,7 @@ class GenerationResultsMixin:
             log("Generation cancelled; failure signal ignored")
             return
         message_lower = (message or "").lower()
-        quota_codes = {
-            "QUOTA_EXCEEDED",
-            "LIMIT_REACHED",
-            "USAGE_LIMIT_REACHED",
-            "MONTHLY_LIMIT_REACHED",
-        }
-        is_quota_error = normalized_code in quota_codes or "monthly limit reached" in message_lower
+        is_quota_error = normalized_code in QUOTA_ERROR_CODES or "monthly limit reached" in message_lower
         duration = time.time() - getattr(self, "_generation_start_time", time.time())
 
 
@@ -116,7 +111,10 @@ class GenerationResultsMixin:
 
 
         if normalized_code != "TRIAL_EXHAUSTED" and not is_quota_error:
-            telemetry.track(te.GENERATION_FAILED, self._enrich_generation_props(extra_props))
+            telemetry.track(
+                te.GENERATION_FAILED,
+                self._enrich_generation_props(extra_props, request_id=snap.get("request_id")),
+            )
             telemetry.flush()
         if normalized_code == "TRIAL_EXHAUSTED":
 
@@ -387,7 +385,7 @@ class GenerationResultsMixin:
                 "template_id": template_id,
                 "template_name": template_name,
                 "used_template": bool(template_id),
-            }))
+            }, request_id=result_info.get("request_id")))
             telemetry.flush()
             completed_emitted = True
             self._maybe_emit_first_generation_milestone()
@@ -412,22 +410,20 @@ class GenerationResultsMixin:
                 if base_index <= 0
                 else f"V{base_index}"
             )
-            self._versions.append({
-                "layer_id": layer.id(),
-                "request_id": self._last_completed_request_id,
-                "prompt": result_prompt,
+            self._versions.append(result_version_record(
+                layer.id(),
+                self._last_completed_request_id,
+                result_prompt,
 
-
-
-                "parent_request_id": (
+                parent_request_id=(
                     self._versions[base_index].get("request_id")
                     if 0 <= base_index < len(self._versions)
                     else None
                 ),
-                "template_id": template_id,
-                "template_name": template_name,
-                "resolution": getattr(self, "_last_suggested_res", "") or "",
-            })
+                template_id=template_id,
+                template_name=template_name,
+                resolution=getattr(self, "_last_suggested_res", ""),
+            ))
             self._selected_version_index = len(self._versions) - 1
 
 
@@ -542,7 +538,7 @@ class GenerationResultsMixin:
                 "template_name": template_name,
                 "used_template": bool(template_id),
                 "layer_add_failed": True,
-            }))
+            }, request_id=result_info.get("request_id")))
             telemetry.track(
                 te.PLUGIN_ERROR,
                 build_failure_props("write", "layer_add_failed", str(e)),

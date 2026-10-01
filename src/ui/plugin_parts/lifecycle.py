@@ -16,6 +16,7 @@ from ...core.config_store import get_export_copy, set_store
 from ...core.errors import build_failure_props
 from ...core.i18n import tr
 from ...core.logger import log, log_warning
+from ...core.product_identity import PRODUCT_ID
 from ...core.qt_compat import QAction, QShortcut
 from ..dock_widget import AIEditDockWidget
 from ..tools.polygon_selection_tool import PolygonSelectionTool
@@ -293,7 +294,7 @@ class PluginLifecycleMixin:
         )
         self._action.setToolTip(tr("AI Edit by TerraLab\nAI-powered image editing for geospatial data"))
         self._action.triggered.connect(self._toggle_dock)
-        add_plugin_to_menu(self._terralab_menu, self._action, "ai-edit")
+        add_plugin_to_menu(self._terralab_menu, self._action, PRODUCT_ID)
 
         from ..terralab_toolbar import (
             add_action_to_toolbar,
@@ -301,7 +302,7 @@ class PluginLifecycleMixin:
         )
 
         self._terralab_toolbar = get_or_create_terralab_toolbar(self._iface)
-        add_action_to_toolbar(self._terralab_toolbar, self._action, "ai-edit")
+        add_action_to_toolbar(self._terralab_toolbar, self._action, PRODUCT_ID)
 
         add_to_plugins_menu(self._iface, self._action)
 
@@ -446,7 +447,7 @@ class PluginLifecycleMixin:
         )
 
 
-        self._refresh_conversations_cache()
+        self._refresh_conversations_cache(reuse_recent=True)
 
 
 
@@ -588,7 +589,7 @@ class PluginLifecycleMixin:
             self._unwatch_plan_return()
         with teardown_step("sibling sign-in"):
             from ...core import sibling_sign_in
-            sibling_sign_in.cancel("ai-edit")
+            sibling_sign_in.cancel(PRODUCT_ID)
 
 
 

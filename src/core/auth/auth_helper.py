@@ -4,12 +4,11 @@ from __future__ import annotations
 from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsSettings
 
 from ..logger import log_warning
-from .activation_manager import SETTINGS_PREFIX
+from .activation_manager import ACTIVATION_TIMESTAMP_KEY, SETTINGS_PREFIX
 
 _AUTHCFG_KEY = f"{SETTINGS_PREFIX}authcfg_id"
 _LEGACY_KEY = f"{SETTINGS_PREFIX}activation_key"
 _MIGRATION_PENDING_KEY = f"{SETTINGS_PREFIX}auth_migration_pending"
-_TIMESTAMP_KEY = f"{SETTINGS_PREFIX}activation_timestamp_unix"
 
 
 def _get_auth_manager():
@@ -139,7 +138,7 @@ def clear_activation(settings=None) -> None:
         (_AUTHCFG_KEY, ""),
         (_LEGACY_KEY, ""),
         (_MIGRATION_PENDING_KEY, False),
-        (_TIMESTAMP_KEY, ""),
+        (ACTIVATION_TIMESTAMP_KEY, ""),
     ):
         changed = _set_if_changed(s, key, empty) or changed
     if not changed:

@@ -212,14 +212,25 @@ class LibraryMixin:
 
 
 
-        from .core.prompts.prompt_presets import get_need_page
+
+        from .core.prompts.prompt_presets import get_need_groups, get_need_page
 
         family_key = str(family_key or "").strip()
         if not family_key:
             return {"_error": "family_key is required. Read one from get_preset_families()."}
-        page = get_need_page(family_key, server_catalog=self._catalog())
+        catalog = self._catalog()
+        page = get_need_page(family_key, server_catalog=catalog)
         if not page or not page.get("categories"):
-            known = [f.get("key") for f in (self.get_preset_families().get("families") or [])]
+            known = [g.get("key") for g in get_need_groups(server_catalog=catalog)]
+            if page and family_key in known:
+
+
+                out = _jsonable(page)
+                out["hint"] = (
+                    "This family holds no preset right now. Call get_top_picks() or "
+                    "search_presets(query) for the presets the catalogue does hold."
+                )
+                return out
             out = not_found_error(
                 "preset family", family_key, known,
                 means="family_key comes from get_preset_families().",
@@ -314,7 +325,13 @@ class LibraryMixin:
         }
 
     @_never_raises
-    def get_prompt_guidance(self) -> dict:
+    def get_prompt_guidance(self, prompt: str | None = None) -> dict:
+
+
+
+
+
+
 
 
 
@@ -323,12 +340,14 @@ class LibraryMixin:
 
 
         from .core.config_store import get_export_dial
-        from .ui.dock.prompts import _MIN_PROMPT_CHARS, _MIN_PROMPT_WORDS
+        from .core.prompts.prompt_minimum import check_prompt_minimum, prompt_minimum_dials
         from .ui.dock.style import MAX_PROMPT_CHARS
 
+        dials = prompt_minimum_dials()
         out: dict[str, Any] = {
-            "min_chars": get_export_dial("limits.min_prompt_chars", _MIN_PROMPT_CHARS),
-            "min_words": get_export_dial("limits.min_prompt_words", _MIN_PROMPT_WORDS),
+            "min_chars": dials.min_chars,
+            "min_words": dials.min_words,
+            "min_cjk_chars": dials.min_cjk_chars,
             "max_chars": get_export_dial("limits.max_prompt_chars", MAX_PROMPT_CHARS),
             "hints": [
                 "Name the thing to change and what it should become.",
@@ -338,4 +357,8 @@ class LibraryMixin:
                 "Draw on the map instead of describing where, when the where is hard to say.",
             ],
         }
+        if prompt is not None:
+            check = check_prompt_minimum(str(prompt))
+            out["prompt_ok"] = check.ok
+            out["prompt_reason"] = check.reason
         return out

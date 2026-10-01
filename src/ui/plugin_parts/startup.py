@@ -16,9 +16,14 @@ from ...core.privacy_notice import (
     has_accepted_privacy_notice,
     save_privacy_notice_accepted,
 )
+from ...core.product_identity import PRODUCT_ID
 from ...workers.generic_request_task import GenericRequestTask
 from ..canvas_exporter import has_tuned_config, set_server_config
 from .errors import _enrich_error_message, _localize_server_error
+
+
+
+_BOOTSTRAP_RETRY_DELAYS_MS = (30_000, 120_000, 300_000)
 
 
 def _server_catalog_request(client, force_refresh: bool):
@@ -227,7 +232,7 @@ class StartupMixin:
         self._activation_config_keyed = bool(auth)
         loader = GenericRequestTask(
             "AI Edit config warm",
-            lambda c=self._client, a=auth: c.get_config("ai-edit", a or None),
+            lambda c=self._client, a=auth: c.get_config(PRODUCT_ID, a or None),
             silent=True,
         )
         loader.succeeded.connect(self._on_activation_config_warmed)
@@ -253,6 +258,7 @@ class StartupMixin:
         if not isinstance(payload, dict) or "export_config" not in payload:
             self._bootstrap_fallback()
             return
+        self._startup_bootstrap_failed = False
         config = payload.get("export_config")
         if isinstance(config, dict):
             self._on_export_config_loaded(config)
@@ -300,7 +306,11 @@ class StartupMixin:
     def _on_tuned_config_loaded(self, payload):
         self._tuned_config_task = None
         config = payload.get("export_config") if isinstance(payload, dict) else None
-        if isinstance(config, dict):
+        if getattr(self, "_startup_bootstrap_failed", False) and isinstance(config, dict):
+
+
+            self._on_bootstrap_loaded(payload)
+        elif isinstance(config, dict):
             self._on_export_config_loaded(config)
 
         waiting = getattr(self, "_generate_waiting_for_config", None)
@@ -338,8 +348,10 @@ class StartupMixin:
 
         if (code or "").strip().upper() in NETWORK_ERROR_CODES:
             log_debug(f"Bootstrap failed on the network ({code}); skipping the legacy loaders")
+            self._startup_bootstrap_failed = True
             if self._dock_widget is None:
                 return
+            self._schedule_bootstrap_retry()
             if self._auth_manager.has_activation_key():
 
                 self._on_key_invalid(message, code)
@@ -347,6 +359,30 @@ class StartupMixin:
                 self._show_connectivity_notice(code, message)
             return
         self._bootstrap_fallback()
+
+    def _schedule_bootstrap_retry(self):
+
+
+
+        attempt = getattr(self, "_bootstrap_retry_count", 0)
+        if attempt >= len(_BOOTSTRAP_RETRY_DELAYS_MS):
+            return
+        self._bootstrap_retry_count = attempt + 1
+        QtC.safe_single_shot(
+            _BOOTSTRAP_RETRY_DELAYS_MS[attempt], self._dock_widget, self._retry_startup_bootstrap
+        )
+
+    def _retry_startup_bootstrap(self):
+        if self._dock_widget is None or not getattr(self, "_startup_bootstrap_failed", False):
+            return
+        task = self._bootstrap_task
+        try:
+            if task is not None and task.is_active():
+                return
+        except RuntimeError:
+            pass  # nosec B110
+        log_debug("Retrying the startup bundle")
+        self._bootstrap_startup()
 
     def _bootstrap_fallback(self):
 

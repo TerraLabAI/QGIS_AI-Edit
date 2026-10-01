@@ -5501,5 +5501,13 @@ We'd love to hear from you!</source>
         <source>{n} layers above not sent: plan limit</source>
         <translation>上方有 {n} 个图层未发送：套餐限制</translation>
     </message>
+    <message>
+        <source>Download incomplete: the image ends early ({got} bytes)</source>
+        <translation>下载不完整：图像提前结束（{got} 字节）</translation>
+    </message>
+    <message>
+        <source>Your image could not be sent: the connection is too slow or was cut. Try again, or pick a lower resolution.</source>
+        <translation>无法发送您的图像：连接太慢或已中断。请重试，或选择较低分辨率。</translation>
+    </message>
 </context>
 </TS>

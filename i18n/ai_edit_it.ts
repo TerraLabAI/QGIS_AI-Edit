@@ -5501,5 +5501,13 @@ Saremo felici di ricevere il tuo feedback!</translation>
         <source>{n} layers above not sent: plan limit</source>
         <translation>{n} layer sopra non inviati: limite del piano</translation>
     </message>
+    <message>
+        <source>Download incomplete: the image ends early ({got} bytes)</source>
+        <translation>Download incompleto: l'immagine termina prima del previsto ({got} byte)</translation>
+    </message>
+    <message>
+        <source>Your image could not be sent: the connection is too slow or was cut. Try again, or pick a lower resolution.</source>
+        <translation>L'immagine non ha potuto essere inviata: la connessione è troppo lenta o si è interrotta. Riprova, oppure scegli una risoluzione più bassa.</translation>
+    </message>
 </context>
 </TS>

@@ -3,13 +3,15 @@ from __future__ import annotations
 import time
 
 from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import QSettings, QUrl
-from qgis.PyQt.QtGui import QDesktopServices
+from qgis.PyQt.QtCore import QSettings
 
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.auth.activation_manager import (
+    ACTIVATION_TIMESTAMP_KEY,
+    PLUGIN_UTM_QUERY,
+    SIGNED_IN_BEFORE_KEY,
     clear_activation,
     get_activation_key,
     get_dashboard_url,
@@ -18,14 +20,16 @@ from ...core.auth.activation_manager import (
     validate_key_with_server,
 )
 from ...core.config_store import get_export_copy, get_export_dial
-from ...core.errors import NETWORK_ERROR_CODES, TRANSIENT_SERVER_ERROR_CODES
+from ...core.errors import NETWORK_ERROR_CODES, PLAN_STOPPED_CODES, TRANSIENT_SERVER_ERROR_CODES
 from ...core.i18n import tr
 from ...core.logger import log, log_debug, log_warning
+from ...core.product_identity import PRODUCT_ID
 from ...core.prompts import conversation_thumbs
 from ...core.window_focus import bring_qgis_window_to_front
 from ...workers.generic_request_task import GenericRequestTask
 from ...workers.pairing_poll_task import PairingPollTask
 from ..canvas_exporter import has_tuned_config
+from ..external_url import open_external
 from .errors import (
     _enrich_error_message,
     dashboard_error_url,
@@ -141,7 +145,7 @@ class ActivationMixin:
 
 
 
-        self._refresh_conversations_cache()
+        self._refresh_conversations_cache(reuse_recent=True)
 
         if isinstance(usage, dict) and "images_used" in usage:
             self._auth_manager.seed_usage(usage)
@@ -201,7 +205,7 @@ class ActivationMixin:
         clear_activation()
         self._auth_manager.set_activation_key("")
         self._dock_widget.set_activated(False)
-        if rejection_code in ("SUBSCRIPTION_INACTIVE", "SUBSCRIPTION_EXPIRED"):
+        if rejection_code in PLAN_STOPPED_CODES:
 
 
             self._dock_widget.set_activation_message_link(
@@ -332,11 +336,11 @@ class ActivationMixin:
 
 
         self._returning_sign_in = bool(
-            settings.value("AIEdit/activation_timestamp_unix", "", type=str)
-        ) or settings.value("AIEdit/signed_in_before", False, type=bool)
-        settings.setValue("AIEdit/signed_in_before", True)
-        if not settings.value("AIEdit/activation_timestamp_unix", "", type=str):
-            settings.setValue("AIEdit/activation_timestamp_unix", str(int(time.time())))
+            settings.value(ACTIVATION_TIMESTAMP_KEY, "", type=str)
+        ) or settings.value(SIGNED_IN_BEFORE_KEY, False, type=bool)
+        settings.setValue(SIGNED_IN_BEFORE_KEY, True)
+        if not settings.value(ACTIVATION_TIMESTAMP_KEY, "", type=str):
+            settings.setValue(ACTIVATION_TIMESTAMP_KEY, str(int(time.time())))
 
     def _start_sibling_sign_in(self):
         from ...core import sibling_sign_in
@@ -345,7 +349,7 @@ class ActivationMixin:
             device = get_device_hash()
         except Exception:  # noqa: BLE001
             device = ""
-        sibling_sign_in.start("ai-edit", self._client.base_url, device, self._on_sibling_sign_in)
+        sibling_sign_in.start(PRODUCT_ID, self._client.base_url, device, self._on_sibling_sign_in)
 
     def _on_sibling_sign_in(self, result: dict):
 
@@ -426,14 +430,15 @@ class ActivationMixin:
 
 
         url = (
-            f"{self._client.base_url}/connect?code={code}&product=ai-edit"
+            f"{self._client.base_url}/connect?code={code}&product={PRODUCT_ID}"
             f"&device_id={get_device_hash()}"
-            "&utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=connect"
+            f"&{PLUGIN_UTM_QUERY}&utm_content=connect"
         )
 
 
         self._dock_widget.set_pairing_link(url)
-        opened = QDesktopServices.openUrl(QUrl(url))
+
+        opened = open_external(url)
         worker = self._pairing_worker
         if worker is not None and worker.is_active() and worker.add_code(code):
 

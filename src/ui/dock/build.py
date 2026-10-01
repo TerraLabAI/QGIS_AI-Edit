@@ -687,13 +687,9 @@ def _build_generate_note_strip(dock: AIEditDockWidget, main_layout: QVBoxLayout)
     note_layout.setContentsMargins(*_NOTE_STRIP_MARGINS)
     note_layout.setSpacing(4)
 
-    from ...core.auth.activation_manager import get_privacy_url
+    from ...core.auth.activation_manager import build_utm_url, get_privacy_url
 
-    privacy_url = get_privacy_url(
-        "https://terra-lab.ai/privacy-policy"
-        "?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit"
-        "&utm_content=generate_privacy"
-    )
+    privacy_url = get_privacy_url(build_utm_url("/privacy-policy", "generate_privacy"))
     privacy_link = (
         f'<a href="{privacy_url}" style="color: {tokens.LINK_INK}; text-decoration: none;">'
         f'{tr("Privacy")}</a>'

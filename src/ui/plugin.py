@@ -156,6 +156,10 @@ class AIEditPlugin(
 
         self._startup_bootstrap_done = False
 
+
+        self._startup_bootstrap_failed = False
+        self._bootstrap_retry_count = 0
+
         self._connectivity_notice_shown = False
 
 

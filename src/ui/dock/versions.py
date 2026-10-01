@@ -297,8 +297,3 @@ class DockVersionsMixin:
 
         if self._reference_widget is not None:
             self._reference_widget.wait_layers_above()
-
-    def clear_markup_reference(self) -> None:
-
-        if self._reference_widget is not None:
-            self._reference_widget.clear_markup_image()

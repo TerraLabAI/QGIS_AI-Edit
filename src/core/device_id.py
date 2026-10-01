@@ -16,6 +16,7 @@ from qgis.PyQt.QtCore import QSysInfo
 
 
 _SETTINGS_KEY = "AIEdit/device_seed"
+_SHARED_SETTINGS_KEY = "TerraLab/device_seed"
 
 
 _HASH_LEN = 16
@@ -38,9 +39,15 @@ def _machine_seed(settings) -> bytes:
         pass
 
     seed = settings.value(_SETTINGS_KEY, "", type=str)
-    if not seed:
+    shared = settings.value(_SHARED_SETTINGS_KEY, "", type=str)
+    if seed:
+        if not shared:
+            settings.setValue(_SHARED_SETTINGS_KEY, seed)
+    elif shared:
+        seed = shared
+    else:
         seed = uuid.uuid4().hex
-        settings.setValue(_SETTINGS_KEY, seed)
+        settings.setValue(_SHARED_SETTINGS_KEY, seed)
     return seed.encode("utf-8")
 
 

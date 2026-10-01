@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from qgis.core import QgsApplication, QgsTask
 from qgis.PyQt.QtCore import QThread
 
+from . import telemetry_events as te
 from .privacy_notice import (
     add_privacy_notice_accepted_hook,
     has_accepted_privacy_notice,
@@ -131,74 +132,80 @@ def set_telemetry_enabled(enabled: bool) -> None:
 
 
 _NO_CONTENT_EVENTS = frozenset({
-    "plugin_opened",
-    "plugin_activated",
-    "activation_screen_viewed",
-    "activation_attempted",
-    "launch_clicked",
+    te.PLUGIN_OPENED,
+    te.PLUGIN_ACTIVATED,
+    te.ACTIVATION_SCREEN_VIEWED,
+    te.ACTIVATION_ATTEMPTED,
+    te.LAUNCH_CLICKED,
 
 
-    "launch_blocked",
+    te.LAUNCH_BLOCKED,
 
-    "generate_blocked",
-    "subscribe_link_clicked",
-    "trial_exhausted_viewed",
-
-
-
-    "plugin_update_prompt_shown",
-    "plugin_update_prompt_clicked",
-
-
-    "tutorial_opened",
-    "template_selected",
-    "generation_started",
-    "generation_completed",
-    "generation_failed",
-    "generation_cancelled",
-    "first_generation_milestone",
-    "favorite_toggled",
-    "recent_selected",
-
-    "history_restored",
-    "history_exported",
-    "markup_opened",
+    te.GENERATE_BLOCKED,
+    te.SUBSCRIBE_LINK_CLICKED,
+    te.TRIAL_EXHAUSTED_VIEWED,
 
 
 
-    "zone_drawn",
-    "ai_edit_guidance_tip_shown",
+    te.PLUGIN_UPDATE_PROMPT_SHOWN,
+    te.PLUGIN_UPDATE_PROMPT_CLICKED,
 
 
-    "basemap_cta_clicked",
-    "vectorize_panel_opened",
-    "vectorize_suggestion_clicked",
-    "vectorize_completed",
-    "swipe_armed",
-    "swipe_disarmed",
+    te.TUTORIAL_OPENED,
+    te.TEMPLATE_SELECTED,
+    te.GENERATION_STARTED,
+    te.GENERATION_COMPLETED,
+    te.GENERATION_FAILED,
+    te.GENERATION_CANCELLED,
+    te.FIRST_GENERATION_MILESTONE,
+    te.FAVORITE_TOGGLED,
+    te.RECENT_SELECTED,
 
-    "generation_refund_attempted",
-    "generation_refund_failed",
+    te.HISTORY_RESTORED,
+    te.HISTORY_EXPORTED,
+    te.MARKUP_OPENED,
 
 
 
-    "ai_edit_pair_started",
-    "ai_edit_pair_succeeded",
-    "ai_edit_pair_failed",
-    "ai_edit_pair_timeout",
-    "ai_edit_pair_cancelled",
+    te.ZONE_DRAWN,
+    te.GUIDANCE_TIP_SHOWN,
+
+
+    te.BASEMAP_CTA_CLICKED,
+    te.VECTORIZE_PANEL_OPENED,
+    te.VECTORIZE_SUGGESTION_CLICKED,
+    te.VECTORIZE_COMPLETED,
+    te.SWIPE_ARMED,
+    te.SWIPE_DISARMED,
+
+    te.GENERATION_REFUND_ATTEMPTED,
+    te.GENERATION_REFUND_FAILED,
+
+
+
+    te.AI_EDIT_PAIR_STARTED,
+    te.AI_EDIT_PAIR_SUCCEEDED,
+    te.AI_EDIT_PAIR_FAILED,
+    te.AI_EDIT_PAIR_TIMEOUT,
+    te.AI_EDIT_PAIR_CANCELLED,
 })
+
+
+
+
+_BACKGROUND_POST_TIMEOUT_MS = 15_000
 
 
 class _TelemetryFlushTask(QgsTask):
 
 
-    def __init__(self, client, events: list, auth: dict):
+    def __init__(self, client, events: list, auth: dict, timeout_ms: int | None = None):
         from .qt_compat import silent_task_flags
         super().__init__("AI Edit telemetry flush", silent_task_flags())
         self._client = client
         self._events = events
         self._auth = auth
+        self._timeout_ms = timeout_ms
         from qgis.core import QgsFeedback
         self._feedback = QgsFeedback()
 
@@ -235,7 +242,10 @@ class _TelemetryFlushTask(QgsTask):
         try:
             from ..api.network_error_classifier import request_feedback
             with request_feedback(self._feedback):
-                result = self._client.send_telemetry_batch(self._events, self._auth)
+                if self._timeout_ms is None:
+                    result = self._client.send_telemetry_batch(self._events, self._auth)
+                else:
+                    result = self._client.send_telemetry_batch(self._events, self._auth, timeout_ms=self._timeout_ms)
         except Exception:  # nosec B110
             return False
         return not (isinstance(result, dict) and result.get("error"))
@@ -258,6 +268,9 @@ class TelemetryCollector:
 
         self._pending_pre_auth: list = []
         self._inflight: list[_TelemetryFlushTask] = []
+
+        self._flush_deferred = False
+        self._closed = False
 
 
 
@@ -364,6 +377,12 @@ class TelemetryCollector:
         with self._lock:
             if not self._batch and not self._pending_pre_auth:
                 return
+            if not synchronous and self._inflight:
+
+
+
+                self._flush_deferred = True
+                return
 
             if not self._has_auth():
                 for evt in self._batch:
@@ -384,7 +403,10 @@ class TelemetryCollector:
                 return
 
             auth = self._auth_manager.get_auth_header()
-            task = _TelemetryFlushTask(self._client, events_to_send, auth)
+            task = _TelemetryFlushTask(
+                self._client, events_to_send, auth,
+                timeout_ms=None if synchronous else _BACKGROUND_POST_TIMEOUT_MS,
+            )
 
 
 
@@ -399,8 +421,8 @@ class TelemetryCollector:
 
 
         try:
-            task.taskCompleted.connect(lambda t=task: self._drop_inflight(t))
-            task.taskTerminated.connect(lambda t=task: self._drop_inflight(t))
+            task.taskCompleted.connect(lambda t=task: self._on_flush_ended(t))
+            task.taskTerminated.connect(lambda t=task: self._on_flush_ended(t))
         except Exception:  # nosec B110
             pass
         QgsApplication.taskManager().addTask(task)
@@ -412,7 +434,21 @@ class TelemetryCollector:
             except ValueError:
                 pass
 
+    def _on_flush_ended(self, task: _TelemetryFlushTask) -> None:
+
+        self._drop_inflight(task)
+        with self._lock:
+            deferred = self._flush_deferred and not self._closed
+            self._flush_deferred = False
+        if deferred:
+            try:
+                self._flush(synchronous=False)
+            except Exception:  # nosec B110
+                pass
+
     def shutdown(self):
+        with self._lock:
+            self._closed = True
 
         self.discard_pre_notice()
 

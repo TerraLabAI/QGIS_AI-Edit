@@ -5501,5 +5501,13 @@ We'd love to hear from you!</source>
         <source>{n} layers above not sent: plan limit</source>
         <translation>上にあるlayer {n}件は送信されません: プランの上限</translation>
     </message>
+    <message>
+        <source>Download incomplete: the image ends early ({got} bytes)</source>
+        <translation>ダウンロードが不完全です: 画像が途中で終わっています ({got} バイト)</translation>
+    </message>
+    <message>
+        <source>Your image could not be sent: the connection is too slow or was cut. Try again, or pick a lower resolution.</source>
+        <translation>画像を送信できませんでした: 接続が遅すぎるか、切断されました。もう一度お試しください。解像度を下げると改善することがあります。</translation>
+    </message>
 </context>
 </TS>

@@ -313,7 +313,6 @@ class _ReferenceCard(QWidget):
         record: ReferenceImage,
         index: int,
         note: str,
-        is_markup: bool,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -351,7 +350,7 @@ class _ReferenceCard(QWidget):
 
 
 
-        tag_text, note_text = _card_source_words(record, is_markup)
+        tag_text, note_text = _card_source_words(record)
         meta = QHBoxLayout()
         meta.setContentsMargins(0, 0, 0, 0)
         meta.setSpacing(T.SPACE_CARD)
@@ -395,20 +394,13 @@ class _ReferenceCard(QWidget):
         self._thumb.setFocus(Qt.FocusReason.TabFocusReason)
 
 
-def _card_source_words(record: ReferenceImage, is_markup: bool) -> tuple[str, str]:
+def _card_source_words(record: ReferenceImage) -> tuple[str, str]:
 
 
 
 
 
 
-
-    if is_markup:
-        return (
-            get_export_copy("widgets.reference_panel.tag_draw", tr("Draw")),
-            get_export_copy("widgets.reference_panel.markup_guidance_hint",
-                            tr("Your marks guide the edit.")),
-        )
     kind = record.source_kind if record.source_kind in ("file", "layer", "map") else "file"
     if getattr(record, "whole_layer", False):
         return (
@@ -808,10 +800,7 @@ class ReferencePanel(QWidget):
         records = self._store.list()
         self._empty_label.setVisible(not records)
 
-
-        self._prompt_tip.setVisible(
-            any(not self._store.is_markup(record.id) for record in records)
-        )
+        self._prompt_tip.setVisible(bool(records))
         limit = self._limit()
 
 
@@ -829,16 +818,11 @@ class ReferencePanel(QWidget):
             if left_out > 1 else
             tr("1 layer above not sent: plan limit"))
         self._left_out_label.setVisible(left_out > 0)
-        number = 0
         for position, record in enumerate(records):
-            is_markup = self._store.is_markup(record.id)
-            if not is_markup:
-                number += 1
             card = _ReferenceCard(
                 record,
-                0 if is_markup else number,
+                position + 1,
                 self._store.get_note(record.id),
-                is_markup,
                 self._list_host,
             )
             card.set_readonly(self._readonly)
@@ -880,10 +864,7 @@ class ReferencePanel(QWidget):
         record = next(
             (r for r in self._store.list() if r.path == image_path), None
         )
-        is_markup = record is not None and self._store.is_markup(record.id)
-        open_reference_preview(
-            self, image_path, reference_preview_title(record, is_markup)
-        )
+        open_reference_preview(self, image_path, reference_preview_title(record))
 
 
 

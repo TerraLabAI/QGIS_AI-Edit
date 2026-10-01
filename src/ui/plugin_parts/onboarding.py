@@ -16,6 +16,7 @@ from ...core.config_store import (
 )
 from ...core.i18n import tr
 from ...core.logger import log, log_warning
+from ...core.served_url_checks import SERVED_URL_FORBIDDEN_RE
 
 
 
@@ -86,7 +87,6 @@ _PROBE_TIMEOUT_MS = 4000
 
 
 _URI_MAX_CHARS = 600
-_URI_FORBIDDEN_RE = re.compile(r"[\x00-\x20\x7f-\x9f<>\"'\\]")
 _XYZ_URI_PREFIX = "type=xyz&url=https://"
 
 _SCENE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
@@ -99,7 +99,7 @@ def _is_safe_xyz_uri(value) -> bool:
         isinstance(value, str)
         and value.startswith(_XYZ_URI_PREFIX)
         and len(value) <= _URI_MAX_CHARS
-        and not _URI_FORBIDDEN_RE.search(value)
+        and not SERVED_URL_FORBIDDEN_RE.search(value)
     )
 
 
@@ -116,7 +116,7 @@ def _served_probe_url(fallback: str) -> str:
         isinstance(value, str)
         and value.startswith("https://")
         and len(value) <= _URI_MAX_CHARS
-        and not _URI_FORBIDDEN_RE.search(value)
+        and not SERVED_URL_FORBIDDEN_RE.search(value)
     ):
         return value
     return fallback
@@ -376,12 +376,9 @@ class OnboardingMixin:
 
 
 
-        from qgis.core import (
-            QgsCoordinateReferenceSystem,
-            QgsCoordinateTransform,
-            QgsProject,
-            QgsRectangle,
-        )
+        from qgis.core import QgsCoordinateReferenceSystem, QgsRectangle
+
+        from ...core.extent_transform import transform_extent
 
         scenes = demo_scenes()
         scene = scenes.get(
@@ -393,15 +390,13 @@ class OnboardingMixin:
             float(extent["xmin"]), float(extent["ymin"]),
             float(extent["xmax"]), float(extent["ymax"]),
         )
-        canvas_crs = self._canvas.mapSettings().destinationCrs()
-        if wgs84 != canvas_crs:
-            try:
-                xform = QgsCoordinateTransform(wgs84, canvas_crs, QgsProject.instance())
-                rect = xform.transformBoundingBox(rect)
-            except Exception as err:  # noqa: BLE001
-                log_warning(f"demo scene transform failed: {err}")
-                self._start_imagery_gate()
-                return
+
+
+        rect = transform_extent(rect, wgs84, self._canvas.mapSettings().destinationCrs())
+        if rect is None:
+            log_warning("demo scene transform failed")
+            self._start_imagery_gate()
+            return
         rect.scale(1.15)
         self._canvas.setExtent(rect)
         self._canvas.refresh()

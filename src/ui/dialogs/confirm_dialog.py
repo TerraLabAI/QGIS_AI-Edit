@@ -377,11 +377,6 @@ def error_box(parent, title: str, body: str = "", detail: str = "",
              tone=ERROR)
 
 
-def success_box(parent, title: str, body: str = "", detail: str = "") -> None:
-
-    info_box(parent, title, body, detail=detail, tone=SUCCESS)
-
-
 def question(parent, title: str, body: str, default_yes: bool = True,
              destructive: bool = False, yes_label: str | None = None,
              no_label: str | None = None, tone: str | None = None) -> bool:
@@ -414,6 +409,5 @@ __all__ = [
     "error_box",
     "info_box",
     "question",
-    "success_box",
     "warning_box",
 ]

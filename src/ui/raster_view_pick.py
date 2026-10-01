@@ -25,13 +25,12 @@ from __future__ import annotations
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
-    QgsCoordinateTransform,
-    QgsProject,
     QgsRasterLayer,
     QgsRectangle,
 )
 
 from ..core.config_store import get_export_dial, get_export_dial_ratio
+from ..core.extent_transform import has_crs_transform, transform_extent
 
 
 
@@ -53,7 +52,8 @@ TIER_SLIVER = 1
 TIER_OUT_OF_VIEW = 0
 
 
-def _reproject_extent(extent, source_crs, target_crs) -> QgsRectangle | None:
+def _comparable_extent(extent, source_crs, target_crs) -> QgsRectangle | None:
+
 
 
 
@@ -64,16 +64,10 @@ def _reproject_extent(extent, source_crs, target_crs) -> QgsRectangle | None:
 
     if extent is None or extent.isEmpty():
         return None
-    if source_crs == target_crs:
-        return extent
-    if not source_crs.isValid() or not target_crs.isValid():
+    if not has_crs_transform(source_crs, target_crs):
         return None
-    try:
-        transform = QgsCoordinateTransform(source_crs, target_crs, QgsProject.instance())
-        reprojected = transform.transformBoundingBox(extent)
-    except Exception:
-        return None
-    return None if reprojected.isEmpty() else reprojected
+    reprojected = transform_extent(extent, source_crs, target_crs)
+    return None if reprojected is None or reprojected.isEmpty() else reprojected
 
 
 def measure_view_share(layer: QgsRasterLayer, view_extent, view_crs) -> float:
@@ -83,7 +77,7 @@ def measure_view_share(layer: QgsRasterLayer, view_extent, view_crs) -> float:
     view_area = view_extent.width() * view_extent.height()
     if view_area <= 0:
         return 0.0
-    layer_extent = _reproject_extent(layer.extent(), layer.crs(), view_crs)
+    layer_extent = _comparable_extent(layer.extent(), layer.crs(), view_crs)
     if layer_extent is None:
         return 0.0
     overlap = layer_extent.intersect(view_extent)
@@ -94,7 +88,7 @@ def measure_view_share(layer: QgsRasterLayer, view_extent, view_crs) -> float:
 
 def raster_is_world_backdrop(layer: QgsRasterLayer) -> bool:
 
-    extent = _reproject_extent(
+    extent = _comparable_extent(
         layer.extent(), layer.crs(), QgsCoordinateReferenceSystem("EPSG:4326"))
     if extent is None:
         return False

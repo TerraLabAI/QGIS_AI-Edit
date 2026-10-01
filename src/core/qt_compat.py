@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from qgis.core import QgsBlockingNetworkRequest, QgsRaster, QgsTask
 from qgis.PyQt.QtCore import QIODevice, QLocale, QObject, QStandardPaths, Qt, QTimer
-from qgis.PyQt.QtGui import QImage, QPainter, QPalette, QTextCursor, QTextOption
+from qgis.PyQt.QtGui import QImage, QPainter, QTextCursor, QTextOption
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 from qgis.PyQt.QtWidgets import QFrame, QSizePolicy, QTextEdit
 
@@ -28,7 +28,6 @@ RightDockWidgetArea = _resolve(Qt, "DockWidgetArea", "RightDockWidgetArea")
 
 PointingHandCursor = _resolve(Qt, "CursorShape", "PointingHandCursor")
 CrossCursor = _resolve(Qt, "CursorShape", "CrossCursor")
-WaitCursor = _resolve(Qt, "CursorShape", "WaitCursor")
 ArrowCursor = _resolve(Qt, "CursorShape", "ArrowCursor")
 
 
@@ -88,10 +87,6 @@ OtherFocusReason = _resolve(Qt, "FocusReason", "OtherFocusReason")
 ToolButtonTextBesideIcon = _resolve(Qt, "ToolButtonStyle", "ToolButtonTextBesideIcon")
 
 
-DownArrow = _resolve(Qt, "ArrowType", "DownArrow")
-RightArrow = _resolve(Qt, "ArrowType", "RightArrow")
-
-
 RichText = _resolve(Qt, "TextFormat", "RichText")
 PlainText = _resolve(Qt, "TextFormat", "PlainText")
 AutoText = _resolve(Qt, "TextFormat", "AutoText")
@@ -105,7 +100,6 @@ WA_StyledBackground = _resolve(Qt, "WidgetAttribute", "WA_StyledBackground")
 
 
 ScrollBarAlwaysOff = _resolve(Qt, "ScrollBarPolicy", "ScrollBarAlwaysOff")
-ScrollBarAsNeeded = _resolve(Qt, "ScrollBarPolicy", "ScrollBarAsNeeded")
 
 
 
@@ -127,7 +121,6 @@ NoPen = _resolve(Qt, "PenStyle", "NoPen")
 
 
 TextSelectableByMouse = _resolve(Qt, "TextInteractionFlag", "TextSelectableByMouse")
-TextBrowserInteraction = _resolve(Qt, "TextInteractionFlag", "TextBrowserInteraction")
 
 
 WriteOnly = _resolve(QIODevice, "OpenModeFlag", "WriteOnly")
@@ -155,13 +148,8 @@ SizePolicyExpanding = _resolve(QSizePolicy, "Policy", "Expanding")
 SizePolicyFixed = _resolve(QSizePolicy, "Policy", "Fixed")
 
 
-PaletteBase = _resolve(QPalette, "ColorRole", "Base")
-
-
 FrameNoFrame = _resolve(QFrame, "Shape", "NoFrame")
-FrameHLine = _resolve(QFrame, "Shape", "HLine")
 FrameVLine = _resolve(QFrame, "Shape", "VLine")
-FrameSunken = _resolve(QFrame, "Shadow", "Sunken")
 
 
 BlockingNoError = _resolve(QgsBlockingNetworkRequest, "ErrorCode", "NoError")

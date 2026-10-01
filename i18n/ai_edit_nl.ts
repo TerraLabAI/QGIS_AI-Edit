@@ -5501,5 +5501,13 @@ We horen graag van u!</translation>
         <source>{n} layers above not sent: plan limit</source>
         <translation>{n} lagen erboven niet verzonden: limiet van je abonnement</translation>
     </message>
+    <message>
+        <source>Download incomplete: the image ends early ({got} bytes)</source>
+        <translation>Download onvolledig: de afbeelding eindigt te vroeg ({got} bytes)</translation>
+    </message>
+    <message>
+        <source>Your image could not be sent: the connection is too slow or was cut. Try again, or pick a lower resolution.</source>
+        <translation>Uw afbeelding kon niet worden verzonden: de verbinding is te traag of werd verbroken. Probeer opnieuw, of kies een lagere resolutie.</translation>
+    </message>
 </context>
 </TS>

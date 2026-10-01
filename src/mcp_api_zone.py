@@ -18,6 +18,7 @@ from qgis.core import (
     QgsRectangle,
 )
 
+from .core.extent_transform import transform_extent
 from .mcp_api_support import _never_raises
 
 
@@ -88,20 +89,15 @@ class ZoneMixin:
 
 
 
-
         if not crs_authid:
             return extent
         source = QgsCoordinateReferenceSystem(str(crs_authid))
         if not source.isValid():
             return {"_error": f"crs '{crs_authid}' is not a coordinate system QGIS knows."}
-        target = self._canvas_crs()
-        if source == target:
-            return extent
-        transform = QgsCoordinateTransform(source, target, QgsProject.instance())
-        try:
-            return transform.transformBoundingBox(QgsRectangle(extent))
-        except Exception:
+        moved = transform_extent(QgsRectangle(extent), source, self._canvas_crs())
+        if moved is None:
             return {"_error": f"Could not convert the area from {crs_authid} to the map CRS."}
+        return moved
 
     def _resolve_polygon(self, polygon_wkt: str, crs_authid: str | None = None):
 
@@ -219,6 +215,8 @@ class ZoneMixin:
 
 
 
+
+
         if getattr(self, "_busy", lambda: False)():
             return {"_error": "Wait for the current generation before changing its zone.", "busy": True}
         if bbox is not None and polygon_wkt:
@@ -245,9 +243,24 @@ class ZoneMixin:
         if refused is not None:
             return refused
 
-        self._open_dock()
+        dock = self._open_dock()
         self._install_zone(extent, polygon)
         summary = self._zone_summary()
+        if not summary.get("has_zone"):
+
+
+            notice = getattr(dock, "_select_zone_notice", None) if dock is not None else None
+            try:
+                reason = notice.text().strip() if notice is not None else ""
+            except Exception:
+                reason = ""
+            summary["ok"] = False
+            summary["_error"] = reason or self._dock_status() or "AI Edit refused this zone."
+            summary["hint"] = (
+                "Call set_zone again with a zone that lands on the image picked in the "
+                "panel. The previous zone is gone too."
+            )
+            return summary
         summary["ok"] = True
         summary["hint"] = (
             "Call generate(prompt) to edit this zone, or markup('draw', geometry_wkt) "

@@ -92,7 +92,7 @@ class ZoneVersionsMixin:
                 telemetry.track(te.GENERATION_CANCELLED, self._enrich_generation_props({
                     "duration_ms": int(duration * 1000),
                     "resolution": getattr(self, "_last_suggested_res", ""),
-                }))
+                }, request_id=self._running_request_id()))
                 telemetry.flush()
 
 
@@ -190,7 +190,6 @@ class ZoneVersionsMixin:
 
 
         self._dock_widget.set_launch_state()
-        self._reset_version_lineage()
         if had_generation:
 
 
@@ -208,9 +207,8 @@ class ZoneVersionsMixin:
 
 
 
-        if key in version:
-            return version.get(key)
-        return (version.get("job") or {}).get(key)
+
+        return version.get(key)
 
     def _on_new_edit_clicked(self):
 
@@ -499,9 +497,6 @@ class ZoneVersionsMixin:
             self._pending_same_edit_template = None
             if pending:
                 self._dock_widget.arm_template(*pending)
-
-
-            self._dock_widget.clear_markup_reference()
         self._show_selection_rectangle(extent, polygon)
         self._dock_widget.set_zone_selected()
 
@@ -897,9 +892,6 @@ class ZoneVersionsMixin:
         self._reset_version_lineage()
         if self._map_tool is not None:
             self._map_tool.set_has_zone(False)
-
-        if self._dock_widget is not None:
-            self._dock_widget.clear_markup_reference()
         self._dock_widget.set_zone_cleared()
         log_debug("Zone cleared")
 

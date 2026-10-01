@@ -16,12 +16,12 @@
 from __future__ import annotations
 
 from qgis.core import (
-    QgsCoordinateTransform,
     QgsProject,
     QgsRectangle,
 )
 
 from ..core import qt_compat as QtC
+from ..core.extent_transform import transform_extent
 from ..core.logger import log_warning
 
 
@@ -89,12 +89,14 @@ def _is_opaque(candidate) -> bool:
 
 def _covers(candidate, extent: QgsRectangle, project) -> bool:
 
+
+
+
+
+
+
     footprint = candidate.extent()
     if footprint is None or footprint.isEmpty():
         return False
-    layer_crs = candidate.crs()
-    project_crs = project.crs()
-    if layer_crs.isValid() and project_crs.isValid() and layer_crs != project_crs:
-        transform = QgsCoordinateTransform(layer_crs, project_crs, project)
-        footprint = transform.transformBoundingBox(footprint)
-    return footprint.contains(extent)
+    footprint = transform_extent(footprint, candidate.crs(), project.crs(), project)
+    return footprint is not None and footprint.contains(extent)

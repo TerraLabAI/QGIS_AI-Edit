@@ -13,16 +13,22 @@ from __future__ import annotations
 
 from ...core import telemetry
 from ...core import telemetry_events as te
-from ...core.config_store import get_export_copy, get_export_dial
+from ...core.config_store import get_export_copy
 from ...core.i18n import tr
+from ...core.prompts.prompt_minimum import (
+    PROMPT_EMPTY,
+    PROMPT_TOO_SHORT,
+    PromptMinimumCheck,
+    PromptMinimumDials,
+    prompt_minimum_dials,
+)
 from .design_tokens import HINT_QSS, INK_2
 
 
 __all__ = [
     "_BLOCK_REASON_QSS",
-    "_MIN_PROMPT_CHARS",
-    "_MIN_PROMPT_WORDS",
     "BLOCK_REASON_INK",
+    "cjk_prompt_minimum_text",
     "DockBlockedReasonsMixin",
     "GENERATE_BLOCK_NO_ZONE",
     "GENERATE_BLOCK_PROMPT_EMPTY",
@@ -36,12 +42,6 @@ __all__ = [
 ]
 
 
-
-
-_MIN_PROMPT_CHARS = 10
-_MIN_PROMPT_WORDS = 2
-
-
 LAUNCH_BLOCK_NO_RASTER = "no_raster"
 LAUNCH_BLOCK_NO_KEY = "no_key"
 LAUNCH_BLOCK_TILES_WARMING = "tiles_warming"
@@ -49,8 +49,8 @@ LAUNCH_BLOCK_WORKER_BUSY = "worker_busy"
 
 
 GENERATE_BLOCK_NO_ZONE = "no_zone"
-GENERATE_BLOCK_PROMPT_EMPTY = "prompt_empty"
-GENERATE_BLOCK_PROMPT_TOO_SHORT = "prompt_too_short"
+GENERATE_BLOCK_PROMPT_EMPTY = PROMPT_EMPTY
+GENERATE_BLOCK_PROMPT_TOO_SHORT = PROMPT_TOO_SHORT
 
 
 BLOCK_REASON_INK = INK_2
@@ -70,7 +70,18 @@ def launch_block_text(reason: str) -> str:
     return ""
 
 
-def generate_block_text(reason: str) -> str:
+def cjk_prompt_minimum_text(dials: PromptMinimumDials) -> str:
+
+
+    return tr("Please describe what you want to change (at least {chars} characters).").replace(
+        "{chars}", str(dials.min_cjk_chars)
+    )
+
+
+def generate_block_text(reason: str, prompt_check: PromptMinimumCheck | None = None) -> str:
+
+
+
 
     if reason == GENERATE_BLOCK_NO_ZONE:
         return get_export_copy("dock.blocked_reasons.no_zone", tr("Draw a zone on the map first"))
@@ -82,12 +93,12 @@ def generate_block_text(reason: str) -> str:
 
         return ""
     if reason == GENERATE_BLOCK_PROMPT_TOO_SHORT:
+        dials = prompt_check.dials if prompt_check is not None else prompt_minimum_dials()
+        if prompt_check is not None and prompt_check.cjk_chars:
+            return cjk_prompt_minimum_text(dials)
         return tr(
             "Say a bit more: at least {chars} characters and {words} words."
-        ).format(
-            chars=get_export_dial("limits.min_prompt_chars", _MIN_PROMPT_CHARS),
-            words=get_export_dial("limits.min_prompt_words", _MIN_PROMPT_WORDS),
-        )
+        ).format(chars=dials.min_chars, words=dials.min_words)
     return ""
 
 
@@ -141,7 +152,9 @@ class DockBlockedReasonsMixin:
         if reason:
             self._track_block_reason(te.LAUNCH_BLOCKED, reason)
 
-    def set_generate_block_reason(self, reason: str | None) -> None:
+    def set_generate_block_reason(
+        self, reason: str | None, prompt_check: PromptMinimumCheck | None = None
+    ) -> None:
 
 
 
@@ -155,7 +168,7 @@ class DockBlockedReasonsMixin:
 
 
             shown = reason and not self._generate_btn.isHidden()
-            text = generate_block_text(reason) if shown else ""
+            text = generate_block_text(reason, prompt_check) if shown else ""
             label.setText(text)
             label.setVisible(bool(text))
         if reason:

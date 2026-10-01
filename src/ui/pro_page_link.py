@@ -16,6 +16,7 @@ import time
 from typing import Callable
 
 from ..core.i18n import get_locale
+from ..core.served_url_checks import is_plain_https_url
 
 
 PRO_LOGIN_TARGET = "pricing"
@@ -45,7 +46,9 @@ def forget_opened() -> None:
 
 
 def _is_openable(url) -> bool:
-    return isinstance(url, str) and url.startswith("https://") and " " not in url
+
+
+    return is_plain_https_url(url)
 
 
 def open_pro_page(

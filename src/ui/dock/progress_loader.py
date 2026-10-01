@@ -245,9 +245,6 @@ class GenerationProgressLoader(QWidget):
         self._full_text = (text or "").rstrip(" .…")
         self._elide_label()
 
-    def phase_text(self) -> str:
-        return self._full_text
-
     def start_run(self) -> None:
 
         self.clock.restart_clock()

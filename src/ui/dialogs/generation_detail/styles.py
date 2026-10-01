@@ -1,8 +1,6 @@
 
 from __future__ import annotations
 
-import os
-
 from ...dock.design_tokens import (
     ACCENT_BORDER,
     BTN_DANGER_GHOST_QSS,
@@ -31,8 +29,6 @@ from ...dock.design_tokens import (
 )
 from ...dock.style import (
     COPY_BTN_QSS,
-    COPY_SVG,
-    ICONS_DIR,
     STAR_FILLED_SVG,
     STAR_OUTLINE_SVG,
 )
@@ -44,13 +40,11 @@ __all__ = [
     "_CHIP_STYLE",
     "_CHIP_VALUE",
     "_COPY_BTN",
-    "_COPY_SVG",
     "_DANGER_BTN",
     "_DETAIL_DIALOG_QSS",
     "_DETAIL_BADGE_STYLE",
     "_DETAIL_SECTION_STYLE",
     "_DETAIL_TITLE_STYLE",
-    "_DOWNLOAD_SVG",
     "_FS_BTN",
     "_LIGHTBOX_QSS",
     "_PRIMARY_BTN",
@@ -67,9 +61,7 @@ __all__ = [
 
 _STAR_OUTLINE_SVG = STAR_OUTLINE_SVG
 _STAR_FILLED_SVG = STAR_FILLED_SVG
-_COPY_SVG = COPY_SVG
 _COPY_BTN = COPY_BTN_QSS
-_DOWNLOAD_SVG = os.path.join(ICONS_DIR, "download.svg")
 
 
 

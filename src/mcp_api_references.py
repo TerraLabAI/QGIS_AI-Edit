@@ -18,6 +18,7 @@ from typing import Any
 
 from qgis.core import QgsProject, QgsRasterLayer, QgsRectangle
 
+from .core.served_url_checks import SERVED_URL_FORBIDDEN_RE
 from .mcp_api_support import (
     _find_project_layer,
     _never_raises,
@@ -104,7 +105,7 @@ _BASEMAP_SEPARATORS_RE = re.compile(r"[\s_-]+")
 
 
 _BASEMAP_URL_MAX_CHARS = 600
-_BASEMAP_URL_FORBIDDEN_RE = re.compile(r"[\x00-\x20\x7f-\x9f<>\"'\\]")
+_BASEMAP_URL_FORBIDDEN_RE = SERVED_URL_FORBIDDEN_RE
 
 _BASEMAP_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,31}$")
 _BASEMAP_ZOOM_MAX = 25
@@ -260,11 +261,12 @@ class ReferencesMixin:
                 "kind": record.source_kind,
                 "size_bytes": record.size_bytes,
                 "note": "",
+
+
                 "is_markup": False,
             }
             try:
                 entry["note"] = store.get_note(record.id)
-                entry["is_markup"] = bool(store.is_markup(record.id))
             except Exception:  # nosec B110
                 pass
             entries.append(entry)
@@ -484,6 +486,7 @@ class ReferencesMixin:
 
     @_never_raises
     def list_references(self) -> dict:
+
 
 
 

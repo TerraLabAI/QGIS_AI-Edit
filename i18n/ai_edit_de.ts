@@ -5521,5 +5521,13 @@ Wir freuen uns auf Ihre Nachricht!</translation>
         <source>{n} layers above not sent: plan limit</source>
         <translation>{n} Ebenen darüber nicht gesendet: Tariflimit</translation>
     </message>
+    <message>
+        <source>Download incomplete: the image ends early ({got} bytes)</source>
+        <translation>Download unvollständig: das Bild endet zu früh ({got} Bytes)</translation>
+    </message>
+    <message>
+        <source>Your image could not be sent: the connection is too slow or was cut. Try again, or pick a lower resolution.</source>
+        <translation>Ihr Bild konnte nicht gesendet werden: Die Verbindung ist zu langsam oder wurde unterbrochen. Versuchen Sie es erneut oder wählen Sie eine niedrigere Auflösung.</translation>
+    </message>
 </context>
 </TS>

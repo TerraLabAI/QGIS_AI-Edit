@@ -12,6 +12,7 @@ from qgis.core import (
 
 from ..config_store import get_export_dial
 from ..errors import AIEditError, ErrorCode
+from ..extent_transform import transform_extent
 from ..i18n import tr
 
 
@@ -39,24 +40,25 @@ def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> N
     geographic_extent = extent
     crosses_antimeridian = False
     if not map_crs.isGeographic():
-        try:
-            to_wgs = QgsCoordinateTransform(
-                map_crs,
-                QgsCoordinateReferenceSystem("EPSG:4326"),
-                QgsProject.instance(),
-            )
-            geographic_extent = to_wgs.transformBoundingBox(extent)
+        wgs84 = QgsCoordinateReferenceSystem("EPSG:4326")
+
+
+        geographic_extent = transform_extent(extent, map_crs, wgs84)
+        if geographic_extent is not None:
+            try:
 
 
 
 
 
-            y_mid = (extent.yMinimum() + extent.yMaximum()) / 2.0
-            left_lon = to_wgs.transform(QgsPointXY(extent.xMinimum(), y_mid)).x()
-            right_lon = to_wgs.transform(QgsPointXY(extent.xMaximum(), y_mid)).x()
-            crosses_antimeridian = right_lon < left_lon
-        except Exception:
-            geographic_extent = None
+
+                to_wgs = QgsCoordinateTransform(map_crs, wgs84, QgsProject.instance())
+                y_mid = (extent.yMinimum() + extent.yMaximum()) / 2.0
+                left_lon = to_wgs.transform(QgsPointXY(extent.xMinimum(), y_mid)).x()
+                right_lon = to_wgs.transform(QgsPointXY(extent.xMaximum(), y_mid)).x()
+                crosses_antimeridian = right_lon < left_lon
+            except Exception:
+                geographic_extent = None
     else:
 
 

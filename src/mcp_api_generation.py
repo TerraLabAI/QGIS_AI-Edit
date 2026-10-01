@@ -98,7 +98,7 @@ class GenerationMixin:
             }
 
 
-            record = records[index - 1] if 0 < index <= len(records) else None
+            record = records[index] if 0 < index < len(records) else None
             if isinstance(record, dict):
                 entry["layer_id"] = record.get("layer_id")
                 entry["request_id"] = record.get("request_id")
@@ -193,10 +193,30 @@ class GenerationMixin:
 
 
 
+
+
+        from .core.prompts.prompt_minimum import check_prompt_minimum
+
         plugin = self._plugin
         prompt = (prompt or "").strip()
         if not prompt:
             return {"submitted": False, "_error": "prompt is required"}
+
+
+
+        check = check_prompt_minimum(prompt)
+        if not check.ok:
+            dials = check.dials
+            return {
+                "submitted": False,
+                "prompt_reason": check.reason,
+                "_error": (
+                    f"The prompt is too short: write at least {dials.min_chars} characters "
+                    f"and {dials.min_words} words, or {dials.min_cjk_chars} characters in "
+                    "Chinese, Japanese or Korean. Nothing was sent or billed."
+                ),
+                "hint": "Call get_prompt_guidance(prompt) to check a prompt before generate().",
+            }
         if bbox is not None and polygon_wkt:
             return {
                 "submitted": False,
@@ -420,6 +440,12 @@ class GenerationMixin:
 
 
 
+
+
+
+
+
+
         if self._busy():
             return {"_error": "Wait for the current generation before selecting a version.", "busy": True}
         dock = self._dock()
@@ -440,22 +466,85 @@ class GenerationMixin:
             )
             out["count"] = count
             return out
+        plugin = self._plugin
+        kept = getattr(plugin, "_selected_version_index", 0)
+        if getattr(plugin, "_version_fetch_active", False):
+
+
+            return {
+                "_error": "A version's image is still downloading. Call list_versions() in a few seconds.",
+                "busy": True,
+                "selected_index": kept,
+            }
+        unavailable = self._version_image_unavailable(index)
+        if unavailable:
+            return {"_error": unavailable, "selected_index": kept}
         if hasattr(dock, "select_version"):
             dock.select_version(index)
         handler = getattr(dock, "_on_version_selected", None)
         if callable(handler):
             handler(index)
+
+
+        pending = bool(getattr(plugin, "_version_fetch_active", False))
+        now = getattr(plugin, "_selected_version_index", index)
+        if not pending and now != index:
+            return {
+                "_error": "AI Edit could not show this version, so the selection did not move.",
+                "selected_index": now,
+                "dock_status": self._dock_status(),
+            }
         try:
             label = strip.label_for(index)
         except Exception:
             label = None
-        return {
+        result: dict[str, Any] = {
             "ok": True,
             "selected_index": index,
             "label": label,
             "versions": self._versions(),
             "hint": "Call generate(prompt) to build the next edit on this version.",
         }
+        if pending:
+            result["pending"] = True
+            result["note"] = (
+                "This version's image is being downloaded. Call list_versions() in a few "
+                "seconds: if the download fails, selected_index goes back to the previous one."
+            )
+        return result
+
+    def _version_image_unavailable(self, index: int) -> str | None:
+
+
+
+
+
+
+        import os
+
+        from .core.prompts import history_cache
+        from .core.raster_writer import extent_and_crs_from_job
+
+        plugin = self._plugin
+        versions = getattr(plugin, "_versions", None) or []
+        needs_layer = getattr(plugin, "_version_needs_layer", None)
+        if not (0 < index < len(versions)) or not callable(needs_layer):
+            return None
+        version = versions[index]
+        if not isinstance(version, dict) or not needs_layer(version):
+            return None
+        local = history_cache.get_output_paths(version.get("request_id") or "")
+        if local and os.path.isfile(local.get("path") or ""):
+            return None
+        job_for = getattr(plugin, "_version_job_for", None)
+        job = job_for(version) if callable(job_for) else None
+        if not (isinstance(job, dict) and job.get("output_url")):
+            return "This version's image is no longer available: it is not on this disk and has no link."
+        if getattr(plugin, "_client", None) is None:
+            return "This version's image has to be downloaded, and AI Edit has no connection to the server."
+        if extent_and_crs_from_job(job) is None:
+            return "This version has no location, so its image cannot be placed on the map."
+        return None
 
     @_never_raises
     def finish_session(self, index: int | None = None) -> dict:

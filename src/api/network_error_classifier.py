@@ -32,16 +32,12 @@ __all__ = [
     "_MIN_IMAGE_BYTES",
     "_reply_failed",
     "_safe_int",
-    "_scrub_urls",
     "CANCELLED_CODE",
     "DownloadError",
     "network_setup_hint",
     "qgis_timeout_hint",
     "request_feedback",
 ]
-
-
-_scrub_urls = scrub_urls
 
 
 def _safe_int(val):

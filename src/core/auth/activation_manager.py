@@ -8,19 +8,27 @@ import re
 from urllib.parse import urlsplit
 
 from ..config_store import get_export_copy
+from ..errors import QUOTA_ERROR_CODES, ErrorCode
 from ..i18n import tr
+from ..product_identity import PRODUCT_ID
+from ..served_url_checks import SERVED_URL_FORBIDDEN_RE
 
 _KEY_RE = re.compile(r"^tl_[0-9a-f]{32}$")
 
 SETTINGS_PREFIX = "AIEdit/"
 
 
+CONSENT_ACCEPTED_KEY = f"{SETTINGS_PREFIX}consent_accepted"
+ACTIVATION_TIMESTAMP_KEY = f"{SETTINGS_PREFIX}activation_timestamp_unix"
+SIGNED_IN_BEFORE_KEY = f"{SETTINGS_PREFIX}signed_in_before"
+
+
+PLUGIN_UTM_QUERY = "utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit"
+
+
 def build_utm_url(path: str, utm_content: str) -> str:
 
-    return (
-        f"https://terra-lab.ai{path}"
-        f"?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content={utm_content}"
-    )
+    return f"https://terra-lab.ai{path}?{PLUGIN_UTM_QUERY}&utm_content={utm_content}"
 
 
 SUBSCRIBE_URL = build_utm_url("/dashboard/ai-edit", "subscribe")
@@ -43,7 +51,7 @@ MARKETPLACE_URL = "https://plugins.qgis.org/plugins/AI_Edit/"
 
 
 _URL_MAX_CHARS = 500
-_URL_FORBIDDEN_RE = re.compile(r"[\x00-\x20\x7f-\x9f<>\"'\\]")
+_URL_FORBIDDEN_RE = SERVED_URL_FORBIDDEN_RE
 
 _EMAIL_MAX_CHARS = 254
 
@@ -225,11 +233,11 @@ def has_consent(settings=None) -> bool:
 
     global _consent_memo
     if settings is not None:
-        return settings.value(f"{SETTINGS_PREFIX}consent_accepted", False, type=bool)
+        return settings.value(CONSENT_ACCEPTED_KEY, False, type=bool)
     if _consent_memo is None:
         from qgis.core import QgsSettings
         _consent_memo = bool(
-            QgsSettings().value(f"{SETTINGS_PREFIX}consent_accepted", False, type=bool)
+            QgsSettings().value(CONSENT_ACCEPTED_KEY, False, type=bool)
         )
     return _consent_memo
 
@@ -242,10 +250,10 @@ def save_consent(settings=None):
 
     global _consent_memo
     if settings is not None:
-        settings.setValue(f"{SETTINGS_PREFIX}consent_accepted", True)
+        settings.setValue(CONSENT_ACCEPTED_KEY, True)
         return
     from qgis.core import QgsSettings
-    QgsSettings().setValue(f"{SETTINGS_PREFIX}consent_accepted", True)
+    QgsSettings().setValue(CONSENT_ACCEPTED_KEY, True)
     _consent_memo = True
 
 
@@ -318,7 +326,7 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str, dict | N
 
     auth = {
         "Authorization": f"Bearer {key}",
-        "X-Product-ID": "ai-edit",
+        "X-Product-ID": PRODUCT_ID,
     }
     try:
         result = client.get_usage(auth=auth)
@@ -345,15 +353,10 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str, dict | N
         if code == "TRIAL_EXHAUSTED":
             return False, error_msg, "TRIAL_EXHAUSTED", None
 
-        if code in {
-            "QUOTA_EXCEEDED",
-            "LIMIT_REACHED",
-            "USAGE_LIMIT_REACHED",
-            "MONTHLY_LIMIT_REACHED",
-        }:
+        if code in QUOTA_ERROR_CODES:
             return False, error_msg, "QUOTA_EXCEEDED", None
 
-        if code == "INVALID_KEY":
+        if code == ErrorCode.INVALID_KEY.value:
             return (
                 False,
                 get_export_copy(
@@ -378,7 +381,7 @@ def validate_key_with_server(client, key: str) -> tuple[bool, str, str, dict | N
         return False, error_msg, (code or "VALIDATION_FAILED"), None
 
     server_product = result.get("product_id", "")
-    if server_product and server_product != "ai-edit":
+    if server_product and server_product != PRODUCT_ID:
         return (
             False,
             get_export_copy(
@@ -444,7 +447,7 @@ def get_server_config(client=None) -> dict:
         return DEFAULT_CONFIG
 
     try:
-        result = client.get_config("ai-edit")
+        result = client.get_config(PRODUCT_ID)
         if isinstance(result, dict) and result and "error" not in result:
             if store is not None:
                 store.set_activation_config(result)

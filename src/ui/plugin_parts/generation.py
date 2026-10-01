@@ -9,7 +9,7 @@ from qgis.PyQt.QtWidgets import QPushButton
 
 from ...core import telemetry
 from ...core import telemetry_events as te
-from ...core.auth.activation_manager import has_consent, save_consent
+from ...core.auth.activation_manager import ACTIVATION_TIMESTAMP_KEY, has_consent, save_consent
 from ...core.entitlements import coerce_tier
 from ...core.errors import build_failure_props
 from ...core.i18n import tr
@@ -20,6 +20,7 @@ from ...core.prompts.prompt_presets import (
     get_vector_hints,
     lookup_template_by_prompt,
 )
+from ...core.version_lineage import original_version_record
 from ...workers.export_worker import ExportWorker
 from ...workers.generic_request_task import GenericRequestTask
 from ..canvas_exporter import (
@@ -50,7 +51,7 @@ class GenerationMixin:
     @staticmethod
     def _days_since_activation() -> int | None:
 
-        raw = QSettings().value("AIEdit/activation_timestamp_unix", "", type=str)
+        raw = QSettings().value(ACTIVATION_TIMESTAMP_KEY, "", type=str)
         if not raw:
             return None
         try:
@@ -60,12 +61,21 @@ class GenerationMixin:
         delta = int((time.time() - ts) // 86400)
         return max(delta, 0)
 
-    def _enrich_generation_props(self, base: dict) -> dict:
+    def _running_request_id(self) -> str | None:
+
+        ctx = getattr(getattr(self, "_worker", None), "ctx", None)
+        return getattr(ctx, "request_id", None)
+
+    def _enrich_generation_props(self, base: dict, request_id: str | None = None) -> dict:
         enriched = {
             **base,
             "context_image_count": self._reference_store.count(),
             "context_total_size_bytes": self._reference_store.total_size_bytes(),
         }
+
+
+        if isinstance(request_id, str) and request_id.strip():
+            enriched["request_id"] = request_id
         days = self._days_since_activation()
         if days is not None:
             enriched["days_since_activation"] = days
@@ -91,7 +101,7 @@ class GenerationMixin:
         telemetry.track(te.GENERATION_CANCELLED, self._enrich_generation_props({
             "duration_ms": int(duration * 1000),
             "resolution": getattr(self, "_last_suggested_res", ""),
-        }))
+        }, request_id=self._running_request_id()))
         telemetry.flush()
         self._generation_service.cancel()
         if self._map_tool:
@@ -285,19 +295,10 @@ class GenerationMixin:
             save_consent()
 
 
-        if not has_server_config():
-            self._dock_widget.set_status(
-                tr(
-                    "Cannot generate: export config not loaded from server. "
-                    "Check your internet connection and restart QGIS."
-                ),
-                is_error=True
-            )
-            return
 
 
 
-        if not has_tuned_config():
+        if not has_server_config() or not has_tuned_config():
             self._generate_waiting_for_config = (prompt, is_retry)
             self._refresh_tuned_config()
             if self._tuned_config_task is None:
@@ -741,7 +742,7 @@ class GenerationMixin:
 
 
         if not self._versions:
-            self._versions.append({"layer_id": None, "request_id": None, "prompt": ""})
+            self._versions.append(original_version_record())
             self._selected_version_index = 0
             pixmap = self._pixmap_from_b64(guidance_b64 or image_b64)
 

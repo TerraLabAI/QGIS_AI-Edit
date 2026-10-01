@@ -6,12 +6,18 @@ qgisMaximumVersion=4.99
 # Qt6 builds of QGIS 3.x refuse to load a plugin that omits this line.
 # QGIS 4 dropped the check and a Qt5 build never runs it.
 supportsQt6=True
-version=1.10.0
+version=1.11.0
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.11.0
+    - On a slow or unstable connection, AI Edit waits and retries instead of failing
+    - A result cut off while downloading resumes where it stopped, never saved half-empty
+    - Before/after compare works on QGIS builds without WebP support
+    - A prompt too short to work is refused before any credit is used
+
     1.10.0
     - Drag a box on the map to draw a zone, with a hint on the map; right-click finishes
     - The demo map opens with a ready zone and prompt, plus three one-click starting prompts
@@ -32,12 +38,6 @@ changelog=
     - A zone you already drew is offered again on the zone step
     - QGIS no longer freezes at startup while AI Edit connects
     - Vectorize works on rasters whose projection is set on the layer only
-
-    1.9.0
-    - Vectorize results now save straight to a GeoPackage, ready to use in your project
-    - The Library page gets full keyboard navigation, a Favorites star, and clearer session names and previews
-    - Undo now works while drawing a zone, removing your last stroke like Ctrl+Z
-    - Layers shown above the one you edit, like labels or polygons, now guide the AI as references
 
 about=
     Show a project before it exists, on the aerial imagery you already have open

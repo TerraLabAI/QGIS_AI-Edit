@@ -29,7 +29,6 @@ from ...core.resolution_labels import (
     resolution_quality_name,
     resolution_tiers,
 )
-from ..icons import icon_for
 from . import design_tokens as tokens
 from .mime import _file_paths_from_mime, _layers_from_mime, _mime_has_droppable
 from .resolution_visuals import (
@@ -379,13 +378,6 @@ class _PromptContainer(QFrame):
         self.setStyleSheet(self._base_style)
 
 
-
-    def _chip_icon(self, name: str, size: int = _PROMPT_CHIP_GLYPH_PX) -> QIcon:
-
-        return icon_for(
-            self, name, size, tokens.qcolor(tokens.INK_2),
-            disabled_color=tokens.qcolor(tokens.INK_3),
-        )
 
     @staticmethod
     def _chip_glyph(button: _FooterIconButton, name: str) -> None:

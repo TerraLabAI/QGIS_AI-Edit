@@ -15,6 +15,7 @@ from ...core.logger import log_warning
 from ...core.number_format import format_count
 from ...core.prompts import conversation_thumbs, history_cache
 from ...core.prompts.session_grouping import session_jobs_for
+from ...core.version_lineage import original_version_record, restored_version_record
 from ...workers.generic_request_task import GenericRequestTask
 from ..raster_writer import (
     add_geotiff_to_project,
@@ -315,7 +316,7 @@ class HistoryMixin(SessionBaseNoticeMixin):
 
         from qgis.PyQt.QtWidgets import QFileDialog
 
-        from ..raster_writer import _slugify
+        from ...core.slug import slugify
 
         side = job.get("download_side") or "output"
         output_url = job.get("input_url") if side == "input" else job.get("output_url")
@@ -330,7 +331,7 @@ class HistoryMixin(SessionBaseNoticeMixin):
             return
 
 
-        base_slug = _slugify(job.get("prompt") or "")[:40] or "ai_edit"
+        base_slug = slugify(job.get("prompt") or "")[:40] or "ai_edit"
         slug = f"{base_slug}_{side}"
         geo = extent_and_crs_from_job(job)
         client = self._client
@@ -580,7 +581,7 @@ class HistoryMixin(SessionBaseNoticeMixin):
         if len(pixmaps) != len(chain) + 1:
             return
         blank = self._pixmap_from_blob(None)
-        self._versions = [{"layer_id": None, "request_id": None, "prompt": ""}]
+        self._versions = [original_version_record()]
         self._dock_widget.seed_version_strip(pixmaps[0] or blank)
         for j, pix in zip(chain, pixmaps[1:]):
             dims = None
@@ -596,12 +597,7 @@ class HistoryMixin(SessionBaseNoticeMixin):
             }
 
 
-            self._versions.append({
-                "layer_id": None,
-                "request_id": j.get("request_id"),
-                "prompt": j.get("prompt") or "",
-                "job": j,
-            })
+            self._versions.append(restored_version_record(j))
             self._dock_widget.add_version_thumb(
                 pix or blank, j.get("prompt") or "", meta
             )
@@ -658,6 +654,8 @@ class HistoryMixin(SessionBaseNoticeMixin):
 
 
 
+
+
         job = version.get("job")
         if isinstance(job, dict) and job.get("output_url"):
             return job
@@ -665,7 +663,11 @@ class HistoryMixin(SessionBaseNoticeMixin):
         if not rid or self._dock_widget is None:
             return None
         for cached in self._dock_widget.get_cached_recent_jobs():
-            if isinstance(cached, dict) and cached.get("request_id") == rid:
+            if (
+                isinstance(cached, dict)
+                and cached.get("request_id") == rid
+                and cached.get("output_url")
+            ):
                 return cached
         return None
 
@@ -961,13 +963,10 @@ class HistoryMixin(SessionBaseNoticeMixin):
 
 
 
-        from qgis.core import (
-            QgsCoordinateReferenceSystem,
-            QgsCoordinateTransform,
-            QgsProject,
-        )
+        from qgis.core import QgsCoordinateReferenceSystem
 
         from ...core.errors import AIEditError
+        from ...core.extent_transform import transform_extent
         from ..canvas_exporter import validate_zone
 
         src_crs = QgsCoordinateReferenceSystem()
@@ -988,20 +987,19 @@ class HistoryMixin(SessionBaseNoticeMixin):
             float(extent_dict["ymax"]),
         )
         canvas_crs = self._canvas.mapSettings().destinationCrs()
-        if src_crs != canvas_crs:
-            try:
-                xform = QgsCoordinateTransform(src_crs, canvas_crs, QgsProject.instance())
-                rect = xform.transformBoundingBox(rect)
-            except Exception as err:  # noqa: BLE001
-                log_warning(f"restore zone transform failed: {err}")
-                self._notify(
-                    get_export_copy(
-                        "flows.history.zone_placement_failed",
-                        tr("Could not place the zone on the current map."),
-                    ),
-                    duration=get_export_dial("flows.history.notify_brief_s", _NOTIFY_BRIEF_S),
-                )
-                return False
+
+        moved = transform_extent(rect, src_crs, canvas_crs)
+        if moved is None:
+            log_warning("restore zone transform failed")
+            self._notify(
+                get_export_copy(
+                    "flows.history.zone_placement_failed",
+                    tr("Could not place the zone on the current map."),
+                ),
+                duration=get_export_dial("flows.history.notify_brief_s", _NOTIFY_BRIEF_S),
+            )
+            return False
+        rect = moved
         try:
             validate_zone(rect, canvas_crs, self._canvas.rotation())
         except AIEditError as err:

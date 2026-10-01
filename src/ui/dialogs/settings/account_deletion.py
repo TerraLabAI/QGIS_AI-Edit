@@ -7,8 +7,14 @@
 from __future__ import annotations
 
 from ....core.config_store import get_export_copy
+from ....core.errors import SIGN_IN_REFUSED_CODES, ErrorCode
 from ....core.i18n import tr
 from ....workers.generic_request_task import GenericRequestTask
+
+
+
+
+_SESSION_EXPIRED_CODES = SIGN_IN_REFUSED_CODES - {ErrorCode.KEY_REVOKED.value}
 
 
 class AccountDeletionMixin:
@@ -149,7 +155,7 @@ class AccountDeletionMixin:
                 "dialogs.account_settings_dialog.no_account_error",
                 tr("No account linked to this key."),
             )
-        if key in ("NO_AUTH", "INVALID_KEY"):
+        if key in _SESSION_EXPIRED_CODES:
             return get_export_copy(
                 "dialogs.account_settings_dialog.invalid_key_error",
                 tr("Session expired. Sign out and back in."),

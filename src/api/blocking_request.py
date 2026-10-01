@@ -54,6 +54,28 @@ _DEADLINE_MARGIN_S = 30.0
 _DEFAULT_DEADLINE_S = 600.0
 
 
+
+_SLOW_LINK_BYTES_PER_S = 16_000
+
+
+def _drop_cached_copy(request) -> None:
+
+
+
+
+
+
+
+
+
+    try:
+        cache = QgsNetworkAccessManager.instance().cache()
+        if cache is not None:
+            cache.remove(request.url())
+    except Exception:  # noqa: BLE001
+        pass  # nosec B110
+
+
 class BlockingRequest:
 
 
@@ -85,8 +107,14 @@ class BlockingRequest:
             content = self._put(request, body, feedback)
         elif method == "POST":
             content = QgsNetworkAccessManager.blockingPost(request, body, "", force_refresh, None)
+        elif force_refresh:
+            _drop_cached_copy(request)
+            try:
+                content = QgsNetworkAccessManager.blockingGet(request, "", True, None)
+            finally:
+                _drop_cached_copy(request)
         else:
-            content = QgsNetworkAccessManager.blockingGet(request, "", force_refresh, None)
+            content = QgsNetworkAccessManager.blockingGet(request, "", False, None)
         self._reply = content
         if content is None:
             self._error = "No reply from the network stack"
@@ -121,7 +149,12 @@ class BlockingRequest:
             timeout_s = request.transferTimeout() / 1000.0
         except AttributeError:
             timeout_s = 0
-        deadline = time.monotonic() + (timeout_s if timeout_s > 0 else _DEFAULT_DEADLINE_S) + _DEADLINE_MARGIN_S
+        deadline = (
+            time.monotonic()
+            + (timeout_s if timeout_s > 0 else _DEFAULT_DEADLINE_S)
+            + _DEADLINE_MARGIN_S
+            + body.size() / _SLOW_LINK_BYTES_PER_S
+        )
         loop = QEventLoop()
         poll = QTimer()
         poll.setInterval(_POLL_MS)

@@ -21,7 +21,6 @@ from qgis.PyQt.QtWidgets import QHBoxLayout, QLabel, QWidget
 from ....core import qt_compat as QtC
 from ....core.config_store import get_export_copy, get_export_dial
 from ....core.i18n import tr
-from ....core.prompts.prompt_presets import _CATEGORY_ORDER
 from ...dock import design_tokens as tk
 from ...dock.style import (
     ICONS_DIR,
@@ -33,17 +32,11 @@ from ...icons import icon_for, pixmap_for
 
 
 __all__ = [
-    "_BACK_BTN_SMALL",
     "paint_search_clear_button",
     "_build_origin_pill",
     "_build_use_hint",
     "_CARD_HOVER",
     "_CARD_NORMAL",
-    "_card_prompt",
-    "_CARD_PROMPT_CHARS",
-    "_CARD_TITLE_H",
-    "_EMPTY_MSG",
-    "_FEED_SUBTITLE",
     "_gallery_batch_size",
     "_GALLERY_PAGE_SIZE",
     "_HALL_SECTION_COUNT",
@@ -53,11 +46,8 @@ __all__ = [
     "_ICON_CACHE",
     "_ICONS_DIR",
     "_is_alive",
-    "_LANDING_HEADING",
     "_LOAD_MORE_BTN",
     "_MAX_TITLE_CHARS",
-    "_NEED_COLLAPSED_SETTING",
-    "_NEED_HEADER_BTN",
     "_NEED_TILE_SUB",
     "_NEED_TILE_TITLE",
     "_ORIGIN_PILL",
@@ -69,7 +59,6 @@ __all__ = [
     "_rail_subitem_style",
     "_SEARCH_BOX",
     "_set_use_hint",
-    "_SIDEBAR_GLYPHS",
     "_sidebar_icon_html",
     "_SIDEBAR_ITEM",
     "_SIDEBAR_ITEM_ACTIVE",
@@ -79,12 +68,10 @@ __all__ = [
     "_STAR_OUTLINE_SVG",
     "_svg_url",
     "_tab_label",
-    "_TAB_ORDER",
     "_TABS_WITH_COUNT",
     "_TROPHY_SVG",
     "_truncate",
     "_USE_HINT_HOVER",
-    "_USE_HINT_REST",
     "CARD_HINT_QSS",
     "card_description",
     "ClampedLabel",
@@ -195,15 +182,6 @@ _SIDEBAR_ITEM_ACTIVE = (
 )
 
 
-_NEED_HEADER_BTN = (
-    "QPushButton { text-align: left; border: none;"
-    f" border-radius: {tk.RADIUS_CONTROL}px; padding: 10px 12px 4px 12px;"
-    f" font-size: {tk.FONT_BASE}px; font-weight: 600; color: {tk.INK};"
-    " background: transparent; }"
-    f"QPushButton:hover {{ background: {tk.HOVER}; }}"
-)
-
-
 
 _SEARCH_BOX = tk.INPUT_QSS + (
     f"QLineEdit {{ min-height: {tk.BTN_PRIMARY_WIDE_PX - 14}px; padding: 6px 12px;"
@@ -241,10 +219,6 @@ CARD_HINT_QSS = (
 
 
 
-_USE_HINT_REST = (
-    f"QLabel {{ color: {tk.INK_3}; font-size: {tk.FONT_BODY}px; font-weight: 600;"
-    " background: transparent; border: none; }"
-)
 _USE_HINT_HOVER = (
     f"QLabel {{ color: {tk.LINK_INK}; font-size: {tk.FONT_BODY}px; font-weight: 600;"
     " background: transparent; border: none; }"
@@ -293,11 +267,6 @@ def _set_use_hint(hint, hovered: bool) -> None:
 
 _STAR_BTN = tk.BTN_ICON_QSS
 
-_EMPTY_MSG = (
-    f"QLabel {{ color: {tk.INK_2}; font-size: {tk.FONT_BODY}px;"
-    " background: transparent; border: none; }"
-)
-
 _LOAD_MORE_BTN = tk.BTN_GHOST_QSS
 
 
@@ -316,17 +285,6 @@ _NEED_TILE_SUB = (
 )
 
 
-_BACK_BTN_SMALL = (
-    "QPushButton { background: transparent; border: 1px solid transparent; padding: 0px;"
-    f" border-radius: {tk.RADIUS_CONTROL}px; }}"
-    f"QPushButton:hover {{ background: {tk.HOVER}; }}"
-    f"QPushButton:pressed {{ background: {tk.HOVER_ON}; }}"
-    f"QPushButton:focus {{ border-color: {tk.ACCENT_BORDER}; }}"
-)
-
-
-_LANDING_HEADING = _NEED_TILE_TITLE
-
 
 _HALL_SECTION_TITLE = (
     f"QLabel {{ color: {tk.INK}; font-size: {tk.FONT_PROSE}px; font-weight: 600;"
@@ -336,7 +294,6 @@ _HALL_SECTION_COUNT = (
     f"QLabel {{ color: {tk.INK_3}; font-size: {tk.FONT_BODY}px;"
     " background: transparent; border: none; }"
 )
-_FEED_SUBTITLE = _NEED_TILE_SUB
 
 
 
@@ -427,23 +384,7 @@ def style_library_scroll(scroll) -> None:
 
 
 
-
-
-
-_TAB_ORDER = [
-    "user_favorites",
-    "recent",
-    "__separator__",
-    "favorites",
-    *_CATEGORY_ORDER,
-]
-
-
 _TABS_WITH_COUNT = {"recent", "user_favorites"}
-
-
-
-_NEED_COLLAPSED_SETTING = "AIEdit/library_need_collapsed_{key}"
 
 
 
@@ -456,41 +397,7 @@ def _gallery_batch_size() -> int:
     return get_export_dial("library.gallery_page_size", _GALLERY_PAGE_SIZE)
 
 
-
-
-_SIDEBAR_GLYPHS = {
-    "user_favorites": ("clock", tk.INK_2),
-    "cartography": ("layout", tk.INK_2),
-    "landcover": ("classify", tk.INK_2),
-    "segment": ("polygon", tk.INK_2),
-    "climate": ("globe", tk.INK_2),
-    "urban": ("home", tk.INK_2),
-    "energy": ("bolt", tk.INK_2),
-    "cleanup": ("sparkles", tk.INK_2),
-    "presentation": ("image", tk.INK_2),
-    "forestry": ("terrain", tk.INK_2),
-    "agriculture": ("hexgrid", tk.INK_2),
-    "archaeology": ("pin", tk.INK_2),
-    "geology": ("contour", tk.INK_2),
-    "hydrology": ("route", tk.INK_2),
-}
-
 _MAX_TITLE_CHARS = 80
-
-
-
-
-
-_CARD_TITLE_H = 36
-
-
-
-_CARD_PROMPT_CHARS = 92
-
-
-def _card_prompt_chars() -> int:
-
-    return get_export_dial("dialogs.common.card_prompt_chars", _CARD_PROMPT_CHARS)
 
 
 def _truncate(text: str, n: int | None = None) -> str:
@@ -563,16 +470,6 @@ def _build_origin_pill(parent, has_template: bool) -> QLabel:
     return pill
 
 
-def _card_prompt(prompt: str, n: int = 66) -> str:
-
-
-    flat = " ".join((prompt or "").split())
-    if len(flat) <= n:
-        return flat
-    cut = flat[:n].rsplit(" ", 1)[0] or flat[:n]
-    return cut.rstrip(" ,.;:-") + "…"
-
-
 def set_rail_count(label: QLabel, count: int) -> None:
 
 
@@ -596,9 +493,6 @@ class ElidedLabel(QLabel):
     def set_full_text(self, text: str) -> None:
         self._full_text = " ".join((text or "").split())
         self._elide()
-
-    def full_text(self) -> str:
-        return self._full_text
 
     def minimumSizeHint(self):  # noqa: N802
         return QSize(0, super().minimumSizeHint().height())

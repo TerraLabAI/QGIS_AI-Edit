@@ -117,13 +117,10 @@ def reference_add_reason(store: ReferenceImageStore, free_tier: bool) -> str:
     return "ok"
 
 
-def reference_preview_title(record: ReferenceImage | None, is_markup: bool) -> str:
-
+def reference_preview_title(record: ReferenceImage | None) -> str:
 
     if record is None:
         return get_export_copy("widgets.reference_images_widget.reference_image", tr("Reference image"))
-    if is_markup:
-        return get_export_copy("widgets.reference_images_widget.draw_reference", tr("Your drawing"))
     name = (record.source_filename or "").strip()
     if name:
         return tr("Reference image: {name}").format(name=name)
@@ -801,17 +798,6 @@ class ReferenceImagesWidget(QWidget):
         self._store.remove(ref_id)
         self._above_left_out += 1
 
-    def clear_markup_image(self) -> None:
-
-
-
-        markup = next(
-            (r for r in self._store.list() if self._store.is_markup(r.id)), None
-        )
-        if markup is not None:
-            self._store.remove(markup.id)
-            self._refresh()
-
     def get_all_b64(self) -> list[str]:
         return self._store.get_all_b64()
 
@@ -1183,8 +1169,7 @@ class ReferenceImagesWidget(QWidget):
         record = next(
             (r for r in self._store.list() if r.path == image_path), None
         )
-        is_markup = record is not None and self._store.is_markup(record.id)
-        return reference_preview_title(record, is_markup)
+        return reference_preview_title(record)
 
     def _open_preview(self, image_path: str) -> None:
         open_reference_preview(self, image_path, self._build_preview_title(image_path))

@@ -6,6 +6,7 @@ import time
 from ..config_store import get_export_copy, get_export_dial
 from ..errors import NETWORK_ERROR_CODES, ErrorCode
 from ..i18n import tr
+from ..product_identity import PRODUCT_ID
 
 
 
@@ -23,6 +24,11 @@ _CREDITS_TIMEOUT_MS = 8_000
 
 
 _USAGE_CACHE_TTL_S = 60.0
+_PREFLIGHT_RETRY_DELAY_S = 2.0
+
+
+def _is_slow_answer(usage) -> bool:
+    return isinstance(usage, dict) and str(usage.get("code") or "").strip().upper() == ErrorCode.TIMEOUT.value
 
 
 class AuthManager:
@@ -82,7 +88,7 @@ class AuthManager:
             return {}
         headers = {
             "Authorization": f"Bearer {key}",
-            "X-Product-ID": "ai-edit",
+            "X-Product-ID": PRODUCT_ID,
         }
 
 
@@ -96,6 +102,18 @@ class AuthManager:
         except Exception:  # nosec B110
             pass
         return headers
+
+    def _preflight_usage(self, auth: dict):
+
+
+
+        timeout_ms = get_export_dial("auth.preflight_timeout_ms", _PREFLIGHT_TIMEOUT_MS)
+        usage = self._client.get_usage(auth=auth, timeout_ms=timeout_ms, retry=False)
+        code = str(usage.get("code") or "").strip().upper() if isinstance(usage, dict) else ""
+        if code in NETWORK_ERROR_CODES and code != ErrorCode.TIMEOUT.value:
+            time.sleep(_PREFLIGHT_RETRY_DELAY_S)
+            usage = self._client.get_usage(auth=auth, timeout_ms=timeout_ms, retry=False)
+        return usage
 
     def check_can_generate(self) -> tuple[bool, str, str]:
 
@@ -119,12 +137,7 @@ class AuthManager:
             usage = self._fresh_cached_usage()
         if usage is None:
             try:
-                usage = self._client.get_usage(
-                    auth=auth,
-                    timeout_ms=get_export_dial(
-                        "auth.preflight_timeout_ms", _PREFLIGHT_TIMEOUT_MS
-                    ),
-                )
+                usage = self._preflight_usage(auth)
             except Exception:
                 return (
                     False,
@@ -134,6 +147,10 @@ class AuthManager:
                     ),
                     ErrorCode.NO_NETWORK.value,
                 )
+            if _is_slow_answer(usage):
+
+
+                return True, "usage check timed out", ""
             self._store_usage(usage, revision)
 
         with self._usage_lock:
@@ -155,7 +172,7 @@ class AuthManager:
                     ),
                     code,
                 )
-            if code == "INVALID_KEY":
+            if code == ErrorCode.INVALID_KEY.value:
                 return (
                     False,
                     get_export_copy(

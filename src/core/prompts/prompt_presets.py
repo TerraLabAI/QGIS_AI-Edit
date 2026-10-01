@@ -552,21 +552,6 @@ def _themed_category_label(cat_key: str, catalog: dict | None) -> str:
     return tr(local) if local else cat_key
 
 
-def _build_themed_category(cat_key: str, catalog: dict | None) -> list[dict]:
-
-
-
-
-
-    if _find_server_category(catalog, cat_key) is None:
-        return []
-    return [
-        _normalize_preset(p, cat_key)
-        for k, p in _iter_live_presets(catalog)
-        if k == cat_key
-    ]
-
-
 def _category_need(cat_key: str, catalog: dict | None) -> str:
 
 
@@ -577,11 +562,6 @@ def _category_need(cat_key: str, catalog: dict | None) -> str:
         if isinstance(need, str) and need in _NEED_LABELS:
             return need
     return _CATEGORY_NEED.get(cat_key, _NEED_ORDER[0])
-
-
-
-
-_PERSONAL_CATEGORY_KEYS = ("recent", "user_favorites", "favorites")
 
 
 def _preset_need(preset: dict, catalog: dict | None) -> str:

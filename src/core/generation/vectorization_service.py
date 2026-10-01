@@ -58,7 +58,6 @@ from .vectorize_layer import (
     apply_class_style,
     build_vector_layer,
     friendly_vector_layer_name,
-    make_layer_permanent,
     set_layer_provenance,
     transplant_features,
 )
@@ -72,7 +71,6 @@ __all__ = [
     "build_vector_layer",
     "compute_class_features",
     "friendly_vector_layer_name",
-    "make_layer_permanent",
     "np",
     "set_layer_provenance",
     "transplant_features",
