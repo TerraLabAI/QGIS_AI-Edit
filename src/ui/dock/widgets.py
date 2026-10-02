@@ -462,7 +462,7 @@ class _ResolutionMenuItem(QWidget):
         self,
         quality: str,
         resolution: str,
-        credits: int,
+        credits: int | None,
         selected: bool,
         locked: bool,
         parent: QWidget | None = None,
@@ -527,11 +527,12 @@ class _ResolutionMenuItem(QWidget):
             pro.setAttribute(QtC.WA_TransparentForMouseEvents, True)
             head.addWidget(pro, 0, QtC.AlignVCenter)
 
-        cost_text = (
-            tr("{n} credit").format(n=credits)
-            if credits == 1
-            else tr("{n} credits").format(n=credits)
-        )
+        if credits is None:
+            cost_text = tr("price loading")
+        elif credits == 1:
+            cost_text = tr("{n} credit").format(n=credits)
+        else:
+            cost_text = tr("{n} credits").format(n=credits)
         cost = QLabel(cost_text, self)
         cost.setStyleSheet(
             f"font-size: {tokens.FONT_HINT}px; background: transparent; color: {tokens.INK_3};"

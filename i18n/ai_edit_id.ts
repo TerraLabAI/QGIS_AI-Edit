@@ -9,7 +9,7 @@
     </message>
     <message>
         <source>It was created, but something opaque is drawn on top of it.</source>
-        <translation>Hasilnya sudah dibuat, tetapi ada sesuatu yang buram digambar di atasnya.</translation>
+        <translation>Hasilnya sudah dibuat, tetapi ada sesuatu yang tidak transparan di atasnya.</translation>
     </message>
     <message>
         <source>Bring it to the front</source>
@@ -21,11 +21,11 @@
     </message>
     <message>
         <source>Your selection and prompt may be processed outside the EU {dot} {privacy}</source>
-        <translation>Pilihan dan prompt Anda dapat diproses di luar Uni Eropa {dot} {privacy}</translation>
+        <translation>Zona dan prompt Anda dapat diproses di luar Uni Eropa {dot} {privacy}</translation>
     </message>
     <message>
         <source>This prompt is not allowed: its content goes against our rules.</source>
-        <translation>Perintah ini tidak diizinkan: isinya melanggar aturan kami.</translation>
+        <translation>Prompt ini tidak diizinkan: isinya melanggar aturan kami.</translation>
     </message>
     <message>
         <source>You have not been charged.</source>
@@ -37,7 +37,7 @@
     </message>
     <message>
         <source>Very large zone (about {km2} km²): the AI keeps only broad shapes at this size. Select a smaller area for object-level edits.</source>
-        <translation>Zona sangat besar (sekitar {km2} km²): pada ukuran ini AI hanya mempertahankan bentuk kasar. Pilih area yang lebih kecil untuk penyuntingan tingkat objek.</translation>
+        <translation>Zona sangat besar (sekitar {km2} km²): pada ukuran ini AI hanya mempertahankan bentuk kasar. Pilih zona yang lebih kecil untuk edit tingkat objek.</translation>
     </message>
     <message>
         <source>Sessions</source>
@@ -69,11 +69,11 @@
     </message>
     <message>
         <source>Rename session</source>
-        <translation>Ganti nama sesi</translation>
+        <translation>Ubah nama sesi</translation>
     </message>
     <message>
         <source>Renaming session</source>
-        <translation>Mengganti nama sesi</translation>
+        <translation>Mengubah nama sesi</translation>
     </message>
     <message>
         <source>No internet connection. This version was made on another device or cleaned from this disk, so its image must be downloaded. Reconnect and click the version again.</source>
@@ -85,7 +85,7 @@
     </message>
     <message>
         <source>Click on the map to outline the area to edit.</source>
-        <translation>Klik pada peta untuk menguraikan area yang akan diedit.</translation>
+        <translation>Klik pada peta untuk menandai batas zona yang akan diedit.</translation>
     </message>
     <message>
         <source>Extract</source>
@@ -97,7 +97,7 @@
     </message>
     <message>
         <source>Show a project: renders, plans, simulations, before/after</source>
-        <translation>Tampilkan proyek: render, rencana, simulasi, sebelum/sesudah</translation>
+        <translation>Tampilkan proyek: render, denah, simulasi, sebelum/sesudah</translation>
     </message>
     <message>
         <source>Extract data: detect, segment, count, map</source>
@@ -105,7 +105,7 @@
     </message>
     <message>
         <source>Repair imagery: sharpen, upscale, fix gaps and seams</source>
-        <translation>Perbaiki citra: pertajam, perbesar, perbaiki celah dan sambungan</translation>
+        <translation>Perbaiki citra: pertajam, tingkatkan resolusi, atasi celah dan sambungan</translation>
     </message>
     <message>
         <source>Our hand-picked selection to get you started.</source>
@@ -185,7 +185,7 @@
     </message>
     <message>
         <source>Top picks</source>
-        <translation>Pilihan Teratas</translation>
+        <translation>Unggulan</translation>
     </message>
     <message>
         <source>What the community runs most often</source>
@@ -297,7 +297,7 @@
     </message>
     <message>
         <source>AI Edit outputs an image, not a vector file. For polygons (SHP, GeoJSON), pick a Segment or Land cover template, then ‘Vectorize this result’. For precise object outlines, try our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin.</source>
-        <translation>AI Edit menghasilkan gambar, bukan file vektor. Untuk poligon (SHP, GeoJSON), pilih templat Segment atau Tutupan lahan, lalu ‘Vektorkan hasil ini’. Untuk garis batas objek yang presisi, coba plugin &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; kami.</translation>
+        <translation>AI Edit menghasilkan gambar, bukan file vektor. Untuk poligon (SHP, GeoJSON), pilih templat Segmentasi atau Tutupan lahan, lalu "Vektorkan hasil ini". Untuk garis luar objek yang presisi, coba plugin &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; kami.</translation>
     </message>
     <message>
         <source>AI Edit edits the image, it doesn't answer questions or count. Describe a visual change, e.g. colour the buildings red.</source>
@@ -305,7 +305,7 @@
     </message>
     <message>
         <source>AI Edit can't measure or count. Our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin is built for that: it outlines objects as polygons QGIS can count and measure.</source>
-        <translation>AI Edit tidak dapat mengukur atau menghitung. Plugin &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; kami dibuat untuk itu: ia menggambar batas objek sebagai poligon yang dapat dihitung dan diukur QGIS.</translation>
+        <translation>AI Edit tidak dapat mengukur atau menghitung. Plugin &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; kami dibuat untuk itu: plugin ini menggambar garis luar objek sebagai poligon yang dapat dihitung dan diukur QGIS.</translation>
     </message>
     <message>
         <source>Zoomed out: the AI won't see small features (buildings, cars, trees) at this scale. Zoom in for object-level detail.</source>
@@ -371,7 +371,7 @@
         <source>AI Edit by TerraLab
 AI-powered image editing for geospatial data</source>
         <translation>AI Edit by TerraLab
-Editing gambar geospasial bertenaga AI</translation>
+Pengeditan gambar berbasis AI untuk data geospasial</translation>
     </message>
     <message>
         <source>AI Edit needs a standard CRS (EPSG code). Your project uses a custom CRS without an authority ID.</source>
@@ -391,7 +391,7 @@ Editing gambar geospasial bertenaga AI</translation>
     </message>
     <message>
         <source>Account migration required, please re-login from the website.</source>
-        <translation>Migrasi akun diperlukan, silakan masuk kembali dari situs web.</translation>
+        <translation>Migrasi akun diperlukan. Masuk kembali dari situs web.</translation>
     </message>
     <message>
         <source>Activate</source>
@@ -415,7 +415,7 @@ Editing gambar geospasial bertenaga AI</translation>
     </message>
     <message>
         <source>Adding past generation to the map</source>
-        <translation>Menambahkan generasi sebelumnya ke peta</translation>
+        <translation>Menambahkan edit sebelumnya ke peta</translation>
     </message>
     <message>
         <source>Adding to map...</source>
@@ -463,7 +463,7 @@ Editing gambar geospasial bertenaga AI</translation>
     </message>
     <message>
         <source>Browse the library (view only while generating).</source>
-        <translation>Jelajahi pustaka (hanya tampilan saat generate berlangsung).</translation>
+        <translation>Jelajahi pustaka (hanya lihat saat pembuatan berlangsung).</translation>
     </message>
     <message>
         <source>Browse...</source>
@@ -509,7 +509,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Catalog not yet available, please retry shortly.</source>
-        <translation>Katalog belum tersedia, coba lagi sesaat lagi.</translation>
+        <translation>Katalog belum tersedia. Coba lagi dalam beberapa saat.</translation>
     </message>
     <message>
         <source>Change activation key</source>
@@ -517,7 +517,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Check QGIS proxy settings: Settings &gt; Options &gt; Network</source>
-        <translation>Periksa pengaturan proxy QGIS: Pengaturan &gt; Opsi &gt; Jaringan</translation>
+        <translation>Periksa pengaturan proxy QGIS: Settings &gt; Options &gt; Network</translation>
     </message>
     <message>
         <source>Check your dashboard</source>
@@ -589,7 +589,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Connection error</source>
-        <translation>Error koneksi</translation>
+        <translation>Kesalahan koneksi</translation>
     </message>
     <message>
         <source>Connection error. Check your internet connection.</source>
@@ -625,7 +625,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Could not add layer: {msg}</source>
-        <translation>Tidak dapat menambahkan lapisan: {msg}</translation>
+        <translation>Tidak dapat menambahkan layer: {msg}</translation>
     </message>
     <message>
         <source>Could not add to map: {msg}</source>
@@ -653,7 +653,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Could not prepare upload, please retry shortly.</source>
-        <translation>Tidak dapat menyiapkan unggahan, coba lagi sesaat lagi.</translation>
+        <translation>Tidak dapat menyiapkan unggahan. Coba lagi dalam beberapa saat.</translation>
     </message>
     <message>
         <source>Could not render {name}</source>
@@ -661,7 +661,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Could not store the vectorized polygons (internal field error).</source>
-        <translation>Tidak dapat menyimpan poligon hasil vektorisasi (error field internal).</translation>
+        <translation>Tidak dapat menyimpan poligon hasil vektorisasi (kesalahan field internal).</translation>
     </message>
     <message>
         <source>Credits</source>
@@ -673,7 +673,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Custom color...</source>
-        <translation>Warna khusus…</translation>
+        <translation>Warna khusus...</translation>
     </message>
     <message>
         <source>DATE</source>
@@ -685,7 +685,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Database error, please retry shortly.</source>
-        <translation>Error database, coba lagi sesaat lagi.</translation>
+        <translation>Kesalahan database. Coba lagi dalam beberapa saat.</translation>
     </message>
     <message>
         <source>Default (auto)</source>
@@ -753,7 +753,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Downloading generation</source>
-        <translation>Mengunduh generasi</translation>
+        <translation>Mengunduh edit</translation>
     </message>
     <message>
         <source>Drag on the map to draw an ellipse.</source>
@@ -781,7 +781,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Drop connected blobs smaller than this many pixels before tracing.</source>
-        <translation>Buang gumpalan yang saling terhubung dan lebih kecil dari jumlah piksel ini sebelum vektorisasi.</translation>
+        <translation>Buang gumpalan terhubung yang lebih kecil dari jumlah piksel ini sebelum penelusuran.</translation>
     </message>
     <message>
         <source>Drop polygons smaller than this many pixels after tracing. Useful for cleaning up speckle that the sieve missed.</source>
@@ -837,7 +837,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Failed to create valid raster layer from {path}</source>
-        <translation>Gagal membuat lapisan raster yang valid dari {path}</translation>
+        <translation>Gagal membuat layer raster yang valid dari {path}</translation>
     </message>
     <message>
         <source>Failed to decode image</source>
@@ -853,7 +853,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Failed to render layer</source>
-        <translation>Gagal merender lapisan</translation>
+        <translation>Gagal merender layer</translation>
     </message>
     <message>
         <source>The image was generated but could not be saved to your output folder ({err}). It is kept in your prompt library: open the Recent tab and download the AI result, or change the output folder and try again.</source>
@@ -893,7 +893,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Free trial</source>
-        <translation>Uji Coba Gratis</translation>
+        <translation>Uji coba gratis</translation>
     </message>
     <message>
         <source>Free plan is limited to {n} reference image.</source>
@@ -901,7 +901,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Freehand stroke</source>
-        <translation>Garis bebas</translation>
+        <translation>Goresan bebas</translation>
     </message>
     <message>
         <source>Fullscreen</source>
@@ -917,23 +917,23 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Generation</source>
-        <translation>Generasi</translation>
+        <translation>Edit</translation>
     </message>
     <message>
         <source>Generation already in progress</source>
-        <translation>Generasi sedang berlangsung</translation>
+        <translation>Pembuatan sedang berlangsung</translation>
     </message>
     <message>
         <source>Generation cancelled</source>
-        <translation>Generasi dibatalkan</translation>
+        <translation>Pembuatan dibatalkan</translation>
     </message>
     <message>
         <source>Generation failed</source>
-        <translation>Generasi gagal</translation>
+        <translation>Pembuatan gagal</translation>
     </message>
     <message>
         <source>Generation failed, please try again.</source>
-        <translation>Generasi gagal, coba lagi.</translation>
+        <translation>Pembuatan gagal. Coba lagi.</translation>
     </message>
     <message>
         <source>Generation restored. Adjust and generate again.</source>
@@ -1025,7 +1025,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Invalid input. Check your prompt and the selected area.</source>
-        <translation>Input tidak valid. Periksa prompt Anda dan area yang dipilih.</translation>
+        <translation>Input tidak valid. Periksa prompt Anda dan zona yang dipilih.</translation>
     </message>
     <message>
         <source>Invalid input. Try a different image or selection.</source>
@@ -1041,7 +1041,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Invalid request. Check your prompt and the selected area, then try again.</source>
-        <translation>Permintaan tidak valid. Periksa prompt Anda dan area yang dipilih, lalu coba lagi.</translation>
+        <translation>Permintaan tidak valid. Periksa prompt Anda dan zona yang dipilih, lalu coba lagi.</translation>
     </message>
     <message>
         <source>Key</source>
@@ -1053,7 +1053,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Layer</source>
-        <translation>Lapisan</translation>
+        <translation>Layer</translation>
     </message>
     <message>
         <source>Library</source>
@@ -1081,7 +1081,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Location data unavailable for this generation.</source>
-        <translation>Data lokasi tidak tersedia untuk generasi ini.</translation>
+        <translation>Data lokasi tidak tersedia untuk edit ini.</translation>
     </message>
     <message>
         <source>Manage on terra-lab.ai</source>
@@ -1113,11 +1113,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Min polygon size:</source>
-        <translation>Ukuran minimum poligon:</translation>
+        <translation>Ukuran poligon minimum:</translation>
     </message>
     <message>
         <source>Monthly limit reached ({used}/{limit}).</source>
-        <translation>Batas bulanan telah tercapai ({used}/{limit}).</translation>
+        <translation>Batas bulanan tercapai ({used}/{limit}).</translation>
     </message>
     <message>
         <source>New version available: v{version}</source>
@@ -1169,7 +1169,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Nothing here yet. The generations you run will land here, ready to reopen, reuse, or add back to the map.</source>
-        <translation>Belum ada apa pun di sini. Generasi yang Anda jalankan akan muncul di sini, siap untuk dibuka kembali, digunakan ulang, atau ditambahkan kembali ke peta.</translation>
+        <translation>Belum ada apa pun di sini. Edit yang Anda jalankan akan muncul di sini, siap dibuka kembali, digunakan ulang, atau ditambahkan lagi ke peta.</translation>
     </message>
     <message>
         <source>OK</source>
@@ -1189,7 +1189,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Open your dashboard to upgrade or wait for renewal.</source>
-        <translation>Buka dasbor Anda untuk meningkatkan paket atau tunggu perpanjangan.</translation>
+        <translation>Buka dasbor Anda untuk upgrade atau tunggu pembaruan kredit.</translation>
     </message>
     <message>
         <source>Original</source>
@@ -1197,7 +1197,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Outline</source>
-        <translation>Kontur</translation>
+        <translation>Garis luar</translation>
     </message>
     <message>
         <source>Output folder</source>
@@ -1289,11 +1289,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Raster is too large for in-memory vectorize ({mp:.0f} megapixels). Crop the layer first or run a tiled workflow.</source>
-        <translation>Raster terlalu besar untuk vektorisasi in-memory ({mp:.0f} megapiksel). Potong lapisan terlebih dahulu atau jalankan alur kerja berbasis tile.</translation>
+        <translation>Raster terlalu besar untuk vektorisasi di memori ({mp:.0f} megapiksel). Potong layer terlebih dahulu atau gunakan alur kerja per tile.</translation>
     </message>
     <message>
         <source>Raster layer has no on-disk source file</source>
-        <translation>Lapisan raster tidak memiliki file sumber di disk</translation>
+        <translation>Layer raster tidak memiliki file sumber di disk</translation>
     </message>
     <message>
         <source>Raster must have at least 3 bands (RGB)</source>
@@ -1305,7 +1305,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Reduce small variations in the outline (0 = no change).</source>
-        <translation>Kurangi variasi kecil pada kontur (0 = tidak ada perubahan).</translation>
+        <translation>Kurangi variasi kecil pada garis luar (0 = tidak ada perubahan).</translation>
     </message>
     <message>
         <source>Reference</source>
@@ -1345,7 +1345,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Resets</source>
-        <translation>Reset</translation>
+        <translation>Direset pada</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -1353,7 +1353,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Resource not found.</source>
-        <translation>Resource tidak ditemukan.</translation>
+        <translation>Sumber daya tidak ditemukan.</translation>
     </message>
     <message>
         <source>Restored</source>
@@ -1369,7 +1369,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Result temporarily unavailable, please retry shortly.</source>
-        <translation>Hasil sementara tidak tersedia, coba lagi sesaat lagi.</translation>
+        <translation>Hasil sementara tidak tersedia. Coba lagi dalam beberapa saat.</translation>
     </message>
     <message>
         <source>Retry</source>
@@ -1377,7 +1377,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Reuse this setup</source>
-        <translation>Gunakan ulang konfigurasi ini</translation>
+        <translation>Gunakan ulang</translation>
     </message>
     <message>
         <source>Round corners for natural shapes like trees and bushes. Increase 'Simplify outline' for smoother results.</source>
@@ -1401,7 +1401,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Save generation image</source>
-        <translation>Simpan gambar generasi</translation>
+        <translation>Simpan gambar edit</translation>
     </message>
     <message>
         <source>Save georeferenced GeoTIFF</source>
@@ -1433,7 +1433,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Select reference images or layers</source>
-        <translation>Pilih gambar referensi atau lapisan</translation>
+        <translation>Pilih gambar referensi atau layer</translation>
     </message>
     <message>
         <source>Selected zone too small. Draw a rectangle at least {pct}% of the canvas size.</source>
@@ -1457,7 +1457,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Server returned data that is not a recognized image format. This usually means the server replied with an error page. Please try again or check the QGIS log.</source>
-        <translation>Server mengembalikan data yang bukan format gambar yang dikenali. Ini biasanya berarti server merespons dengan halaman error. Coba lagi atau periksa log QGIS.</translation>
+        <translation>Server mengembalikan data yang bukan format gambar yang dikenali. Ini biasanya berarti server merespons dengan halaman kesalahan. Coba lagi atau periksa log QGIS.</translation>
     </message>
     <message>
         <source>Service not configured. Please contact support.</source>
@@ -1465,11 +1465,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Service temporarily unavailable, please retry shortly.</source>
-        <translation>Layanan sementara tidak tersedia, coba lagi sesaat lagi.</translation>
+        <translation>Layanan sementara tidak tersedia. Coba lagi dalam beberapa saat.</translation>
     </message>
     <message>
         <source>This feature is temporarily unavailable. Please try again later.</source>
-        <translation>Fitur ini sementara tidak tersedia. Silakan coba lagi nanti.</translation>
+        <translation>Fitur ini sementara tidak tersedia. Coba lagi nanti.</translation>
     </message>
     <message>
         <source>Settings</source>
@@ -1485,11 +1485,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Show</source>
-        <translation>Tampilkan</translation>
+        <translation>Lihat</translation>
     </message>
     <message>
         <source>Show again</source>
-        <translation>Tampilkan lagi</translation>
+        <translation>Lihat lagi</translation>
     </message>
     <message>
         <source>Show fewer categories</source>
@@ -1509,7 +1509,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Load older generations</source>
-        <translation>Muat generasi yang lebih lama</translation>
+        <translation>Muat edit yang lebih lama</translation>
     </message>
     <message>
         <source>Loading session</source>
@@ -1521,7 +1521,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Show {n} more</source>
-        <translation>Tampilkan {n} lagi</translation>
+        <translation>Lihat {n} lagi</translation>
     </message>
     <message>
         <source>Show {n} more categories</source>
@@ -1533,7 +1533,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Simplify outline:</source>
-        <translation>Sederhanakan kontur:</translation>
+        <translation>Sederhanakan garis luar:</translation>
     </message>
     <message>
         <source>Something not working?</source>
@@ -1545,7 +1545,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Start a new AI edit session</source>
-        <translation>Mulai sesi AI edit baru</translation>
+        <translation>Mulai sesi edit AI baru</translation>
     </message>
     <message>
         <source>Status check failed</source>
@@ -1553,7 +1553,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Storage temporarily unavailable, please retry shortly.</source>
-        <translation>Penyimpanan sementara tidak tersedia, coba lagi sesaat lagi.</translation>
+        <translation>Penyimpanan sementara tidak tersedia. Coba lagi dalam beberapa saat.</translation>
     </message>
     <message>
         <source>Subscribe</source>
@@ -1601,7 +1601,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>The generation service returned an unexpected response, please retry.</source>
-        <translation>Layanan generasi mengembalikan respons yang tidak terduga, coba lagi.</translation>
+        <translation>Layanan pembuatan mengembalikan respons yang tidak terduga. Coba lagi.</translation>
     </message>
     <message>
         <source>The model couldn't finish this generation. It often means what your prompt describes is not visible in the selected area. Try a different zone or rephrase.</source>
@@ -1621,7 +1621,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>This generation's image is no longer available.</source>
-        <translation>Gambar generasi ini tidak lagi tersedia.</translation>
+        <translation>Gambar edit ini tidak lagi tersedia.</translation>
     </message>
     <message>
         <source>This key belongs to a different product. Use your AI Edit key.</source>
@@ -1641,11 +1641,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>This zone crosses the antimeridian (180 deg longitude). AI Edit does not support that yet. Split your zone into two.</source>
-        <translation>Zona ini melintasi antimeridian (bujur 180 derajat). AI Edit belum mendukung hal ini. Bagi zona Anda menjadi dua.</translation>
+        <translation>Zona ini melintasi antimeridian (bujur 180°). AI Edit belum mendukung hal ini. Bagi zona Anda menjadi dua.</translation>
     </message>
     <message>
         <source>Too many requests, please wait a moment.</source>
-        <translation>Terlalu banyak permintaan, tunggu sesaat.</translation>
+        <translation>Terlalu banyak permintaan. Tunggu sebentar.</translation>
     </message>
     <message>
         <source>Too much image data to send. Remove a reference image or lower the resolution, then try again.</source>
@@ -1685,11 +1685,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Unknown error</source>
-        <translation>Error tidak dikenal</translation>
+        <translation>Kesalahan tidak dikenal</translation>
     </message>
     <message>
         <source>Unknown or unauthorized request.</source>
-        <translation>Permintaan tidak dikenal atau tidak diotorisasi.</translation>
+        <translation>Permintaan tidak dikenal atau tidak diizinkan.</translation>
     </message>
     <message>
         <source>Unknown template.</source>
@@ -1697,7 +1697,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Unsupported format. Use PNG, JPG, WEBP or BMP, or drop a QGIS layer.</source>
-        <translation>Format tidak didukung. Gunakan PNG, JPG, WEBP, atau BMP, atau seret lapisan QGIS.</translation>
+        <translation>Format tidak didukung. Gunakan PNG, JPG, WEBP, atau BMP, atau seret layer QGIS.</translation>
     </message>
     <message>
         <source>Update now</source>
@@ -1705,7 +1705,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Upgrade</source>
-        <translation>Tingkatkan</translation>
+        <translation>Upgrade</translation>
     </message>
     <message>
         <source>Upgrade to 2K &amp;&amp; 4K</source>
@@ -1717,7 +1717,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Upload session expired, please retry.</source>
-        <translation>Sesi unggahan telah berakhir, coba lagi.</translation>
+        <translation>Sesi unggahan telah berakhir. Coba lagi.</translation>
     </message>
     <message>
         <source>Use</source>
@@ -1797,7 +1797,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>What should the AI change?</source>
-        <translation>Apa yang harus diubah oleh AI?</translation>
+        <translation>Apa yang harus diubah AI?</translation>
     </message>
     <message>
         <source>Where AI Edit writes its generated GeoTIFFs. Leave empty to use ~/Documents/AI Edit/ (or the saved project folder).</source>
@@ -1825,7 +1825,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Zone is too close to a pole (above {limit} degrees latitude). AI Edit cannot estimate ground resolution there.</source>
-        <translation>Zona terlalu dekat dengan kutub (di atas {limit} derajat lintang). AI Edit tidak dapat memperkirakan resolusi permukaan di lokasi tersebut.</translation>
+        <translation>Zona terlalu dekat dengan kutub (lintang di atas {limit}°). AI Edit tidak dapat memperkirakan resolusi di lapangan di lokasi tersebut.</translation>
     </message>
     <message>
         <source>browse a category or search</source>
@@ -1877,11 +1877,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>{n} d ago</source>
-        <translation>{n} h lalu</translation>
+        <translation>{n} hr lalu</translation>
     </message>
     <message>
         <source>{n} h ago</source>
-        <translation>{n} j lalu</translation>
+        <translation>{n} jam lalu</translation>
     </message>
     <message>
         <source>{n} mark. Click Done to save it as a reference image.</source>
@@ -1905,7 +1905,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>{} outputs are unlocked with a subscription.</source>
-        <translation>Output {} terbuka dengan berlangganan.</translation>
+        <translation>Output {} tersedia dengan berlangganan.</translation>
     </message>
     <message>
         <source>Reuse prompt</source>
@@ -1945,15 +1945,15 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Generation failed: the request was blocked by a safety filter. You have not been charged. Try rephrasing your prompt.</source>
-        <translation>Generasi gagal: permintaan diblokir oleh filter keamanan. Anda tidak dikenakan biaya. Coba ubah kata-kata prompt Anda.</translation>
+        <translation>Pembuatan gagal: permintaan diblokir oleh filter keamanan. Anda tidak dikenai biaya. Coba susun ulang prompt Anda.</translation>
     </message>
     <message>
         <source>Generation failed: the AI returned no image. You have not been charged. AI Edit draws on the map and cannot answer questions, so describe the change you want to see, then try again.</source>
-        <translation>Generasi gagal: AI tidak mengembalikan gambar. Anda tidak dikenakan biaya. AI Edit menggambar di atas peta dan tidak menjawab pertanyaan, jadi jelaskan perubahan yang Anda inginkan, lalu coba lagi.</translation>
+        <translation>Pembuatan gagal: AI tidak mengembalikan gambar. Anda tidak dikenai biaya. AI Edit menggambar di atas peta dan tidak dapat menjawab pertanyaan, jadi jelaskan perubahan yang ingin Anda lihat, lalu coba lagi.</translation>
     </message>
     <message>
         <source>Our image servers are busy right now. You have not been charged. Please wait a moment and try again.</source>
-        <translation>Server gambar kami sedang sibuk saat ini. Anda tidak dikenakan biaya. Tunggu sesaat dan coba lagi.</translation>
+        <translation>Server gambar kami sedang sibuk saat ini. Anda tidak dikenai biaya. Tunggu sebentar lalu coba lagi.</translation>
     </message>
     <message>
         <source>Copy prompt</source>
@@ -1973,7 +1973,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Segment</source>
-        <translation>Segment</translation>
+        <translation>Segmentasi</translation>
     </message>
     <message>
         <source>Climate scenarios</source>
@@ -1985,11 +1985,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Energy &amp; solar</source>
-        <translation>Energi dan tenaga surya</translation>
+        <translation>Energi &amp; surya</translation>
     </message>
     <message>
         <source>Cleanup &amp; enhance</source>
-        <translation>Pembersihan dan peningkatan</translation>
+        <translation>Pembersihan citra</translation>
     </message>
     <message>
         <source>Presentation renders</source>
@@ -1997,7 +1997,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Forestry &amp; vegetation</source>
-        <translation>Kehutanan dan vegetasi</translation>
+        <translation>Hutan &amp; vegetasi</translation>
     </message>
     <message>
         <source>Agriculture</source>
@@ -2005,15 +2005,15 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Archaeology &amp; heritage</source>
-        <translation>Arkeologi dan warisan budaya</translation>
+        <translation>Arkeologi &amp; budaya</translation>
     </message>
     <message>
         <source>Geology &amp; mining</source>
-        <translation>Geologi dan pertambangan</translation>
+        <translation>Geologi &amp; tambang</translation>
     </message>
     <message>
         <source>Water &amp; hydrology</source>
-        <translation>Air dan hidrologi</translation>
+        <translation>Air &amp; hidrologi</translation>
     </message>
     <message>
         <source>Activate AI Edit</source>
@@ -2069,11 +2069,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>This account has no active AI Edit plan. Reactivate it on terra-lab.ai, then click Connect again.</source>
-        <translation>Akun ini tidak memiliki paket AI Edit yang aktif. Aktifkan kembali di terra-lab.ai, lalu klik Hubungkan lagi.</translation>
+        <translation>Akun ini tidak memiliki paket AI Edit yang aktif. Aktifkan kembali di terra-lab.ai, lalu klik Masuk lagi.</translation>
     </message>
     <message>
         <source>Sign-in was cancelled in the browser. Click Connect to try again.</source>
-        <translation>Proses masuk dibatalkan di browser. Klik Hubungkan untuk mencoba lagi.</translation>
+        <translation>Proses masuk dibatalkan di browser. Klik Masuk untuk mencoba lagi.</translation>
     </message>
     <message>
         <source>Connecting AI Edit</source>
@@ -2125,7 +2125,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Upgrade to Pro</source>
-        <translation>Tingkatkan ke Pro</translation>
+        <translation>Upgrade ke Pro</translation>
     </message>
     <message>
         <source>Preferences</source>
@@ -2209,7 +2209,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Add color from map</source>
-        <translation>Tambahkan warna dari peta</translation>
+        <translation>Tambah warna dari peta</translation>
     </message>
     <message>
         <source>Added {hex} to the class list.</source>
@@ -2261,7 +2261,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Couldn't load the example basemap. Check your internet connection, or add your own layer (GeoTIFF, WMS, XYZ).</source>
-        <translation>Tidak dapat memuat peta dasar contoh. Periksa koneksi internet Anda, atau tambahkan lapisan Anda sendiri (GeoTIFF, WMS, XYZ).</translation>
+        <translation>Tidak dapat memuat basemap contoh. Periksa koneksi internet Anda, atau tambahkan layer Anda sendiri (GeoTIFF, WMS, XYZ).</translation>
     </message>
     <message>
         <source>Couldn't open your browser. Copy the link and open it manually.</source>
@@ -2269,7 +2269,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Couldn't save the updated features to the file.</source>
-        <translation>Tidak dapat menyimpan fitur yang diperbarui ke file.</translation>
+        <translation>Tidak dapat menyimpan feature yang diperbarui ke file.</translation>
     </message>
     <message>
         <source>Credit refunded.</source>
@@ -2301,7 +2301,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Free plan, {n} AI edits every month. Signing up takes 15 seconds in your browser.</source>
-        <translation>Paket Free, {n} pengeditan AI per bulan. Pendaftaran butuh 15 detik di browser Anda.</translation>
+        <translation>Paket Free, {n} edit AI per bulan. Pendaftaran butuh 15 detik di browser Anda.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>
@@ -2325,7 +2325,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Loading imagery...</source>
-        <translation>Memuat citra…</translation>
+        <translation>Memuat citra...</translation>
     </message>
     <message>
         <source>New here?</source>
@@ -2361,7 +2361,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Please contact {email} for help.</source>
-        <translation>Silakan hubungi {email} untuk bantuan.</translation>
+        <translation>Hubungi {email} untuk bantuan.</translation>
     </message>
     <message>
         <source>Raster has no usable georeferencing.</source>
@@ -2389,7 +2389,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Still waiting. If the page did not open or shows an error, click Open again or copy the link into another browser.</source>
-        <translation>Masih menunggu. Jika halaman tidak terbuka atau menampilkan error, klik Buka lagi atau salin tautannya ke browser lain.</translation>
+        <translation>Masih menunggu. Jika halaman tidak terbuka atau menampilkan kesalahan, klik Buka lagi atau salin tautan ke browser lain.</translation>
     </message>
     <message>
         <source>Team or organization?</source>
@@ -2401,7 +2401,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>The service is temporarily unavailable (server error). Your connection is fine - please try again in a few minutes.</source>
-        <translation>Layanan sementara tidak tersedia (error server). Koneksi Anda baik-baik saja - coba lagi dalam beberapa menit.</translation>
+        <translation>Layanan sementara tidak tersedia (kesalahan server). Koneksi Anda baik-baik saja. Coba lagi dalam beberapa menit.</translation>
     </message>
     <message>
         <source>Then type what to change on your imagery, and get the result back as a georeferenced layer.</source>
@@ -2409,7 +2409,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Trace this color as polygons. Unchecked colors are treated as background.</source>
-        <translation>Jiplak warna ini sebagai poligon. Warna yang tidak dicentang diperlakukan sebagai latar belakang.</translation>
+        <translation>Telusuri warna ini sebagai poligon. Warna yang tidak dicentang diperlakukan sebagai latar belakang.</translation>
     </message>
     <message>
         <source>Vector</source>
@@ -2417,7 +2417,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Vectorize failed unexpectedly. Please try again, or report the problem if it persists.</source>
-        <translation>Vektorkan gagal secara tidak terduga. Coba lagi, atau laporkan masalah ini jika terus berlanjut.</translation>
+        <translation>Vektorisasi gagal secara tidak terduga. Coba lagi, atau laporkan masalah ini jika terus berlanjut.</translation>
     </message>
     <message>
         <source>Vectorize turns a flat-color map (Segment, Land cover, masks, site plans...) into editable polygons - one class per color, ready to select, measure, style and export. It reads colors, so it works on colored maps, not photo-realistic images.</source>
@@ -2425,11 +2425,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Waiting for the example basemap to finish loading before you generate</source>
-        <translation>Menunggu peta dasar contoh selesai dimuat sebelum Anda memulai proses generate</translation>
+        <translation>Menunggu basemap contoh selesai dimuat sebelum Anda menghasilkan edit</translation>
     </message>
     <message>
         <source>Watch the tutorial</source>
-        <translation>Tonton tutorialnya</translation>
+        <translation>Tonton tutorial</translation>
     </message>
     <message>
         <source>Write to us:</source>
@@ -2529,7 +2529,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>No layers in the project</source>
-        <translation>Tidak ada lapisan dalam proyek</translation>
+        <translation>Tidak ada layer di proyek</translation>
     </message>
     <message>
         <source>Need cleaner outlines? Try our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin.</source>
@@ -2537,7 +2537,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Before and after comparison</source>
-        <translation>Perbandingan sebelum / sesudah</translation>
+        <translation>Perbandingan sebelum dan sesudah</translation>
     </message>
     <message>
         <source>Could not start the generation: {error}</source>
@@ -2545,7 +2545,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Could not write {name}. It may be open in QGIS or in another program. Close it, or pick a different name, and try again.</source>
-        <translation>Tidak dapat menulis {name}. Berkas ini mungkin sedang terbuka di QGIS atau di program lain. Tutup berkas tersebut, atau pilih nama lain, lalu coba lagi.</translation>
+        <translation>Tidak dapat menulis {name}. File ini mungkin sedang terbuka di QGIS atau program lain. Tutup file tersebut, atau pilih nama lain, lalu coba lagi.</translation>
     </message>
     <message>
         <source>Dismiss</source>
@@ -2573,7 +2573,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Press Enter to preview it, Delete to remove it.</source>
-        <translation>Tekan Enter untuk pratinjau, Delete untuk menghapus.</translation>
+        <translation>Tekan Enter untuk melihat pratinjau, Delete untuk menghapus.</translation>
     </message>
     <message>
         <source>Remove reference image {n}</source>
@@ -2585,7 +2585,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Sign-in failed unexpectedly. Click Connect to try again.</source>
-        <translation>Proses masuk gagal secara tidak terduga. Klik Hubungkan untuk mencoba lagi.</translation>
+        <translation>Proses masuk gagal secara tidak terduga. Klik Masuk untuk mencoba lagi.</translation>
     </message>
     <message>
         <source>The request failed unexpectedly.</source>
@@ -2693,7 +2693,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>This deletes its generations and their images from TerraLab servers. Layers already in your project stay. This cannot be undone.</source>
-        <translation>Ini menghapus generasi dan gambarnya dari server TerraLab. Layer yang sudah ada di proyek Anda tetap ada. Tindakan ini tidak dapat dibatalkan.</translation>
+        <translation>Edit beserta gambarnya akan dihapus dari server TerraLab. Layer yang sudah ada di proyek Anda tetap ada. Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
         <source>Title</source>
@@ -2713,7 +2713,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Add a layer…</source>
-        <translation>Tambahkan lapisan…</translation>
+        <translation>Tambahkan layer…</translation>
     </message>
     <message>
         <source>Load a sample image</source>
@@ -2773,7 +2773,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Your layers are hidden</source>
-        <translation>Lapisan Anda tersembunyi</translation>
+        <translation>Layer Anda tersembunyi</translation>
     </message>
     <message>
         <source>Nothing shows on the map until one is checked.</source>
@@ -2781,11 +2781,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Show my layers</source>
-        <translation>Tampilkan lapisan saya</translation>
+        <translation>Tampilkan layer</translation>
     </message>
     <message>
         <source>Re-check your topmost layer in the Layers panel</source>
-        <translation>Centang kembali lapisan teratas di panel Lapisan</translation>
+        <translation>Centang kembali layer teratas di panel Layers</translation>
     </message>
     <message>
         <source>Past sessions</source>
@@ -2805,7 +2805,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Pick images or data files. Data files (GeoTIFF, shapefile, GeoJSON...) are rendered at your zone.</source>
-        <translation>Pilih gambar atau berkas data. Berkas data (GeoTIFF, shapefile, GeoJSON...) dirender pada zona Anda.</translation>
+        <translation>Pilih gambar atau file data. File data (GeoTIFF, shapefile, GeoJSON...) dirender pada zona Anda.</translation>
     </message>
     <message>
         <source>From a QGIS layer</source>
@@ -2813,7 +2813,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Snapshot one of this project's layers at your zone. The layer itself is not changed and stays where it is.</source>
-        <translation>Ambil cuplikan salah satu lapisan proyek ini pada zona Anda. Lapisan itu sendiri tidak berubah dan tetap di tempatnya.</translation>
+        <translation>Ambil cuplikan salah satu layer proyek ini pada zona Anda. Layer itu sendiri tidak berubah dan tetap di tempatnya.</translation>
     </message>
     <message>
         <source>No references yet. Add one to guide the AI.</source>
@@ -2837,7 +2837,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Keep these references to guide the edit, and close the panel</source>
-        <translation>Simpan referensi ini untuk memandu penyuntingan, lalu tutup panel</translation>
+        <translation>Simpan referensi ini untuk memandu edit, lalu tutup panel</translation>
     </message>
     <message>
         <source>Each image is cropped to your zone and stays hidden from the map. Add a note to tell the AI what to take from it.</source>
@@ -2845,7 +2845,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>My work</source>
-        <translation>Pekerjaan saya</translation>
+        <translation>Karya saya</translation>
     </message>
     <message>
         <source>Starred</source>
@@ -2909,11 +2909,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>A bridge that calls this over a network usually gives up waiting after about a minute. The generation is NOT lost when that happens: it keeps running in QGIS and finishes on its own. Poll '{status_label}' until BUSY is false, then read the new layer in the project. Do not submit the run again, that is a second charge.</source>
-        <translation>Bridge yang memanggil ini melalui jaringan biasanya berhenti menunggu setelah sekitar satu menit. Generasi TIDAK hilang saat itu terjadi: prosesnya tetap berjalan di QGIS dan selesai sendiri. Polling '{status_label}' hingga BUSY bernilai false, lalu baca layer baru di proyek. Jangan kirim proses ini lagi karena akan dikenai biaya kedua.</translation>
+        <translation>Bridge yang memanggil ini melalui jaringan biasanya berhenti menunggu setelah sekitar satu menit. Pembuatan TIDAK hilang saat itu terjadi: prosesnya tetap berjalan di QGIS dan selesai sendiri. Polling '{status_label}' hingga BUSY bernilai false, lalu baca layer baru di proyek. Jangan kirim proses ini lagi, karena Anda akan ditagih dua kali.</translation>
     </message>
     <message>
         <source>A generation is already running</source>
-        <translation>Generasi sedang berjalan</translation>
+        <translation>Pembuatan sedang berlangsung</translation>
     </message>
     <message>
         <source>AI Edit did not take the run.</source>
@@ -2925,7 +2925,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>AI Edit rewrites aerial and satellite imagery from a text prompt and gives the result back as a georeferenced image on the map. Land cover classification, building footprints, cloud removal, object removal, super resolution upscaling, flood simulation, coloring an old map. One prompt, one picture back.</source>
-        <translation>AI Edit menulis ulang citra udara dan satelit berdasarkan perintah teks, lalu mengembalikan hasilnya sebagai citra bergeoreferensi pada peta. Klasifikasi tutupan lahan, jejak bangunan, penghapusan awan, penghapusan objek, peningkatan resolusi super, simulasi banjir, dan pewarnaan peta lama. Satu perintah, satu gambar hasil.</translation>
+        <translation>AI Edit menulis ulang foto udara dan citra satelit berdasarkan prompt teks, lalu mengembalikan hasilnya sebagai citra bergeoreferensi pada peta. Klasifikasi tutupan lahan, footprint bangunan, penghapusan awan, penghapusan objek, peningkatan resolusi super, simulasi banjir, dan pewarnaan peta lama. Satu prompt, satu gambar hasil.</translation>
     </message>
     <message>
         <source>Added to the project: {layers}.</source>
@@ -2945,7 +2945,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Check AI Edit status, credits and plan before you generate or edit satellite imagery</source>
-        <translation>Periksa status, kredit, dan paket AI Edit sebelum membuat atau mengedit citra satelit</translation>
+        <translation>Periksa status, kredit, dan paket AI Edit sebelum menghasilkan atau mengedit citra satelit</translation>
     </message>
     <message>
         <source>Class name written on every polygon (optional)</source>
@@ -2977,15 +2977,15 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Every generation is billed to the signed-in account, and a free account may only ask for the smallest output size. Run '{status_id}' to read the balance and the plan before anything is spent. Plan limits: {pricing_url}</source>
-        <translation>Setiap generasi dibebankan ke akun yang sedang masuk, dan akun gratis hanya dapat meminta ukuran keluaran terkecil. Jalankan '{status_id}' untuk membaca saldo dan paket sebelum kredit digunakan. Batas paket: {pricing_url}</translation>
+        <translation>Setiap pembuatan ditagihkan ke akun yang sedang masuk, dan akun gratis hanya dapat meminta ukuran output terkecil. Jalankan '{status_id}' untuk membaca saldo dan paket sebelum kredit digunakan. Batas paket: {pricing_url}</translation>
     </message>
     <message>
         <source>Generate and edit satellite or aerial imagery with AI: classify land cover, remove clouds and objects, upscale to super resolution, simulate floods</source>
-        <translation>Buat dan edit citra satelit atau udara dengan AI: klasifikasikan tutupan lahan, hapus awan dan objek, tingkatkan ke resolusi super, dan simulasikan banjir</translation>
+        <translation>Hasilkan dan edit citra satelit atau foto udara dengan AI: klasifikasikan tutupan lahan, hapus awan dan objek, tingkatkan resolusi super, simulasikan banjir</translation>
     </message>
     <message>
         <source>Map area to edit</source>
-        <translation>Emprise peta yang akan diedit</translation>
+        <translation>Area peta yang akan diedit</translation>
     </message>
     <message>
         <source>Name of the layer added to the project</source>
@@ -3005,15 +3005,15 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Output size, leave empty for the one selected in the panel</source>
-        <translation>Ukuran keluaran, biarkan kosong untuk menggunakan ukuran yang dipilih di panel</translation>
+        <translation>Ukuran output, biarkan kosong untuk menggunakan ukuran yang dipilih di panel</translation>
     </message>
     <message>
         <source>Output size: {size}.</source>
-        <translation>Ukuran keluaran: {size}.</translation>
+        <translation>Ukuran output: {size}.</translation>
     </message>
     <message>
         <source>Output sizes this build offers, smallest first: {sizes}.</source>
-        <translation>Ukuran keluaran yang ditawarkan build ini, dari yang terkecil: {sizes}.</translation>
+        <translation>Ukuran output yang ditawarkan build ini, dari yang terkecil: {sizes}.</translation>
     </message>
     <message>
         <source>Pick the color to trace, as a color or as '#rrggbb'.</source>
@@ -3025,7 +3025,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Plugin installed</source>
-        <translation>Plugin terpasang</translation>
+        <translation>Plugin terinstal</translation>
     </message>
     <message>
         <source>Prompt (what the picture should look like)</source>
@@ -3033,7 +3033,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Prompt preset id (optional)</source>
-        <translation>Id preset prompt (opsional)</translation>
+        <translation>ID templat prompt (opsional)</translation>
     </message>
     <message>
         <source>Ready to run</source>
@@ -3045,11 +3045,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Rewrites the imagery over a map area from a text prompt and puts the result on the map as a georeferenced image layer, lined up with the area you gave it.</source>
-        <translation>Menulis ulang citra pada emprise peta berdasarkan prompt teks dan menempatkan hasilnya pada peta sebagai layer citra bergeoreferensi yang sejajar dengan emprise yang diberikan.</translation>
+        <translation>Menulis ulang citra pada area peta berdasarkan prompt teks dan menempatkan hasilnya pada peta sebagai layer citra bergeoreferensi yang sejajar dengan area yang diberikan.</translation>
     </message>
     <message>
         <source>Run '{status_label}' ('{status_id}') first. It answers in a moment, spends nothing, and tells you whether this one can run at all.</source>
-        <translation>Jalankan '{status_label}' ('{status_id}') terlebih dahulu. Proses ini memberikan jawaban dalam waktu singkat, tidak menggunakan kredit, dan memberi tahu apakah proses ini dapat dijalankan.</translation>
+        <translation>Jalankan '{status_label}' ('{status_id}') terlebih dahulu. Algoritma itu menjawab dalam sekejap, tidak menggunakan kredit, dan memberi tahu Anda apakah algoritma ini dapat dijalankan.</translation>
     </message>
     <message>
         <source>Run started</source>
@@ -3061,7 +3061,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Sending the area to the AI service. Prompt: {prompt}</source>
-        <translation>Mengirim emprise ke layanan AI. Prompt: {prompt}</translation>
+        <translation>Mengirim area ke layanan AI. Prompt: {prompt}</translation>
     </message>
     <message>
         <source>Source image: leave it empty to use the newest AI Edit result in the project, or name a raster layer to trace a different one. The layer has to be in the project, not a file picked from disk.</source>
@@ -3101,11 +3101,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>The area is empty. Draw a rectangle over the imagery.</source>
-        <translation>Emprise kosong. Gambar persegi panjang di atas citra.</translation>
+        <translation>Area masih kosong. Gambar persegi panjang di atas citra.</translation>
     </message>
     <message>
         <source>The area is read from the map canvas view, so the imagery under it is what the AI sees. Zoom in far enough that the detail you are asking about is visible, and hide any layer you do not want sent.</source>
-        <translation>Emprise dibaca dari tampilan kanvas peta, sehingga citra di bawahnya adalah yang dilihat AI. Perbesar secukupnya agar detail yang diminta terlihat, dan sembunyikan layer yang tidak ingin dikirim.</translation>
+        <translation>Area dibaca dari map canvas, sehingga citra di bawahnya adalah yang dilihat AI. Perbesar secukupnya agar detail yang diminta terlihat, dan sembunyikan layer yang tidak ingin dikirim.</translation>
     </message>
     <message>
         <source>The balance could not be read, so CREDITS_REMAINING is -1 rather than a count. Reason: {reason}.</source>
@@ -3125,7 +3125,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>The tracing finished but its layer is not in the project.</source>
-        <translation>Penelusuran selesai, tetapi layernya tidak ada dalam proyek.</translation>
+        <translation>Penelusuran selesai, tetapi layer hasilnya tidak ada di proyek.</translation>
     </message>
     <message>
         <source>This QGIS build exposes no way to keep the run on the main thread. These algorithms drive the AI Edit panel, and driving it from a background thread would take QGIS down, so the run is refused. Update QGIS, or use the panel itself.</source>
@@ -3133,7 +3133,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>This run takes 30 to 120 seconds, and QGIS stays busy for the caller until it ends. Never start it again while it is running: a second run costs the user money.</source>
-        <translation>Proses ini memerlukan waktu 30 hingga 120 detik, dan QGIS tetap sibuk bagi pemanggil hingga proses selesai. Jangan pernah memulainya lagi saat masih berjalan karena proses kedua akan membebani pengguna.</translation>
+        <translation>Proses ini memerlukan waktu 30 hingga 120 detik, dan QGIS tetap sibuk bagi pemanggil hingga proses selesai. Jangan pernah memulainya lagi saat masih berjalan, karena proses kedua berarti biaya tambahan bagi pengguna.</translation>
     </message>
     <message>
         <source>This runs on the AI service, so it needs an internet connection and a signed-in TerraLab account. Open the AI Edit panel once to sign in.</source>
@@ -3149,7 +3149,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Traced {count} polygon(s) from {image}.</source>
-        <translation>Menelusuri {count} poligon dari {image}.</translation>
+        <translation>{count} poligon ditelusuri dari {image}.</translation>
     </message>
     <message>
         <source>Tracing color {color} on {image}.</source>
@@ -3164,16 +3164,16 @@ Kami senang mendengar dari Anda!</translation>
   {generate_id} - '{generate_label}'. Give it a map area and a prompt. It returns a new image layer over that area. It runs on the AI service, takes 30 to 120 seconds, and QGIS stays busy until it ends. Never start it twice: a second run costs the user money.
   {vectorize_id} - '{vectorize_label}'. Give it one flat color of a result image and it traces that color into a polygon layer. Free, local, needs no account, and usually a few seconds.</source>
         <translation>Dua algoritma melakukan pekerjaan ini, dan Anda dapat menjalankan salah satunya berdasarkan id:
-  {generate_id} - '{generate_label}'. Berikan emprise peta dan prompt. Algoritma ini mengembalikan layer citra baru di atas emprise tersebut. Proses berjalan pada layanan AI, memerlukan waktu 30 hingga 120 detik, dan QGIS tetap sibuk hingga selesai. Jangan pernah memulainya dua kali karena proses kedua akan membebani pengguna.
-  {vectorize_id} - '{vectorize_label}'. Berikan satu warna seragam dari citra hasil dan algoritma ini menelusuri warna tersebut menjadi layer poligon. Gratis, lokal, tidak memerlukan akun, dan biasanya selesai dalam beberapa detik.</translation>
+  {generate_id}: '{generate_label}'. Berikan area peta dan prompt. Algoritma ini mengembalikan layer citra baru di atas area tersebut. Proses berjalan pada layanan AI, memerlukan waktu 30 hingga 120 detik, dan QGIS tetap sibuk hingga selesai. Jangan pernah memulainya dua kali, karena proses kedua berarti biaya tambahan bagi pengguna.
+  {vectorize_id}: '{vectorize_label}'. Berikan satu warna seragam dari citra hasil dan algoritma ini menelusuri warna tersebut menjadi layer poligon. Gratis, lokal, tidak memerlukan akun, dan biasanya selesai dalam beberapa detik.</translation>
     </message>
     <message>
         <source>Type a prompt, for example 'remove the clouds'.</source>
-        <translation>Ketik prompt, misalnya 'remove the clouds'.</translation>
+        <translation>Ketik prompt, misalnya 'hapus awan'.</translation>
     </message>
     <message>
         <source>Use it after '{generate_id}' has painted a class in one color, for example 'color every building red and everything else grey'. Point this algorithm at red and you get one polygon per building.</source>
-        <translation>Gunakan setelah '{generate_id}' mewarnai suatu kelas dengan satu warna, misalnya 'color every building red and everything else grey'. Arahkan algoritma ini ke warna merah untuk mendapatkan satu poligon per bangunan.</translation>
+        <translation>Gunakan setelah '{generate_id}' mewarnai suatu kelas dengan satu warna, misalnya 'warnai setiap bangunan dengan merah dan sisanya abu-abu'. Arahkan algoritma ini ke warna merah untuk mendapatkan satu poligon per bangunan.</translation>
     </message>
     <message>
         <source>Vectorize a color of an AI result into polygons (land cover classes, raster to vector)</source>
@@ -3181,15 +3181,15 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>What it is for: classify land cover, extract building footprints as a colored picture, remove clouds, remove cars or buildings, upscale to super resolution, simulate a flood, color an old scanned map, restore a damaged photo.</source>
-        <translation>Kegunaannya: mengklasifikasikan tutupan lahan, mengekstrak jejak bangunan sebagai gambar berwarna, menghapus awan, menghapus mobil atau bangunan, meningkatkan ke resolusi super, mensimulasikan banjir, mewarnai peta lama hasil pemindaian, dan memulihkan foto yang rusak.</translation>
+        <translation>Kegunaannya: mengklasifikasikan tutupan lahan, mengekstrak footprint bangunan sebagai gambar berwarna, menghapus awan, menghapus mobil atau bangunan, meningkatkan ke resolusi super, mensimulasikan banjir, mewarnai peta lama hasil pemindaian, dan memulihkan foto yang rusak.</translation>
     </message>
     <message>
         <source>What it returns: SUBMITTED (whether the run started), STATE ('done', 'generating', 'cancelled' or 'idle'), RESULT_LAYERS (the names of the image layers this run added to the project) and STATUS. There is no file output: the plugin adds the georeferenced result to the project itself, under its own layer group.</source>
-        <translation>Hasil yang dikembalikan: SUBMITTED (apakah proses dimulai), STATE ('done', 'generating', 'cancelled' atau 'idle'), RESULT_LAYERS (nama layer citra yang ditambahkan proses ini ke proyek), dan STATUS. Tidak ada keluaran file: plugin menambahkan hasil bergeoreferensi langsung ke proyek, di bawah grup layernya sendiri.</translation>
+        <translation>Hasil yang dikembalikan: SUBMITTED (apakah proses dimulai), STATE ('done', 'generating', 'cancelled' atau 'idle'), RESULT_LAYERS (nama layer citra yang ditambahkan proses ini ke proyek), dan STATUS. Tidak ada output file: plugin menambahkan hasil bergeoreferensi langsung ke proyek, di grup layer miliknya sendiri.</translation>
     </message>
     <message>
         <source>What it returns: no file output. The plugin adds one styled polygon layer to the project beside the image it came from, and this algorithm reports LAYER_NAME, FEATURE_COUNT and STATUS. That layer lives in memory until you save it, so use 'Make permanent' on it, or export it, before closing the project.</source>
-        <translation>Hasil yang dikembalikan: tidak ada keluaran file. Plugin menambahkan satu layer poligon bergaya ke proyek di sebelah citra asalnya, dan algoritma ini melaporkan LAYER_NAME, FEATURE_COUNT, dan STATUS. Layer tersebut berada di memori hingga Anda menyimpannya, jadi gunakan 'Make permanent' atau ekspor layer tersebut sebelum menutup proyek.</translation>
+        <translation>Hasil yang dikembalikan: tidak ada output file. Plugin menambahkan satu layer poligon bergaya ke proyek di sebelah citra asalnya, dan algoritma ini melaporkan LAYER_NAME, FEATURE_COUNT, dan STATUS. Layer tersebut berada di memori hingga Anda menyimpannya, jadi gunakan 'Make permanent' atau ekspor layer tersebut sebelum menutup proyek.</translation>
     </message>
     <message>
         <source>What the user has to do</source>
@@ -3197,15 +3197,15 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>What this one returns: INSTALLED and READY (true or false), STATE (READY, NEEDS_ACTIVATION or NO_PANEL), ACTION_REQUIRED (what a person has to do when READY is false), PLAN ('free', 'pro' or empty when unknown), CREDITS_REMAINING, BUSY (true while a generation is already running) and NEXT_ALGORITHMS. CREDITS_REMAINING is -1 when the account did not report a number, which usually means nobody is signed in yet.</source>
-        <translation>Hasil yang dikembalikan: INSTALLED dan READY (true atau false), STATE (READY, NEEDS_ACTIVATION atau NO_PANEL), ACTION_REQUIRED (yang harus dilakukan seseorang ketika READY bernilai false), PLAN ('free', 'pro' atau kosong jika tidak diketahui), CREDITS_REMAINING, BUSY (true saat generasi sedang berjalan), dan NEXT_ALGORITHMS. CREDITS_REMAINING bernilai -1 ketika akun tidak melaporkan jumlah, yang biasanya berarti belum ada pengguna yang masuk.</translation>
+        <translation>Hasil yang dikembalikan: INSTALLED dan READY (true atau false), STATE (READY, NEEDS_ACTIVATION atau NO_PANEL), ACTION_REQUIRED (yang harus dilakukan seseorang ketika READY bernilai false), PLAN ('free', 'pro' atau kosong jika tidak diketahui), CREDITS_REMAINING, BUSY (true saat pembuatan sedang berlangsung), dan NEXT_ALGORITHMS. CREDITS_REMAINING bernilai -1 ketika akun tidak melaporkan jumlah, yang biasanya berarti belum ada pengguna yang masuk.</translation>
     </message>
     <message>
         <source>What to type in 'Prompt': plain words describing the picture you want back, for example 'color every building red and everything else grey' or 'remove the clouds' or 'upscale and sharpen'.</source>
-        <translation>Yang harus diketik di 'Prompt': kata-kata biasa yang menjelaskan gambar yang ingin Anda dapatkan, misalnya 'color every building red and everything else grey', 'remove the clouds', atau 'upscale and sharpen'.</translation>
+        <translation>Yang diketik di 'Prompt': kata-kata biasa yang menjelaskan gambar yang ingin Anda dapatkan, misalnya 'warnai setiap bangunan dengan merah dan sisanya abu-abu', 'hapus awan', atau 'tingkatkan resolusi dan pertajam'.</translation>
     </message>
     <message>
         <source>When BUSY is true, a generation is already running. Wait for it and poll this algorithm again rather than starting another one.</source>
-        <translation>Saat BUSY bernilai true, generasi sedang berjalan. Tunggu hingga selesai dan polling algoritma ini kembali, bukan memulai proses lain.</translation>
+        <translation>Saat BUSY bernilai true, pembuatan sedang berlangsung. Tunggu hingga selesai dan lakukan polling algoritma ini lagi, jangan memulai proses lain.</translation>
     </message>
     <message>
         <source>When READY is false, read ACTION_REQUIRED out to the user and stop. Signing in happens in the AI Edit panel in QGIS, not from here, and no algorithm can do it for the user.</source>
@@ -3277,7 +3277,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Check for Updates</source>
-        <translation>Periksa Pembaruan</translation>
+        <translation>Periksa pembaruan</translation>
     </message>
     <message>
         <source>More from TerraLab...</source>
@@ -3315,7 +3315,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Part of your zone is outside "{layer}". That part will come back blank.</source>
-        <translation>Sebagian zona Anda berada di luar "{layer}". Bagian itu akan kembali kosong.</translation>
+        <translation>Sebagian zona Anda berada di luar "{layer}". Bagian itu akan kosong pada hasil.</translation>
     </message>
     <message>
         <source>Looking for building, tree or road outlines? AI Segmentation traces them as real geometry.</source>
@@ -3355,7 +3355,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>This layer does not cover your zone, so it is sent whole, not aligned to it.</source>
-        <translation>Lapisan ini tidak mencakup zona Anda, jadi dikirim utuh, tanpa penyelarasan.</translation>
+        <translation>Layer ini tidak mencakup zona Anda, jadi dikirim utuh, tanpa penyelarasan.</translation>
     </message>
     <message>
         <source>"{layer}" does not cover your zone. It is sent as a whole image.</source>
@@ -3395,7 +3395,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>An edit is already running</source>
-        <translation>Pengeditan sedang berlangsung</translation>
+        <translation>Sudah ada edit yang sedang berlangsung</translation>
     </message>
     <message>
         <source>Checking your account...</source>
@@ -3483,7 +3483,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>AI Edit {version} is out</source>
-        <translation>AI Edit {version} telah tersedia</translation>
+        <translation>AI Edit {version} telah dirilis</translation>
     </message>
     <message>
         <source>Later</source>
@@ -3503,19 +3503,19 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>1 stroke</source>
-        <translation>1 sapuan</translation>
+        <translation>1 goresan</translation>
     </message>
     <message>
         <source>&lt;b&gt;Draw&lt;/b&gt;&lt;br&gt;Draw lines, arrows or circles on the map to show the AI what to change and where. Your drawing is sent with the prompt as visual guidance.</source>
-        <translation>&lt;b&gt;Menggambar&lt;/b&gt;&lt;br&gt;Gambar garis, panah, atau lingkaran pada peta untuk menunjukkan kepada AI apa yang harus diubah dan di mana. Gambar Anda dikirim bersama prompt sebagai panduan visual.</translation>
+        <translation>&lt;b&gt;Gambar&lt;/b&gt;&lt;br&gt;Gambar garis, panah, atau lingkaran pada peta untuk menunjukkan kepada AI apa yang harus diubah dan di mana. Gambar Anda dikirim bersama prompt sebagai panduan visual.</translation>
     </message>
     <message>
         <source>&lt;b&gt;Library&lt;/b&gt;&lt;br&gt;Ready-made prompts, your recent prompts and your favorites.</source>
-        <translation>&lt;b&gt;Library&lt;/b&gt;&lt;br&gt;Prompt siap pakai, prompt terbaru Anda, dan favorit Anda.</translation>
+        <translation>&lt;b&gt;Pustaka&lt;/b&gt;&lt;br&gt;Prompt siap pakai, prompt terbaru Anda, dan favorit Anda.</translation>
     </message>
     <message>
         <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Higher quality is sharper and more precise, and costs more credits. Standard (1K), Detailed (2K), Maximum (4K).</source>
-        <translation>&lt;b&gt;Kualitas&lt;/b&gt;&lt;br&gt;Kualitas lebih tinggi lebih tajam dan presisi, serta menggunakan lebih banyak kredit. Standar (1K), Mendetail (2K), Maksimum (4K).</translation>
+        <translation>&lt;b&gt;Kualitas&lt;/b&gt;&lt;br&gt;Kualitas lebih tinggi lebih tajam dan presisi, serta menggunakan lebih banyak kredit. Standar (1K), Detail (2K), Maksimum (4K).</translation>
     </message>
     <message>
         <source>&lt;b&gt;References&lt;/b&gt;&lt;br&gt;Add an image or data file from disk, or one of your project's layers, as guidance for the AI. You can also drag a layer from the Layers panel straight into the prompt box. Everything is cropped to your zone.</source>
@@ -3523,7 +3523,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>A newer version is ready. Opens the QGIS plugin manager on it.</source>
-        <translation>Versi yang lebih baru sudah tersedia. Membuka pengelola plugin QGIS untuk versi tersebut.</translation>
+        <translation>Versi yang lebih baru sudah tersedia. Membuka Plugin Manager QGIS pada versi tersebut.</translation>
     </message>
     <message>
         <source>AI Edit Pro</source>
@@ -3555,7 +3555,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Account created. Outline an area on the example map to make your first edit.</source>
-        <translation>Akun dibuat. Tandai area pada peta contoh untuk membuat edit pertama Anda.</translation>
+        <translation>Akun dibuat. Gambar zona pada peta contoh untuk membuat edit pertama Anda.</translation>
     </message>
     <message>
         <source>Account deletion scheduled</source>
@@ -3567,7 +3567,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Account not loaded</source>
-        <translation>Akun tidak dimuat</translation>
+        <translation>Akun gagal dimuat</translation>
     </message>
     <message>
         <source>Add a layer first</source>
@@ -3579,11 +3579,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Add the Original</source>
-        <translation>Tambahkan yang Asli</translation>
+        <translation>Tambahkan versi Asli</translation>
     </message>
     <message>
         <source>Added</source>
-        <translation>Ditambahkan</translation>
+        <translation>Ditambah</translation>
     </message>
     <message>
         <source>Added to your map as</source>
@@ -3595,7 +3595,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Added {added} of {total}. The limit is {n} references.</source>
-        <translation>Menambahkan {added} dari {total}. Batasnya adalah {n} referensi.</translation>
+        <translation>Ditambahkan {added} dari {total}. Batasnya {n} referensi.</translation>
     </message>
     <message>
         <source>Added {hex} to the classes.</source>
@@ -3619,7 +3619,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Amber</source>
-        <translation>Amber</translation>
+        <translation>Jingga</translation>
     </message>
     <message>
         <source>An AI edit of your map zone</source>
@@ -3631,7 +3631,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Any subscription stops renewing.</source>
-        <translation>Langganan apa pun berhenti diperpanjang.</translation>
+        <translation>Langganan Anda tidak lagi diperpanjang.</translation>
     </message>
     <message>
         <source>Apply the next change to the picked version, on the same zone</source>
@@ -3639,15 +3639,15 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Ask your IT team to allow terra-lab.ai, or import your company root certificate in Settings &gt; Options &gt; Authentication</source>
-        <translation>Minta tim TI Anda untuk mengizinkan terra-lab.ai, atau impor sertifikat root perusahaan Anda di Pengaturan &gt; Opsi &gt; Autentikasi</translation>
+        <translation>Minta tim TI Anda mengizinkan terra-lab.ai, atau impor sertifikat root perusahaan Anda di Settings &gt; Options &gt; Authentication</translation>
     </message>
     <message>
         <source>Ask your IT team to allow terra-lab.ai.</source>
-        <translation>Minta tim TI Anda untuk mengizinkan terra-lab.ai.</translation>
+        <translation>Minta tim TI Anda mengizinkan terra-lab.ai.</translation>
     </message>
     <message>
         <source>Back to the classes: check, rename or recolor, then vectorize again.</source>
-        <translation>Kembali ke kelas: periksa, ganti nama, atau ubah warnanya, lalu lakukan vektorisasi lagi.</translation>
+        <translation>Kembali ke kelas: periksa, ubah nama, atau ubah warna, lalu vektorkan lagi.</translation>
     </message>
     <message>
         <source>Before</source>
@@ -3675,7 +3675,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Browse the top picks</source>
-        <translation>Jelajahi pilihan terbaik</translation>
+        <translation>Jelajahi Unggulan</translation>
     </message>
     <message>
         <source>Bug, question or idea? Write to us.</source>
@@ -3683,7 +3683,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Cancel on terra-lab.ai during the grace period. After that, it is final.</source>
-        <translation>Batalkan di terra-lab.ai selama masa tenggang. Setelah itu, pembatalan bersifat final.</translation>
+        <translation>Batalkan di terra-lab.ai selama masa tenggang. Setelah itu, penghapusan bersifat final.</translation>
     </message>
     <message>
         <source>Cancel the zone</source>
@@ -3695,7 +3695,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Check your connection, then reopen the library.</source>
-        <translation>Periksa koneksi Anda, lalu buka kembali library.</translation>
+        <translation>Periksa koneksi Anda, lalu buka kembali Pustaka.</translation>
     </message>
     <message>
         <source>Check your connection, then retry.</source>
@@ -3727,7 +3727,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Close Vectorize</source>
-        <translation>Tutup Vectorize</translation>
+        <translation>Tutup Vektorkan</translation>
     </message>
     <message>
         <source>Close the panel</source>
@@ -3763,7 +3763,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Contracting by {n} px erased every shape. Set “Expand/Contract” closer to 0.</source>
-        <translation>Mengontraksikan sebesar {n} px menghapus semua bentuk. Atur “Perbesar/Perkecil” lebih dekat ke 0.</translation>
+        <translation>Memperkecil sebesar {n} px menghapus semua bentuk. Atur "Perluas/Perkecil" mendekati 0.</translation>
     </message>
     <message>
         <source>Copy your logs and send them to us. We will look into it.</source>
@@ -3867,7 +3867,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Download Original as a georeferenced GeoTIFF (.tif)</source>
-        <translation>Unduh gambar asli sebagai GeoTIFF (.tif) bergeoreferensi</translation>
+        <translation>Unduh versi Asli sebagai GeoTIFF bergeoreferensi (.tif)</translation>
     </message>
     <message>
         <source>Download as GeoTIFF</source>
@@ -3895,7 +3895,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Drag from the start to the tip. Shift keeps 45 degree angles.</source>
-        <translation>Seret dari awal ke ujung. Shift mempertahankan sudut 45 derajat.</translation>
+        <translation>Seret dari awal ke ujung. Shift menjaga sudut 45°.</translation>
     </message>
     <message>
         <source>Drag on the map to draw freely.</source>
@@ -3931,7 +3931,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Edit the selected area with AI (Enter)</source>
-        <translation>Edit area yang dipilih dengan AI (Enter)</translation>
+        <translation>Edit zona yang dipilih dengan AI (Enter)</translation>
     </message>
     <message>
         <source>Erases all data, stops every TerraLab plugin</source>
@@ -3975,11 +3975,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Free plan</source>
-        <translation>Paket gratis</translation>
+        <translation>Paket Free</translation>
     </message>
     <message>
         <source>Free plan limit reached.</source>
-        <translation>Batas paket gratis tercapai.</translation>
+        <translation>Batas paket Free tercapai.</translation>
     </message>
     <message>
         <source>From zone to finished edit</source>
@@ -3987,7 +3987,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Generate a flat-color map first, then come back.</source>
-        <translation>Buat peta warna datar terlebih dahulu, lalu kembali.</translation>
+        <translation>Hasilkan peta warna datar terlebih dahulu, lalu kembali.</translation>
     </message>
     <message>
         <source>Generate the edit on your zone</source>
@@ -4003,11 +4003,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Get Pro</source>
-        <translation>Dapatkan Pro</translation>
+        <translation>Ambil Pro</translation>
     </message>
     <message>
         <source>Get better results</source>
-        <translation>Dapatkan hasil yang lebih baik</translation>
+        <translation>Dapatkan hasil lebih baik</translation>
     </message>
     <message>
         <source>Go back one step</source>
@@ -4031,7 +4031,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>How far a pixel's color may drift from its class. Higher takes in noisy shades.</source>
-        <translation>Seberapa jauh warna piksel boleh menyimpang dari kelasnya. Nilai lebih tinggi menerima lebih banyak corak yang bising.</translation>
+        <translation>Seberapa jauh warna piksel boleh menyimpang dari kelasnya. Nilai lebih tinggi ikut mencakup corak warna yang berderau.</translation>
     </message>
     <message>
         <source>Ideas and workflows</source>
@@ -4039,7 +4039,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>If your browser works, turn on Settings &gt; Options &gt; Network &gt; Use proxy for web access.</source>
-        <translation>Jika browser Anda berfungsi, aktifkan Pengaturan &gt; Opsi &gt; Jaringan &gt; Gunakan proxy untuk akses web.</translation>
+        <translation>Jika browser Anda berfungsi, aktifkan Settings &gt; Options &gt; Network &gt; Use proxy for web access.</translation>
     </message>
     <message>
         <source>Image too large. Draw a smaller zone or pick a lower Quality.</source>
@@ -4055,15 +4055,15 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Installed</source>
-        <translation>Terpasang</translation>
+        <translation>Terinstal</translation>
     </message>
     <message>
         <source>It is installed but did not start. Restart QGIS to use it.</source>
-        <translation>Plugin ini terpasang tetapi tidak dimulai. Mulai ulang QGIS untuk menggunakannya.</translation>
+        <translation>Plugin ini terinstal tetapi gagal dimulai. Mulai ulang QGIS untuk menggunakannya.</translation>
     </message>
     <message>
         <source>It is installed but switched off. Turns it on and opens it.</source>
-        <translation>Plugin ini terpasang tetapi dinonaktifkan. Aktifkan dan buka plugin ini.</translation>
+        <translation>Plugin ini terinstal tetapi dimatikan. Mengaktifkan dan membukanya.</translation>
     </message>
     <message>
         <source>Its companion files are missing ({missing}). Drop the whole set together.</source>
@@ -4071,7 +4071,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Keep editing with Pro</source>
-        <translation>Lanjutkan mengedit dengan Pro</translation>
+        <translation>Terus mengedit dengan Pro</translation>
     </message>
     <message>
         <source>Keep the polygons on your map and close this panel</source>
@@ -4127,7 +4127,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Locked while the AI generates</source>
-        <translation>Terkunci selama AI menghasilkan</translation>
+        <translation>Terkunci selama AI membuat hasil</translation>
     </message>
     <message>
         <source>Made from</source>
@@ -4143,7 +4143,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Map view</source>
-        <translation>Tampilan peta</translation>
+        <translation>Map canvas</translation>
     </message>
     <message>
         <source>More edits, commercial use</source>
@@ -4163,7 +4163,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Needs a restart</source>
-        <translation>Perlu memulai ulang</translation>
+        <translation>Perlu mulai ulang</translation>
     </message>
     <message>
         <source>Network error. Check your internet connection.</source>
@@ -4187,15 +4187,15 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>No map to vectorize yet</source>
-        <translation>Belum ada peta untuk divektorisasi</translation>
+        <translation>Belum ada peta untuk divektorkan</translation>
     </message>
     <message>
         <source>No matches found</source>
-        <translation>Tidak ada kecocokan ditemukan</translation>
+        <translation>Tidak ada yang cocok</translation>
     </message>
     <message>
         <source>No pixel matches the checked colors. Adjust a color, or add one with “Add color from map”.</source>
-        <translation>Tidak ada piksel yang cocok dengan warna yang dicentang. Sesuaikan warnanya, atau tambahkan satu dengan “Tambahkan warna dari peta”.</translation>
+        <translation>Tidak ada piksel yang cocok dengan warna yang dicentang. Sesuaikan warnanya, atau tambahkan satu dengan "Tambah warna dari peta".</translation>
     </message>
     <message>
         <source>No prompt was saved for this version.</source>
@@ -4207,11 +4207,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>No sessions match</source>
-        <translation>Tidak ada sesi yang cocok</translation>
+        <translation>Tidak ada sesi cocok</translation>
     </message>
     <message>
         <source>No shape reaches {n} px. Lower “Min polygon size”.</source>
-        <translation>Tidak ada bentuk yang mencapai {n} px. Turunkan “Ukuran poligon minimum”.</translation>
+        <translation>Tidak ada bentuk yang mencapai {n} px. Turunkan "Ukuran poligon minimum".</translation>
     </message>
     <message>
         <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size” or “Remove speckle”, or raise “Color tolerance”.</source>
@@ -4247,11 +4247,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Open a prompt or a past edit and press its star: it will wait for you here.</source>
-        <translation>Buka sebuah prompt atau edit sebelumnya lalu tekan bintangnya: ia akan menunggu Anda di sini.</translation>
+        <translation>Buka prompt atau edit sebelumnya lalu tekan bintangnya. Item itu akan menunggu Anda di sini.</translation>
     </message>
     <message>
         <source>Open dashboard</source>
-        <translation>Buka dashboard</translation>
+        <translation>Buka dasbor</translation>
     </message>
     <message>
         <source>Open in QGIS</source>
@@ -4263,7 +4263,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Open the Library</source>
-        <translation>Buka Perpustakaan</translation>
+        <translation>Buka Pustaka</translation>
     </message>
     <message>
         <source>Open your sessions</source>
@@ -4271,19 +4271,19 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Opens in your browser</source>
-        <translation>Terbuka di browser Anda</translation>
+        <translation>Dibuka di browser Anda</translation>
     </message>
     <message>
         <source>Opens the QGIS plugin manager on this plugin.</source>
-        <translation>Membuka pengelola plugin QGIS pada plugin ini.</translation>
+        <translation>Membuka Plugin Manager QGIS pada plugin ini.</translation>
     </message>
     <message>
         <source>Opens your dashboard in the browser</source>
-        <translation>Membuka dashboard Anda di browser</translation>
+        <translation>Membuka dasbor Anda di browser</translation>
     </message>
     <message>
         <source>Or drop images and layers here</source>
-        <translation>Atau letakkan gambar dan layer di sini</translation>
+        <translation>Atau seret gambar dan layer ke sini</translation>
     </message>
     <message>
         <source>Other TerraLab plugins for QGIS</source>
@@ -4295,11 +4295,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Outline an area, say what to change</source>
-        <translation>Gariskan sebuah area, sebutkan yang ingin diubah</translation>
+        <translation>Tandai sebuah area, jelaskan perubahan yang diinginkan</translation>
     </message>
     <message>
         <source>Output size</source>
-        <translation>Ukuran keluaran</translation>
+        <translation>Ukuran output</translation>
     </message>
     <message>
         <source>Outside the prompt box</source>
@@ -4315,7 +4315,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Personal, non-commercial use</source>
-        <translation>Penggunaan pribadi, non-komersial</translation>
+        <translation>Penggunaan pribadi, nonkomersial</translation>
     </message>
     <message>
         <source>Pick a map under Layer first.</source>
@@ -4327,11 +4327,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Plan not loaded</source>
-        <translation>Paket tidak dimuat</translation>
+        <translation>Paket gagal dimuat</translation>
     </message>
     <message>
         <source>Plan, payment and invoices</source>
-        <translation>Paket, pembayaran, dan invoice</translation>
+        <translation>Paket, pembayaran, dan faktur</translation>
     </message>
     <message>
         <source>Preview</source>
@@ -4339,7 +4339,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Privacy Policy</source>
-        <translation>Kebijakan Privasi</translation>
+        <translation>Kebijakan privasi</translation>
     </message>
     <message>
         <source>Pro</source>
@@ -4351,7 +4351,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Pro unlocks Detailed and Maximum, for printing and zooming in</source>
-        <translation>Pro membuka Detailed dan Maximum, untuk mencetak dan memperbesar</translation>
+        <translation>Detail dan Maksimum tersedia dengan Pro, untuk mencetak dan memperbesar</translation>
     </message>
     <message>
         <source>Project layer</source>
@@ -4363,7 +4363,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Prompts, References, Draw, Vectorize</source>
-        <translation>Prompts, Referensi, Gambar, Vektorisasi</translation>
+        <translation>Prompt, Referensi, Gambar, Vektorkan</translation>
     </message>
     <message>
         <source>Proven prompts to start from. Open one to see it before and after.</source>
@@ -4407,7 +4407,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Remove every stroke. Undo cannot bring them back.</source>
-        <translation>Hapus semua goresan. Undo tidak dapat mengembalikannya.</translation>
+        <translation>Hapus semua goresan. Urungkan tidak dapat mengembalikannya.</translation>
     </message>
     <message>
         <source>Remove the last point</source>
@@ -4431,7 +4431,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Reset settings</source>
-        <translation>Atur ulang pengaturan</translation>
+        <translation>Reset pengaturan</translation>
     </message>
     <message>
         <source>Restart QGIS</source>
@@ -4447,7 +4447,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Run QGIS from a single sentence.</source>
-        <translation>Jalankan QGIS dari satu kalimat.</translation>
+        <translation>Jalankan QGIS dengan satu kalimat.</translation>
     </message>
     <message>
         <source>Save reference</source>
@@ -4463,7 +4463,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Secure connection failed, often because of company SSL inspection. Ask your IT team to allow terra-lab.ai, or import your company root certificate in Settings &gt; Options &gt; Authentication.</source>
-        <translation>Koneksi aman gagal, sering kali karena inspeksi SSL perusahaan. Minta tim IT Anda mengizinkan terra-lab.ai, atau impor sertifikat root perusahaan Anda di Pengaturan &gt; Opsi &gt; Autentikasi.</translation>
+        <translation>Koneksi aman gagal, sering kali karena inspeksi SSL perusahaan. Minta tim TI Anda mengizinkan terra-lab.ai, atau impor sertifikat root perusahaan Anda di Settings &gt; Options &gt; Authentication.</translation>
     </message>
     <message>
         <source>See Pro</source>
@@ -4479,11 +4479,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>See usage</source>
-        <translation>Lihat penggunaan</translation>
+        <translation>Penggunaan</translation>
     </message>
     <message>
         <source>See what Pro unlocks</source>
-        <translation>Lihat apa yang Pro buka</translation>
+        <translation>Lihat apa saja yang tersedia di Pro</translation>
     </message>
     <message>
         <source>Server refused the connection. The service may be temporarily down.</source>
@@ -4491,7 +4491,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Session expired. Sign out and back in.</source>
-        <translation>Sesi berakhir. Keluar lalu masuk kembali.</translation>
+        <translation>Sesi masuk berakhir. Keluar lalu masuk kembali.</translation>
     </message>
     <message>
         <source>Session reopened. Edit the prompt or pick a version, then Generate.</source>
@@ -4523,7 +4523,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Show this layer in the Layers panel</source>
-        <translation>Tampilkan layer ini di panel Layer</translation>
+        <translation>Tampilkan layer ini di panel Layers</translation>
     </message>
     <message>
         <source>Sign in</source>
@@ -4551,7 +4551,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Softer outlines for natural shapes like trees.</source>
-        <translation>Garis tepi lebih lembut untuk bentuk alami seperti pohon.</translation>
+        <translation>Garis luar lebih halus untuk bentuk alami seperti pohon.</translation>
     </message>
     <message>
         <source>Start from {label}</source>
@@ -4567,15 +4567,15 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Still generating. The result is added to your map when ready.</source>
-        <translation>Masih menghasilkan. Hasil ditambahkan ke peta Anda saat siap.</translation>
+        <translation>Pembuatan masih berlangsung. Hasil ditambahkan ke peta Anda saat siap.</translation>
     </message>
     <message>
         <source>Still waiting, but AI Edit cannot reach the server to check your sign-in.</source>
-        <translation>Masih menunggu, tetapi AI Edit tidak dapat menjangkau server untuk memeriksa status masuk Anda.</translation>
+        <translation>Masih menunggu, tetapi AI Edit tidak dapat menjangkau server untuk memeriksa sesi masuk Anda.</translation>
     </message>
     <message>
         <source>Straight lines. Click the first point to close, Shift keeps 45 degree angles.</source>
-        <translation>Garis lurus. Klik titik pertama untuk menutup, Shift menjaga sudut 45 derajat.</translation>
+        <translation>Garis lurus. Klik titik pertama untuk menutup, Shift menjaga sudut 45°.</translation>
     </message>
     <message>
         <source>Stroke color</source>
@@ -4595,7 +4595,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Team seats, custom quota, invoices</source>
-        <translation>Kursi tim, kuota khusus, faktur</translation>
+        <translation>Lisensi tim, kuota khusus, faktur</translation>
     </message>
     <message>
         <source>TerraLab blog</source>
@@ -4615,7 +4615,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>The AI Edit drawing layer is hidden.</source>
-        <translation>Layer gambar AI Edit disembunyikan.</translation>
+        <translation>Layer "AI Edit drawing" tersembunyi.</translation>
     </message>
     <message>
         <source>The Free plan takes up to {n} references.</source>
@@ -4631,15 +4631,15 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>The free plan includes {n} reference. Remove it to add another.</source>
-        <translation>Paket free mencakup {n} referensi. Hapus untuk menambah yang lain.</translation>
+        <translation>Paket Free mencakup {n} referensi. Hapus untuk menambah yang lain.</translation>
     </message>
     <message>
         <source>The free plan includes {n} references. Remove one to add another.</source>
-        <translation>Paket free mencakup {n} referensi. Hapus satu untuk menambah yang lain.</translation>
+        <translation>Paket Free mencakup {n} referensi. Hapus satu untuk menambah yang lain.</translation>
     </message>
     <message>
         <source>The imagery this session was edited on is not in this project. Add its Original to see your edits in context.</source>
-        <translation>Citra yang menjadi dasar edit sesi ini tidak ada di proyek ini. Tambahkan Original-nya untuk melihat edit Anda dalam konteks.</translation>
+        <translation>Citra yang menjadi dasar edit sesi ini tidak ada di proyek ini. Tambahkan versi Asli untuk melihat edit Anda dalam konteks.</translation>
     </message>
     <message>
         <source>The layer keeps its last result.</source>
@@ -4647,7 +4647,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>The map area you select and your prompt go to our image generation partner only to produce the result, and it deletes them within 30 days.</source>
-        <translation>Area peta yang Anda pilih dan prompt Anda dikirim ke mitra pembuatan gambar kami hanya untuk menghasilkan hasil, dan mitra tersebut menghapusnya dalam 30 hari.</translation>
+        <translation>Zona peta yang Anda pilih dan prompt Anda dikirim ke mitra pembuatan gambar kami hanya untuk menghasilkan hasil, dan mitra tersebut menghapusnya dalam 30 hari.</translation>
     </message>
     <message>
         <source>The map this layer came from was removed. Vectorize it again.</source>
@@ -4655,7 +4655,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>The next edit starts from it.</source>
-        <translation>Edit berikutnya dimulai darinya.</translation>
+        <translation>Edit berikutnya dimulai dari sini.</translation>
     </message>
     <message>
         <source>The polygons could not be added to your map. Try again.</source>
@@ -4675,11 +4675,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>This Quality is not in your plan. Upgrade to Pro to use it.</source>
-        <translation>Kualitas ini tidak ada di paket Anda. Tingkatkan ke Pro untuk menggunakannya.</translation>
+        <translation>Kualitas ini tidak ada di paket Anda. Upgrade ke Pro untuk menggunakannya.</translation>
     </message>
     <message>
         <source>This computer is no longer signed in</source>
-        <translation>Komputer ini tidak lagi masuk</translation>
+        <translation>Sesi masuk di komputer ini telah berakhir</translation>
     </message>
     <message>
         <source>This looks like a photo. Pick a color below.</source>
@@ -4703,7 +4703,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Too many attempts. Try again soon.</source>
-        <translation>Terlalu banyak percobaan. Coba lagi nanti.</translation>
+        <translation>Terlalu banyak percobaan. Coba lagi dalam beberapa saat.</translation>
     </message>
     <message>
         <source>Tools</source>
@@ -4735,7 +4735,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Turns a flat-color map into polygons, one class per color.</source>
-        <translation>Mengubah peta warna datar menjadi poligon, satu kelas per warna.</translation>
+        <translation>Mengubah peta berwarna polos menjadi poligon, satu kelas per warna.</translation>
     </message>
     <message>
         <source>Tutorials</source>
@@ -4747,7 +4747,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Undo the last stroke ({shortcut})</source>
-        <translation>Batalkan goresan terakhir ({shortcut})</translation>
+        <translation>Urungkan goresan terakhir ({shortcut})</translation>
     </message>
     <message>
         <source>Up to 12 reference images</source>
@@ -4767,7 +4767,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Update to keep using AI Edit. It takes one click in the QGIS Plugin Manager, and the plugin reloads on its own.</source>
-        <translation>Perbarui untuk terus menggunakan AI Edit. Hanya perlu satu klik di Plugin Manager QGIS, dan plugin dimuat ulang sendiri.</translation>
+        <translation>Perbarui untuk terus menggunakan AI Edit. Hanya perlu satu klik di Plugin Manager QGIS, dan plugin dimuat ulang secara otomatis.</translation>
     </message>
     <message>
         <source>Updating the layer...</source>
@@ -4803,11 +4803,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>We will look into it and get back to you.</source>
-        <translation>Kami akan menyelidikinya dan menghubungi Anda kembali.</translation>
+        <translation>Kami akan menindaklanjutinya dan menghubungi Anda kembali.</translation>
     </message>
     <message>
         <source>What will you edit first?</source>
-        <translation>Apa yang akan Anda edit pertama kali?</translation>
+        <translation>Apa yang akan Anda edit pertama?</translation>
     </message>
     <message>
         <source>What would you like to edit?</source>
@@ -4851,7 +4851,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Your drawing won't be used</source>
-        <translation>Gambar Anda tidak akan digunakan</translation>
+        <translation>Goresan Anda tidak akan digunakan</translation>
     </message>
     <message>
         <source>Your email</source>
@@ -4859,11 +4859,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Your generations stay in your history until you delete them. On {pro} you can set 30 days, 90 days or 1 year in Settings.</source>
-        <translation>Generasi Anda tetap berada di riwayat Anda hingga Anda menghapusnya. Pada {pro} Anda dapat mengatur 30 hari, 90 hari, atau 1 tahun di Pengaturan.</translation>
+        <translation>Edit Anda tetap ada di riwayat sampai Anda menghapusnya. Dengan {pro} Anda dapat mengatur 30 hari, 90 hari, atau 1 tahun di Pengaturan.</translation>
     </message>
     <message>
         <source>Your generations, history and prompts are erased.</source>
-        <translation>Generasi, riwayat, dan prompt Anda dihapus.</translation>
+        <translation>Edit, riwayat, dan prompt Anda dihapus.</translation>
     </message>
     <message>
         <source>Your map, before any AI edit</source>
@@ -4871,7 +4871,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Your network blocked the connection (HTTP {status}). Ask your IT team to allow terra-lab.ai.</source>
-        <translation>Jaringan Anda memblokir koneksi (HTTP {status}). Minta tim IT Anda untuk mengizinkan terra-lab.ai.</translation>
+        <translation>Jaringan Anda memblokir koneksi (HTTP {status}). Minta tim TI Anda mengizinkan terra-lab.ai.</translation>
     </message>
     <message>
         <source>Your session is saved. Reopen it from Sessions, the clock at the top.</source>
@@ -4883,7 +4883,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Your zone is too small. Draw it at least {pct}% of the map width.</source>
-        <translation>Zona Anda terlalu kecil. Gambarlah setidaknya {pct}% dari lebar peta.</translation>
+        <translation>Zona Anda terlalu kecil. Gambar zona dengan lebar minimal {pct}% dari lebar peta.</translation>
     </message>
     <message>
         <source>Your {total} free edits return next month</source>
@@ -4911,11 +4911,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>{head} “{name}”: {count}.</source>
-        <translation>{head} “{name}”: {count}.</translation>
+        <translation>{head} "{name}": {count}.</translation>
     </message>
     <message>
         <source>{hex} is already listed as “{name}”. It is checked.</source>
-        <translation>{hex} sudah terdaftar sebagai “{name}”. Sudah dicentang.</translation>
+        <translation>{hex} sudah terdaftar sebagai "{name}". Sudah dicentang.</translation>
     </message>
     <message>
         <source>{label} {n}</source>
@@ -4947,7 +4947,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>“Color tolerance” at {n} matches no pixel. Raise it.</source>
-        <translation>“Toleransi warna” pada {n} tidak cocok dengan piksel mana pun. Naikkan nilainya.</translation>
+        <translation>"Toleransi warna" pada {n} tidak cocok dengan piksel mana pun. Naikkan nilainya.</translation>
     </message>
     <message>
         <source>“Remove speckle” at {n} px removed every shape. Lower it.</source>
@@ -4955,7 +4955,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>“{name}” updated: {count}.</source>
-        <translation>“{name}” diperbarui: {count}.</translation>
+        <translation>"{name}" diperbarui: {count}.</translation>
     </message>
     <message>
         <source>&#x27;Color tolerance&#x27; at {n} matches no pixel. Raise it.</source>
@@ -5171,11 +5171,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>{n} stroke. Click Done to guide the edit with it.</source>
-        <translation>{n} goresan. Klik Selesai untuk memandu edit dengannya.</translation>
+        <translation>{n} goresan. Klik Selesai untuk memandu edit dengan goresan ini.</translation>
     </message>
     <message>
         <source>{n} strokes. Click Done to guide the edit with them.</source>
-        <translation>{n} goresan. Klik Selesai untuk memandu edit dengannya.</translation>
+        <translation>{n} goresan. Klik Selesai untuk memandu edit dengan goresan tersebut.</translation>
     </message>
     <message>
         <source>1 layer above not sent: plan limit</source>
@@ -5183,7 +5183,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>&lt; 0.1 km²</source>
-        <translation>&lt; 0.1 km²</translation>
+        <translation>&lt; 0,1 km²</translation>
     </message>
     <message>
         <source>AI Edit needs an image under your data.</source>
@@ -5203,7 +5203,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Cancel to pick another layer.</source>
-        <translation>Batal untuk memilih layer lain.</translation>
+        <translation>Batalkan untuk memilih layer lain.</translation>
     </message>
     <message>
         <source>Cancelled before starting the run.</source>
@@ -5215,7 +5215,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Capturing your zone...</source>
-        <translation>Menangkap zona Anda...</translation>
+        <translation>Mengambil gambar zona Anda...</translation>
     </message>
     <message>
         <source>Click to add points, or drag a box</source>
@@ -5243,7 +5243,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Draw a line, then say: add a path along the pink line.</source>
-        <translation>Gambar sebuah garis, lalu ucapkan: tambahkan jalur di sepanjang garis merah muda.</translation>
+        <translation>Gambar sebuah garis, lalu tulis: tambahkan jalur di sepanjang garis merah muda.</translation>
     </message>
     <message>
         <source>Draw a zone on the map to start.</source>
@@ -5251,7 +5251,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Fill the holes inside each shape, except where another checked class sits.</source>
-        <translation>Isi lubang di dalam setiap bentuk, kecuali tempat kelas tercentang lainnya berada.</translation>
+        <translation>Isi lubang di dalam setiap bentuk, kecuali di tempat kelas lain yang dicentang berada.</translation>
     </message>
     <message>
         <source>Generating your image...</source>
@@ -5263,7 +5263,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Image to edit</source>
-        <translation>Citra yang akan diedit</translation>
+        <translation>Gambar untuk diedit</translation>
     </message>
     <message>
         <source>Invalid server response</source>
@@ -5275,11 +5275,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Keep this result, draw a new zone with this prompt</source>
-        <translation>Simpan hasil ini, gambar zona baru dengan prompt ini</translation>
+        <translation>Pertahankan hasil ini, gambar zona baru dengan prompt ini</translation>
     </message>
     <message>
         <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size”, or raise “Color tolerance”.</source>
-        <translation>Tidak ada bentuk yang tersisa dengan pengaturan ini. Atur “Expand/Contract” mendekati 0, turunkan “Min polygon size”, atau naikkan “Color tolerance”.</translation>
+        <translation>Tidak ada bentuk yang tersisa dengan pengaturan ini. Atur "Perluas/Perkecil" mendekati 0, turunkan "Ukuran poligon minimum", atau naikkan "Toleransi warna".</translation>
     </message>
     <message>
         <source>Open my dashboard</source>
@@ -5291,7 +5291,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Outline an area, say what to change, get a new map layer.</source>
-        <translation>Buat garis area, ucapkan apa yang ingin diubah, dapatkan layer peta baru.</translation>
+        <translation>Tandai area, jelaskan perubahannya, dapatkan layer peta baru.</translation>
     </message>
     <message>
         <source>Pick a zone, a selection or a polygon layer already in the project</source>
@@ -5315,15 +5315,15 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Same edit elsewhere</source>
-        <translation>Edit yang sama di tempat lain</translation>
+        <translation>Edit sama di tempat lain</translation>
     </message>
     <message>
         <source>Same prompt, same base: a new variation</source>
-        <translation>Prompt sama, base sama: variasi baru</translation>
+        <translation>Prompt dan versi dasar yang sama: variasi baru</translation>
     </message>
     <message>
         <source>Save or discard your edits on the vector layer, then run Vectorize again.</source>
-        <translation>Simpan atau buang edit Anda pada layer vektor, lalu jalankan Vektorisasi lagi.</translation>
+        <translation>Simpan atau buang edit Anda pada layer vektor, lalu jalankan Vektorkan lagi.</translation>
     </message>
     <message>
         <source>Shapes smaller than this join the class around them, so no hole is left.</source>
@@ -5335,7 +5335,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Sign-in timed out. Click Sign in to try again.</source>
-        <translation>Waktu masuk habis. Klik Masuk untuk mencoba lagi.</translation>
+        <translation>Proses masuk melewati batas waktu. Klik Masuk untuk mencoba lagi.</translation>
     </message>
     <message>
         <source>Signed in (from {}).</source>
@@ -5351,7 +5351,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Signed out</source>
-        <translation>Belum masuk</translation>
+        <translation>Telah keluar</translation>
     </message>
     <message>
         <source>That shape is too thin or too small to edit. Pick another one.</source>
@@ -5395,7 +5395,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>The service is busy. Please try again shortly.</source>
-        <translation>Layanan sedang sibuk. Silakan coba lagi dalam beberapa saat.</translation>
+        <translation>Layanan sedang sibuk. Coba lagi dalam beberapa saat.</translation>
     </message>
     <message>
         <source>The version this came from is not in this session.</source>
@@ -5403,7 +5403,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>This edit is taking longer than expected. Your result may still arrive in Recent in your library in a few minutes.</source>
-        <translation>Edit ini berlangsung lebih lama dari perkiraan. Hasil Anda mungkin tetap tiba di Terbaru di pustaka Anda dalam beberapa menit.</translation>
+        <translation>Edit ini berlangsung lebih lama dari perkiraan. Hasil Anda mungkin masih muncul di Terbaru di pustaka Anda dalam beberapa menit.</translation>
     </message>
     <message>
         <source>This file cannot be read. Check that it still exists and that you can open it.</source>
@@ -5431,7 +5431,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>You are signed in. Outline an area on the example map to make an edit.</source>
-        <translation>Anda telah masuk. Buat garis area pada peta contoh untuk membuat edit.</translation>
+        <translation>Anda telah masuk. Tandai area pada peta contoh untuk membuat edit.</translation>
     </message>
     <message>
         <source>You are signed out. Click Sign in to continue.</source>
@@ -5439,7 +5439,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>You are signed out. Sign in again to use AI Edit.</source>
-        <translation>Anda belum masuk. Masuk lagi untuk menggunakan AI Edit.</translation>
+        <translation>Anda telah keluar. Masuk lagi untuk menggunakan AI Edit.</translation>
     </message>
     <message>
         <source>You are signed out. Sign in to use AI Edit.</source>
@@ -5451,7 +5451,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Your account changed. Please try again.</source>
-        <translation>Akun Anda berubah. Silakan coba lagi.</translation>
+        <translation>Akun Anda berubah. Coba lagi.</translation>
     </message>
     <message>
         <source>Your output folder could not be used, so the result was saved in {folder}. You can pick another folder in the settings.</source>
@@ -5475,11 +5475,11 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>Your zone was cleared: no layer is visible on the map anymore.</source>
-        <translation>Zona Anda telah dihapus: tidak ada layer yang terlihat di peta lagi.</translation>
+        <translation>Zona Anda telah dihapus: tidak ada lagi layer yang terlihat di peta.</translation>
     </message>
     <message>
         <source>or use an existing zone</source>
-        <translation>atau gunakan zona yang sudah ada</translation>
+        <translation>atau gunakan zona yang ada</translation>
     </message>
     <message>
         <source>{area} km²</source>
@@ -5495,7 +5495,7 @@ Kami senang mendengar dari Anda!</translation>
     </message>
     <message>
         <source>{name} draws nothing inside your zone</source>
-        <translation>{name} tidak menggambar apa pun di dalam zona Anda</translation>
+        <translation>{name} tidak menampilkan apa pun di dalam zona Anda</translation>
     </message>
     <message>
         <source>{n} layers above not sent: plan limit</source>
@@ -5508,6 +5508,54 @@ Kami senang mendengar dari Anda!</translation>
     <message>
         <source>Your image could not be sent: the connection is too slow or was cut. Try again, or pick a lower resolution.</source>
         <translation>Gambar Anda tidak dapat dikirim: koneksi terlalu lambat atau terputus. Coba lagi, atau pilih resolusi yang lebih rendah.</translation>
+    </message>
+    <message>
+        <source>2. Click to contact us</source>
+        <translation>2. Klik untuk menghubungi kami</translation>
+    </message>
+    <message>
+        <source>AI Edit settings are still loading. Draw the zone again in a moment.</source>
+        <translation>Pengaturan AI Edit masih dimuat. Gambar zona lagi sebentar lagi.</translation>
+    </message>
+    <message>
+        <source>Connect to the internet to load AI Edit settings.</source>
+        <translation>Hubungkan ke internet untuk memuat pengaturan AI Edit.</translation>
+    </message>
+    <message>
+        <source>Copy link</source>
+        <translation>Salin tautan</translation>
+    </message>
+    <message>
+        <source>Could not reach the server to prepare your zone. Check your connection and try again.</source>
+        <translation>Tidak dapat menjangkau server untuk menyiapkan zona Anda. Periksa koneksi Anda dan coba lagi.</translation>
+    </message>
+    <message>
+        <source>Custom needs?</source>
+        <translation>Butuh solusi khusus?</translation>
+    </message>
+    <message>
+        <source>Free plan with AI edits every month. Signing up takes 15 seconds in your browser.</source>
+        <translation>Paket gratis dengan edit AI setiap bulan. Mendaftar hanya butuh 15 detik di browser Anda.</translation>
+    </message>
+    <message>
+        <source>Loading settings from the server...</source>
+        <translation>Memuat pengaturan dari server...</translation>
+    </message>
+    <message>
+        <source>Sign in to see this template's prompt</source>
+        <translation>Masuk untuk melihat prompt templat ini</translation>
+    </message>
+    <message>
+        <source>Sign in to use this template</source>
+        <translation>Masuk untuk menggunakan templat ini</translation>
+    </message>
+    <message>
+        <source>Up to {n} reference images</source>
+        <translation>Hingga {n} gambar referensi</translation>
+    </message>
+    <message>
+        <source>price loading</source>
+        <translation>memuat harga</translation>
     </message>
 </context>
 </TS>

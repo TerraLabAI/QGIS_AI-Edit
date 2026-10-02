@@ -56,6 +56,7 @@ def _ctx_snapshot(ctx) -> dict:
         "flat_classes": copy.deepcopy(getattr(ctx, "flat_classes", None)),
         "flat_foreground": getattr(ctx, "flat_foreground", None),
         "output_rescued": bool(getattr(ctx, "output_rescued", False)),
+        "failure_code": getattr(ctx, "failure_code", None),
     }
 
 
@@ -106,6 +107,7 @@ class GenerationTask(QgsTask):
         skip_trial_check=False,
         context_image_paths=None,
         context_image_notes=None,
+        context_image_meta=None,
         guidance_image=None,
         guidance_format=None,
     ):
@@ -128,6 +130,9 @@ class GenerationTask(QgsTask):
         self._context_image_paths = list(context_image_paths or [])
 
         self._context_image_notes = list(context_image_notes or [])
+
+
+        self._context_image_meta = list(context_image_meta or [])
         self._context_images: list[str] = []
         self._guidance_image = guidance_image
         self._guidance_format = guidance_format
@@ -268,6 +273,7 @@ class GenerationTask(QgsTask):
             resp = self._client.analyze_pixels(
                 self._auth_manager.get_auth_header(), "flat_output", width, height, pack(raw),
                 seg_hint=bool(getattr(self._ctx, "seg_intent", False)),
+                request_id=getattr(self._ctx, "request_id", None),
             )
             classes = resp.get("flat_classes") if isinstance(resp, dict) else None
             if not isinstance(classes, list) or len(classes) < 2:
@@ -384,6 +390,16 @@ class GenerationTask(QgsTask):
 
 
 
+        meta = self._context_image_meta
+        if meta and len(meta) == len(self._context_image_paths):
+
+            keep = [i for i, p in enumerate(self._context_image_paths) if os.path.isfile(p)]
+            if len(keep) != len(meta):
+                notes_in = self._context_image_notes
+                self._context_image_paths = [self._context_image_paths[i] for i in keep]
+                if len(notes_in) == len(meta):
+                    self._context_image_notes = [notes_in[i] for i in keep]
+                meta = [meta[i] for i in keep]
         notes = self._context_image_notes
         if notes and len(notes) == len(self._context_image_paths):
             self._context_images, notes = encode_references_with_notes(
@@ -398,6 +414,7 @@ class GenerationTask(QgsTask):
                 )
                 self._context_image_notes = []
             self._context_images = encode_references_b64(self._context_image_paths)
+        self._context_image_meta = meta if len(meta) == len(self._context_images) else []
 
         if self.isCanceled():
             return False
@@ -492,6 +509,7 @@ class GenerationTask(QgsTask):
             suggested_resolution=self._suggested_resolution,
             context_images=self._context_images,
             context_image_notes=self._context_image_notes or None,
+            context_image_meta=self._context_image_meta or None,
             guidance_image=self._guidance_image,
             guidance_format=self._guidance_format,
             is_cancelled=self.isCanceled,

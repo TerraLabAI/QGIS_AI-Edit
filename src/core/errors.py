@@ -41,6 +41,9 @@ class ErrorCode(str, Enum):
     MAP_ROTATED = "MAP_ROTATED"
     ZONE_TOO_SMALL = "ZONE_TOO_SMALL"
 
+
+    CONFIG_LOADING = "CONFIG_LOADING"
+
     NO_PIXELS_MATCHED = "NO_PIXELS_MATCHED"
     RASTER_TOO_LARGE = "RASTER_TOO_LARGE"
     INVALID_RASTER = "INVALID_RASTER"
@@ -173,6 +176,7 @@ ERROR_CODE_TRAITS: dict[str, frozenset[ErrorCodeTrait]] = {
     "POLAR": _trait_row("REPORT_NONE"),
     "MAP_ROTATED": _trait_row("REPORT_NONE"),
     "ZONE_TOO_SMALL": _trait_row("REPORT_NONE"),
+    "CONFIG_LOADING": _trait_row("REPORT_NONE", "NOT_MODEL_FAILURE"),
     "TOO_LARGE": _trait_row("REPORT_NONE", "SUBMIT_STAGE"),
     "BAD_REQUEST": _trait_row("REPORT_NONE", "SUBMIT_STAGE"),
     "PAYLOAD_TOO_LARGE": _trait_row("REPORT_NONE"),

@@ -24,10 +24,10 @@ from ...core.i18n import tr
 from ...core.logger import log_debug
 from ...core.prompts import prompt_history
 from ...core.resolution_labels import (
-    DEFAULT_RESOLUTION_CREDIT_COSTS,
     resolution_chip_label,
     resolution_quality_name,
     resolution_tiers,
+    served_credit_costs,
 )
 from . import design_tokens as tokens
 from .mime import _file_paths_from_mime, _layers_from_mime, _mime_has_droppable
@@ -186,7 +186,7 @@ class _PromptContainer(QFrame):
 
 
         self._selected_resolution = "1K"
-        self._resolution_costs: dict[str, int] = dict(DEFAULT_RESOLUTION_CREDIT_COSTS)
+        self._resolution_costs: dict[str, int] = served_credit_costs()
         self._free_tier = False
 
 
@@ -720,7 +720,8 @@ class _PromptContainer(QFrame):
         for res in resolution_tiers():
             locked = not is_tier_allowed(res, self._free_tier)
             selected = res == self._selected_resolution
-            credits = self._resolution_costs.get(res, 0)
+
+            credits = self._resolution_costs.get(res)
             widget = _ResolutionMenuItem(
                 resolution_quality_name(res), res, credits, selected, locked,
                 self._resolution_menu,

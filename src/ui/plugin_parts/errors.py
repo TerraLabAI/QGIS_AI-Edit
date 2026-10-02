@@ -388,107 +388,30 @@ def _enrich_error_message(error: str, code: str = "") -> str:
 
 
 
-
-
-
-
-_MODEL_FAILURE_HINTS = (
-    "no image",
-    "no_image",
-    "finish_reason",
-    "no candidates",
-    "block",
-    "safety",
-    "couldn't complete",
-    "could not complete",
-    "rephrasing your prompt",
-    "no credit was charged",
-
-
-
-
-    "content_policy",
-    "content policy",
-    "content checker",
-    "flagged",
-
-
-
-
-
-
-
-    "no_media_generated",
-    "did not generate",
-    "invalid_request",
-    "could not generate",
-    "cannot be processed",
-)
-
-
-
 _NON_MODEL_FAILURE_CODES = codes_with_trait(ErrorCodeTrait.NOT_MODEL_FAILURE)
 
 
 
 
+_MODEL_FAILURE_CODES = frozenset({"safety_block", "invalid_request", "no_image"})
 
 
-
-_SAFETY_BLOCK_HINTS = (
-    "block",
-    "safety",
-    "content_policy",
-    "content policy",
-    "content checker",
-    "flagged",
-)
+def _is_safety_block(failure_code: str | None) -> bool:
 
 
-def _is_safety_block(message: str) -> bool:
+    return failure_code == "safety_block"
 
 
-    text = (message or "").lower()
-    hints = get_export_dial_list(
-        "error_hints.safety_block", _SAFETY_BLOCK_HINTS, normalize=str.lower
-    )
-    return any(needle in text for needle in hints)
+def _is_model_failure(failure_code: str | None, normalized_code: str) -> bool:
 
-
-def _is_model_failure(message: str, normalized_code: str) -> bool:
 
 
 
     if normalized_code in _NON_MODEL_FAILURE_CODES:
         return False
-
-
-
     if _is_prompt_blocked(normalized_code):
         return False
-    text = (message or "").lower()
-
-
-
-    hints = get_export_dial_list(
-        "error_hints.model_failure", _MODEL_FAILURE_HINTS, normalize=str.lower
-    )
-    return any(needle in text for needle in hints)
-
-
-
-
-
-_BUSY_HINTS = (
-    "resource exhausted",
-    "resource_exhausted",
-    "too many requests",
-    "rate limit",
-    "rate-limit",
-    "service is busy",
-    "busy right now",
-    "try again in a moment",
-)
+    return failure_code in _MODEL_FAILURE_CODES
 
 
 
@@ -502,13 +425,8 @@ _BUSY_CODES = ServerDialSet(
 )
 
 
-def _is_service_busy(message: str, normalized_code: str) -> bool:
-    if normalized_code in _BUSY_CODES:
-        return True
-    text = (message or "").lower()
-
-    hints = get_export_dial_list("error_hints.busy", _BUSY_HINTS, normalize=str.lower)
-    return any(needle in text for needle in hints)
+def _is_service_busy(failure_code: str | None, normalized_code: str) -> bool:
+    return failure_code == "busy" or normalized_code in _BUSY_CODES
 
 
 def _resolve_class_label(

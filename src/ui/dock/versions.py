@@ -270,6 +270,8 @@ class DockVersionsMixin:
             self._resolution_credit_costs = costs
         self._refresh_resolution_triggers()
 
+        self.refresh_free_plan_line()
+
     def get_selected_resolution(self) -> str:
 
         return self._selected_resolution
@@ -292,6 +294,13 @@ class DockVersionsMixin:
         if self._reference_widget is None:
             return 0
         return self._reference_widget.set_layers_above(layers, input_layer=input_layer)
+
+    def reference_context_image_meta(self) -> list:
+
+
+        if self._reference_widget is None:
+            return []
+        return self._reference_widget.context_image_meta()
 
     def wait_reference_layers_above(self) -> None:
 

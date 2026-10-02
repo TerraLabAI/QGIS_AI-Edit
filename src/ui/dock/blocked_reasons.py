@@ -94,6 +94,8 @@ def generate_block_text(reason: str, prompt_check: PromptMinimumCheck | None = N
         return ""
     if reason == GENERATE_BLOCK_PROMPT_TOO_SHORT:
         dials = prompt_check.dials if prompt_check is not None else prompt_minimum_dials()
+        if dials is None:
+            return ""
         if prompt_check is not None and prompt_check.cjk_chars:
             return cjk_prompt_minimum_text(dials)
         return tr(

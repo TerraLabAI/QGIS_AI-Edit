@@ -11,10 +11,9 @@ from ...core import telemetry_events as te
 from ...core.auth.activation_manager import has_seen_privacy_notice
 from ...core.config_store import get_export_copy, get_export_dial
 from ...core.i18n import tr
-from ...core.paywall_state import classify_paywall_state
-from ...core.pro_ceiling import pro_ceiling_enabled, pro_low_threshold
+from ...core.paywall_state import served_paywall_state
+from ...core.pro_ceiling import pro_ceiling_enabled
 from ...core.prompts.prompt_presets import format_template_prompt
-from ...core.resolution_labels import DEFAULT_RESOLUTION_CREDIT_COSTS
 from ..icons import pixmap_for
 from ..onboarding_hint import (
     HINT_GUIDE_AI,
@@ -628,25 +627,12 @@ class DockGenerationStateMixin:
 
         if self._cached_used is None or self._cached_limit is None:
             return "normal"
-        if not self._is_free_tier:
-            return self._pro_paywall_state()
-        if self._cached_limit <= 0:
+        state = served_paywall_state()
+        if state is None:
             return "normal"
-        remaining = max(0, self._cached_limit - self._cached_used)
-        unit_cost = self._resolution_credit_costs.get(
-            "1K", DEFAULT_RESOLUTION_CREDIT_COSTS["1K"]
-        )
-        return classify_paywall_state(remaining, unit_cost)
-
-    def _pro_paywall_state(self) -> str:
-
-
-        if self._cached_limit <= 0 or not pro_ceiling_enabled():
+        if state == "pro_low" and (self._is_free_tier or not pro_ceiling_enabled()):
             return "normal"
-        remaining = max(0, self._cached_limit - self._cached_used)
-        if 0 < remaining <= pro_low_threshold(self._cached_limit):
-            return "pro_low"
-        return "normal"
+        return state
 
     def _is_free_tier_exhausted(self) -> bool:
         return self._paywall_state() == "wall"

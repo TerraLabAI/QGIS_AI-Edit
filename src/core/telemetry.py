@@ -154,6 +154,8 @@ _NO_CONTENT_EVENTS = frozenset({
     te.TUTORIAL_OPENED,
     te.TEMPLATE_SELECTED,
     te.GENERATION_STARTED,
+
+    te.CONFIG_GATE_WAITED,
     te.GENERATION_COMPLETED,
     te.GENERATION_FAILED,
     te.GENERATION_CANCELLED,
@@ -195,6 +197,60 @@ _NO_CONTENT_EVENTS = frozenset({
 
 _BACKGROUND_POST_TIMEOUT_MS = 15_000
 
+_RETRY_BACKOFF_S = 2.0
+
+_PENDING_PRE_AUTH_MAX = 50
+
+
+
+
+
+
+
+def _served_policy() -> dict:
+    try:
+        from .config_store import get_store
+
+        store = get_store()
+        config = store.get_activation_config() if store is not None else None
+        block = config.get("telemetry") if isinstance(config, dict) else None
+        return block if isinstance(block, dict) else {}
+    except Exception:  # nosec B110
+        return {}
+
+
+def _served_number(key: str, lo: float, hi: float):
+
+    import math
+
+    value = _served_policy().get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return None
+    return value if lo <= value <= hi else None
+
+
+def _policy_number(key: str, fallback, lo: float, hi: float):
+    value = _served_number(key, lo, hi)
+    return fallback if value is None else value
+
+
+def _sampled_out(event: str) -> bool:
+
+
+    import math
+
+    rates = _served_policy().get("sample_rates")
+    if not isinstance(rates, dict):
+        return False
+    rate = rates.get(event)
+    if isinstance(rate, bool) or not isinstance(rate, (int, float)) or not math.isfinite(rate):
+        return False
+    if not 0 <= rate < 1:
+        return False
+    import random
+
+    return random.random() >= rate  # nosec B311
+
 
 class _TelemetryFlushTask(QgsTask):
 
@@ -217,7 +273,9 @@ class _TelemetryFlushTask(QgsTask):
         if not self._post() and not self.isCanceled():
             import time
 
-            for _ in range(8):
+
+            backoff_s = _policy_number("retry_backoff_s", _RETRY_BACKOFF_S, 0.5, 60)
+            for _ in range(max(1, int(round(backoff_s / 0.25)))):
                 if self.isCanceled():
                     return False
                 time.sleep(0.25)
@@ -318,6 +376,8 @@ class TelemetryCollector:
 
         if not is_telemetry_enabled():
             return
+        if _sampled_out(event):
+            return
         accepted = has_accepted_privacy_notice()
         evt = {
             "event": event,
@@ -327,11 +387,18 @@ class TelemetryCollector:
                 **(properties or {}),
             },
         }
+        full = False
         with self._lock:
             if accepted:
                 self._batch.append(evt)
+
+
+                batch_max = _served_number("batch_max", 1, 2000)
+                full = batch_max is not None and len(self._batch) >= batch_max
             elif len(self._pre_notice) < _PRE_NOTICE_CAP:
                 self._pre_notice.append(evt)
+        if full and _on_main_thread():
+            self.flush()
 
     def accept_pre_notice(self) -> None:
 
@@ -385,8 +452,9 @@ class TelemetryCollector:
                 return
 
             if not self._has_auth():
+                pending_max = _policy_number("pending_pre_auth_max", _PENDING_PRE_AUTH_MAX, 0, 1000)
                 for evt in self._batch:
-                    if evt["event"] in _NO_CONTENT_EVENTS and len(self._pending_pre_auth) < 50:
+                    if evt["event"] in _NO_CONTENT_EVENTS and len(self._pending_pre_auth) < pending_max:
                         self._pending_pre_auth.append(evt)
                 self._batch.clear()
                 return
@@ -405,7 +473,9 @@ class TelemetryCollector:
             auth = self._auth_manager.get_auth_header()
             task = _TelemetryFlushTask(
                 self._client, events_to_send, auth,
-                timeout_ms=None if synchronous else _BACKGROUND_POST_TIMEOUT_MS,
+                timeout_ms=None if synchronous else int(
+                    _policy_number("timeout_ms", _BACKGROUND_POST_TIMEOUT_MS, 1_000, 60_000)
+                ),
             )
 
 

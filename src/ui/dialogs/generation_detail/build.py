@@ -26,7 +26,8 @@ from ....core.i18n import tr
 from ....core.number_format import format_count
 from ....core.prompts import prompt_history
 from ....core.prompts.hex_highlight import prompt_to_hex_html
-from ....core.prompts.prompt_presets import format_template_prompt, lookup_template_by_prompt
+from ....core.prompts.preset_normalize import is_placeholder_preset
+from ....core.prompts.prompt_presets import format_template_prompt, template_label
 from ....core.resolution_labels import resolution_display_label
 from ...before_after_slider import BeforeAfterSlider
 from ...dock.design_tokens import BTN_PRIMARY_WIDE_PX, INK, INK_2, SCROLL_AREA_QSS, qcolor
@@ -88,10 +89,9 @@ class BuildUiMixin:
                 "dialogs.build.template_fallback", tr("Template"))
 
 
-
-        match = lookup_template_by_prompt(str(src.get("prompt") or ""))
-        if match and match[1]:
-            return match[1]
+        label = template_label(str(src.get("template_id") or ""))
+        if label:
+            return label
         prompt = " ".join(str(src.get("prompt") or "").split())
         if not prompt:
             return get_export_copy("dialogs.build.generation_fallback", tr("Generation"))
@@ -254,6 +254,10 @@ class BuildUiMixin:
         lbl.setStyleSheet(_DETAIL_SECTION_STYLE)
         return lbl
 
+    def _preset_is_placeholder(self) -> bool:
+
+        return not self._is_generation and is_placeholder_preset(self._preset)
+
     def _build_prompt_block(self) -> QWidget:
         src = self._job or self._preset or {}
         prompt = str(src.get("prompt") or "")
@@ -286,6 +290,13 @@ class BuildUiMixin:
             header.addWidget(btn)
         v.addLayout(header)
 
+        if self._preset_is_placeholder():
+
+            body = QLabel(tr("Sign in to see this template's prompt"))
+            body.setWordWrap(True)
+            body.setStyleSheet(_PROMPT_STYLE)
+            v.addWidget(body)
+            return wrap
         body = QLabel(prompt_to_hex_html(format_template_prompt(prompt)))
         body.setWordWrap(True)
         body.setTextFormat(QtC.RichText)
@@ -420,6 +431,10 @@ class BuildUiMixin:
                 str((self._preset or {}).get("prompt") or "")
             )
             self._refresh_prompt_star()
+            if self._preset_is_placeholder():
+
+                self._prompt_star_btn.setEnabled(False)
+                self._prompt_star_btn.setVisible(False)
             self._prompt_star_btn.clicked.connect(self._on_prompt_star)
             row.addWidget(self._prompt_star_btn)
 

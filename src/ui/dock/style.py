@@ -5,7 +5,6 @@ import os
 from qgis.PyQt.QtCore import QSize, QUrl
 from qgis.PyQt.QtGui import QColor, QIcon, QPainter
 
-from ...core.auth.activation_manager import build_utm_url
 from . import design_tokens as tokens
 from .design_tokens import (  # noqa: F401
     ACCENT,
@@ -81,7 +80,6 @@ __all__ = [
     "FOCUS_RING",
     "FOCUS_RING_ON_FILL",
     "ICONS_DIR",
-    "MAX_PROMPT_CHARS",
     "STAR_FILLED_SVG",
     "STAR_OUTLINE_SVG",
     "svg_url",
@@ -112,10 +110,9 @@ DISABLED_TEXT = "#666666"
 
 FAVORITE_STAR_COLOR = "#e57373"
 
-MAX_PROMPT_CHARS = 2000
 
 
-DOCK_BRANDING_URL = build_utm_url("/ai-edit", "dock_branding")
+DOCK_BRANDING_URL = "https://terra-lab.ai/ai-edit"
 
 
 

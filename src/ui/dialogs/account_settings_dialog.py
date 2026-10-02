@@ -271,7 +271,9 @@ class AccountSettingsDialog(
             f'{html.escape(tr("Privacy"))}</a>', side)
         legal.setOpenExternalLinks(True)
         legal.setStyleSheet(f"font-size: {FONT_HINT}px;")
-        legal.setContentsMargins(16, 0, 0, 0)
+
+        legal.setWordWrap(True)
+        legal.setContentsMargins(16, 0, 12, 0)
         col.addWidget(legal)
         return side
 

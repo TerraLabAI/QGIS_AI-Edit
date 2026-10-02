@@ -42,6 +42,7 @@ from qgis.core import (
 )
 
 from .. import qt_compat as QtC
+from ..config_store import require_dial
 from ..errors import AIEditError, ErrorCode
 from ..i18n import tr
 from ..logger import log_debug
@@ -590,6 +591,18 @@ def _trace_classes_batched(
     return True, feats
 
 
+def refine_defaults() -> dict:
+
+
+
+    return {
+        "tolerance": int(require_dial("vectorize.refine.tolerance", lo=0, hi=255)),
+        "simplify": float(require_dial("vectorize.refine.simplify", lo=0, hi=50)),
+        "sieve": int(require_dial("vectorize.refine.sieve", lo=0, hi=2000)),
+        "min_pixels": int(require_dial("vectorize.refine.min_pixels", lo=0, hi=100000)),
+    }
+
+
 def compute_class_features(
     *,
     raster_path: str,
@@ -598,10 +611,10 @@ def compute_class_features(
     ellipsoid: str,
     classes: list[dict],
     competitors: list[tuple[int, int, int]] | tuple = (),
-    tolerance: int = 90,
-    sieve_threshold: int = 10,
-    min_pixels: int = 50,
-    simplify_factor: float = 1.0,
+    tolerance: int,
+    sieve_threshold: int,
+    min_pixels: int,
+    simplify_factor: float,
     round_corners: bool = False,
     expand_value: int = 0,
     fill_holes: bool = False,
@@ -824,9 +837,9 @@ def vectorize_by_color(
     raster_layer: QgsRasterLayer,
     target_rgb: tuple[int, int, int],
     tolerance: int = 40,
-    sieve_threshold: int = 10,
-    min_pixels: int = 50,
-    simplify_factor: float = 1.0,
+    sieve_threshold: int | None = None,
+    min_pixels: int | None = None,
+    simplify_factor: float | None = None,
     layer_name: str | None = None,
     output_rgb: tuple[int, int, int] | None = None,
     round_corners: bool = False,
@@ -843,6 +856,15 @@ def vectorize_by_color(
 
 
 
+
+    if sieve_threshold is None or min_pixels is None or simplify_factor is None:
+        served = refine_defaults()
+        if sieve_threshold is None:
+            sieve_threshold = served["sieve"]
+        if min_pixels is None:
+            min_pixels = served["min_pixels"]
+        if simplify_factor is None:
+            simplify_factor = served["simplify"]
     project = QgsProject.instance()
     feats = _compute_vector_features(
         raster_path=(raster_layer.source() or "").split("|", 1)[0],

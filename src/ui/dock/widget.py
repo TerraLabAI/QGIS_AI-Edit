@@ -10,7 +10,7 @@ from ...core.config_store import get_export_copy
 from ...core.i18n import tr
 from ...core.qt_compat import QShortcut
 from ...core.reference_image_store import ReferenceImageStore
-from ...core.resolution_labels import DEFAULT_RESOLUTION_CREDIT_COSTS
+from ...core.resolution_labels import served_credit_costs
 from ..keyboard_focus import apply_keyboard_focus_policy
 from .account import DockAccountMixin
 from .blocked_reasons import DockBlockedReasonsMixin
@@ -80,6 +80,7 @@ class AIEditDockWidget(
     reference_panel_requested = pyqtSignal()
     reference_done_clicked = pyqtSignal()
     reference_capture_requested = pyqtSignal()
+    reference_config_needed = pyqtSignal()
 
 
 
@@ -236,7 +237,8 @@ class AIEditDockWidget(
 
 
 
-        self._resolution_credit_costs: dict[str, int] = dict(DEFAULT_RESOLUTION_CREDIT_COSTS)
+
+        self._resolution_credit_costs: dict[str, int] = served_credit_costs()
 
 
 

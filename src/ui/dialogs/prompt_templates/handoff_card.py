@@ -19,7 +19,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ....core import qt_compat as QtC
-from ....core.config_store import get_export_copy
+from ....core.config_store import ConfigMissing, get_export_copy, require_table
 from ....core.i18n import tr
 from ...cross_plugin_discovery import open_ai_segmentation
 from ...dock import design_tokens as tk
@@ -27,10 +27,27 @@ from ...icons import pixmap_for
 
 
 
-_SEGMENTATION_QUERY_WORDS = (
-    "segment", "outline", "detect", "building", "tree", "road",
-    "water", "vegetation", "footprint", "mask",
-)
+_HANDOFF_WORDS_KEY = "library_search.segmentation_handoff_words"
+_MAX_HANDOFF_WORDS = 200
+_MAX_HANDOFF_WORD_CHARS = 60
+
+
+def _segmentation_query_words() -> tuple[str, ...]:
+
+    try:
+        words = require_table(_HANDOFF_WORDS_KEY)
+    except ConfigMissing:
+        return ()
+    if not isinstance(words, list):
+        return ()
+    out = []
+    for word in words[:_MAX_HANDOFF_WORDS]:
+        if isinstance(word, str):
+            cleaned = word.strip().lower()[:_MAX_HANDOFF_WORD_CHARS]
+            if cleaned:
+                out.append(cleaned)
+    return tuple(out)
+
 
 
 _CARD_QSS = (
@@ -46,7 +63,7 @@ _STACK_BELOW_PX = 460
 def query_asks_for_segmentation(query: str) -> bool:
 
     q = (query or "").strip().lower()
-    return bool(q) and any(word in q for word in _SEGMENTATION_QUERY_WORDS)
+    return bool(q) and any(word in q for word in _segmentation_query_words())
 
 
 class _HandoffCard(QFrame):

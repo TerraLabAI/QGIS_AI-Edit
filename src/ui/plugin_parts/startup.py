@@ -18,7 +18,7 @@ from ...core.privacy_notice import (
 )
 from ...core.product_identity import PRODUCT_ID
 from ...workers.generic_request_task import GenericRequestTask
-from ..canvas_exporter import has_tuned_config, set_server_config
+from ..canvas_exporter import set_server_config
 from .errors import _enrich_error_message, _localize_server_error
 
 
@@ -26,11 +26,12 @@ from .errors import _enrich_error_message, _localize_server_error
 _BOOTSTRAP_RETRY_DELAYS_MS = (30_000, 120_000, 300_000)
 
 
-def _server_catalog_request(client, force_refresh: bool):
+def _server_catalog_request(client, force_refresh: bool, auth: dict | None = None):
+
 
 
     from ...core.prompts.prompt_presets_client import fetch_server_catalog
-    catalog = fetch_server_catalog(client, force_refresh=force_refresh)
+    catalog = fetch_server_catalog(client, force_refresh=force_refresh, auth=auth)
     if catalog is None:
         return {"error": "Catalog unavailable", "code": "UNAVAILABLE"}
     return catalog
@@ -215,8 +216,12 @@ class StartupMixin:
             lambda c=self._client, a=auth: c.get_bootstrap(a),
             silent=True,
         )
-        task.succeeded.connect(self._on_bootstrap_loaded)
-        task.failed.connect(self._on_bootstrap_failed)
+        task.succeeded.connect(
+            lambda p, a=auth: self._on_bootstrap_loaded(p) if self._answer_key_current(a, "bootstrap") else None
+        )
+        task.failed.connect(
+            lambda m, c, a=auth: self._on_bootstrap_failed(m, c) if self._answer_key_current(a, "bootstrap") else None
+        )
         self._bootstrap_task = task
         QgsApplication.taskManager().addTask(task)
         self._warm_activation_config()
@@ -235,9 +240,28 @@ class StartupMixin:
             lambda c=self._client, a=auth: c.get_config(PRODUCT_ID, a or None),
             silent=True,
         )
-        loader.succeeded.connect(self._on_activation_config_warmed)
+        loader.succeeded.connect(
+            lambda r, a=auth: self._on_activation_config_warmed(r)
+            if self._answer_key_current(a, "plugin config")
+            else None
+        )
         self._activation_config_loader = loader
         QgsApplication.taskManager().addTask(loader)
+
+    def _answer_key_current(self, auth, what: str = "answer") -> bool:
+
+
+
+
+
+
+        if not auth:
+            return True
+        current = self._auth_manager.get_auth_header() if self._auth_manager else {}
+        if current == auth:
+            return True
+        log_debug(f"Dropped a {what} answer fetched for a key no longer held")
+        return False
 
     def _on_activation_config_warmed(self, result):
 
@@ -247,12 +271,17 @@ class StartupMixin:
 
             store = get_store()
             if store is not None:
-                store.set_activation_config(result)
+                store.accept_fetched_plugin_config(
+                    result, keyed=bool(getattr(self, "_activation_config_keyed", False))
+                )
 
 
 
             if self._dock_widget is not None:
                 self._dock_widget.refresh_feature_visibility()
+
+            if getattr(self, "_activation_config_keyed", False):
+                self._refresh_price_displays()
 
     def _on_bootstrap_loaded(self, payload):
         if not isinstance(payload, dict) or "export_config" not in payload:
@@ -262,17 +291,7 @@ class StartupMixin:
         config = payload.get("export_config")
         if isinstance(config, dict):
             self._on_export_config_loaded(config)
-        catalog_payload = payload.get("catalog")
-        if isinstance(catalog_payload, dict):
-            try:
-                from ...core.prompts.prompt_presets_client import store_catalog
-
-                catalog = store_catalog(catalog_payload)
-                if catalog is not None:
-                    self._last_catalog_fetch_unix = time.time()
-                    self._on_server_catalog_loaded(catalog)
-            except Exception as err:  # nosec B110
-                log_warning(f"Bootstrap catalog handling failed: {err}")
+        self._apply_bootstrap_catalog(payload)
         usage = payload.get("usage")
         if isinstance(usage, dict) and "error" in usage:
             self._on_key_invalid(
@@ -282,26 +301,32 @@ class StartupMixin:
             self._on_key_valid(usage)
 
 
+    def _apply_bootstrap_catalog(self, payload) -> None:
+
+        catalog_payload = payload.get("catalog") if isinstance(payload, dict) else None
+        if not isinstance(catalog_payload, dict):
+            return
+        try:
+            from ...core.prompts.prompt_presets_client import store_catalog
+
+            catalog = store_catalog(
+                catalog_payload, key_held=self._auth_manager.has_activation_key()
+            )
+            if catalog is not None:
+                self._last_catalog_fetch_unix = time.time()
+                self._on_server_catalog_loaded(catalog)
+        except Exception as err:  # nosec B110
+            log_warning(f"Bootstrap catalog handling failed: {err}")
+
     def _refresh_tuned_config(self):
 
 
 
 
 
-        if self._tuned_config_task is not None:
+        if not self._auth_manager.get_auth_header():
             return
-        auth = self._auth_manager.get_auth_header()
-        if not auth:
-            return
-        task = GenericRequestTask(
-            "AI Edit tuned config",
-            lambda c=self._client, a=auth: c.get_bootstrap(a),
-            silent=True,
-        )
-        task.succeeded.connect(self._on_tuned_config_loaded)
-        task.failed.connect(self._on_tuned_config_failed)
-        self._tuned_config_task = task
-        QgsApplication.taskManager().addTask(task)
+        self._start_config_refetch()
 
     def _on_tuned_config_loaded(self, payload):
         self._tuned_config_task = None
@@ -313,33 +338,17 @@ class StartupMixin:
         elif isinstance(config, dict):
             self._on_export_config_loaded(config)
 
-        waiting = getattr(self, "_generate_waiting_for_config", None)
-        self._generate_waiting_for_config = None
-        if waiting is None or self._dock_widget is None:
-            return
-        if not has_tuned_config():
 
-            self._dock_widget.set_status(
-                tr("Could not get your settings from the server. Press Generate to try again."),
-                is_error=True,
-            )
-            return
-        prompt, is_retry = waiting
-        self._on_generate(prompt, is_retry=is_retry)
+            self._apply_bootstrap_catalog(payload)
+
+            self._refresh_price_displays()
+
+        self._resume_config_gate()
 
     def _on_tuned_config_failed(self, message: str, code: str):
         self._tuned_config_task = None
         log_debug(f"Tuned config refresh failed ({code}): {message}")
-        if getattr(self, "_generate_waiting_for_config", None) is None:
-            return
-        self._generate_waiting_for_config = None
-        if self._dock_widget is not None:
-            self._dock_widget.set_status(
-                _enrich_error_message(
-                    tr("Could not get your settings from the server."), code
-                ),
-                is_error=True,
-            )
+        self._fail_config_gate(message, code)
 
     def _on_bootstrap_failed(self, message: str, code: str):
 
@@ -392,7 +401,21 @@ class StartupMixin:
         if self._auth_manager.has_activation_key():
             self._check_activation_state()
 
-    def _load_server_catalog(self):
+    def _refresh_catalog_after_sign_in(self):
+
+
+
+        try:
+            from ...core.prompts.prompt_presets_client import cached_catalog_has_placeholders
+
+            if not cached_catalog_has_placeholders():
+                return
+        except Exception as err:  # nosec B110
+            log_debug(f"Catalog placeholder check skipped: {err}")
+            return
+        self._load_server_catalog(force=True)
+
+    def _load_server_catalog(self, force: bool = False):
 
 
 
@@ -407,15 +430,20 @@ class StartupMixin:
 
 
         now = time.time()
-        if now - getattr(self, "_last_catalog_fetch_unix", 0.0) < 60.0:
+        if not force and now - getattr(self, "_last_catalog_fetch_unix", 0.0) < 60.0:
             return
         self._last_catalog_fetch_unix = now
+        auth = self._auth_manager.get_auth_header() if self._auth_manager else {}
         self._catalog_loader = GenericRequestTask(
             "AI Edit preset catalog",
-            lambda c=self._client: _server_catalog_request(c, force_refresh=True),
+            lambda c=self._client, a=auth: _server_catalog_request(c, force_refresh=True, auth=a or None),
             silent=True,
         )
-        self._catalog_loader.succeeded.connect(self._on_server_catalog_loaded)
+        self._catalog_loader.succeeded.connect(
+            lambda cat, a=auth: self._on_server_catalog_loaded(cat)
+            if self._answer_key_current(a, "catalog")
+            else None
+        )
         self._catalog_loader.failed.connect(lambda _msg, _code: self._on_server_catalog_failed())
         QgsApplication.taskManager().addTask(self._catalog_loader)
 
@@ -441,6 +469,9 @@ class StartupMixin:
         costs = config.get("resolution_credit_costs")
         if self._dock_widget:
             self._dock_widget.set_resolution_credit_costs(costs if isinstance(costs, dict) else {})
+
+
+        self._resume_layers_above_soon()
 
     def _on_export_config_failed(self, error_message: str, code: str = ""):
 

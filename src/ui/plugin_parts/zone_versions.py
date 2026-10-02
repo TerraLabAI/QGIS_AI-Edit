@@ -543,26 +543,33 @@ class ZoneVersionsMixin:
 
 
 
+
+
+
+
+        from ...core.entitlements import coerce_tier
         from ...workers.generic_request_task import GenericRequestTask
-        from ..canvas_exporter import ground_resolution_for_size, native_size_inputs
+        from ..canvas_exporter import ground_resolution_for_size
+        from .generation import _served_size, export_size_inputs
 
         settings = self._canvas.mapSettings()
-        inputs = native_size_inputs(settings, extent)
+        inputs = export_size_inputs(settings, extent, None)
         auth = self._auth_manager.get_auth_header()
         if not inputs or not auth:
             return
 
-        def _on_size(result, ext=extent, ms=settings, area=area_km2):
+        zone = QgsRectangle(extent)
+
+        def _on_size(result, ext=zone, ms=settings, area=area_km2, i=inputs):
             if self._dock_widget is None or self._selected_extent is None:
                 return
             if QgsRectangle(self._selected_extent) != ext:
                 return
-            if not isinstance(result, dict):
+            size = _served_size(result)
+            if size is None or size[0] <= 0 or size[1] <= 0:
                 return
-            w, h = result.get("width"), result.get("height")
-            if not (isinstance(w, int) and isinstance(h, int) and w > 0 and h > 0):
-                return
-            gr = ground_resolution_for_size(ms, ext, w, h)
+            self._remember_export_size(i, size)
+            gr = ground_resolution_for_size(ms, ext, size[0], size[1])
             try:
                 self._dock_widget.set_zone_guidance(gr, area)
             except RuntimeError:  # nosec B110
@@ -576,6 +583,30 @@ class ZoneVersionsMixin:
         task.succeeded.connect(_on_size)
         self._zone_size_task = task
         QgsApplication.taskManager().addTask(task)
+
+        try:
+            tier = coerce_tier(
+                self._dock_widget.get_selected_resolution(), self._dock_widget._is_free_tier
+            )
+        except (AttributeError, RuntimeError):
+            tier = None
+        tier_inputs = export_size_inputs(settings, extent, tier) if tier else None
+        if not tier_inputs:
+            return
+
+        def _on_tier_size(result, i=tier_inputs):
+            size = _served_size(result)
+            if size is not None:
+                self._remember_export_size(i, size)
+
+        tier_task = GenericRequestTask(
+            "AI Edit zone size",
+            lambda c=self._client, a=auth, i=tier_inputs: c.get_export_size(a, i),
+            silent=True,
+        )
+        tier_task.succeeded.connect(_on_tier_size)
+        self._zone_tier_size_task = tier_task
+        QgsApplication.taskManager().addTask(tier_task)
 
     def _publish_shared_zone(self, label: str = "") -> None:
 
@@ -797,6 +828,24 @@ class ZoneVersionsMixin:
             self._dock_widget.set_reference_layers_above(above, input_layer=input_layer)
         except Exception as err:  # nosec B110
             log_debug(f"Layers above the input not attached: {err}")
+
+    def _resume_layers_above_soon(self) -> None:
+
+
+
+        dock = self._dock_widget
+        if dock is None or self._selected_extent is None:
+            return
+        QtC.safe_single_shot(0, dock, self._resume_layers_above)
+
+    def _resume_layers_above(self) -> None:
+        widget = getattr(self._dock_widget, "_reference_widget", None) if self._dock_widget else None
+        if widget is None or self._selected_extent is None:
+            return
+        try:
+            widget.resume_layers_above()
+        except RuntimeError as err:  # nosec B110
+            log_debug(f"Layers above not resumed: {err}")
 
     def _input_layer(self):
 

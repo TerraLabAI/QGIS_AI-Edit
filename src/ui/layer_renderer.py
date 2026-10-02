@@ -25,17 +25,33 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QEventLoop, QObject, QSize, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QColor, QImage, QPainter
 
-from ..core.config_store import get_export_dial
+from ..core.config_store import ConfigMissing, get_export_dial, require_dial
 from ..core.extent_transform import transform_extent
 from ..core.logger import log_warning
 
 
-
-MAX_RENDER_PX = 1536
-
+def _render_max_px() -> int | None:
 
 
-_RENDER_DPI = 192
+
+    try:
+        return int(require_dial("render.max_px", lo=64, hi=8192))
+    except ConfigMissing as exc:
+        log_warning(f"Layer render skipped: {exc}")
+        return None
+
+
+def _render_dpi() -> int | None:
+
+
+
+    try:
+        return int(require_dial("render.dpi", lo=24, hi=1200))
+    except ConfigMissing as exc:
+        log_warning(f"Layer render skipped: {exc}")
+        return None
+
+
 _FALLBACK_CRS = "EPSG:3857"
 
 
@@ -152,7 +168,9 @@ def render_layers_at_extent(layers: list, extent: QgsRectangle, crs, settle: boo
         return None
     if crs is None or not crs.isValid():
         crs = _resolve_crs(layers[0])
-    max_px = get_export_dial("render.max_px", MAX_RENDER_PX)
+    max_px = _render_max_px()
+    if max_px is None:
+        return None
     return _render_at_extent(layers, QgsRectangle(extent), crs, max_px, settle=settle)
 
 
@@ -354,7 +372,9 @@ def render_layers_to_qimage(
     if not layers:
         return None
     if max_px is None:
-        max_px = get_export_dial("render.max_px", MAX_RENDER_PX)
+        max_px = _render_max_px()
+        if max_px is None:
+            return None
 
     if force_extent is not None and _usable(force_extent):
         dest_crs = force_crs if (force_crs is not None and force_crs.isValid()) else _resolve_crs(layers[0])
@@ -397,13 +417,16 @@ def _render_at_extent(
     settle: bool = True,
 ) -> QImage | None:
 
+    dpi = _render_dpi()
+    if dpi is None:
+        return None
     settings = _zone_settings(layers, extent, dest_crs, max_px)
     settings.setFlag(QgsMapSettings.Flag.Antialiasing, True)
 
     _hq_flag = getattr(QgsMapSettings.Flag, "HighQualityImageTransforms", None)
     if _hq_flag is not None:
         settings.setFlag(_hq_flag, True)
-    settings.setOutputDpi(get_export_dial("render.dpi", _RENDER_DPI))
+    settings.setOutputDpi(dpi)
 
     if settle and any(is_remote_layer(lyr) for lyr in layers):
         _enable_online_resampling(layers)
@@ -642,17 +665,18 @@ class ZoneLayerRender(QObject):
         super().__init__(parent)
         self._layers = [lyr for lyr in layers or [] if lyr is not None]
         self._settings = None
-        if self._layers and extent is not None and _usable(extent):
+        max_px = _render_max_px() if self._layers else None
+        dpi = _render_dpi() if max_px is not None else None
+        if self._layers and extent is not None and _usable(extent) and dpi is not None:
             dest_crs = crs if (crs is not None and crs.isValid()) else _resolve_crs(self._layers[0])
             background = QColor(0, 0, 0, 0) if transparent else None
-            max_px = get_export_dial("render.max_px", MAX_RENDER_PX)
             self._settings = _zone_settings(
                 self._layers, QgsRectangle(extent), dest_crs, max_px, background)
             self._settings.setFlag(QgsMapSettings.Flag.Antialiasing, True)
             hq_flag = getattr(QgsMapSettings.Flag, "HighQualityImageTransforms", None)
             if hq_flag is not None:
                 self._settings.setFlag(hq_flag, True)
-            self._settings.setOutputDpi(get_export_dial("render.dpi", _RENDER_DPI))
+            self._settings.setOutputDpi(dpi)
         self._job = None
         self._prev = None
         self._passes_left = 0

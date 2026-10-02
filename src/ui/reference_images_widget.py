@@ -27,7 +27,13 @@ from qgis.PyQt.QtWidgets import (
 from ..core import qt_compat as QtC
 from ..core import telemetry
 from ..core import telemetry_events as te
-from ..core.config_store import get_export_copy, get_export_dial, get_export_dial_ratio
+from ..core.config_store import (
+    ConfigMissing,
+    get_export_copy,
+    get_export_dial,
+    get_export_dial_ratio,
+    require_dial,
+)
 from ..core.i18n import tr
 from ..core.logger import log_debug
 from ..core.reference_image_store import (
@@ -57,15 +63,6 @@ _THUMB_BOX_PX = REF_THUMB_PX + 4
 
 
 _REMOVE_BTN_PX = 24
-
-
-
-
-
-
-
-
-FREE_TIER_MAX_REFERENCES = 1
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
 _PREVIEW_MAX_SCREEN_RATIO = 0.8
@@ -74,33 +71,16 @@ _ERROR_CLEAR_MS = 4000
 
 
 
-
-_MIN_LAYER_ABOVE_COVERAGE = 0.005
-
 _LAYERS_ABOVE_WAIT_MS = 20000
-
-
-def layer_above_note(name: str, over_input: bool) -> str:
-
-
-    name = (name or "").strip()[:80]
-    if over_input:
-        return (
-            f'Map layer "{name}" from the user\'s project, drawn on top of the '
-            "same area as the image to edit, aligned pixel for pixel with it."
-        )
-    return (
-        f'Map layer "{name}" from the user\'s project, drawn over the image to '
-        "edit and aligned pixel for pixel with it."
-    )
 
 
 def free_tier_max_references() -> int:
 
 
-    return get_export_dial(
-        "entitlements.free_tier_max_references", FREE_TIER_MAX_REFERENCES
-    )
+
+
+
+    return int(require_dial("entitlements.free_tier_max_references", lo=0, hi=100))
 
 
 def reference_add_reason(store: ReferenceImageStore, free_tier: bool) -> str:
@@ -110,10 +90,13 @@ def reference_add_reason(store: ReferenceImageStore, free_tier: bool) -> str:
 
 
     count = store.count()
-    if free_tier and count >= free_tier_max_references():
-        return "free_limit"
-    if count >= max_references():
-        return "hard_cap"
+    try:
+        if free_tier and count >= free_tier_max_references():
+            return "free_limit"
+        if count >= max_references():
+            return "hard_cap"
+    except ConfigMissing:
+        return "loading"
     return "ok"
 
 
@@ -226,13 +209,14 @@ class _ThumbWidget(QFrame):
 
 
     remove_clicked = pyqtSignal(str)
+
+
     preview_requested = pyqtSignal(str)
 
     def __init__(self, record: ReferenceImage, index: int, parent=None,
                  remove_overlay: bool = True, whole_badge: bool = True):
         super().__init__(parent)
         self._ref_id = record.id
-        self._image_path = record.path
         self._readonly = False
         self._hovered = False
         self._remove_overlay = bool(remove_overlay)
@@ -385,7 +369,7 @@ class _ThumbWidget(QFrame):
     def keyPressEvent(self, event):  # noqa: N802
         key = event.key()
         if key in self._PREVIEW_KEYS:
-            self.preview_requested.emit(self._image_path)
+            self.preview_requested.emit(self._ref_id)
             event.accept()
             return
         if key in self._REMOVE_KEYS:
@@ -405,7 +389,7 @@ class _ThumbWidget(QFrame):
         if self._remove_btn.isVisible() and self._remove_btn.geometry().contains(pos):
             super().mousePressEvent(event)
             return
-        self.preview_requested.emit(self._image_path)
+        self.preview_requested.emit(self._ref_id)
         super().mousePressEvent(event)
 
 
@@ -548,6 +532,9 @@ class ReferenceImagesWidget(QWidget):
 
     upsell_requested = pyqtSignal()
 
+
+    config_needed = pyqtSignal()
+
     layers_above_done = pyqtSignal()
 
     def __init__(self, store: ReferenceImageStore, parent=None):
@@ -575,12 +562,18 @@ class ReferenceImagesWidget(QWidget):
         self._above_layer_ids: dict[str, str] = {}
 
 
+        self._above_meta: dict[str, dict] = {}
+
+
         self._above_queue: list = []
         self._above_input = None
         self._above_base = None
         self._above_render = None
         self._above_current = None
         self._above_left_out = 0
+
+
+        self._above_waiting_config = False
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -631,8 +624,18 @@ class ReferenceImagesWidget(QWidget):
         self._store.clear()
         self._above_ref_ids = []
         self._above_layer_ids = {}
+        self._above_meta = {}
         self._above_left_out = 0
         self._refresh()
+
+    def context_image_meta(self) -> list[dict | None]:
+
+
+
+        return [
+            None if self._store.get_note(record.id).strip() else self._above_meta.get(record.id)
+            for record in self._store.list()
+        ]
 
     def set_layers_above(self, layers: list, input_layer=None) -> int:
 
@@ -658,23 +661,35 @@ class ReferenceImagesWidget(QWidget):
         self._cancel_layers_above()
         for ref_id in self._above_ref_ids:
             self._store.remove(ref_id)
+            self._above_meta.pop(ref_id, None)
         self._above_ref_ids = []
         self._above_layer_ids = {}
         self._above_left_out = 0
         self._above_queue = [layer for layer in (layers or []) if layer is not None]
         self._above_input = input_layer
         self._above_base = None
+        self._above_waiting_config = False
+        if self._above_queue and self._free_slots_for_above() is None:
+
+
+            self._above_waiting_config = True
         self._refresh()
         if not self._above_queue:
             return 0
         queued = len(self._above_queue)
-        needs_base = input_layer is not None and any(
+        if not self._above_waiting_config:
+            self._start_above_batch()
+        return queued
+
+    def _start_above_batch(self) -> None:
+
+
+        needs_base = self._above_input is not None and self._above_base is None and any(
             not _is_raster_layer(layer) for layer in self._above_queue)
         if needs_base:
-            self._start_above_render([input_layer], transparent=False, base=True)
+            self._start_above_render([self._above_input], transparent=False, base=True)
         else:
             self._render_next_above()
-        return queued
 
     def layers_above_pending(self) -> bool:
 
@@ -684,9 +699,27 @@ class ReferenceImagesWidget(QWidget):
 
         return self._above_left_out
 
+    def layers_above_waiting_config(self) -> bool:
+
+        return self._above_waiting_config and bool(self._above_queue)
+
+    def resume_layers_above(self) -> bool:
+
+
+
+        if not self.layers_above_waiting_config() or self._above_render is not None:
+            return False
+        if self._free_slots_for_above() is None:
+            return False
+        self._above_waiting_config = False
+        self._start_above_batch()
+        return True
+
     def wait_layers_above(self, timeout_ms: int | None = None) -> None:
 
 
+
+        self.resume_layers_above()
         if not self.layers_above_pending():
             return
         loop = QEventLoop()
@@ -712,8 +745,10 @@ class ReferenceImagesWidget(QWidget):
 
         return self._store.count() - len(self._above_ref_ids)
 
-    def _free_slots_for_above(self) -> int:
-        return max(0, self.add_limit() - self._store.count())
+    def _free_slots_for_above(self) -> int | None:
+
+        limit = self._served_add_limit()
+        return None if limit is None else max(0, limit - self._store.count())
 
     def _start_above_render(self, layers: list, transparent: bool, base: bool = False) -> None:
         render = ZoneLayerRender(
@@ -725,8 +760,17 @@ class ReferenceImagesWidget(QWidget):
 
     def _render_next_above(self) -> None:
 
+
+
         while self._above_queue:
-            if self._free_slots_for_above() <= 0:
+            free = self._free_slots_for_above()
+            if free is None:
+                self._above_waiting_config = True
+                self._above_render = None
+                self._refresh()
+                self.layers_above_done.emit()
+                return
+            if free <= 0:
                 self._above_left_out = len(self._above_queue)
                 self._above_queue = []
                 break
@@ -763,14 +807,21 @@ class ReferenceImagesWidget(QWidget):
         if image is None or image.isNull():
             return
         coverage = drawn_fraction(image)
-        if coverage < get_export_dial_ratio(
-                "references.layer_above_min_coverage", _MIN_LAYER_ABOVE_COVERAGE):
+        try:
+            min_coverage = require_dial("references.layer_above_min_coverage", lo=0.0, hi=1.0)
+        except ConfigMissing:
+
+
+            min_coverage = None
+        if min_coverage is not None and coverage < min_coverage:
             log_debug(f"Layer above dropped: {layer.name()} paints {coverage:.2%} of the zone")
             return
         over_input = not _is_raster_layer(layer) and self._above_base is not None
         card = compose_over(image, self._above_base if over_input else None)
         record = self._store.add_from_qimage(card, layer.name(), source_kind="layer")
-        self._store.set_auto_note(record.id, layer_above_note(layer.name(), over_input))
+        self._above_meta[record.id] = {
+            "kind": "layer_above", "name": layer.name(), "over_input": over_input,
+        }
         self._above_ref_ids.append(record.id)
         self._above_layer_ids[record.id] = layer.id()
         telemetry.track(te.REFERENCE_ADDED, {"source_kind": "layer", "whole_layer": False})
@@ -784,6 +835,7 @@ class ReferenceImagesWidget(QWidget):
         self._above_queue = []
         self._above_input = None
         self._above_base = None
+        self._above_waiting_config = False
         self.layers_above_done.emit()
 
     def _give_way_for_user(self) -> None:
@@ -795,6 +847,7 @@ class ReferenceImagesWidget(QWidget):
             return
         ref_id = self._above_ref_ids.pop()
         self._above_layer_ids.pop(ref_id, None)
+        self._above_meta.pop(ref_id, None)
         self._store.remove(ref_id)
         self._above_left_out += 1
 
@@ -809,7 +862,11 @@ class ReferenceImagesWidget(QWidget):
 
 
 
-        return self.user_count() >= max_references()
+        try:
+            return self.user_count() >= max_references()
+        except ConfigMissing:
+
+            return False
 
     def set_free_tier(self, free_tier: bool) -> None:
 
@@ -827,9 +884,16 @@ class ReferenceImagesWidget(QWidget):
 
 
 
-        if self._free_tier:
-            return min(free_tier_max_references(), max_references())
-        return max_references()
+        limit = self._served_add_limit()
+        return 0 if limit is None else limit
+
+    def _served_add_limit(self) -> int | None:
+        try:
+            if self._free_tier:
+                return min(free_tier_max_references(), max_references())
+            return max_references()
+        except ConfigMissing:
+            return None
 
     def _check_can_add(self, give_way: bool = False) -> str:
 
@@ -858,8 +922,13 @@ class ReferenceImagesWidget(QWidget):
         if self._readonly or not items:
             return
         added = 0
+        try:
+            cap = max_references()
+        except ConfigMissing:
+            self.config_needed.emit()
+            return
         for image, name in items:
-            if self._store.count() >= max_references():
+            if self._store.count() >= cap:
                 break
             if image is None or image.isNull():
                 continue
@@ -892,6 +961,9 @@ class ReferenceImagesWidget(QWidget):
             return
         if reason == "hard_cap":
             self._show_temp_error(_hard_cap_message())
+            return
+        if reason == "loading":
+            self.config_needed.emit()
             return
 
 
@@ -997,6 +1069,8 @@ class ReferenceImagesWidget(QWidget):
             self.upsell_requested.emit()
         elif stop == "hard_cap":
             self._show_temp_error(_partial_cap_message(added, total))
+        elif stop == "loading":
+            self.config_needed.emit()
         elif failures:
             self._show_temp_error(_failures_message(failures))
 
@@ -1112,6 +1186,9 @@ class ReferenceImagesWidget(QWidget):
         if reason == "hard_cap":
             self._show_temp_error(_hard_cap_message())
             return
+        if reason == "loading":
+            self.config_needed.emit()
+            return
         if image is None or image.isNull():
             self._show_temp_error(get_export_copy(
                 "widgets.reference_images_widget.map_capture_failed",
@@ -1161,6 +1238,7 @@ class ReferenceImagesWidget(QWidget):
         if ref_id in self._above_ref_ids:
             self._above_ref_ids.remove(ref_id)
         self._above_layer_ids.pop(ref_id, None)
+        self._above_meta.pop(ref_id, None)
         self._refresh()
 
     def _build_preview_title(self, image_path: str) -> str:
@@ -1171,5 +1249,7 @@ class ReferenceImagesWidget(QWidget):
         )
         return reference_preview_title(record)
 
-    def _open_preview(self, image_path: str) -> None:
-        open_reference_preview(self, image_path, self._build_preview_title(image_path))
+    def _open_preview(self, ref_id: str) -> None:
+        record = next((r for r in self._store.list() if r.id == ref_id), None)
+        if record is not None:
+            open_reference_preview(self, record.path, reference_preview_title(record))

@@ -51,6 +51,7 @@ LOADER_SIGNALS = {
     "_tuned_config_task": REQUEST_TASK_SIGNALS,
     "_export_size_task": REQUEST_TASK_SIGNALS,
     "_zone_size_task": REQUEST_TASK_SIGNALS,
+    "_zone_tier_size_task": REQUEST_TASK_SIGNALS,
     "_activation_config_loader": REQUEST_TASK_SIGNALS,
 
     "_basemap_probe_task": REQUEST_TASK_SIGNALS,
@@ -428,6 +429,7 @@ class PluginLifecycleMixin:
         self._dock_widget.vectorize_clicked.connect(self._on_vectorize_clicked)
         self._dock_widget.vectorize_done_clicked.connect(self._on_vectorize_done_clicked)
         self._dock_widget.reference_panel_requested.connect(self._on_reference_clicked)
+        self._dock_widget.reference_config_needed.connect(self._on_reference_config_needed)
         self._dock_widget.reference_done_clicked.connect(self._on_reference_done_clicked)
         self._dock_widget.reference_capture_requested.connect(
             self._on_reference_capture_requested
@@ -487,6 +489,13 @@ class PluginLifecycleMixin:
 
         self._canvas.destinationCrsChanged.connect(self._on_zone_crs_event)
         QgsProject.instance().cleared.connect(self._on_project_cleared_zone)
+
+
+
+
+        QgsProject.instance().writeProject.connect(self._on_project_write_zone)
+        QgsProject.instance().readProject.connect(self._on_project_read_zone)
+        self._on_project_read_zone()
 
 
 
@@ -562,6 +571,24 @@ class PluginLifecycleMixin:
             log("AI Edit plugin loaded")
         if self._skip_trial_check:
             log_warning("DEV MODE: SKIP_TRIAL_CHECK is active - auth checks bypassed")
+
+    def _on_project_read_zone(self, *_args):
+
+        try:
+            from ...core import zone_of_interest as zoi
+
+            zoi.restore_zone_layer()
+        except Exception as err:  # noqa: BLE001
+            log_warning(f"Shared zone not restored: {err}")
+
+    def _on_project_write_zone(self, *_args):
+
+        try:
+            from ...core import zone_of_interest as zoi
+
+            zoi.store_project_zone_shapes()
+        except Exception as err:  # noqa: BLE001
+            log_warning(f"Shared zone not stored: {err}")
 
     def unload(self):
 
@@ -641,6 +668,8 @@ class PluginLifecycleMixin:
             (lambda: QgsProject.instance().layerTreeRoot().visibilityChanged,
              self._on_project_layers_changed),
             (lambda: QgsProject.instance().cleared, self._on_project_cleared_zone),
+            (lambda: QgsProject.instance().readProject, self._on_project_read_zone),
+            (lambda: QgsProject.instance().writeProject, self._on_project_write_zone),
             (lambda: self._canvas.destinationCrsChanged, self._on_zone_crs_event),
         ):
             try:

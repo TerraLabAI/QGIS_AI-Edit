@@ -373,9 +373,16 @@ def category_line(name: str) -> str:
 
 def gauge_category(fraction_left: float) -> str:
 
+
     if fraction_left <= 0:
         return "coral"
-    return "amber" if fraction_left < 0.2 else "leaf"
+    try:
+        from ...core.config_store import require_dial
+
+        low_ratio = require_dial("credits.low_ratio", lo=0, hi=1)
+    except Exception:  # nosec B110
+        return "leaf"
+    return "amber" if fraction_left < low_ratio else "leaf"
 
 
 

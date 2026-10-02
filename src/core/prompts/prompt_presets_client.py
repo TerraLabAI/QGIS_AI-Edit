@@ -35,6 +35,12 @@
 
 
 
+
+
+
+
+
+
 from __future__ import annotations
 
 import json
@@ -45,6 +51,7 @@ from urllib.parse import urlsplit
 from ..config_store import get_export_dial
 from ..logger import log_debug, log_warning
 from . import cache_blob_file
+from .preset_normalize import _current_lang, catalog_has_placeholders
 
 
 
@@ -91,18 +98,6 @@ def _presets_cache_ttl() -> int:
     return get_export_dial("cache_ttl_s.presets", _PRESETS_CACHE_TTL_SECONDS)
 
 
-def _is_polyglot_or_string(value: Any) -> bool:
-
-
-
-
-    if isinstance(value, str):
-        return bool(value.strip())
-    if isinstance(value, dict):
-        return any(isinstance(v, str) and v.strip() for v in value.values())
-    return False
-
-
 def _validate_catalog(payload: Any) -> dict | None:
 
 
@@ -131,7 +126,10 @@ def _validate_catalog(payload: Any) -> dict | None:
                 return None
             if not isinstance(p.get("id"), str) or not p["id"].strip():
                 return None
-            if not _is_polyglot_or_string(p.get("prompt")):
+
+
+            prompt = p.get("prompt")
+            if prompt is not None and not isinstance(prompt, (str, dict)):
                 return None
     return payload
 
@@ -224,10 +222,20 @@ def _read_cache_raw() -> tuple[dict | None, float | None]:
     return catalog, cache_blob_file.cache_file_age_s(_CACHE_FILE)
 
 
+def _catalog_lang_matches(catalog: dict) -> bool:
+
+
+    lang = catalog.get("lang")
+    return not isinstance(lang, str) or lang == _current_lang()
+
+
 def _read_cache() -> dict | None:
 
     catalog, age = _read_cache_raw()
     if catalog is None or age is None or age > _presets_cache_ttl():
+        return None
+    if not _catalog_lang_matches(catalog):
+        log_debug("prompt_presets_client: cached catalog is in another language")
         return None
     return catalog
 
@@ -251,6 +259,31 @@ def read_cached_catalog_stale_ok() -> dict | None:
     return catalog
 
 
+def _keeps_full_copy(catalog: dict, key_held: bool) -> dict | None:
+
+
+
+    if not key_held or not catalog_has_placeholders(catalog):
+        return None
+    cached, _ = _read_cache_raw()
+
+
+    if (
+        cached is not None
+        and not catalog_has_placeholders(cached)
+        and (not isinstance(cached.get("lang"), str) or cached.get("lang") == catalog.get("lang"))
+    ):
+        log_debug("prompt_presets_client: kept the signed-in catalog over a placeholder copy")
+        return cached
+    return None
+
+
+def cached_catalog_has_placeholders() -> bool:
+
+    cached, _ = _read_cache_raw()
+    return cached is not None and catalog_has_placeholders(cached)
+
+
 def _write_cache(catalog: dict) -> None:
 
 
@@ -269,6 +302,34 @@ def _write_cache(catalog: dict) -> None:
 
 
     _seed_prompt_presets_memo(catalog)
+
+
+def _strip_prompts(node: Any) -> Any:
+
+
+    if isinstance(node, list):
+        return [_strip_prompts(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    out = {k: _strip_prompts(v) for k, v in node.items() if k != "prompt"}
+    if "prompt" in node:
+        out["placeholder"] = True
+    return out
+
+
+def drop_signed_in_prompts() -> dict | None:
+
+
+
+
+    cached, _ = _read_cache_raw()
+    if cached is None:
+        _clear_prompt_presets_memo()
+        return None
+    stripped = _strip_prompts(cached)
+    stripped["prompts"] = "placeholder"
+    _write_cache(stripped)
+    return stripped
 
 
 def invalidate_cache() -> None:
@@ -290,7 +351,23 @@ def invalidate_cache() -> None:
     _clear_prompt_presets_memo()
 
 
-def fetch_server_catalog(client, force_refresh: bool = False) -> dict | None:
+def _presets_path() -> str:
+
+
+
+
+    from urllib.parse import urlencode
+
+    from ..request_context import plugin_version
+
+    version = "".join(ch for ch in plugin_version() if ch.isalnum() or ch in "._-")
+    params = {"v": version} if version else {}
+    if version:
+        params["lang"] = _current_lang()
+    return f"/api/ai-edit/presets?{urlencode(params)}" if params else "/api/ai-edit/presets"
+
+
+def fetch_server_catalog(client, force_refresh: bool = False, auth: dict | None = None) -> dict | None:
 
 
 
@@ -307,7 +384,8 @@ def fetch_server_catalog(client, force_refresh: bool = False) -> dict | None:
     try:
         resp = client._request(
             "GET",
-            "/api/ai-edit/presets",
+            _presets_path(),
+            auth=auth or None,
             timeout_ms=get_export_dial(
                 "pipeline.prompt_presets_client.catalog_fetch_timeout_ms", _CATALOG_FETCH_TIMEOUT_MS
             ),
@@ -325,6 +403,9 @@ def fetch_server_catalog(client, force_refresh: bool = False) -> dict | None:
         log_warning("Server catalog payload did not match expected v2 shape")
         return None
 
+    kept = _keeps_full_copy(catalog, key_held=bool(auth))
+    if kept is not None:
+        return kept
     _write_cache(catalog)
     log_debug(
         f"prompt_presets_client: fetched {len(catalog.get('categories', []))} categories"
@@ -332,13 +413,16 @@ def fetch_server_catalog(client, force_refresh: bool = False) -> dict | None:
     return catalog
 
 
-def store_catalog(payload) -> dict | None:
+def store_catalog(payload, key_held: bool = False) -> dict | None:
 
 
 
     catalog = _validate_catalog(payload)
     if catalog is None:
         return None
+    kept = _keeps_full_copy(catalog, key_held)
+    if kept is not None:
+        return kept
     _write_cache(catalog)
     return catalog
 

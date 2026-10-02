@@ -597,6 +597,7 @@ def _build_reference_widget(dock: AIEditDockWidget) -> None:
         dock._reference_widget.error_cleared.connect(dock._hide_status_box)
         dock._reference_widget.images_changed.connect(dock._sync_attach_buttons)
         dock._reference_widget.upsell_requested.connect(dock._show_reference_upsell)
+        dock._reference_widget.config_needed.connect(dock.reference_config_needed.emit)
 
 
 
@@ -687,9 +688,10 @@ def _build_generate_note_strip(dock: AIEditDockWidget, main_layout: QVBoxLayout)
     note_layout.setContentsMargins(*_NOTE_STRIP_MARGINS)
     note_layout.setSpacing(4)
 
-    from ...core.auth.activation_manager import build_utm_url, get_privacy_url
+    from ...core.auth.activation_manager import get_server_url
 
-    privacy_url = get_privacy_url(build_utm_url("/privacy-policy", "generate_privacy"))
+
+    privacy_url = get_server_url("generate_privacy_url", "https://terra-lab.ai/privacy-policy")
     privacy_link = (
         f'<a href="{privacy_url}" style="color: {tokens.LINK_INK}; text-decoration: none;">'
         f'{tr("Privacy")}</a>'

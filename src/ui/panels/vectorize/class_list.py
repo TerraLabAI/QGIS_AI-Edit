@@ -21,17 +21,23 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ....core import qt_compat as QtC
-from ....core.config_store import get_export_copy, get_export_dial
+from ....core.config_store import ConfigMissing, get_export_copy, require_dial
 from ....core.i18n import tr
 from ...dock import design_tokens as T
 from ...dock.design_tokens import repolish_widget
 from ...panel_helpers import apply_swatch_style, check_box_qss
 
 
+def _same_class_l1() -> int:
 
 
 
-_SAME_CLASS_L1 = 40
+
+    try:
+        return int(require_dial("vectorize.same_class_l1", lo=0, hi=765))
+    except ConfigMissing:
+        return 0
+
 
 
 
@@ -244,7 +250,7 @@ class ClassListWidget(QWidget):
 
 
 
-        existing = self._nearest_row(rgb, get_export_dial("vectorize.same_class_l1", _SAME_CLASS_L1))
+        existing = self._nearest_row(rgb, _same_class_l1())
         if existing is not None:
             existing.check.setChecked(checked)
             if label:
@@ -265,7 +271,7 @@ class ClassListWidget(QWidget):
     def ensure_class(self, rgb: tuple[int, int, int], label: str = "") -> None:
 
 
-        existing = self._nearest_row(rgb, get_export_dial("vectorize.same_class_l1", _SAME_CLASS_L1) * 2)
+        existing = self._nearest_row(rgb, _same_class_l1() * 2)
         if existing is not None:
             existing.check.blockSignals(True)
             existing.check.setChecked(True)

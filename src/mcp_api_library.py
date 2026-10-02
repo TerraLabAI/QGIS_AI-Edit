@@ -339,24 +339,26 @@ class LibraryMixin:
 
 
 
-        from .core.config_store import get_export_dial
-        from .core.prompts.prompt_minimum import check_prompt_minimum, prompt_minimum_dials
-        from .ui.dock.style import MAX_PROMPT_CHARS
+        from .core.prompts.prompt_minimum import (
+            check_prompt_minimum,
+            prompt_minimum_dials,
+            served_max_prompt_chars,
+        )
+        from .mcp_api_guide import prompt_hints
 
         dials = prompt_minimum_dials()
+        hints = prompt_hints()
         out: dict[str, Any] = {
-            "min_chars": dials.min_chars,
-            "min_words": dials.min_words,
-            "min_cjk_chars": dials.min_cjk_chars,
-            "max_chars": get_export_dial("limits.max_prompt_chars", MAX_PROMPT_CHARS),
-            "hints": [
-                "Name the thing to change and what it should become.",
-                "One instruction at a time reads better than a paragraph.",
-                "Say the colour, the material or the season you want, in plain words.",
-                "Attach a picture instead of describing a look you cannot put in words.",
-                "Draw on the map instead of describing where, when the where is hard to say.",
-            ],
+            "min_chars": dials.min_chars if dials else None,
+            "min_words": dials.min_words if dials else None,
+            "min_cjk_chars": dials.min_cjk_chars if dials else None,
+            "max_chars": served_max_prompt_chars(),
+            "hints": hints,
         }
+        if dials is None:
+            out["limits_status"] = "loading"
+        if not hints:
+            out["hints_status"] = "Sign in to load the prompt hints."
         if prompt is not None:
             check = check_prompt_minimum(str(prompt))
             out["prompt_ok"] = check.ok

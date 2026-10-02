@@ -40,7 +40,9 @@ WALL_URL = build_utm_url("/dashboard/ai-edit", "wall")
 PREWALL_URL = build_utm_url("/dashboard/ai-edit", "prewall")
 TERMS_URL = build_utm_url("/terms-of-sale", "settings_terms")
 PRIVACY_URL = build_utm_url("/privacy-policy", "settings_privacy")
-CONTACT_CALL_URL = "https://calendly.com/barbot-yvann/30min"
+
+
+CONTACT_PAGE_URL = "https://terra-lab.ai/support"
 GUIDE_URL = "https://terra-lab.ai/blog/ai-edit-complete-guide"
 MARKETPLACE_URL = "https://plugins.qgis.org/plugins/AI_Edit/"
 
@@ -102,8 +104,23 @@ def get_privacy_url(fallback: str = PRIVACY_URL) -> str:
     return _server_url("privacy_url", fallback)
 
 
+def get_contact_page_url() -> str:
+
+
+    return _server_url("contact_page_url", CONTACT_PAGE_URL)
+
+
 def get_contact_call_url() -> str:
-    return _server_url("contact_call_url", CONTACT_CALL_URL)
+
+
+
+
+
+
+    cfg = get_server_config()
+    contact = cfg.get("contact")
+    value = contact.get("book_call_url") if isinstance(contact, dict) else cfg.get("contact_call_url")
+    return value if _is_safe_link(value) else ""
 
 
 def get_guide_url() -> str:
@@ -144,6 +161,14 @@ def is_feature_enabled(name: str) -> bool:
     if not isinstance(features, dict):
         return True
     return features.get(name) is not False
+
+
+def is_feature_on(name: str) -> bool:
+
+
+
+    features = get_server_config().get("features")
+    return isinstance(features, dict) and features.get(name) is True
 
 
 
@@ -193,11 +218,7 @@ def served_marketplace_url() -> str:
 
 
 
-
-
-
 DEFAULT_CONFIG = {
-    "free_credits": 60,
     "free_tier_active": True,
     "upgrade_url": build_utm_url("/dashboard/ai-edit", "upgrade"),
 }
@@ -282,10 +303,19 @@ def save_activation(key: str, settings=None):
     _impl(key, settings)
 
 
+    from ..paywall_state import forget
+    forget()
+
+
 def clear_activation(settings=None):
 
     from .auth_helper import clear_activation as _impl
     _impl(settings)
+
+    from ..config_store import clear_saved_account_config
+    clear_saved_account_config()
+    from ..paywall_state import forget
+    forget()
 
 
 def migrate_legacy_key(settings=None) -> bool:
@@ -450,7 +480,7 @@ def get_server_config(client=None) -> dict:
         result = client.get_config(PRODUCT_ID)
         if isinstance(result, dict) and result and "error" not in result:
             if store is not None:
-                store.set_activation_config(result)
+                store.accept_fetched_plugin_config(result, keyed=False)
             return result
     except Exception:
         pass  # nosec B110

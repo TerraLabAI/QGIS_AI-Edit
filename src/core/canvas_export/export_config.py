@@ -5,10 +5,11 @@ from qgis.PyQt.QtGui import QImageWriter
 
 def set_server_config(config: dict):
 
+
     from ..config_store import get_store
     store = get_store()
     if store is not None:
-        store.set_server_export_config(config)
+        store.accept_fetched_export_config(config)
 
 
 def has_server_config() -> bool:
@@ -22,9 +23,9 @@ def has_tuned_config() -> bool:
 
 
 
+    from ..config_store import is_account_export_config
     cfg = _get_server_config()
-    marker = cfg.get("tuned_config") if cfg else None
-    return isinstance(marker, int) and not isinstance(marker, bool) and marker >= 1
+    return bool(cfg) and is_account_export_config(cfg)
 
 
 def _get_server_config() -> dict | None:
@@ -68,13 +69,6 @@ def _get_align() -> int | None:
 
 
 
-
-
-
-
-
-_DEFAULT_INPUT_FORMAT = "webp"
-_DEFAULT_INPUT_QUALITY = 90
 _supported_write_formats_cache: set[str] | None = None
 
 
@@ -101,18 +95,9 @@ def chosen_input_format() -> tuple[str, str, int]:
 
 
 
-    cfg = _get_server_config() or {}
-    pref = str(cfg.get("input_format") or _DEFAULT_INPUT_FORMAT).lower()
-    try:
-        quality_value = cfg.get("input_quality")
-        quality = (
-            int(quality_value)
-            if quality_value is not None and not isinstance(quality_value, bool)
-            else _DEFAULT_INPUT_QUALITY
-        )
-    except (TypeError, ValueError, OverflowError):
-        quality = _DEFAULT_INPUT_QUALITY
-    quality = max(1, min(100, quality))
+    from ..config_store import require_dial, require_str
+    pref = require_str("input_format").lower()
+    quality = int(require_dial("input_quality", lo=1, hi=100))
 
     supported = _supported_write_formats()
     if pref == "webp" and "webp" in supported:

@@ -4,6 +4,7 @@ from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.i18n import tr
+from ...core.prompts.preset_normalize import is_placeholder_preset
 from ...core.prompts.prompt_presets import format_template_prompt
 from ..panel_helpers import main_window_for_dialog
 
@@ -140,7 +141,12 @@ class DockLibraryMixin:
                         self.history_restore.emit(restore)
                     return None
                 preset = dlg.get_selected_preset()
-                if preset and not preset.get("from_recent") and not preset.get("from_favorites"):
+                if (
+                    preset
+                    and not preset.get("from_recent")
+                    and not preset.get("from_favorites")
+                    and not is_placeholder_preset(preset)
+                ):
                     self.template_selected.emit(
                         str(preset.get("id") or ""),
                         str(preset.get("label") or ""),
@@ -225,7 +231,15 @@ class DockLibraryMixin:
 
 
 
-        if not preset or not preset.get("prompt"):
+
+
+
+        if not preset:
+            return
+        if is_placeholder_preset(preset):
+            self.set_status(tr("Sign in to use this template"), is_error=False)
+            return
+        if not preset.get("prompt"):
             return
         self._active_template_id = str(preset.get("id") or "") or None
         self._active_template_name = str(preset.get("label") or "") or None

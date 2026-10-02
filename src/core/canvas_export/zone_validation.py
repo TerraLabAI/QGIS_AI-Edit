@@ -10,7 +10,7 @@ from qgis.core import (
     QgsRectangle,
 )
 
-from ..config_store import get_export_dial
+from ..config_store import ConfigMissing, require_dial
 from ..errors import AIEditError, ErrorCode
 from ..extent_transform import transform_extent
 from ..i18n import tr
@@ -18,7 +18,6 @@ from ..i18n import tr
 
 
 
-_POLAR_ABS_LAT_DEG = 85.0
 
 
 def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> None:
@@ -87,8 +86,19 @@ def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> N
                     "AI Edit does not support that yet. Split your zone into two."
                 ),
             )
-        polar_limit = get_export_dial("zone.polar_abs_lat_deg", _POLAR_ABS_LAT_DEG)
-        if coords_in_range and max_abs_lat > polar_limit:
+        if not coords_in_range:
+            return
+        try:
+            polar_limit = require_dial("zone.polar_abs_lat_deg", lo=0, hi=90)
+        except ConfigMissing:
+
+
+
+            raise AIEditError(
+                ErrorCode.CONFIG_LOADING,
+                tr("AI Edit settings are still loading. Draw the zone again in a moment."),
+            ) from None
+        if max_abs_lat > polar_limit:
             raise AIEditError(
                 ErrorCode.POLAR,
                 tr(
@@ -101,7 +111,6 @@ def validate_zone(extent: QgsRectangle, map_crs, map_rotation: float = 0.0) -> N
 
 
 
-_LAYER_OVERLAP_MIN_SHARE = 0.5
 
 OVERLAP_OK = "ok"
 OVERLAP_PARTIAL = "partial"
@@ -155,7 +164,10 @@ def zone_layer_overlap(zone, zone_crs, layer_extent: QgsRectangle, layer_crs) ->
         if zone_area <= 0:
             return OVERLAP_OK
         inside = geom.intersection(extent_geom).area() / zone_area
-        min_share = get_export_dial("zone.layer_overlap_min_share", _LAYER_OVERLAP_MIN_SHARE)
+        try:
+            min_share = require_dial("zone.layer_overlap_min_share", lo=0, hi=1)
+        except ConfigMissing:
+            return OVERLAP_OK
         if inside < min_share:
             return OVERLAP_PARTIAL
     except Exception:  # nosec B110

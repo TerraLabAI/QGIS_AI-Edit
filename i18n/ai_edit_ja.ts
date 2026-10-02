@@ -5,7 +5,7 @@
     <name>AIEdit</name>
     <message>
         <source>Your result is behind other layers</source>
-        <translation>結果が他のレイヤの背後にあります</translation>
+        <translation>結果が他のレイヤの背面にあります</translation>
     </message>
     <message>
         <source>It was created, but something opaque is drawn on top of it.</source>
@@ -13,7 +13,7 @@
     </message>
     <message>
         <source>Bring it to the front</source>
-        <translation>前面に移動</translation>
+        <translation>最前面に移動</translation>
     </message>
     <message>
         <source>See an example</source>
@@ -21,7 +21,7 @@
     </message>
     <message>
         <source>Your selection and prompt may be processed outside the EU {dot} {privacy}</source>
-        <translation>選択内容とプロンプトはEU域外で処理される場合があります {dot} {privacy}</translation>
+        <translation>選択範囲とプロンプトはEU域外で処理される場合があります {dot} {privacy}</translation>
     </message>
     <message>
         <source>This prompt is not allowed: its content goes against our rules.</source>
@@ -37,7 +37,7 @@
     </message>
     <message>
         <source>Very large zone (about {km2} km²): the AI keeps only broad shapes at this size. Select a smaller area for object-level edits.</source>
-        <translation>非常に広いゾーン（約 {km2} km²）: このサイズでは AI は大まかな形状しか保持できません。オブジェクト単位の編集には、より小さい範囲を選択してください。</translation>
+        <translation>範囲が非常に広い（約{km2}km²）：AIはこのサイズでは大まかな形状しか保持しません。オブジェクト単位の編集には、より狭い範囲を選択してください。</translation>
     </message>
     <message>
         <source>Sessions</source>
@@ -53,15 +53,15 @@
     </message>
     <message>
         <source>Loading older sessions</source>
-        <translation>古いセッションを読み込み中</translation>
+        <translation>過去のセッションを読み込み中…</translation>
     </message>
     <message>
         <source>Delete this session?</source>
-        <translation>このセッションを削除しますか？</translation>
+        <translation>セッションの削除</translation>
     </message>
     <message>
         <source>Deleting session</source>
-        <translation>セッションを削除しています</translation>
+        <translation>セッションを削除中…</translation>
     </message>
     <message>
         <source>Session deleted.</source>
@@ -73,7 +73,7 @@
     </message>
     <message>
         <source>Renaming session</source>
-        <translation>セッション名を変更しています</translation>
+        <translation>セッション名を変更中…</translation>
     </message>
     <message>
         <source>No internet connection. This version was made on another device or cleaned from this disk, so its image must be downloaded. Reconnect and click the version again.</source>
@@ -97,11 +97,11 @@
     </message>
     <message>
         <source>Show a project: renders, plans, simulations, before/after</source>
-        <translation>プロジェクトを見せる：レンダリング、計画図、シミュレーション、ビフォー/アフター</translation>
+        <translation>プロジェクトを可視化：レンダリング、計画図、シミュレーション、ビフォーアフター</translation>
     </message>
     <message>
         <source>Extract data: detect, segment, count, map</source>
-        <translation>データを抽出：検出、セグメント、カウント、マッピング</translation>
+        <translation>データを抽出：検出、セグメンテーション、カウント、マッピング</translation>
     </message>
     <message>
         <source>Repair imagery: sharpen, upscale, fix gaps and seams</source>
@@ -217,7 +217,7 @@
     </message>
     <message>
         <source>{n} prompts</source>
-        <translation>{n} 件のプロンプト</translation>
+        <translation>プロンプト{n}件</translation>
     </message>
     <message>
         <source>Back to library</source>
@@ -233,7 +233,7 @@
     </message>
     <message>
         <source>Cancelling sign-in</source>
-        <translation>サインインをキャンセルしています</translation>
+        <translation>ログインをキャンセル中…</translation>
     </message>
     <message>
         <source>No credit was used.</source>
@@ -257,15 +257,15 @@
     </message>
     <message>
         <source>This license is already in use on the maximum number of computers. Free one in your account, or wait for an inactive one to expire.</source>
-        <translation>このライセンスは、利用可能な最大台数のコンピューターで既に使用されています。アカウントでコンピューターを1台解放するか、非アクティブな端末の期限切れをお待ちください。</translation>
+        <translation>このライセンスは、上限の台数のコンピュータで既に使用されています。アカウントでコンピュータを1台解放するか、非アクティブなコンピュータの有効期限が切れるまでお待ちください。</translation>
     </message>
     <message>
         <source>Manage your computers</source>
-        <translation>コンピューターを管理</translation>
+        <translation>利用中のコンピュータを管理</translation>
     </message>
     <message>
         <source>No internet connection. Check your network and try again.</source>
-        <translation>インターネットに接続されていません。ネットワークを確認して再度お試しください。</translation>
+        <translation>インターネットに接続されていません。ネットワークを確認して、もう一度お試しください。</translation>
     </message>
     <message>
         <source>No internet connection.</source>
@@ -297,7 +297,7 @@
     </message>
     <message>
         <source>AI Edit outputs an image, not a vector file. For polygons (SHP, GeoJSON), pick a Segment or Land cover template, then ‘Vectorize this result’. For precise object outlines, try our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin.</source>
-        <translation>AI Editが出力するのは画像であり、ベクタファイルではありません。ポリゴン（SHP、GeoJSON）が必要な場合は、Segmentまたは土地被覆のテンプレートを選び、「この結果をベクトル化」を使用してください。オブジェクトの正確な輪郭が必要な場合は、プラグイン&lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt;をお試しください。</translation>
+        <translation>AI Editが出力するのは画像であり、ベクタファイルではありません。ポリゴン（SHP、GeoJSON）が必要な場合は、「セグメント」または「土地被覆」のテンプレートを選び、「この結果をベクタ化」を使用してください。オブジェクトの正確な輪郭が必要な場合は、&lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt;プラグインをお試しください。</translation>
     </message>
     <message>
         <source>AI Edit edits the image, it doesn't answer questions or count. Describe a visual change, e.g. colour the buildings red.</source>
@@ -305,7 +305,7 @@
     </message>
     <message>
         <source>AI Edit can't measure or count. Our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin is built for that: it outlines objects as polygons QGIS can count and measure.</source>
-        <translation>AI Editでは計測や数え上げはできません。それにはプラグイン&lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt;が適しています。オブジェクトをポリゴンとして輪郭抽出し、QGISで数えたり計測したりできます。</translation>
+        <translation>AI Editでは計測や数え上げはできません。そのためには当社の&lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt;プラグインが適しています。オブジェクトの輪郭をポリゴンとして抽出するので、QGISで数えたり計測したりできます。</translation>
     </message>
     <message>
         <source>Zoomed out: the AI won't see small features (buildings, cars, trees) at this scale. Zoom in for object-level detail.</source>
@@ -371,7 +371,7 @@
         <source>AI Edit by TerraLab
 AI-powered image editing for geospatial data</source>
         <translation>AI Edit by TerraLab
-地理空間データのためのAI画像編集</translation>
+地理空間データ向けのAI画像編集</translation>
     </message>
     <message>
         <source>AI Edit needs a standard CRS (EPSG code). Your project uses a custom CRS without an authority ID.</source>
@@ -383,7 +383,7 @@ AI-powered image editing for geospatial data</source>
     </message>
     <message>
         <source>AI result</source>
-        <translation>AI結果</translation>
+        <translation>AIの結果</translation>
     </message>
     <message>
         <source>Account Settings</source>
@@ -415,11 +415,11 @@ AI-powered image editing for geospatial data</source>
     </message>
     <message>
         <source>Adding past generation to the map</source>
-        <translation>過去の生成結果をマップに追加中</translation>
+        <translation>過去の生成結果を地図に追加中…</translation>
     </message>
     <message>
         <source>Adding to map...</source>
-        <translation>マップに追加中...</translation>
+        <translation>地図に追加中…</translation>
     </message>
     <message>
         <source>Adjustments re-run instantly and update the same layer.</source>
@@ -467,7 +467,7 @@ AI-powered image editing for geospatial data</source>
     </message>
     <message>
         <source>Browse...</source>
-        <translation>参照...</translation>
+        <translation>ブラウズ…</translation>
     </message>
     <message>
         <source>Bug, question, feature request?
@@ -489,7 +489,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Cancelled</source>
-        <translation>キャンセルしました</translation>
+        <translation>キャンセル済み</translation>
     </message>
     <message>
         <source>Cannot generate: export config not loaded from server. Check your internet connection and restart QGIS.</source>
@@ -509,7 +509,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Catalog not yet available, please retry shortly.</source>
-        <translation>カタログがまだ利用できません。少し待ってから再試行してください。</translation>
+        <translation>カタログがまだ利用できません。しばらくしてから、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Change activation key</source>
@@ -517,7 +517,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Check QGIS proxy settings: Settings &gt; Options &gt; Network</source>
-        <translation>QGISのプロキシ設定を確認してください: 設定 &gt; オプション &gt; ネットワーク</translation>
+        <translation>QGISのプロキシ設定を確認してください：「設定」→「オプション」→「ネットワーク」</translation>
     </message>
     <message>
         <source>Check your dashboard</source>
@@ -537,15 +537,15 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Clear all</source>
-        <translation>すべて消去</translation>
+        <translation>すべてクリア</translation>
     </message>
     <message>
         <source>Clear this zone</source>
-        <translation>このゾーンを消去</translation>
+        <translation>この範囲をクリア</translation>
     </message>
     <message>
         <source>Clear zone</source>
-        <translation>ゾーンを消去</translation>
+        <translation>範囲をクリア</translation>
     </message>
     <message>
         <source>Click and drag on the map to draw an arrow.</source>
@@ -601,7 +601,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Copied</source>
-        <translation>コピーしました</translation>
+        <translation>コピー済み</translation>
     </message>
     <message>
         <source>Copied!</source>
@@ -621,15 +621,15 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Copy your logs with the button below and send them to our support email.</source>
-        <translation>下のボタンでログをコピーし、サポート宛のメールアドレスに送信してください。</translation>
+        <translation>下のボタンでログをコピーし、サポートのメールアドレスに送信してください。</translation>
     </message>
     <message>
         <source>Could not add layer: {msg}</source>
-        <translation>レイヤを追加できませんでした: {msg}</translation>
+        <translation>レイヤを追加できませんでした：{msg}</translation>
     </message>
     <message>
         <source>Could not add to map: {msg}</source>
-        <translation>マップに追加できませんでした: {msg}</translation>
+        <translation>地図に追加できませんでした：{msg}</translation>
     </message>
     <message>
         <source>Could not download the reference image.</source>
@@ -649,19 +649,19 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Could not place the zone on the current map.</source>
-        <translation>現在のマップにゾーンを配置できませんでした。</translation>
+        <translation>現在の地図に範囲を配置できませんでした。</translation>
     </message>
     <message>
         <source>Could not prepare upload, please retry shortly.</source>
-        <translation>アップロードを準備できませんでした。少し待ってから再試行してください。</translation>
+        <translation>アップロードを準備できませんでした。しばらくしてから、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Could not render {name}</source>
-        <translation>{name} を描画できませんでした</translation>
+        <translation>{name}を描画できませんでした</translation>
     </message>
     <message>
         <source>Could not store the vectorized polygons (internal field error).</source>
-        <translation>ベクトル化されたポリゴンを保存できませんでした（内部フィールドエラー）。</translation>
+        <translation>ベクタ化したポリゴンを保存できませんでした（内部フィールドエラー）。</translation>
     </message>
     <message>
         <source>Credits</source>
@@ -685,7 +685,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Database error, please retry shortly.</source>
-        <translation>データベースエラーです。少し待ってから再試行してください。</translation>
+        <translation>データベースエラーです。しばらくしてから、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Default (auto)</source>
@@ -709,7 +709,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Dock or undock this panel</source>
-        <translation>このパネルをドッキング/解除</translation>
+        <translation>このパネルをドッキング／解除</translation>
     </message>
     <message>
         <source>Done</source>
@@ -721,23 +721,23 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Download failed</source>
-        <translation>ダウンロードに失敗しました</translation>
+        <translation>ダウンロード失敗</translation>
     </message>
     <message>
         <source>Download failed ({code}): {msg}</source>
-        <translation>ダウンロードに失敗しました ({code}): {msg}</translation>
+        <translation>ダウンロードに失敗しました（{code}）：{msg}</translation>
     </message>
     <message>
         <source>Download failed: HTTP {status}</source>
-        <translation>ダウンロードに失敗しました: HTTP {status}</translation>
+        <translation>ダウンロードに失敗しました：HTTP {status}</translation>
     </message>
     <message>
         <source>Download failed: {msg}</source>
-        <translation>ダウンロードに失敗しました: {msg}</translation>
+        <translation>ダウンロードに失敗しました：{msg}</translation>
     </message>
     <message>
         <source>Download incomplete: received {got} of {total} bytes</source>
-        <translation>ダウンロードが不完全です: {total} バイト中 {got} バイトを受信</translation>
+        <translation>ダウンロードが不完全です：{total}バイト中{got}バイトを受信しました</translation>
     </message>
     <message>
         <source>Download original</source>
@@ -753,7 +753,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Downloading generation</source>
-        <translation>生成結果をダウンロード中</translation>
+        <translation>生成結果をダウンロード中…</translation>
     </message>
     <message>
         <source>Drag on the map to draw an ellipse.</source>
@@ -781,7 +781,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Drop connected blobs smaller than this many pixels before tracing.</source>
-        <translation>トレース前に、このピクセル数より小さい連結領域を除去します。</translation>
+        <translation>トレース前に、このピクセル数より小さい連結成分を除去します。</translation>
     </message>
     <message>
         <source>Drop polygons smaller than this many pixels after tracing. Useful for cleaning up speckle that the sieve missed.</source>
@@ -789,7 +789,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Dropping it on the map...</source>
-        <translation>マップに配置中...</translation>
+        <translation>地図に配置中…</translation>
     </message>
     <message>
         <source>EXPERIMENTAL (may produce unexpected results)</source>
@@ -797,7 +797,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Editing</source>
-        <translation>編集中</translation>
+        <translation>編集</translation>
     </message>
     <message>
         <source>Email</source>
@@ -825,7 +825,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Expand/Contract:</source>
-        <translation>拡大/縮小:</translation>
+        <translation>膨張／収縮:</translation>
     </message>
     <message>
         <source>Export error: {error}</source>
@@ -833,11 +833,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Failed to create GeoTIFF at {path}</source>
-        <translation>{path} にGeoTIFFを作成できませんでした</translation>
+        <translation>{path}にGeoTIFFを作成できませんでした</translation>
     </message>
     <message>
         <source>Failed to create valid raster layer from {path}</source>
-        <translation>{path} から有効なラスタレイヤを作成できませんでした</translation>
+        <translation>{path}から有効なラスタレイヤを作成できませんでした</translation>
     </message>
     <message>
         <source>Failed to decode image</source>
@@ -881,7 +881,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Fill holes:</source>
-        <translation>穴を埋める:</translation>
+        <translation>孔埋め:</translation>
     </message>
     <message>
         <source>Fill interior holes in the selection</source>
@@ -901,7 +901,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Freehand stroke</source>
-        <translation>自由線</translation>
+        <translation>フリーハンドのストローク</translation>
     </message>
     <message>
         <source>Fullscreen</source>
@@ -933,7 +933,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Generation failed, please try again.</source>
-        <translation>生成に失敗しました。再試行してください。</translation>
+        <translation>生成に失敗しました。もう一度お試しください。</translation>
     </message>
     <message>
         <source>Generation restored. Adjust and generate again.</source>
@@ -949,7 +949,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>GeoTIFF write produced no file at {path}</source>
-        <translation>GeoTIFFの書き込みで {path} にファイルが生成されませんでした</translation>
+        <translation>GeoTIFFの書き込みで{path}にファイルが生成されませんでした</translation>
     </message>
     <message>
         <source>Get Your Key</source>
@@ -961,7 +961,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Grabbing your masterpiece...</source>
-        <translation>傑作を取得中...</translation>
+        <translation>傑作を取得中…</translation>
     </message>
     <message>
         <source>Guidance tips</source>
@@ -997,7 +997,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Image format {fmt} is not supported by your QGIS GDAL build. Please update QGIS or contact support.</source>
-        <translation>画像形式 {fmt} は、お使いのQGISのGDALビルドではサポートされていません。QGISを更新するか、サポートにお問い合わせください。</translation>
+        <translation>画像形式{fmt}は、お使いのQGISのGDALビルドではサポートされていません。QGISを更新するか、サポートにお問い合わせください。</translation>
     </message>
     <message>
         <source>Image too large (max 50 MB)</source>
@@ -1033,7 +1033,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>That does not look like an activation key. Most people do not need one: just use the Sign in button. A key starts with tl_ and is only for admin-issued or offline activation.</source>
-        <translation>アクティベーションキーの形式ではないようです。ほとんどの方はキーは不要です。「サインイン」ボタンをご利用ください。キーは tl_ で始まり、管理者発行またはオフライン有効化の場合にのみ使用します。</translation>
+        <translation>アクティベーションキーの形式ではないようです。ほとんどの場合、キーは不要です。「ログイン」ボタンをお使いください。キーはtl_で始まり、管理者が発行した場合やオフラインで有効化する場合にのみ使用します。</translation>
     </message>
     <message>
         <source>Have a key? Enter it manually</source>
@@ -1041,7 +1041,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Invalid request. Check your prompt and the selected area, then try again.</source>
-        <translation>リクエストが無効です。プロンプトと選択範囲を確認し、再試行してください。</translation>
+        <translation>リクエストが無効です。プロンプトと選択範囲を確認して、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Key</source>
@@ -1073,7 +1073,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Loading reference images</source>
-        <translation>参照画像を読み込み中</translation>
+        <translation>参照画像を読み込み中…</translation>
     </message>
     <message>
         <source>Loading…</source>
@@ -1117,7 +1117,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Monthly limit reached ({used}/{limit}).</source>
-        <translation>月間の上限に達しました（{used}/{limit}）。</translation>
+        <translation>月間上限に達しました（{used}/{limit}）。</translation>
     </message>
     <message>
         <source>New version available: v{version}</source>
@@ -1161,7 +1161,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>No zone selected</source>
-        <translation>ゾーンが選択されていません</translation>
+        <translation>範囲が選択されていません</translation>
     </message>
     <message>
         <source>None</source>
@@ -1169,7 +1169,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Nothing here yet. The generations you run will land here, ready to reopen, reuse, or add back to the map.</source>
-        <translation>まだ何もありません。実行した生成結果はここに表示され、再度開いたり、再利用したり、マップに追加し直すことができます。</translation>
+        <translation>まだ何もありません。実行した生成の結果はここに表示され、再度開いたり、再利用したり、地図に追加し直したりできます。</translation>
     </message>
     <message>
         <source>OK</source>
@@ -1189,11 +1189,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Open your dashboard to upgrade or wait for renewal.</source>
-        <translation>ダッシュボードを開いてアップグレードするか、更新をお待ちください。</translation>
+        <translation>ダッシュボードを開いてアップグレードするか、利用枠のリセットをお待ちください。</translation>
     </message>
     <message>
         <source>Original</source>
-        <translation>オリジナル</translation>
+        <translation>元画像</translation>
     </message>
     <message>
         <source>Outline</source>
@@ -1205,7 +1205,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Pencil</source>
-        <translation>ペン</translation>
+        <translation>鉛筆</translation>
     </message>
     <message>
         <source>Pick a color from a dialog.</source>
@@ -1217,7 +1217,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Pick an AI Edit output to vectorize.</source>
-        <translation>ベクトル化するAI Editの出力を選択してください。</translation>
+        <translation>ベクタ化するAI Editの出力を選択してください。</translation>
     </message>
     <message>
         <source>Pick an example</source>
@@ -1253,7 +1253,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Preparing...</source>
-        <translation>準備中...</translation>
+        <translation>準備中…</translation>
     </message>
     <message>
         <source>Press Esc to exit Before/After mode</source>
@@ -1265,7 +1265,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Privacy</source>
-        <translation>プライバシーポリシー</translation>
+        <translation>プライバシー</translation>
     </message>
     <message>
         <source>Prompt</source>
@@ -1289,7 +1289,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Raster is too large for in-memory vectorize ({mp:.0f} megapixels). Crop the layer first or run a tiled workflow.</source>
-        <translation>ラスタが大きすぎるため、メモリ上でのベクトル化ができません（{mp:.0f}メガピクセル）。先にレイヤを切り出すか、タイル分割のワークフローを実行してください。</translation>
+        <translation>ラスタが大きすぎるため、メモリ上でのベクタ化ができません（{mp:.0f}メガピクセル）。先にレイヤを切り出すか、タイル分割のワークフローを実行してください。</translation>
     </message>
     <message>
         <source>Raster layer has no on-disk source file</source>
@@ -1301,7 +1301,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Recent</source>
-        <translation>最近使用</translation>
+        <translation>最近</translation>
     </message>
     <message>
         <source>Reduce small variations in the outline (0 = no change).</source>
@@ -1317,11 +1317,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Reference image {n}</source>
-        <translation>参照画像 {n}</translation>
+        <translation>参照画像{n}</translation>
     </message>
     <message>
         <source>Reference image: {name}</source>
-        <translation>参照画像: {name}</translation>
+        <translation>参照画像：{name}</translation>
     </message>
     <message>
         <source>Reference images</source>
@@ -1345,7 +1345,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Resets</source>
-        <translation>リセット</translation>
+        <translation>リセット日</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -1357,11 +1357,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Restored</source>
-        <translation>復元しました</translation>
+        <translation>復元済み</translation>
     </message>
     <message>
         <source>Result not available.</source>
-        <translation>結果はまだ利用できません。</translation>
+        <translation>結果を利用できません。</translation>
     </message>
     <message>
         <source>Result not ready yet.</source>
@@ -1369,7 +1369,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Result temporarily unavailable, please retry shortly.</source>
-        <translation>結果が一時的に利用できません。少し待ってから再試行してください。</translation>
+        <translation>結果が一時的に利用できません。しばらくしてから、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Retry</source>
@@ -1421,7 +1421,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Saved to {path}</source>
-        <translation>{path} に保存しました</translation>
+        <translation>{path}に保存しました。</translation>
     </message>
     <message>
         <source>Search prompts... e.g. "add trees", "segment buildings"</source>
@@ -1429,7 +1429,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Segment elements on raster images using AI (opens AI Segmentation plugin)</source>
-        <translation>AIでラスタ画像内の要素をセグメントする（AI Segmentationプラグインを開きます）</translation>
+        <translation>AIでラスタ画像内の要素をセグメンテーションします（AI Segmentationプラグインが開きます）</translation>
     </message>
     <message>
         <source>Select reference images or layers</source>
@@ -1441,7 +1441,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>You can only draw inside the selected zone.</source>
-        <translation>描画できるのは選択したゾーンの内側のみです。</translation>
+        <translation>描画できるのは選択した範囲の内側のみです。</translation>
     </message>
     <message>
         <source>Selection</source>
@@ -1449,7 +1449,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Sending your image to the AI...</source>
-        <translation>画像をAIに送信中...</translation>
+        <translation>AIに画像を送信中…</translation>
     </message>
     <message>
         <source>Server returned an empty response (0 bytes)</source>
@@ -1457,7 +1457,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Server returned data that is not a recognized image format. This usually means the server replied with an error page. Please try again or check the QGIS log.</source>
-        <translation>サーバーから認識できない形式のデータが返されました。多くの場合、サーバーがエラーページを返したことを示しています。再試行するか、QGISのログを確認してください。</translation>
+        <translation>サーバーから認識できない形式のデータが返されました。多くの場合、サーバーがエラーページを返したことを示しています。もう一度お試しいただくか、QGISのログメッセージを確認してください。</translation>
     </message>
     <message>
         <source>Service not configured. Please contact support.</source>
@@ -1465,7 +1465,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Service temporarily unavailable, please retry shortly.</source>
-        <translation>サービスが一時的に利用できません。少し待ってから再試行してください。</translation>
+        <translation>サービスが一時的に利用できません。しばらくしてから、もう一度お試しください。</translation>
     </message>
     <message>
         <source>This feature is temporarily unavailable. Please try again later.</source>
@@ -1485,7 +1485,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Show</source>
-        <translation>表示</translation>
+        <translation>可視化</translation>
     </message>
     <message>
         <source>Show again</source>
@@ -1513,11 +1513,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Loading session</source>
-        <translation>セッションを読み込み中</translation>
+        <translation>セッションを読み込み中…</translation>
     </message>
     <message>
         <source>Loading...</source>
-        <translation>読み込み中...</translation>
+        <translation>読み込み中…</translation>
     </message>
     <message>
         <source>Show {n} more</source>
@@ -1533,7 +1533,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Simplify outline:</source>
-        <translation>輪郭を簡略化:</translation>
+        <translation>輪郭を簡素化:</translation>
     </message>
     <message>
         <source>Something not working?</source>
@@ -1553,11 +1553,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Storage temporarily unavailable, please retry shortly.</source>
-        <translation>ストレージが一時的に利用できません。少し待ってから再試行してください。</translation>
+        <translation>ストレージが一時的に利用できません。しばらくしてから、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Subscribe</source>
-        <translation>登録する</translation>
+        <translation>申し込む</translation>
     </message>
     <message>
         <source>Subscribe for higher resolution</source>
@@ -1581,7 +1581,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Taking a bit longer than usual...</source>
-        <translation>通常より少し時間がかかっています...</translation>
+        <translation>通常より少し時間がかかっています…</translation>
     </message>
     <message>
         <source>Template</source>
@@ -1601,7 +1601,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>The generation service returned an unexpected response, please retry.</source>
-        <translation>生成サービスから予期しない応答がありました。再試行してください。</translation>
+        <translation>生成サービスから予期しない応答がありました。もう一度お試しください。</translation>
     </message>
     <message>
         <source>The model couldn't finish this generation. It often means what your prompt describes is not visible in the selected area. Try a different zone or rephrase.</source>
@@ -1629,7 +1629,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>This project's CRS is invalid. Set a project CRS before drawing a zone.</source>
-        <translation>このプロジェクトのCRSが無効です。ゾーンを描く前にプロジェクトのCRSを設定してください。</translation>
+        <translation>このプロジェクトのCRSが無効です。範囲を描く前に、プロジェクトのCRSを設定してください。</translation>
     </message>
     <message>
         <source>This raster needs at least 3 bands (RGB).</source>
@@ -1641,7 +1641,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>This zone crosses the antimeridian (180 deg longitude). AI Edit does not support that yet. Split your zone into two.</source>
-        <translation>このゾーンは180度経線をまたいでいます。AI Editは現在この状況に対応していません。ゾーンを2つに分けてください。</translation>
+        <translation>範囲が180度経線をまたいでいます。AI Editはまだ対応していません。範囲を2つに分けてください。</translation>
     </message>
     <message>
         <source>Too many requests, please wait a moment.</source>
@@ -1649,7 +1649,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Too much image data to send. Remove a reference image or lower the resolution, then try again.</source>
-        <translation>送信する画像データが多すぎます。参照画像を減らすか解像度を下げて、再試行してください。</translation>
+        <translation>送信する画像データが多すぎます。参照画像を減らすか解像度を下げて、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Tool</source>
@@ -1665,7 +1665,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Try again, or check your internet speed</source>
-        <translation>再試行するか、インターネットの速度を確認してください</translation>
+        <translation>もう一度お試しいただくか、インターネットの速度を確認してください</translation>
     </message>
     <message>
         <source>Tutorial</source>
@@ -1713,11 +1713,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Upload session does not match your account.</source>
-        <translation>アップロードセッションがお使いのアカウントと一致しません。</translation>
+        <translation>このアップロードはお使いのアカウントのものではありません。</translation>
     </message>
     <message>
         <source>Upload session expired, please retry.</source>
-        <translation>アップロードセッションの有効期限が切れました。再試行してください。</translation>
+        <translation>アップロードの有効期限が切れました。もう一度お試しください。</translation>
     </message>
     <message>
         <source>Use</source>
@@ -1741,7 +1741,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Vectorize</source>
-        <translation>ベクトル化</translation>
+        <translation>ベクタ化</translation>
     </message>
     <message>
         <source>Vectorize ({})</source>
@@ -1749,7 +1749,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Vectorize needs numpy, which failed to load. Please update QGIS or contact support.</source>
-        <translation>ベクトル化にはnumpyが必要ですが、読み込みに失敗しました。QGISを更新するか、サポートにお問い合わせください。</translation>
+        <translation>ベクタ化にはnumpyが必要ですが、読み込みに失敗しました。QGISを更新するか、サポートにお問い合わせください。</translation>
     </message>
     <message>
         <source>Vectorize this result</source>
@@ -1761,11 +1761,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>{n} color zones detected in this result</source>
-        <translation>この結果から{n}個の色ゾーンを検出しました</translation>
+        <translation>この結果から{n}色を検出しました</translation>
     </message>
     <message>
         <source>{n} color zone detected in this result</source>
-        <translation>この結果から{n}個の色ゾーンを検出しました</translation>
+        <translation>この結果から{n}色を検出しました</translation>
     </message>
     <message>
         <source>Turn the colored zones into editable polygons</source>
@@ -1777,7 +1777,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Vectorizing...</source>
-        <translation>ベクトル化中...</translation>
+        <translation>ベクタ化中…</translation>
     </message>
     <message>
         <source>Version details</source>
@@ -1809,7 +1809,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Your prompt</source>
-        <translation>あなたのプロンプト</translation>
+        <translation>自分のプロンプト</translation>
     </message>
     <message>
         <source>Your prompts</source>
@@ -1817,15 +1817,15 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Your result</source>
-        <translation>あなたの結果</translation>
+        <translation>結果</translation>
     </message>
     <message>
         <source>Your subscription has expired or been canceled. Renew at terra-lab.ai/dashboard</source>
-        <translation>サブスクリプションの有効期限が切れたか、解約されました。terra-lab.ai/dashboard で更新してください</translation>
+        <translation>サブスクリプションの有効期限が切れたか、解約されました。terra-lab.ai/dashboardで更新してください</translation>
     </message>
     <message>
         <source>Zone is too close to a pole (above {limit} degrees latitude). AI Edit cannot estimate ground resolution there.</source>
-        <translation>ゾーンが極付近（緯度{limit}度以上）にあります。この範囲ではAI Editが地上解像度を推定できません。</translation>
+        <translation>範囲が極に近すぎます（緯度{limit}度以上）。AI Editはその位置の地上解像度を推定できません。</translation>
     </message>
     <message>
         <source>browse a category or search</source>
@@ -1869,11 +1869,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>{n} credits</source>
-        <translation>{n} クレジット</translation>
+        <translation>{n}クレジット</translation>
     </message>
     <message>
         <source>{n} credit</source>
-        <translation>{n} クレジット</translation>
+        <translation>{n}クレジット</translation>
     </message>
     <message>
         <source>{n} d ago</source>
@@ -1905,7 +1905,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>{} outputs are unlocked with a subscription.</source>
-        <translation>{} の出力はサブスクリプションで利用可能になります。</translation>
+        <translation>「{}」品質の出力はサブスクリプションで利用できます。</translation>
     </message>
     <message>
         <source>Reuse prompt</source>
@@ -1913,7 +1913,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>from {base}</source>
-        <translation>{base} から</translation>
+        <translation>{base}から</translation>
     </message>
     <message>
         <source>clean source</source>
@@ -1933,7 +1933,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Generate from {base}</source>
-        <translation>{base} から生成</translation>
+        <translation>{base}から生成</translation>
     </message>
     <message>
         <source>Start from</source>
@@ -1945,15 +1945,15 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Generation failed: the request was blocked by a safety filter. You have not been charged. Try rephrasing your prompt.</source>
-        <translation>生成に失敗しました: リクエストが安全フィルタによってブロックされました。クレジットは消費されていません。プロンプトを言い換えてお試しください。</translation>
+        <translation>生成に失敗しました：リクエストが安全フィルタによってブロックされました。料金は発生していません。プロンプトを言い換えて、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Generation failed: the AI returned no image. You have not been charged. AI Edit draws on the map and cannot answer questions, so describe the change you want to see, then try again.</source>
-        <translation>生成に失敗しました: AIが画像を返しませんでした。クレジットは消費されていません。AI Edit は地図に描画するツールで、質問には答えられません。加えたい変更を記述して、もう一度お試しください。</translation>
+        <translation>生成に失敗しました：AIが画像を返しませんでした。料金は発生していません。AI Editは地図に描き込むツールで、質問には答えられません。加えたい変更を説明してから、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Our image servers are busy right now. You have not been charged. Please wait a moment and try again.</source>
-        <translation>現在、画像生成サーバーが混み合っています。クレジットは消費されていません。少し待ってから再試行してください。</translation>
+        <translation>現在、画像生成サーバーが混み合っています。料金は発生していません。しばらくしてから、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Copy prompt</source>
@@ -1973,7 +1973,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Segment</source>
-        <translation>Segment</translation>
+        <translation>セグメント</translation>
     </message>
     <message>
         <source>Climate scenarios</source>
@@ -1989,11 +1989,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Cleanup &amp; enhance</source>
-        <translation>クリーンアップと画質向上</translation>
+        <translation>補正と高画質化</translation>
     </message>
     <message>
         <source>Presentation renders</source>
-        <translation>プレゼンテーション用レンダリング</translation>
+        <translation>プレゼン用画像</translation>
     </message>
     <message>
         <source>Forestry &amp; vegetation</source>
@@ -2057,7 +2057,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Browser page open. Finish signing in to connect.</source>
-        <translation>ブラウザのページを開きました。サインインを完了して接続してください。</translation>
+        <translation>ブラウザでページが開きました。ログインを完了すると接続されます。</translation>
     </message>
     <message>
         <source>Still waiting. If the page did not open or shows an error, click Open again or enter your key manually.</source>
@@ -2065,31 +2065,31 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Unexpected response from the server. Please try again.</source>
-        <translation>サーバーから予期しない応答がありました。再試行してください。</translation>
+        <translation>サーバーから予期しない応答がありました。もう一度お試しください。</translation>
     </message>
     <message>
         <source>This account has no active AI Edit plan. Reactivate it on terra-lab.ai, then click Connect again.</source>
-        <translation>このアカウントには有効なAI Editプランがありません。terra-lab.aiで再度有効化し、もう一度「接続」をクリックしてください。</translation>
+        <translation>このアカウントには有効なAI Editプランがありません。terra-lab.aiでプランを再度有効にしてから、もう一度ログインしてください。</translation>
     </message>
     <message>
         <source>Sign-in was cancelled in the browser. Click Connect to try again.</source>
-        <translation>ブラウザでのサインインがキャンセルされました。「接続」をクリックして再試行してください。</translation>
+        <translation>ブラウザでのログインがキャンセルされました。もう一度ログインしてください。</translation>
     </message>
     <message>
         <source>Connecting AI Edit</source>
-        <translation>AI Editを接続中</translation>
+        <translation>AI Editに接続しています…</translation>
     </message>
     <message>
         <source>Edit your map with AI</source>
-        <translation>AIでマップを編集</translation>
+        <translation>AIで地図を編集</translation>
     </message>
     <message>
         <source>Sign in / Sign up to start</source>
-        <translation>サインイン / サインアップして開始</translation>
+        <translation>ログイン／新規登録して開始</translation>
     </message>
     <message>
         <source>Sign in via your browser to start using AI Edit</source>
-        <translation>ブラウザでサインインしてAI Editの利用を開始</translation>
+        <translation>ブラウザでログインして、AI Editを使い始めます。</translation>
     </message>
     <message>
         <source>Use an activation key</source>
@@ -2105,11 +2105,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Sign out</source>
-        <translation>サインアウト</translation>
+        <translation>ログアウト</translation>
     </message>
     <message>
         <source>Sign out of AI Edit?</source>
-        <translation>AI Editからサインアウトしますか？</translation>
+        <translation>AI Editからログアウト</translation>
     </message>
     <message>
         <source>You can sign back in anytime from QGIS.</source>
@@ -2209,7 +2209,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Add color from map</source>
-        <translation>マップから色を追加</translation>
+        <translation>地図から色を追加</translation>
     </message>
     <message>
         <source>Added {hex} to the class list.</source>
@@ -2225,11 +2225,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Check at least one class to vectorize.</source>
-        <translation>ベクトル化するクラスを少なくとも1つチェックしてください。</translation>
+        <translation>ベクタ化するクラスを少なくとも1つチェックしてください。</translation>
     </message>
     <message>
         <source>Checking imagery availability</source>
-        <translation>画像の利用可否を確認中</translation>
+        <translation>画像の利用可否を確認中…</translation>
     </message>
     <message>
         <source>Class name</source>
@@ -2245,7 +2245,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Cleanup</source>
-        <translation>クリーンアップ</translation>
+        <translation>整理</translation>
     </message>
     <message>
         <source>Colors detected in this map - each checked one becomes a polygon class:</source>
@@ -2261,7 +2261,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Couldn't load the example basemap. Check your internet connection, or add your own layer (GeoTIFF, WMS, XYZ).</source>
-        <translation>サンプルのベースマップを読み込めませんでした。インターネット接続を確認するか、独自のレイヤ（GeoTIFF、WMS、XYZ）を追加してください。</translation>
+        <translation>サンプルのベースマップを読み込めませんでした。インターネット接続を確認するか、お持ちのレイヤ（GeoTIFF、WMS、XYZ）を追加してください。</translation>
     </message>
     <message>
         <source>Couldn't open your browser. Copy the link and open it manually.</source>
@@ -2273,7 +2273,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Credit refunded.</source>
-        <translation>クレジットは返還されました。</translation>
+        <translation>クレジットを返却しました。</translation>
     </message>
     <message>
         <source>Downloading reference image</source>
@@ -2301,7 +2301,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Free plan, {n} AI edits every month. Signing up takes 15 seconds in your browser.</source>
-        <translation>Free プラン、毎月 {n} 回の AI 編集。登録はブラウザで 15 秒です。</translation>
+        <translation>Freeプラン、毎月{n}回のAI編集。新規登録はブラウザで15秒です。</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>
@@ -2313,7 +2313,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>If a credit was charged, it will be refunded.</source>
-        <translation>クレジットが消費された場合は返還されます。</translation>
+        <translation>クレジットが消費された場合は返却されます。</translation>
     </message>
     <message>
         <source>Keep your marks on the zone to guide the edit, and close Mark up</source>
@@ -2365,7 +2365,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Raster has no usable georeferencing.</source>
-        <translation>ラスタに使用可能な位置情報がありません。</translation>
+        <translation>ラスタに使用できる位置情報がありません。</translation>
     </message>
     <message>
         <source>Refine</source>
@@ -2377,19 +2377,19 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Select at least one color to vectorize.</source>
-        <translation>ベクトル化する色を少なくとも1つ選択してください。</translation>
+        <translation>ベクタ化する色を少なくとも1つ選択してください。</translation>
     </message>
     <message>
         <source>Server returned a non-image response, retrying download</source>
-        <translation>サーバーが画像以外の応答を返しました。ダウンロードを再試行しています</translation>
+        <translation>サーバーが画像以外の応答を返しました。ダウンロードを再試行中…</translation>
     </message>
     <message>
         <source>Share of the map covered by this color.</source>
-        <translation>このマップに占めるこの色の割合です。</translation>
+        <translation>この地図に占めるこの色の割合です。</translation>
     </message>
     <message>
         <source>Still waiting. If the page did not open or shows an error, click Open again or copy the link into another browser.</source>
-        <translation>まだ待機中です。ページが開かない、またはエラーが表示される場合は、もう一度「開く」をクリックするか、リンクを別のブラウザにコピーしてください。</translation>
+        <translation>まだ待機中です。ページが開かない、またはエラーが表示される場合は、「再度開く」をクリックするか、リンクを別のブラウザにコピーしてください。</translation>
     </message>
     <message>
         <source>Team or organization?</source>
@@ -2413,11 +2413,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Vector</source>
-        <translation>ベクトル</translation>
+        <translation>ベクタ</translation>
     </message>
     <message>
         <source>Vectorize failed unexpectedly. Please try again, or report the problem if it persists.</source>
-        <translation>ベクトル化中に予期しないエラーが発生しました。もう一度お試しいただくか、問題が続く場合はご報告ください。</translation>
+        <translation>ベクタ化中に予期しないエラーが発生しました。もう一度お試しいただくか、問題が続く場合はご報告ください。</translation>
     </message>
     <message>
         <source>Vectorize turns a flat-color map (Segment, Land cover, masks, site plans...) into editable polygons - one class per color, ready to select, measure, style and export. It reads colors, so it works on colored maps, not photo-realistic images.</source>
@@ -2465,7 +2465,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>{n} versions</source>
-        <translation>{n}件のバージョン</translation>
+        <translation>バージョン{n}件</translation>
     </message>
     <message>
         <source>Your marks won't be used</source>
@@ -2501,7 +2501,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>This shape is too thin, too small, or crosses itself. Draw it again.</source>
-        <translation>この図形は細すぎる、小さすぎる、または自己交差しています。もう一度描き直してください。</translation>
+        <translation>この図形は細すぎるか小さすぎるか、自己交差しています。描き直してください。</translation>
     </message>
     <message>
         <source>Crop</source>
@@ -2537,7 +2537,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Before and after comparison</source>
-        <translation>変更前と変更後の比較</translation>
+        <translation>変更前後の比較</translation>
     </message>
     <message>
         <source>Could not start the generation: {error}</source>
@@ -2545,7 +2545,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Could not write {name}. It may be open in QGIS or in another program. Close it, or pick a different name, and try again.</source>
-        <translation>{name} を書き込めませんでした。QGIS または他のプログラムで開かれている可能性があります。ファイルを閉じるか、別の名前を選んで再試行してください。</translation>
+        <translation>{name}を書き込めませんでした。QGISまたは他のプログラムで開かれている可能性があります。ファイルを閉じるか、別の名前を選んで、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Dismiss</source>
@@ -2553,7 +2553,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Divider at {pct}%. Left and right arrows move it.</source>
-        <translation>仕切りは {pct}% の位置です。左右の矢印キーで移動できます。</translation>
+        <translation>分割線は{pct}%の位置です。左右の矢印キーで移動できます。</translation>
     </message>
     <message>
         <source>Favorite</source>
@@ -2577,7 +2577,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Remove reference image {n}</source>
-        <translation>参照画像 {n} を削除</translation>
+        <translation>参照画像{n}を削除</translation>
     </message>
     <message>
         <source>Remove this reference image</source>
@@ -2585,7 +2585,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Sign-in failed unexpectedly. Click Connect to try again.</source>
-        <translation>サインイン中に予期しないエラーが発生しました。「接続」をクリックして再試行してください。</translation>
+        <translation>ログイン処理中に予期しないエラーが発生しました。もう一度ログインしてください。</translation>
     </message>
     <message>
         <source>The request failed unexpectedly.</source>
@@ -2645,7 +2645,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Loading thumbnails</source>
-        <translation>サムネイルを読み込み中</translation>
+        <translation>サムネイルを読み込み中…</translation>
     </message>
     <message>
         <source>No conversation matches.</source>
@@ -2665,7 +2665,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Rename</source>
-        <translation>名前を変更</translation>
+        <translation>名前変更</translation>
     </message>
     <message>
         <source>Rename conversation</source>
@@ -2693,7 +2693,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>This deletes its generations and their images from TerraLab servers. Layers already in your project stay. This cannot be undone.</source>
-        <translation>この会話の生成と画像が TerraLab サーバーから削除されます。プロジェクト内のレイヤはそのまま残ります。元に戻すことはできません。</translation>
+        <translation>このセッションの生成結果と画像がTerraLabのサーバーから削除されます。プロジェクト内のレイヤはそのまま残ります。元に戻すことはできません。</translation>
     </message>
     <message>
         <source>Title</source>
@@ -2785,7 +2785,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Re-check your topmost layer in the Layers panel</source>
-        <translation>レイヤパネルで最上位のレイヤを再チェックします</translation>
+        <translation>レイヤパネルで最上位のレイヤにもう一度チェックを入れます</translation>
     </message>
     <message>
         <source>Past sessions</source>
@@ -2797,7 +2797,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Name your marks in the prompt, e.g. "add a pond inside the circle". The marks guide the AI and won't appear in the result.</source>
-        <translation>プロンプトでマークに言及してください（例：「円の中に池を追加」）。マークはAIの手掛かりで、結果には表示されません。</translation>
+        <translation>プロンプトの中でマークを名前で指定してください（例：「円の中に池を追加」）。マークはAIへのガイドで、結果には表示されません。</translation>
     </message>
     <message>
         <source>From your computer</source>
@@ -2805,7 +2805,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Pick images or data files. Data files (GeoTIFF, shapefile, GeoJSON...) are rendered at your zone.</source>
-        <translation>画像またはデータファイルを選択します。データファイル（GeoTIFF、シェープファイル、GeoJSONなど）はゾーンで描画されます。</translation>
+        <translation>画像またはデータファイルを選択します。データファイル（GeoTIFF、シェープファイル、GeoJSONなど）は範囲に合わせて描画されます。</translation>
     </message>
     <message>
         <source>From a QGIS layer</source>
@@ -2813,7 +2813,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Snapshot one of this project's layers at your zone. The layer itself is not changed and stays where it is.</source>
-        <translation>このプロジェクトのレイヤをゾーンでスナップショットします。レイヤ自体は変更されず、そのまま残ります。</translation>
+        <translation>このプロジェクトのレイヤの1つを、範囲の部分だけ画像として取り込みます。レイヤ自体は変更されず、そのまま残ります。</translation>
     </message>
     <message>
         <source>No references yet. Add one to guide the AI.</source>
@@ -2845,7 +2845,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>My work</source>
-        <translation>マイワーク</translation>
+        <translation>自分の作業</translation>
     </message>
     <message>
         <source>Starred</source>
@@ -2869,7 +2869,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Adding session input to the map</source>
-        <translation>セッション入力を地図に追加しています</translation>
+        <translation>セッションの入力画像を地図に追加中…</translation>
     </message>
     <message>
         <source>Your {total} free generations return on {date}</source>
@@ -2909,7 +2909,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>A bridge that calls this over a network usually gives up waiting after about a minute. The generation is NOT lost when that happens: it keeps running in QGIS and finishes on its own. Poll '{status_label}' until BUSY is false, then read the new layer in the project. Do not submit the run again, that is a second charge.</source>
-        <translation>ネットワーク経由でこれを呼び出すブリッジは、通常約1分で待機を諦めます。その場合も生成は失われません。QGISで処理は実行され続け、自動的に完了します。BUSY が false になるまで '{status_label}' をポーリングし、その後プロジェクト内の新しいレイヤーを読み取ってください。処理を再送信しないでください。再送信すると二重に課金されます。</translation>
+        <translation>ネットワーク経由でこれを呼び出すブリッジは、通常約1分で待機を打ち切ります。その場合も生成は失われません。QGIS内で実行が続き、自動的に完了します。BUSYがfalseになるまで「{status_label}」をポーリングし、その後プロジェクト内の新しいレイヤを読み取ってください。処理を再送信しないでください。二重に課金されます。</translation>
     </message>
     <message>
         <source>A generation is already running</source>
@@ -2917,19 +2917,19 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>AI Edit did not take the run.</source>
-        <translation>AI Edit は処理を受け付けませんでした。</translation>
+        <translation>AI Editは処理を受け付けませんでした。</translation>
     </message>
     <message>
         <source>AI Edit is not ready. Open the AI Edit panel and finish the setup.</source>
-        <translation>AI Edit は準備できていません。AI Edit パネルを開いてセットアップを完了してください。</translation>
+        <translation>AI Editの準備ができていません。AI Editパネルを開いてセットアップを完了してください。</translation>
     </message>
     <message>
         <source>AI Edit rewrites aerial and satellite imagery from a text prompt and gives the result back as a georeferenced image on the map. Land cover classification, building footprints, cloud removal, object removal, super resolution upscaling, flood simulation, coloring an old map. One prompt, one picture back.</source>
-        <translation>AI Edit はテキストプロンプトに基づいて航空画像や衛星画像を書き換え、ジオリファレンスされた画像として地図上に返します。土地被覆分類、建物フットプリントの抽出、雲の除去、物体の除去、超解像アップスケーリング、洪水シミュレーション、古地図のカラー化に対応します。1つのプロンプトから1枚の画像が返されます。</translation>
+        <translation>AI Editは、テキストのプロンプトから衛星画像や航空写真を書き換え、位置情報付きの画像として地図上に返します。土地被覆の分類、建物フットプリントの抽出、雲の除去、オブジェクトの除去、超解像へのアップスケール、洪水シミュレーション、古地図のカラー化に対応します。1つのプロンプトから1枚の画像が返ります。</translation>
     </message>
     <message>
         <source>Added to the project: {layers}.</source>
-        <translation>プロジェクトに追加されました: {layers}。</translation>
+        <translation>プロジェクトに追加しました：{layers}。</translation>
     </message>
     <message>
         <source>Algorithms that do the work</source>
@@ -2945,7 +2945,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Check AI Edit status, credits and plan before you generate or edit satellite imagery</source>
-        <translation>衛星画像を生成または編集する前に、AI Edit のステータス、クレジット、プランを確認します</translation>
+        <translation>衛星画像を生成・編集する前に、AI Editの状態、クレジット、プランを確認します</translation>
     </message>
     <message>
         <source>Class name written on every polygon (optional)</source>
@@ -2953,7 +2953,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Class name: written on every polygon, so several runs over the same image stay apart once they are merged.</source>
-        <translation>クラス名: すべてのポリゴンに書き込まれるため、同じ画像に対する複数回の処理を統合した後も区別できます。</translation>
+        <translation>クラス名：すべてのポリゴンに書き込まれるため、同じ画像に対する複数回の処理を統合した後も区別できます。</translation>
     </message>
     <message>
         <source>Color to trace</source>
@@ -2961,11 +2961,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Color to trace: the exact color of the class in the picture. Widen the tolerance when the color is not perfectly flat; narrow it when two classes bleed into each other. The tracer uses {tolerance} when you leave it empty.</source>
-        <translation>トレースする色: 画像内のクラスの正確な色です。色が完全に均一でない場合は許容差を広げ、2つのクラスが互いに混ざる場合は狭めてください。空欄にすると、トレーサーは {tolerance} を使用します。</translation>
+        <translation>トレースする色：画像内のクラスの正確な色です。色が完全に均一でない場合は許容範囲を広げ、2つのクラスが互いに混ざる場合は狭めてください。空欄にすると、トレーサは{tolerance}を使用します。</translation>
     </message>
     <message>
         <source>Color tolerance 0 to 255 (leave empty for {tolerance})</source>
-        <translation>色の許容差 0～255（{tolerance} の場合は空欄）</translation>
+        <translation>色の許容範囲0～255（空欄の場合は{tolerance}）</translation>
     </message>
     <message>
         <source>Credits left on the plan</source>
@@ -2973,31 +2973,31 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Credits left: {count}.</source>
-        <translation>残りのクレジット: {count}。</translation>
+        <translation>残りクレジット：{count}。</translation>
     </message>
     <message>
         <source>Every generation is billed to the signed-in account, and a free account may only ask for the smallest output size. Run '{status_id}' to read the balance and the plan before anything is spent. Plan limits: {pricing_url}</source>
-        <translation>生成処理はすべてサインイン中のアカウントに課金され、無料アカウントでは最小の出力サイズのみ指定できます。クレジットが消費される前に '{status_id}' を実行して、残高とプランを確認してください。プランの制限: {pricing_url}</translation>
+        <translation>生成はすべてログイン中のアカウントに課金され、無料アカウントでは最小の出力サイズのみ指定できます。クレジットが消費される前に'{status_id}'を実行して、残高とプランを確認してください。プランの上限：{pricing_url}</translation>
     </message>
     <message>
         <source>Generate and edit satellite or aerial imagery with AI: classify land cover, remove clouds and objects, upscale to super resolution, simulate floods</source>
-        <translation>AI で衛星画像や航空画像を生成・編集します: 土地被覆の分類、雲や物体の除去、超解像へのアップスケーリング、洪水のシミュレーション</translation>
+        <translation>AIで衛星画像や航空写真を生成・編集します：土地被覆の分類、雲やオブジェクトの除去、超解像へのアップスケール、洪水のシミュレーション</translation>
     </message>
     <message>
         <source>Map area to edit</source>
-        <translation>編集する地図範囲</translation>
+        <translation>編集する地図の範囲</translation>
     </message>
     <message>
         <source>Name of the layer added to the project</source>
-        <translation>プロジェクトに追加されたレイヤーの名前</translation>
+        <translation>プロジェクトに追加したレイヤの名前</translation>
     </message>
     <message>
         <source>Names of the image layers added to the project</source>
-        <translation>プロジェクトに追加された画像レイヤーの名前</translation>
+        <translation>プロジェクトに追加した画像レイヤの名前</translation>
     </message>
     <message>
         <source>No account is needed for this one. The AI Edit plugin has to be loaded, and nothing else: the tracing reads the picture on this computer and sends nothing.</source>
-        <translation>これはアカウントを必要としません。AI Edit プラグインが読み込まれていれば、それ以外は不要です。トレース処理はこのコンピューター上の画像を読み取り、何も送信しません。</translation>
+        <translation>この処理にアカウントは不要です。AI Editプラグインが読み込まれていれば十分です。トレース処理はこのコンピュータ上で画像を読み取り、何も送信しません。</translation>
     </message>
     <message>
         <source>Number of polygons traced</source>
@@ -3005,23 +3005,23 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Output size, leave empty for the one selected in the panel</source>
-        <translation>出力サイズ。パネルで選択したサイズを使用する場合は空欄にします</translation>
+        <translation>出力サイズ（パネルで選択したサイズを使う場合は空欄）</translation>
     </message>
     <message>
         <source>Output size: {size}.</source>
-        <translation>出力サイズ: {size}。</translation>
+        <translation>出力サイズ：{size}。</translation>
     </message>
     <message>
         <source>Output sizes this build offers, smallest first: {sizes}.</source>
-        <translation>このビルドで提供される出力サイズ（小さい順）: {sizes}。</translation>
+        <translation>このビルドで提供される出力サイズ（小さい順）：{sizes}。</translation>
     </message>
     <message>
         <source>Pick the color to trace, as a color or as '#rrggbb'.</source>
-        <translation>トレースする色を色指定または '#rrggbb' 形式で選択します。</translation>
+        <translation>トレースする色を、色または'#rrggbb'の形式で指定してください。</translation>
     </message>
     <message>
         <source>Plan on the signed-in account</source>
-        <translation>サインイン中のアカウントのプラン</translation>
+        <translation>ログイン中のアカウントのプラン</translation>
     </message>
     <message>
         <source>Plugin installed</source>
@@ -3029,15 +3029,15 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Prompt (what the picture should look like)</source>
-        <translation>プロンプト（画像の内容）</translation>
+        <translation>プロンプト（求める画像の説明）</translation>
     </message>
     <message>
         <source>Prompt preset id (optional)</source>
-        <translation>プロンプトプリセット ID（任意）</translation>
+        <translation>プロンプトプリセットID（任意）</translation>
     </message>
     <message>
         <source>Ready to run</source>
-        <translation>実行する準備ができています</translation>
+        <translation>実行準備完了</translation>
     </message>
     <message>
         <source>Result image to trace (leave empty for the newest one)</source>
@@ -3045,11 +3045,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Rewrites the imagery over a map area from a text prompt and puts the result on the map as a georeferenced image layer, lined up with the area you gave it.</source>
-        <translation>地図範囲内の画像をテキストプロンプトに基づいて書き換え、指定した範囲に合わせてジオリファレンスされた画像レイヤーとして地図上に配置します。</translation>
+        <translation>地図の範囲内の画像をテキストのプロンプトから書き換え、指定した範囲に合わせて、位置情報付きの画像レイヤとして地図上に配置します。</translation>
     </message>
     <message>
         <source>Run '{status_label}' ('{status_id}') first. It answers in a moment, spends nothing, and tells you whether this one can run at all.</source>
-        <translation>まず '{status_label}' ('{status_id}') を実行してください。すぐに結果が返り、クレジットを消費せず、この処理を実行できるかどうかを知らせます。</translation>
+        <translation>まず「{status_label}」（'{status_id}'）を実行してください。すぐに結果が返り、クレジットを消費せず、この処理を実行できるかどうかも分かります。</translation>
     </message>
     <message>
         <source>Run started</source>
@@ -3057,15 +3057,15 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Run this first. It says whether AI Edit can work right now, it spends nothing, and it answers in a moment.</source>
-        <translation>まずこれを実行してください。AI Edit を現在使用できるかどうかを確認でき、クレジットを消費せず、すぐに結果が返ります。</translation>
+        <translation>まずこれを実行してください。AI Editが今使える状態かどうかを確認でき、クレジットは消費されず、すぐに結果が返ります。</translation>
     </message>
     <message>
         <source>Sending the area to the AI service. Prompt: {prompt}</source>
-        <translation>範囲を AI サービスに送信しています。プロンプト: {prompt}</translation>
+        <translation>範囲をAIサービスに送信しています。プロンプト：{prompt}</translation>
     </message>
     <message>
         <source>Source image: leave it empty to use the newest AI Edit result in the project, or name a raster layer to trace a different one. The layer has to be in the project, not a file picked from disk.</source>
-        <translation>ソース画像: プロジェクト内の最新の AI Edit 結果を使用する場合は空欄にします。別の画像をトレースする場合は、ラスター レイヤーを指定してください。レイヤーはプロジェクト内に存在する必要があり、ディスクから選択したファイルは使用できません。</translation>
+        <translation>ソース画像：プロジェクト内の最新のAI Edit結果を使用する場合は空欄にします。別の画像をトレースする場合は、ラスタレイヤを指定してください。レイヤはプロジェクト内にある必要があり、ディスクから選んだファイルは使用できません。</translation>
     </message>
     <message>
         <source>State</source>
@@ -3073,7 +3073,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>State: {state}. Ready: {ready}. Busy: {busy}.</source>
-        <translation>状態: {state}。準備完了: {ready}。実行中: {busy}。</translation>
+        <translation>状態：{state}。準備完了：{ready}。実行中：{busy}。</translation>
     </message>
     <message>
         <source>Status</source>
@@ -3081,35 +3081,35 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Still running after {seconds} seconds. The run was NOT cancelled and is still going. Poll '{status_id}' until BUSY is false, then read the new layer in the project. Do not submit it again.</source>
-        <translation>{seconds} 秒経過しましたが、まだ実行中です。処理はキャンセルされておらず、継続しています。BUSY が false になるまで '{status_id}' をポーリングし、その後プロジェクト内の新しいレイヤーを読み取ってください。再送信しないでください。</translation>
+        <translation>{seconds}秒経過しましたが、まだ実行中です。処理はキャンセルされておらず、継続しています。BUSYがfalseになるまで'{status_id}'をポーリングし、その後プロジェクト内の新しいレイヤを読み取ってください。再送信しないでください。</translation>
     </message>
     <message>
         <source>Still running after {seconds}s. {panel_line}</source>
-        <translation>{seconds} 秒経過しましたが、まだ実行中です。{panel_line}</translation>
+        <translation>{seconds}秒経過しましたが、まだ実行中です。{panel_line}</translation>
     </message>
     <message>
         <source>That image is not in the project, so there is nothing to trace beside. Add the layer to the project first, then run this again.</source>
-        <translation>その画像はプロジェクト内にないため、トレース対象がありません。まずレイヤーをプロジェクトに追加してから、もう一度実行してください。</translation>
+        <translation>その画像はプロジェクト内にないため、トレースするものがありません。まずレイヤをプロジェクトに追加してから、もう一度実行してください。</translation>
     </message>
     <message>
         <source>The AI Edit plugin is not loaded. Enable it in Plugins &gt; Manage and Install Plugins, then reopen this algorithm. (Looked for: {keys})</source>
-        <translation>AI Edit プラグインが読み込まれていません。Plugins &gt; Manage and Install Plugins で有効化してから、このアルゴリズムを再度開いてください。（検索対象: {keys}）</translation>
+        <translation>AI Editプラグインが読み込まれていません。「プラグイン」→「プラグインの管理とインストール」で有効にしてから、このアルゴリズムをもう一度開いてください。（検索対象：{keys}）</translation>
     </message>
     <message>
         <source>The AI Edit status call returned nothing usable.</source>
-        <translation>AI Edit のステータス呼び出しから使用可能な結果が返されませんでした。</translation>
+        <translation>AI Editのステータス呼び出しから使用可能な結果が返されませんでした。</translation>
     </message>
     <message>
         <source>The area is empty. Draw a rectangle over the imagery.</source>
-        <translation>範囲が空です。画像上に長方形を描いてください。</translation>
+        <translation>範囲が空です。画像上に四角形を描いてください。</translation>
     </message>
     <message>
         <source>The area is read from the map canvas view, so the imagery under it is what the AI sees. Zoom in far enough that the detail you are asking about is visible, and hide any layer you do not want sent.</source>
-        <translation>範囲はマップキャンバスの表示から読み取られるため、その下にある画像が AI に渡されます。対象の詳細が見えるまで十分にズームインし、送信したくないレイヤーは非表示にしてください。</translation>
+        <translation>範囲はマップキャンバスの表示から読み取られるため、その下にある画像がAIに渡されます。対象の詳細が見えるまで十分にズームインし、送信したくないレイヤは非表示にしてください。</translation>
     </message>
     <message>
         <source>The balance could not be read, so CREDITS_REMAINING is -1 rather than a count. Reason: {reason}.</source>
-        <translation>残高を読み取れなかったため、CREDITS_REMAINING は件数ではなく -1 です。理由: {reason}。</translation>
+        <translation>残高を読み取れなかったため、CREDITS_REMAININGはクレジット数ではなく-1です。理由：{reason}。</translation>
     </message>
     <message>
         <source>The imagery is never sent anywhere for this: the tracing is local, and it is not billed to any plan.</source>
@@ -3117,7 +3117,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>The run ended without adding a layer. Read the AI Edit panel for the reason.</source>
-        <translation>レイヤーが追加されないまま処理が終了しました。理由は AI Edit パネルで確認してください。</translation>
+        <translation>レイヤが追加されないまま処理が終了しました。理由はAI Editパネルで確認してください。</translation>
     </message>
     <message>
         <source>The status call returned nothing usable.</source>
@@ -3125,71 +3125,71 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>The tracing finished but its layer is not in the project.</source>
-        <translation>トレースは完了しましたが、そのレイヤーがプロジェクト内にありません。</translation>
+        <translation>トレースは完了しましたが、そのレイヤがプロジェクト内にありません。</translation>
     </message>
     <message>
         <source>This QGIS build exposes no way to keep the run on the main thread. These algorithms drive the AI Edit panel, and driving it from a background thread would take QGIS down, so the run is refused. Update QGIS, or use the panel itself.</source>
-        <translation>この QGIS ビルドには、処理をメインスレッドで維持する方法がありません。これらのアルゴリズムは AI Edit パネルを操作するため、バックグラウンドスレッドから操作すると QGIS がクラッシュします。そのため処理は拒否されます。QGIS を更新するか、パネル自体を使用してください。</translation>
+        <translation>このQGISビルドには、処理をメインスレッドで維持する方法がありません。これらのアルゴリズムはAI Editパネルを操作するため、バックグラウンドスレッドから操作するとQGISがクラッシュします。そのため処理は拒否されます。QGISを更新するか、パネル自体を使用してください。</translation>
     </message>
     <message>
         <source>This run takes 30 to 120 seconds, and QGIS stays busy for the caller until it ends. Never start it again while it is running: a second run costs the user money.</source>
-        <translation>この処理には30～120秒かかり、終了するまで呼び出し元の QGIS はビジー状態になります。実行中に再度開始しないでください。2回目の処理はユーザーに課金されます。</translation>
+        <translation>この処理には30～120秒かかり、終了するまで呼び出し元のQGISはビジー状態になります。実行中に再度開始しないでください。2回目の処理はユーザーに課金されます。</translation>
     </message>
     <message>
         <source>This runs on the AI service, so it needs an internet connection and a signed-in TerraLab account. Open the AI Edit panel once to sign in.</source>
-        <translation>これは AI サービス上で実行されるため、インターネット接続とサインイン済みの TerraLab アカウントが必要です。サインインするには AI Edit パネルを一度開いてください。</translation>
+        <translation>これはAIサービス上で実行されるため、インターネット接続とログイン済みのTerraLabアカウントが必要です。ログインするには、AI Editパネルを一度開いてください。</translation>
     </message>
     <message>
         <source>This takes 30 to 120 seconds and QGIS stays busy until it ends. Do not start it again: a second run costs money.</source>
-        <translation>これには30～120秒かかり、終了するまで QGIS はビジー状態になります。再度開始しないでください。2回目の処理には費用が発生します。</translation>
+        <translation>これには30～120秒かかり、終了するまでQGISはビジー状態になります。再度開始しないでください。2回目の処理には費用が発生します。</translation>
     </message>
     <message>
         <source>To turn one flat color of the result into polygons afterwards, run '{vectorize_id}' ('{vectorize_label}').</source>
-        <translation>結果画像の均一な1色を後からポリゴンに変換するには、'{vectorize_id}' ('{vectorize_label}') を実行してください。</translation>
+        <translation>結果画像の均一な1色を後からポリゴンに変換するには、'{vectorize_id}'（「{vectorize_label}」）を実行してください。</translation>
     </message>
     <message>
         <source>Traced {count} polygon(s) from {image}.</source>
-        <translation>{image} から {count} 個のポリゴンをトレースしました。</translation>
+        <translation>{image}からポリゴン{count}個をトレースしました。</translation>
     </message>
     <message>
         <source>Tracing color {color} on {image}.</source>
-        <translation>{image} 上で色 {color} をトレースしています。</translation>
+        <translation>{image}の色{color}をトレースしています。</translation>
     </message>
     <message>
         <source>Turns one flat color of an AI Edit result image into polygons you can edit, measure and export. It runs on your machine, spends nothing, and usually takes a few seconds.</source>
-        <translation>AI Edit の結果画像に含まれる均一な1色を、編集、計測、エクスポートできるポリゴンに変換します。コンピューター上で実行され、クレジットを消費せず、通常は数秒で完了します。</translation>
+        <translation>AI Editの結果画像に含まれる均一な1色を、編集、計測、エクスポートできるポリゴンに変換します。ローカルで実行され、クレジットを消費せず、通常は数秒で完了します。</translation>
     </message>
     <message>
         <source>Two algorithms do the work, and you can run either by id:
   {generate_id} - '{generate_label}'. Give it a map area and a prompt. It returns a new image layer over that area. It runs on the AI service, takes 30 to 120 seconds, and QGIS stays busy until it ends. Never start it twice: a second run costs the user money.
   {vectorize_id} - '{vectorize_label}'. Give it one flat color of a result image and it traces that color into a polygon layer. Free, local, needs no account, and usually a few seconds.</source>
-        <translation>2つのアルゴリズムが処理を実行し、どちらも ID で実行できます:
-  {generate_id} - '{generate_label}'。地図範囲とプロンプトを指定します。その範囲上に新しい画像レイヤーを返します。AI サービス上で実行され、30～120秒かかり、終了するまで QGIS はビジー状態になります。2回続けて開始しないでください。2回目の処理はユーザーに課金されます。
-  {vectorize_id} - '{vectorize_label}'。結果画像の均一な1色を指定すると、その色をポリゴンレイヤーにトレースします。無料でローカルに実行でき、アカウントは不要で、通常は数秒で完了します。</translation>
+        <translation>2つのアルゴリズムが処理を実行し、どちらもIDで実行できます：
+  {generate_id} - 「{generate_label}」。地図の範囲とプロンプトを指定すると、その範囲に新しい画像レイヤを返します。AIサービス上で実行され、30～120秒かかり、終了するまでQGISはビジー状態になります。2回続けて開始しないでください。2回目の処理はユーザーに課金されます。
+  {vectorize_id} - 「{vectorize_label}」。結果画像の均一な1色を指定すると、その色をポリゴンレイヤにトレースします。無料でローカルに実行でき、アカウントは不要で、通常は数秒で完了します。</translation>
     </message>
     <message>
         <source>Type a prompt, for example 'remove the clouds'.</source>
-        <translation>プロンプトを入力します。例: 'remove the clouds'。</translation>
+        <translation>プロンプトを入力してください。例：「雲を除去」</translation>
     </message>
     <message>
         <source>Use it after '{generate_id}' has painted a class in one color, for example 'color every building red and everything else grey'. Point this algorithm at red and you get one polygon per building.</source>
-        <translation>'{generate_id}' でクラスを1色に着色した後に使用します。例: 'color every building red and everything else grey'。このアルゴリズムで赤を指定すると、建物ごとに1つのポリゴンが得られます。</translation>
+        <translation>'{generate_id}'でクラスを1色に塗り分けた後に使用します。例：「建物をすべて赤、それ以外を灰色にする」。このアルゴリズムで赤を指定すると、建物ごとに1つのポリゴンが得られます。</translation>
     </message>
     <message>
         <source>Vectorize a color of an AI result into polygons (land cover classes, raster to vector)</source>
-        <translation>AI の結果画像の色をポリゴンにベクトル化します（土地被覆クラス、ラスターからベクター）</translation>
+        <translation>AIの結果画像の色をポリゴンにベクタ化します（土地被覆クラス、ラスタからベクタへの変換）</translation>
     </message>
     <message>
         <source>What it is for: classify land cover, extract building footprints as a colored picture, remove clouds, remove cars or buildings, upscale to super resolution, simulate a flood, color an old scanned map, restore a damaged photo.</source>
-        <translation>用途: 土地被覆の分類、着色画像としての建物フットプリント抽出、雲の除去、車や建物の除去、超解像へのアップスケーリング、洪水のシミュレーション、古いスキャン地図のカラー化、破損した写真の復元。</translation>
+        <translation>用途：土地被覆の分類、着色画像としての建物フットプリントの抽出、雲の除去、車や建物の除去、超解像へのアップスケール、洪水のシミュレーション、スキャンした古地図のカラー化、破損した写真の復元。</translation>
     </message>
     <message>
         <source>What it returns: SUBMITTED (whether the run started), STATE ('done', 'generating', 'cancelled' or 'idle'), RESULT_LAYERS (the names of the image layers this run added to the project) and STATUS. There is no file output: the plugin adds the georeferenced result to the project itself, under its own layer group.</source>
-        <translation>返される値: SUBMITTED（処理が開始されたかどうか）、STATE（'done'、'generating'、'cancelled' または 'idle'）、RESULT_LAYERS（この処理がプロジェクトに追加した画像レイヤーの名前）、STATUS。ファイル出力はありません。プラグインがジオリファレンスされた結果を独自のレイヤーグループの下にプロジェクト自体へ追加します。</translation>
+        <translation>返される値：SUBMITTED（処理が開始されたかどうか）、STATE（'done'、'generating'、'cancelled'、'idle'のいずれか）、RESULT_LAYERS（この処理がプロジェクトに追加した画像レイヤの名前）、STATUS。ファイル出力はありません。プラグインが、位置情報付きの結果を独自のレイヤグループの下にプロジェクトへ追加します。</translation>
     </message>
     <message>
         <source>What it returns: no file output. The plugin adds one styled polygon layer to the project beside the image it came from, and this algorithm reports LAYER_NAME, FEATURE_COUNT and STATUS. That layer lives in memory until you save it, so use 'Make permanent' on it, or export it, before closing the project.</source>
-        <translation>返される値: ファイル出力はありません。プラグインは元画像の隣にスタイル設定された1つのポリゴンレイヤーをプロジェクトに追加し、このアルゴリズムは LAYER_NAME、FEATURE_COUNT、STATUS を返します。このレイヤーは保存するまでメモリ上に存在するため、プロジェクトを閉じる前に 'Make permanent' を使用するか、エクスポートしてください。</translation>
+        <translation>返される値：ファイル出力はありません。プラグインは元の画像の隣にスタイル設定済みのポリゴンレイヤを1つプロジェクトに追加し、このアルゴリズムはLAYER_NAME、FEATURE_COUNT、STATUSを返します。このレイヤは保存するまでメモリ上にあるため、プロジェクトを閉じる前に「保存」を使用するか、エクスポートしてください。</translation>
     </message>
     <message>
         <source>What the user has to do</source>
@@ -3197,35 +3197,35 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>What this one returns: INSTALLED and READY (true or false), STATE (READY, NEEDS_ACTIVATION or NO_PANEL), ACTION_REQUIRED (what a person has to do when READY is false), PLAN ('free', 'pro' or empty when unknown), CREDITS_REMAINING, BUSY (true while a generation is already running) and NEXT_ALGORITHMS. CREDITS_REMAINING is -1 when the account did not report a number, which usually means nobody is signed in yet.</source>
-        <translation>返される値: INSTALLED と READY（true または false）、STATE（READY、NEEDS_ACTIVATION または NO_PANEL）、ACTION_REQUIRED（READY が false の場合に必要な操作）、PLAN（'free'、'pro' または不明時は空）、CREDITS_REMAINING、BUSY（生成処理がすでに実行中の場合は true）、NEXT_ALGORITHMS。アカウントが数値を返さなかった場合、CREDITS_REMAINING は -1 になります。通常は、まだ誰もサインインしていないことを意味します。</translation>
+        <translation>返される値：INSTALLEDとREADY（trueまたはfalse）、STATE（READY、NEEDS_ACTIVATION、NO_PANELのいずれか）、ACTION_REQUIRED（READYがfalseのときに人が行う必要のある操作）、PLAN（'free'、'pro'、不明の場合は空）、CREDITS_REMAINING、BUSY（生成がすでに実行中の間はtrue）、NEXT_ALGORITHMS。アカウントが数値を報告しなかった場合、CREDITS_REMAININGは-1になります。通常は、まだ誰もログインしていないことを意味します。</translation>
     </message>
     <message>
         <source>What to type in 'Prompt': plain words describing the picture you want back, for example 'color every building red and everything else grey' or 'remove the clouds' or 'upscale and sharpen'.</source>
-        <translation>'Prompt' に入力する内容: 必要な画像を説明する普通の言葉。例: 'color every building red and everything else grey'、'remove the clouds'、'upscale and sharpen'。</translation>
+        <translation>「プロンプト」に入力する内容：必要な画像を言葉で説明します。例：「建物をすべて赤、それ以外を灰色にする」、「雲を除去」、「アップスケールしてシャープにする」</translation>
     </message>
     <message>
         <source>When BUSY is true, a generation is already running. Wait for it and poll this algorithm again rather than starting another one.</source>
-        <translation>BUSY が true の場合、生成処理はすでに実行中です。別の処理を開始せず、完了するまで待ってからこのアルゴリズムを再度ポーリングしてください。</translation>
+        <translation>BUSYがtrueの場合、生成はすでに実行中です。別の処理を開始せず、完了を待ってから、このアルゴリズムをもう一度ポーリングしてください。</translation>
     </message>
     <message>
         <source>When READY is false, read ACTION_REQUIRED out to the user and stop. Signing in happens in the AI Edit panel in QGIS, not from here, and no algorithm can do it for the user.</source>
-        <translation>READY が false の場合は、ACTION_REQUIRED の内容をユーザーに伝えて停止してください。サインインはここからではなく QGIS の AI Edit パネルで行います。ユーザーの代わりにサインインできるアルゴリズムはありません。</translation>
+        <translation>READYがfalseの場合は、ACTION_REQUIREDの内容をユーザーに伝えて停止してください。ログインはここからではなく、QGISのAI Editパネルで行います。ユーザーの代わりにログインできるアルゴリズムはありません。</translation>
     </message>
     <message>
         <source>completed, {count} layer(s) added</source>
-        <translation>完了、{count} 個のレイヤーを追加</translation>
+        <translation>完了、レイヤ{count}件を追加</translation>
     </message>
     <message>
         <source>completed, {count} polygon(s) in one layer</source>
-        <translation>完了、1つのレイヤーに {count} 個のポリゴン</translation>
+        <translation>完了、1つのレイヤにポリゴン{count}個</translation>
     </message>
     <message>
         <source>failed: {reason}</source>
-        <translation>失敗: {reason}</translation>
+        <translation>失敗：{reason}</translation>
     </message>
     <message>
         <source>finished with no new layer</source>
-        <translation>新しいレイヤーなしで終了</translation>
+        <translation>新しいレイヤなしで終了</translation>
     </message>
     <message>
         <source>the account call returned nothing usable</source>
@@ -3233,7 +3233,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>the account reported no usage counts</source>
-        <translation>アカウントから使用量が報告されませんでした</translation>
+        <translation>アカウントから利用回数が報告されませんでした</translation>
     </message>
     <message>
         <source>the account returned no number</source>
@@ -3249,27 +3249,27 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>{action} failed: {error}</source>
-        <translation>{action} が失敗しました: {error}</translation>
+        <translation>{action}が失敗しました：{error}</translation>
     </message>
     <message>
         <source>{action} returned nothing usable.</source>
-        <translation>{action} から使用可能な結果が返されませんでした。</translation>
+        <translation>{action}から使用可能な結果が返されませんでした。</translation>
     </message>
     <message>
         <source>{message} (state: {state})</source>
-        <translation>{message}（状態: {state}）</translation>
+        <translation>{message}（状態：{state}）</translation>
     </message>
     <message>
         <source>{outcome} (code: {code})</source>
-        <translation>{outcome}（コード: {code}）</translation>
+        <translation>{outcome}（コード：{code}）</translation>
     </message>
     <message>
         <source>{outcome}: {panel_line}</source>
-        <translation>{outcome}: {panel_line}</translation>
+        <translation>{outcome}：{panel_line}</translation>
     </message>
     <message>
         <source>{product} is available to AI agents. Run 'import terralab; print(terralab.capabilities())' from any code-execution tool, or look for the TerraLab algorithms in the Processing registry.</source>
-        <translation>{product} は AI エージェントから利用できます。任意のコード実行ツールで 'import terralab; print(terralab.capabilities())' を実行するか、Processing レジストリで TerraLab アルゴリズムを探してください。</translation>
+        <translation>{product}はAIエージェントから利用できます。コード実行ツールから'import terralab; print(terralab.capabilities())'を実行するか、プロセシングレジストリでTerraLabのアルゴリズムを探してください。</translation>
     </message>
     <message>
         <source>Personal, non-commercial use. A paid plan adds commercial use for one person.</source>
@@ -3277,11 +3277,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Check for Updates</source>
-        <translation>アップデートを確認</translation>
+        <translation>更新を確認</translation>
     </message>
     <message>
         <source>More from TerraLab...</source>
-        <translation>TerraLabの詳細...</translation>
+        <translation>TerraLabをもっと見る…</translation>
     </message>
     <message>
         <source>Monthly limit reached ({used}/{limit})</source>
@@ -3289,11 +3289,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Need more this month? Write to us and we set up a plan that fits your volume.</source>
-        <translation>今月さらに必要ですか？お問い合わせください。ご利用量に合ったプランをご案内します。</translation>
+        <translation>今月さらに必要ですか？お問い合わせください。ご利用量に合わせたプランをご用意します。</translation>
     </message>
     <message>
         <source>{left} of {total} credits left this month</source>
-        <translation>今月のクレジット残り {left}/{total}</translation>
+        <translation>今月の残りクレジット：{left}/{total}</translation>
         <source>Select a raster layer to edit:</source>
         <translation>編集するラスターレイヤーを選択:</translation>
     </message>
@@ -3311,19 +3311,19 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Your zone is outside "{layer}". Pick the right raster or draw inside it.</source>
-        <translation>ゾーンが「{layer}」の外にあります。正しいラスターを選ぶか、その中に描いてください。</translation>
+        <translation>範囲が「{layer}」の外にあります。正しいラスタを選ぶか、その内側に描いてください。</translation>
     </message>
     <message>
         <source>Part of your zone is outside "{layer}". That part will come back blank.</source>
-        <translation>ゾーンの一部が「{layer}」の外にあります。その部分は空白で返されます。</translation>
+        <translation>範囲の一部が「{layer}」の外にあります。その部分は空白で返されます。</translation>
     </message>
     <message>
         <source>Looking for building, tree or road outlines? AI Segmentation traces them as real geometry.</source>
-        <translation>建物・樹木・道路の輪郭をお探しですか？AI Segmentation なら実際のジオメトリとして抽出できます。</translation>
+        <translation>建物・樹木・道路の輪郭をお探しですか？AI Segmentationなら、実際のジオメトリとしてトレースできます。</translation>
     </message>
     <message>
         <source>Open AI Segmentation</source>
-        <translation>AI Segmentation を開く</translation>
+        <translation>AI Segmentationを開く</translation>
     </message>
     <message>
         <source>Computer</source>
@@ -3339,7 +3339,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Drag a rectangle anywhere on the map to capture what you see as a reference. Esc cancels.</source>
-        <translation>地図上の任意の場所で矩形をドラッグすると、見えているものを参照画像として取り込みます。Esc でキャンセル。</translation>
+        <translation>地図上の任意の場所で四角形をドラッグすると、見えているものを参照画像として取り込みます。Escでキャンセルします。</translation>
     </message>
     <message>
         <source>Drag a rectangle on the map to capture it as a reference. Esc cancels.</source>
@@ -3355,11 +3355,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>This layer does not cover your zone, so it is sent whole, not aligned to it.</source>
-        <translation>このレイヤーはゾーンを覆っていないため、位置合わせせずに全体を送信します。</translation>
+        <translation>このレイヤは範囲を覆っていないため、位置合わせせずに全体を送信します。</translation>
     </message>
     <message>
         <source>"{layer}" does not cover your zone. It is sent as a whole image.</source>
-        <translation>「{layer}」はゾーンを覆っていません。画像全体として送信します。</translation>
+        <translation>「{layer}」は範囲を覆っていません。画像全体として送信します。</translation>
     </message>
     <message>
         <source>Could not capture the map. Zoom in and try again.</source>
@@ -3375,11 +3375,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Copy email</source>
-        <translation>メールアドレスをコピー</translation>
+        <translation>アドレスをコピー</translation>
     </message>
     <message>
         <source>Custom needs? Write to us: {email}</source>
-        <translation>特別なご要望がありますか？こちらまでご連絡ください：{email}</translation>
+        <translation>個別のご要望がありますか？お問い合わせください：{email}</translation>
     </message>
     <message>
         <source>Add imagery</source>
@@ -3403,7 +3403,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Draw a zone on the map first</source>
-        <translation>先に地図上でゾーンを描画</translation>
+        <translation>先に地図上で範囲を描く</translation>
     </message>
     <message>
         <source>Write what you want to change</source>
@@ -3483,7 +3483,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>AI Edit {version} is out</source>
-        <translation>AI Edit {version} が公開されました</translation>
+        <translation>AI Edit {version}を公開しました</translation>
     </message>
     <message>
         <source>Later</source>
@@ -3495,35 +3495,35 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>1 polygon</source>
-        <translation>ポリゴン 1個</translation>
+        <translation>ポリゴン1個</translation>
     </message>
     <message>
         <source>1 prompt</source>
-        <translation>prompt 1件</translation>
+        <translation>プロンプト1件</translation>
     </message>
     <message>
         <source>1 stroke</source>
-        <translation>ストローク 1本</translation>
+        <translation>ストローク1本</translation>
     </message>
     <message>
         <source>&lt;b&gt;Draw&lt;/b&gt;&lt;br&gt;Draw lines, arrows or circles on the map to show the AI what to change and where. Your drawing is sent with the prompt as visual guidance.</source>
-        <translation>&lt;b&gt;描画&lt;/b&gt;&lt;br&gt;マップ上に線、矢印、円を描いて、AIに変更内容と場所を示します。描画は視覚的なガイダンスとしてpromptと一緒に送信されます。</translation>
+        <translation>&lt;b&gt;描画&lt;/b&gt;&lt;br&gt;地図上に線、矢印、円を描いて、AIに変更の内容と場所を示します。描画は視覚的なガイドとしてプロンプトと一緒に送信されます。</translation>
     </message>
     <message>
         <source>&lt;b&gt;Library&lt;/b&gt;&lt;br&gt;Ready-made prompts, your recent prompts and your favorites.</source>
-        <translation>&lt;b&gt;ライブラリ&lt;/b&gt;&lt;br&gt;すぐに使えるprompt、最近使用したprompt、お気に入り。</translation>
+        <translation>&lt;b&gt;ライブラリ&lt;/b&gt;&lt;br&gt;すぐに使えるプロンプト、最近使ったプロンプト、お気に入り。</translation>
     </message>
     <message>
         <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Higher quality is sharper and more precise, and costs more credits. Standard (1K), Detailed (2K), Maximum (4K).</source>
-        <translation>&lt;b&gt;品質&lt;/b&gt;&lt;br&gt;品質を上げると、より鮮明で正確になりますが、より多くのクレジットを消費します。標準（1K）、詳細（2K）、最高（4K）。</translation>
+        <translation>&lt;b&gt;品質&lt;/b&gt;&lt;br&gt;品質を上げると、より鮮明で正確になりますが、より多くのクレジットを消費します。標準（1K）、詳細（2K）、最大（4K）。</translation>
     </message>
     <message>
         <source>&lt;b&gt;References&lt;/b&gt;&lt;br&gt;Add an image or data file from disk, or one of your project's layers, as guidance for the AI. You can also drag a layer from the Layers panel straight into the prompt box. Everything is cropped to your zone.</source>
-        <translation>&lt;b&gt;参照&lt;/b&gt;&lt;br&gt;ディスク上の画像またはデータファイル、あるいはプロジェクトのlayerのいずれかを、AIのガイダンスとして追加します。Layersパネルからlayerをpromptボックスに直接ドラッグすることもできます。すべてが指定した範囲に合わせて切り抜かれます。</translation>
+        <translation>&lt;b&gt;参照&lt;/b&gt;&lt;br&gt;ディスク上の画像またはデータファイル、あるいはプロジェクトのレイヤを、AIへのガイドとして追加します。レイヤパネルからプロンプト欄へレイヤを直接ドラッグすることもできます。すべて指定した範囲に合わせて切り抜かれます。</translation>
     </message>
     <message>
         <source>A newer version is ready. Opens the QGIS plugin manager on it.</source>
-        <translation>新しいバージョンを利用できます。そのバージョンのQGIS plugin managerを開きます。</translation>
+        <translation>新しいバージョンを利用できます。QGISのプラグインマネージャでこのプラグインを開きます。</translation>
     </message>
     <message>
         <source>AI Edit Pro</source>
@@ -3531,11 +3531,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>AI Edit Settings</source>
-        <translation>AI Edit 設定</translation>
+        <translation>AI Editの設定</translation>
     </message>
     <message>
         <source>AI Edit Settings...</source>
-        <translation>AI Edit 設定...</translation>
+        <translation>AI Editの設定…</translation>
     </message>
     <message>
         <source>AI Edit and your data</source>
@@ -3543,11 +3543,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>About 150 edits a month and higher-resolution results. Cancel anytime.</source>
-        <translation>月約150回の編集と高解像度の結果。いつでもキャンセルできます。</translation>
+        <translation>月約150回の編集と高解像度の結果。いつでも解約できます。</translation>
     </message>
     <message>
         <source>Above 0 grows every shape outward, below 0 shrinks it inward.</source>
-        <translation>0より大きい値ではすべての図形が外側に拡大し、0より小さい値では内側に縮小します。</translation>
+        <translation>0より大きい値ではすべての図形が外側に膨張し、0より小さい値では内側に収縮します。</translation>
     </message>
     <message>
         <source>Account</source>
@@ -3555,11 +3555,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Account created. Outline an area on the example map to make your first edit.</source>
-        <translation>アカウントを作成しました。サンプルマップ上で範囲を囲んで、最初の編集を行いましょう。</translation>
+        <translation>アカウントを作成しました。サンプルの地図上で範囲を囲んで、最初の編集を行いましょう。</translation>
     </message>
     <message>
         <source>Account deletion scheduled</source>
-        <translation>アカウント削除を予約しました</translation>
+        <translation>アカウントの削除を予約しました</translation>
     </message>
     <message>
         <source>Account not deleted.</source>
@@ -3575,11 +3575,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Add a layer, or start with a sample.</source>
-        <translation>layerを追加するか、サンプルから始めてください。</translation>
+        <translation>レイヤを追加するか、サンプルから始めてください。</translation>
     </message>
     <message>
         <source>Add the Original</source>
-        <translation>Originalを追加</translation>
+        <translation>元画像を追加</translation>
     </message>
     <message>
         <source>Added</source>
@@ -3587,11 +3587,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Added to your map as</source>
-        <translation>マップに次の名前で追加しました</translation>
+        <translation>地図に追加した名前</translation>
     </message>
     <message>
         <source>Added to your map as {name}</source>
-        <translation>マップに{name}として追加しました</translation>
+        <translation>地図に{name}として追加しました。</translation>
     </message>
     <message>
         <source>Added {added} of {total}. The limit is {n} references.</source>
@@ -3611,11 +3611,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>After</source>
-        <translation>後</translation>
+        <translation>変更後</translation>
     </message>
     <message>
         <source>All TerraLab plugins are signed out. To cancel, sign in on terra-lab.ai.</source>
-        <translation>すべてのTerraLab pluginからサインアウトしました。キャンセルするには、terra-lab.aiでサインインしてください。</translation>
+        <translation>すべてのTerraLabプラグインからログアウトしました。取り消すには、terra-lab.aiでログインしてください。</translation>
     </message>
     <message>
         <source>Amber</source>
@@ -3623,7 +3623,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>An AI edit of your map zone</source>
-        <translation>マップ範囲のAI編集</translation>
+        <translation>地図の範囲のAI編集</translation>
     </message>
     <message>
         <source>Another quality level</source>
@@ -3639,19 +3639,19 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Ask your IT team to allow terra-lab.ai, or import your company root certificate in Settings &gt; Options &gt; Authentication</source>
-        <translation>ITチームにterra-lab.aiの許可を依頼するか、設定 &gt; オプション &gt; 認証で会社のルート証明書をインポートしてください</translation>
+        <translation>社内のIT管理者にterra-lab.aiへのアクセス許可を依頼するか、「設定」→「オプション」→「認証」で会社のルート証明書をインポートしてください</translation>
     </message>
     <message>
         <source>Ask your IT team to allow terra-lab.ai.</source>
-        <translation>ITチームにterra-lab.aiの許可を依頼してください。</translation>
+        <translation>社内のIT管理者にterra-lab.aiへのアクセス許可を依頼してください。</translation>
     </message>
     <message>
         <source>Back to the classes: check, rename or recolor, then vectorize again.</source>
-        <translation>クラスに戻る：確認、名前変更、色の変更を行ってから、もう一度ベクトル化してください。</translation>
+        <translation>クラスに戻る：確認、名前変更、色の変更を行ってから、もう一度ベクタ化してください。</translation>
     </message>
     <message>
         <source>Before</source>
-        <translation>前</translation>
+        <translation>変更前</translation>
     </message>
     <message>
         <source>Before you start</source>
@@ -3683,7 +3683,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Cancel on terra-lab.ai during the grace period. After that, it is final.</source>
-        <translation>猶予期間中にterra-lab.aiでキャンセルしてください。その後は取り消せません。</translation>
+        <translation>猶予期間中はterra-lab.aiで取り消せます。猶予期間を過ぎると、削除は確定します。</translation>
     </message>
     <message>
         <source>Cancel the zone</source>
@@ -3703,7 +3703,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Checkout on terra-lab.ai</source>
-        <translation>terra-lab.aiでチェックアウト</translation>
+        <translation>購入手続きはterra-lab.aiで行います</translation>
     </message>
     <message>
         <source>Clear the search</source>
@@ -3711,15 +3711,15 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Click a color on the map to add it as a class.</source>
-        <translation>マップ上の色をクリックして、クラスとして追加します。</translation>
+        <translation>地図上の色をクリックして、クラスとして追加します。</translation>
     </message>
     <message>
         <source>Click a color on the map. Esc cancels.</source>
-        <translation>マップ上の色をクリックしてください。Escでキャンセルします。</translation>
+        <translation>地図上の色をクリックしてください。Escでキャンセルします。</translation>
     </message>
     <message>
         <source>Click each point, double-click to finish.</source>
-        <translation>各ポイントをクリックし、ダブルクリックして終了します。</translation>
+        <translation>各点をクリックし、ダブルクリックで終了します。</translation>
     </message>
     <message>
         <source>Click to end the comparison</source>
@@ -3727,7 +3727,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Close Vectorize</source>
-        <translation>ベクトル化を閉じる</translation>
+        <translation>ベクタ化を閉じる</translation>
     </message>
     <message>
         <source>Close the panel</source>
@@ -3747,7 +3747,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Confirm with your email. Cancel on terra-lab.ai during the grace period.</source>
-        <translation>メールで確認してください。猶予期間中にterra-lab.aiでキャンセルできます。</translation>
+        <translation>メールで確認してください。猶予期間中はterra-lab.aiで取り消せます。</translation>
     </message>
     <message>
         <source>Confirmation refused. Close and try again.</source>
@@ -3763,7 +3763,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Contracting by {n} px erased every shape. Set “Expand/Contract” closer to 0.</source>
-        <translation>{n} pxで収縮すると、すべての図形が消えました。「拡大/縮小」を0に近い値に設定してください。</translation>
+        <translation>{n}pxの収縮で、すべての図形が消えました。「膨張／収縮」を0に近い値に設定してください。</translation>
     </message>
     <message>
         <source>Copy your logs and send them to us. We will look into it.</source>
@@ -3787,19 +3787,19 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Credit count not available</source>
-        <translation>クレジット数を利用できません</translation>
+        <translation>クレジット数を取得できません</translation>
     </message>
     <message>
         <source>Credits left and reset date</source>
-        <translation>残りのクレジットとリセット日</translation>
+        <translation>残りクレジットとリセット日</translation>
     </message>
     <message>
         <source>Custom color {hex}</source>
-        <translation>カスタム色 {hex}</translation>
+        <translation>カスタム色{hex}</translation>
     </message>
     <message>
         <source>Custom needs</source>
-        <translation>カスタム要件</translation>
+        <translation>個別のご要望</translation>
     </message>
     <message>
         <source>Cyan</source>
@@ -3807,7 +3807,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Danger zone</source>
-        <translation>危険区域</translation>
+        <translation>危険な操作</translation>
     </message>
     <message>
         <source>Data erased after the grace period.</source>
@@ -3835,19 +3835,19 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Deleting account</source>
-        <translation>アカウントを削除中</translation>
+        <translation>アカウントを削除中…</translation>
     </message>
     <message>
         <source>Deleting...</source>
-        <translation>削除中...</translation>
+        <translation>削除中…</translation>
     </message>
     <message>
         <source>Deletion already scheduled. Cancel on terra-lab.ai.</source>
-        <translation>削除はすでに予定されています。terra-lab.aiでキャンセルできます。</translation>
+        <translation>削除はすでに予約されています。terra-lab.aiで取り消せます。</translation>
     </message>
     <message>
         <source>Deletion already set for {date}. Cancel on terra-lab.ai.</source>
-        <translation>{date}に削除がすでに設定されています。terra-lab.aiでキャンセルできます。</translation>
+        <translation>{date}に削除がすでに予約されています。terra-lab.aiで取り消せます。</translation>
     </message>
     <message>
         <source>Describe the change, e.g. turn the fields into a forest</source>
@@ -3863,11 +3863,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Detailed and Maximum quality</source>
-        <translation>詳細と最大品質</translation>
+        <translation>「詳細」と「最大」の品質</translation>
     </message>
     <message>
         <source>Download Original as a georeferenced GeoTIFF (.tif)</source>
-        <translation>オリジナルを地理参照付きGeoTIFF（.tif）としてダウンロード</translation>
+        <translation>元画像を位置情報付きGeoTIFF（.tif）としてダウンロード</translation>
     </message>
     <message>
         <source>Download as GeoTIFF</source>
@@ -3875,19 +3875,19 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Downloading reference</source>
-        <translation>参照をダウンロード中</translation>
+        <translation>参照画像をダウンロード中…</translation>
     </message>
     <message>
         <source>Drag a box on the map. Esc cancels.</source>
-        <translation>マップ上でボックスをドラッグします。Escでキャンセル。</translation>
+        <translation>地図上でドラッグして四角形を描きます。Escでキャンセルします。</translation>
     </message>
     <message>
         <source>Drag across an area. Shift draws a true circle.</source>
-        <translation>エリアを横切るようにドラッグします。Shiftで真円を描けます。</translation>
+        <translation>範囲を横切るようにドラッグします。Shiftで正円を描けます。</translation>
     </message>
     <message>
         <source>Drag across the area to circle it.</source>
-        <translation>エリアを横切るようにドラッグして円で囲みます。</translation>
+        <translation>範囲を横切るようにドラッグして円で囲みます。</translation>
     </message>
     <message>
         <source>Drag from the start to the tip.</source>
@@ -3899,11 +3899,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Drag on the map to draw freely.</source>
-        <translation>マップ上でドラッグして自由に描画します。</translation>
+        <translation>地図上でドラッグして自由に描画します。</translation>
     </message>
     <message>
         <source>Drag the line or use the arrow keys. Esc stops.</source>
-        <translation>線をドラッグするか矢印キーを使用します。Escで停止。</translation>
+        <translation>線をドラッグするか、矢印キーを使います。Escで停止します。</translation>
     </message>
     <message>
         <source>Draw</source>
@@ -3911,7 +3911,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Drawing a zone</source>
-        <translation>ゾーンを描画中</translation>
+        <translation>範囲を描くとき</translation>
     </message>
     <message>
         <source>Drop polygons smaller than this after tracing.</source>
@@ -3919,39 +3919,39 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Drop this zone and go back to the start</source>
-        <translation>このゾーンを破棄して最初に戻る</translation>
+        <translation>この範囲を破棄して最初に戻る</translation>
     </message>
     <message>
         <source>Duration</source>
-        <translation>期間</translation>
+        <translation>所要時間</translation>
     </message>
     <message>
         <source>Each change updates the same layer.</source>
-        <translation>各変更は同じlayerを更新します。</translation>
+        <translation>各変更は同じレイヤを更新します。</translation>
     </message>
     <message>
         <source>Edit the selected area with AI (Enter)</source>
-        <translation>AIで選択エリアを編集（Enter）</translation>
+        <translation>AIで選択範囲を編集（Enter）</translation>
     </message>
     <message>
         <source>Erases all data, stops every TerraLab plugin</source>
-        <translation>すべてのデータを消去し、すべてのTerraLab pluginを停止します</translation>
+        <translation>すべてのデータを消去し、すべてのTerraLabプラグインを停止します</translation>
     </message>
     <message>
         <source>Errors, versions and features used, linked to your account. Never your imagery, layers or coordinates. On Pro, counts only.</source>
-        <translation>エラー、バージョン、使用された機能をアカウントに紐づけて収集します。お客様の画像、layers、座標は決して収集しません。Proでは回数のみ。</translation>
+        <translation>エラー、バージョン、使用した機能をアカウントに紐づけて収集します。画像、レイヤ、座標は一切収集しません。Proでは回数のみです。</translation>
     </message>
     <message>
         <source>Every TerraLab plugin stops, on all computers.</source>
-        <translation>すべてのコンピューターで、すべてのTerraLab pluginが停止します。</translation>
+        <translation>すべてのコンピュータで、すべてのTerraLabプラグインが停止します。</translation>
     </message>
     <message>
         <source>Every edit you run lands here, grouped by place, ready to pick up again.</source>
-        <translation>実行したすべての編集がここに保存され、場所ごとにまとめられ、いつでも再開できます。</translation>
+        <translation>実行した編集はすべて、場所ごとにまとめてここに保存され、いつでも再開できます。</translation>
     </message>
     <message>
         <source>Everything we make</source>
-        <translation>私たちが作るすべて</translation>
+        <translation>私たちの製品一覧</translation>
     </message>
     <message>
         <source>Failed to download result image after {attempts} attempts: {err}.</source>
@@ -3963,11 +3963,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Finish signing in on the page that just opened</source>
-        <translation>開いたページでサインインを完了してください</translation>
+        <translation>開いたページでログインを完了してください</translation>
     </message>
     <message>
         <source>For a team?</source>
-        <translation>チームで利用しますか？</translation>
+        <translation>チーム向け</translation>
     </message>
     <message>
         <source>Free credits used up this month</source>
@@ -3975,39 +3975,39 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Free plan</source>
-        <translation>無料プラン</translation>
+        <translation>Freeプラン</translation>
     </message>
     <message>
         <source>Free plan limit reached.</source>
-        <translation>無料プランの上限に達しました。</translation>
+        <translation>Freeプランの上限に達しました。</translation>
     </message>
     <message>
         <source>From zone to finished edit</source>
-        <translation>ゾーンから完成した編集まで</translation>
+        <translation>範囲の指定から編集の完成まで</translation>
     </message>
     <message>
         <source>Generate a flat-color map first, then come back.</source>
-        <translation>先にフラットカラーのマップを生成してから戻ってください。</translation>
+        <translation>先に色を塗り分けた地図を生成してから戻ってください。</translation>
     </message>
     <message>
         <source>Generate the edit on your zone</source>
-        <translation>ゾーンで編集を生成</translation>
+        <translation>範囲で編集を生成</translation>
     </message>
     <message>
         <source>Generate without it</source>
-        <translation>それなしで生成</translation>
+        <translation>なしで生成</translation>
     </message>
     <message>
         <source>Generated in the USA.</source>
-        <translation>米国で生成されました。</translation>
+        <translation>生成は米国で行われます。</translation>
     </message>
     <message>
         <source>Get Pro</source>
-        <translation>Proを入手</translation>
+        <translation>Proにアップグレード</translation>
     </message>
     <message>
         <source>Get better results</source>
-        <translation>より良い結果を得る</translation>
+        <translation>より良い結果を得るには</translation>
     </message>
     <message>
         <source>Go back one step</source>
@@ -4031,7 +4031,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>How far a pixel's color may drift from its class. Higher takes in noisy shades.</source>
-        <translation>ピクセルの色がそのクラスからどの程度ずれてよいか。値を大きくするとノイズの多い色調も取り込みます。</translation>
+        <translation>ピクセルの色がクラスの色からどの程度ずれても許容するかを指定します。値を大きくすると、ノイズの多い色調も取り込みます。</translation>
     </message>
     <message>
         <source>Ideas and workflows</source>
@@ -4039,15 +4039,15 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>If your browser works, turn on Settings &gt; Options &gt; Network &gt; Use proxy for web access.</source>
-        <translation>ブラウザが動作する場合は、Settings &gt; Options &gt; Network &gt; Use proxy for web accessをオンにしてください。</translation>
+        <translation>ブラウザが動作する場合は、「設定」→「オプション」→「ネットワーク」で、Webアクセスにプロキシを使用するオプションをオンにしてください。</translation>
     </message>
     <message>
         <source>Image too large. Draw a smaller zone or pick a lower Quality.</source>
-        <translation>画像が大きすぎます。より小さいゾーンを描くか、より低い品質を選択してください。</translation>
+        <translation>画像が大きすぎます。範囲を小さくするか、品質を下げてください。</translation>
     </message>
     <message>
         <source>In your prompt, say what to take from each: "roof colours from reference 1".</source>
-        <translation>promptで、それぞれから何を取り入れるかを指定してください：「屋根の色は参照1から」。</translation>
+        <translation>プロンプトで、それぞれから何を取り入れるかを指定してください：「屋根の色は参照1から」。</translation>
     </message>
     <message>
         <source>Install in QGIS</source>
@@ -4075,11 +4075,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Keep the polygons on your map and close this panel</source>
-        <translation>ポリゴンをマップに残してこのパネルを閉じる</translation>
+        <translation>ポリゴンを地図に残して、このパネルを閉じます。</translation>
     </message>
     <message>
         <source>Keep this result on your map and start over on a new zone. The session stays in Sessions.</source>
-        <translation>この結果をマップに残して新しいゾーンでやり直します。セッションはSessionsに残ります。</translation>
+        <translation>この結果を地図に残して、新しい範囲でやり直します。セッションは「セッション」に残ります。</translation>
     </message>
     <message>
         <source>Keep your strokes to guide the edit. They are removed from the result.</source>
@@ -4087,11 +4087,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Kept in France.</source>
-        <translation>フランスで保持されます。</translation>
+        <translation>フランスで保管されます。</translation>
     </message>
     <message>
         <source>Keyboard shortcuts</source>
-        <translation>キーボードショートカット</translation>
+        <translation>ショートカット</translation>
     </message>
     <message>
         <source>Last free edit this month.</source>
@@ -4099,7 +4099,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Leave empty for the default folder</source>
-        <translation>デフォルトフォルダーにする場合は空欄にします</translation>
+        <translation>デフォルトのフォルダを使う場合は空欄にします</translation>
     </message>
     <message>
         <source>Leave fullscreen</source>
@@ -4111,11 +4111,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Like it? Pro adds Detailed and Maximum quality, and commercial use.</source>
-        <translation>気に入りましたか？Proでは詳細と最大品質、および商用利用が追加されます。</translation>
+        <translation>気に入りましたか？Proなら「詳細」と「最大」の品質と商用利用が使えます。</translation>
     </message>
     <message>
         <source>Limit reached. Remove one to add another.</source>
-        <translation>上限に達しました。1つ削除して別のものを追加してください。</translation>
+        <translation>上限に達しました。別の参照を追加するには、1件削除してください。</translation>
     </message>
     <message>
         <source>Linked to your account, no imagery</source>
@@ -4123,7 +4123,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Load this prompt, its references and the same map zone back into AI Edit, replacing what you have now.</source>
-        <translation>このprompt、その参照、同じマップゾーンをAI Editに読み込み、現在の内容を置き換えます。</translation>
+        <translation>このプロンプト、その参照、同じ範囲をAI Editに読み込み、現在の内容を置き換えます。</translation>
     </message>
     <message>
         <source>Locked while the AI generates</source>
@@ -4143,7 +4143,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Map view</source>
-        <translation>地図ビュー</translation>
+        <translation>表示範囲</translation>
     </message>
     <message>
         <source>More edits, commercial use</source>
@@ -4151,7 +4151,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>More from TerraLab</source>
-        <translation>TerraLab をもっと見る</translation>
+        <translation>TerraLabをもっと見る</translation>
     </message>
     <message>
         <source>More plugins</source>
@@ -4159,7 +4159,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Need more?</source>
-        <translation>もっと必要ですか？</translation>
+        <translation>足りませんか？</translation>
     </message>
     <message>
         <source>Needs a restart</source>
@@ -4167,7 +4167,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Network error. Check your internet connection.</source>
-        <translation>ネットワークエラー。インターネット接続を確認してください。</translation>
+        <translation>ネットワークエラーです。インターネット接続を確認してください。</translation>
     </message>
     <message>
         <source>New edit</source>
@@ -4175,35 +4175,35 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>No account linked to this key.</source>
-        <translation>このキーにリンクされているアカウントがありません。</translation>
+        <translation>このキーに紐づくアカウントがありません。</translation>
     </message>
     <message>
         <source>No edits yet</source>
-        <translation>まだ編集がありません</translation>
+        <translation>編集はまだありません</translation>
     </message>
     <message>
         <source>No favorites yet</source>
-        <translation>まだお気に入りがありません</translation>
+        <translation>お気に入りはまだありません</translation>
     </message>
     <message>
         <source>No map to vectorize yet</source>
-        <translation>ベクター化できるマップがまだありません</translation>
+        <translation>ベクタ化する地図がありません</translation>
     </message>
     <message>
         <source>No matches found</source>
-        <translation>一致する項目が見つかりません</translation>
+        <translation>一致する項目はありません</translation>
     </message>
     <message>
         <source>No pixel matches the checked colors. Adjust a color, or add one with “Add color from map”.</source>
-        <translation>チェックした色に一致するピクセルがありません。色を調整するか、「マップから色を追加」で色を追加してください。</translation>
+        <translation>チェックした色に一致するピクセルがありません。色を調整するか、「地図から色を追加」で色を追加してください。</translation>
     </message>
     <message>
         <source>No prompt was saved for this version.</source>
-        <translation>このバージョンの prompt は保存されていません。</translation>
+        <translation>このバージョンにはプロンプトが保存されていません。</translation>
     </message>
     <message>
         <source>No prompts in this section yet</source>
-        <translation>このセクションにはまだ prompt がありません</translation>
+        <translation>このセクションにプロンプトがありません</translation>
     </message>
     <message>
         <source>No sessions match</source>
@@ -4211,7 +4211,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>No shape reaches {n} px. Lower “Min polygon size”.</source>
-        <translation>{n} px に達するシェイプがありません。「最小ポリゴン サイズ」を下げてください。</translation>
+        <translation>{n}pxに達する図形がありません。「最小ポリゴンサイズ」を小さくしてください。</translation>
     </message>
     <message>
         <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size” or “Remove speckle”, or raise “Color tolerance”.</source>
@@ -4223,11 +4223,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Not an image or a map file QGIS can open.</source>
-        <translation>QGIS で開ける画像またはマップファイルではありません。</translation>
+        <translation>QGISで開ける画像または地図ファイルではありません。</translation>
     </message>
     <message>
         <source>Not signed in</source>
-        <translation>サインインしていません</translation>
+        <translation>ログインしていません</translation>
     </message>
     <message>
         <source>Nothing was sent. Press Generate again to read the notice.</source>
@@ -4235,7 +4235,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Nothing yet. The AI works from your zone and prompt only.</source>
-        <translation>まだ何もありません。AI はゾーンと prompt のみで動作します。</translation>
+        <translation>まだ何もありません。AIは範囲とプロンプトのみで動作します。</translation>
     </message>
     <message>
         <source>Open</source>
@@ -4243,11 +4243,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Open QGIS's Data Source Manager to add data</source>
-        <translation>データを追加するには、QGIS のデータソースマネージャーを開いてください</translation>
+        <translation>データを追加するには、QGISのデータソースマネージャを開いてください。</translation>
     </message>
     <message>
         <source>Open a prompt or a past edit and press its star: it will wait for you here.</source>
-        <translation>prompt または過去の編集を開いてスターを押してください。ここに保存されます。</translation>
+        <translation>プロンプトや過去の編集を開いてスターを押すと、ここに保存されます。</translation>
     </message>
     <message>
         <source>Open dashboard</source>
@@ -4255,11 +4255,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Open in QGIS</source>
-        <translation>QGIS で開く</translation>
+        <translation>QGISで開く</translation>
     </message>
     <message>
         <source>Open the AI Edit page</source>
-        <translation>AI Edit ページを開く</translation>
+        <translation>AI Editのページを開く</translation>
     </message>
     <message>
         <source>Open the Library</source>
@@ -4275,7 +4275,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Opens the QGIS plugin manager on this plugin.</source>
-        <translation>このプラグインで QGIS のプラグインマネージャーを開きます。</translation>
+        <translation>QGISのプラグインマネージャで、このプラグインのページを開きます。</translation>
     </message>
     <message>
         <source>Opens your dashboard in the browser</source>
@@ -4283,19 +4283,19 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Or drop images and layers here</source>
-        <translation>または、ここに画像と layer をドロップしてください</translation>
+        <translation>または、画像やレイヤをここにドロップしてください</translation>
     </message>
     <message>
         <source>Other TerraLab plugins for QGIS</source>
-        <translation>QGIS 用のその他の TerraLab プラグイン</translation>
+        <translation>QGIS向けのTerraLabの他のプラグイン</translation>
     </message>
     <message>
         <source>Other TerraLab plugins...</source>
-        <translation>その他の TerraLab プラグイン...</translation>
+        <translation>TerraLabの他のプラグイン…</translation>
     </message>
     <message>
         <source>Outline an area, say what to change</source>
-        <translation>領域を囲んで、変更内容を指定してください</translation>
+        <translation>範囲を囲んで、変更内容を指定します</translation>
     </message>
     <message>
         <source>Output size</source>
@@ -4303,11 +4303,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Outside the prompt box</source>
-        <translation>prompt ボックスの外側</translation>
+        <translation>プロンプトボックスの外側</translation>
     </message>
     <message>
         <source>Outside your zone, sent whole</source>
-        <translation>ゾーンの外側:全体を送信</translation>
+        <translation>範囲の外側：全体を送信</translation>
     </message>
     <message>
         <source>Part of your zone is off the imagery. That part will come back blank.</source>
@@ -4319,7 +4319,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Pick a map under Layer first.</source>
-        <translation>最初に Layer でマップを選択してください。</translation>
+        <translation>先に「レイヤ」で地図を選択してください。</translation>
     </message>
     <message>
         <source>Pick a tool to draw.</source>
@@ -4331,7 +4331,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Plan, payment and invoices</source>
-        <translation>プラン、支払い、請求書</translation>
+        <translation>プラン、お支払い、請求書</translation>
     </message>
     <message>
         <source>Preview</source>
@@ -4347,39 +4347,39 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Pro plan</source>
-        <translation>Pro プラン</translation>
+        <translation>Proプラン</translation>
     </message>
     <message>
         <source>Pro unlocks Detailed and Maximum, for printing and zooming in</source>
-        <translation>Pro で「詳細」と「最大」がアンロックされ、印刷やズームに利用できます</translation>
+        <translation>Proで「詳細」と「最大」が使えます。印刷やズームイン向けです。</translation>
     </message>
     <message>
         <source>Project layer</source>
-        <translation>プロジェクト layer</translation>
+        <translation>レイヤ</translation>
     </message>
     <message>
         <source>Prompts and edits you starred.</source>
-        <translation>スターを付けた prompt と編集。</translation>
+        <translation>スターを付けたプロンプトと編集。</translation>
     </message>
     <message>
         <source>Prompts, References, Draw, Vectorize</source>
-        <translation>prompt、参照、描画、ベクター化</translation>
+        <translation>プロンプト、参照、描画、ベクタ化</translation>
     </message>
     <message>
         <source>Proven prompts to start from. Open one to see it before and after.</source>
-        <translation>実績のある prompt で始められます。開くと前後の比較を確認できます。</translation>
+        <translation>実績のあるプロンプトから始められます。開くと、変更前後を確認できます。</translation>
     </message>
     <message>
         <source>Proxy connection failed. Check QGIS proxy settings (Settings &gt; Options &gt; Network).</source>
-        <translation>プロキシ接続に失敗しました。QGIS のプロキシ設定を確認してください(設定 &gt; オプション &gt; ネットワーク)。</translation>
+        <translation>プロキシ接続に失敗しました。QGISのプロキシ設定を確認してください（「設定」→「オプション」→「ネットワーク」）。</translation>
     </message>
     <message>
         <source>QGIS could not turn it on. Tick it in Plugins &gt; Manage and Install Plugins.</source>
-        <translation>QGIS で有効にできませんでした。「プラグイン &gt; プラグインの管理とインストール」でチェックしてください。</translation>
+        <translation>QGISで有効にできませんでした。「プラグイン」→「プラグインの管理とインストール」でチェックを入れてください。</translation>
     </message>
     <message>
         <source>Raise the timeout in Settings &gt; Options &gt; Network.</source>
-        <translation>設定 &gt; オプション &gt; ネットワークでタイムアウトを延長してください。</translation>
+        <translation>「設定」→「オプション」→「ネットワーク」でタイムアウトを延長してください。</translation>
     </message>
     <message>
         <source>Read the guide</source>
@@ -4387,7 +4387,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Reference {n}</source>
-        <translation>参照 {n}</translation>
+        <translation>参照{n}</translation>
     </message>
     <message>
         <source>References</source>
@@ -4395,7 +4395,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Refreshing sessions</source>
-        <translation>セッションを更新中</translation>
+        <translation>セッションを更新中…</translation>
     </message>
     <message>
         <source>Release to add</source>
@@ -4411,15 +4411,15 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Remove the last point</source>
-        <translation>最後の点を削除</translation>
+        <translation>最後の点を取り消す</translation>
     </message>
     <message>
         <source>Remove {name}</source>
-        <translation>{name} を削除</translation>
+        <translation>{name}を削除</translation>
     </message>
     <message>
         <source>Reopen this session in AI Edit: its prompt, references and the same map zone.</source>
-        <translation>このセッションを AI Edit で再度開きます:prompt、参照、同じマップゾーンが含まれます。</translation>
+        <translation>このセッションをAI Editで再度開きます：プロンプト、参照、同じ範囲が含まれます。</translation>
     </message>
     <message>
         <source>Request cancelled.</source>
@@ -4435,7 +4435,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Restart QGIS</source>
-        <translation>QGIS を再起動</translation>
+        <translation>QGISを再起動</translation>
     </message>
     <message>
         <source>Result</source>
@@ -4443,11 +4443,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Results for "{query}"</source>
-        <translation>"{query}" の検索結果</translation>
+        <translation>「{query}」の検索結果</translation>
     </message>
     <message>
         <source>Run QGIS from a single sentence.</source>
-        <translation>1 つの文章から QGIS を実行します。</translation>
+        <translation>一文の指示でQGISを操作します。</translation>
     </message>
     <message>
         <source>Save reference</source>
@@ -4455,19 +4455,19 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Saved in memory only: the GeoPackage is in use. Save the layer before closing QGIS.</source>
-        <translation>メモリ内のみに保存されました: GeoPackage が使用中です。QGIS を閉じる前に layer を保存してください。</translation>
+        <translation>メモリ上にのみ保存しました：GeoPackageが使用中です。QGISを閉じる前にレイヤを保存してください。</translation>
     </message>
     <message>
         <source>Search prompts</source>
-        <translation>prompt を検索</translation>
+        <translation>プロンプトを検索</translation>
     </message>
     <message>
         <source>Secure connection failed, often because of company SSL inspection. Ask your IT team to allow terra-lab.ai, or import your company root certificate in Settings &gt; Options &gt; Authentication.</source>
-        <translation>安全な接続に失敗しました。多くの場合、会社の SSL 検査が原因です。IT チームに terra-lab.ai の許可を依頼するか、Settings &gt; Options &gt; Authentication で会社のルート証明書をインポートしてください。</translation>
+        <translation>安全な接続に失敗しました。多くの場合、社内のSSL検査が原因です。社内のIT管理者にterra-lab.aiへのアクセス許可を依頼するか、「設定」→「オプション」→「認証」で社内のルート証明書をインポートしてください。</translation>
     </message>
     <message>
         <source>See Pro</source>
-        <translation>Pro を見る</translation>
+        <translation>Proを見る</translation>
     </message>
     <message>
         <source>See it in action</source>
@@ -4475,15 +4475,15 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>See plans on terra-lab.ai</source>
-        <translation>terra-lab.ai でプランを見る</translation>
+        <translation>terra-lab.aiでプランを見る</translation>
     </message>
     <message>
         <source>See usage</source>
-        <translation>使用状況を見る</translation>
+        <translation>利用状況</translation>
     </message>
     <message>
         <source>See what Pro unlocks</source>
-        <translation>Pro で使える機能を見る</translation>
+        <translation>Proで使える機能を見る</translation>
     </message>
     <message>
         <source>Server refused the connection. The service may be temporarily down.</source>
@@ -4491,15 +4491,15 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Session expired. Sign out and back in.</source>
-        <translation>セッションの有効期限が切れました。サインアウトして再度サインインしてください。</translation>
+        <translation>ログインの有効期限が切れました。ログアウトしてから、もう一度ログインしてください。</translation>
     </message>
     <message>
         <source>Session reopened. Edit the prompt or pick a version, then Generate.</source>
-        <translation>セッションを再開しました。prompt を編集するかバージョンを選び、Generate を押してください。</translation>
+        <translation>セッションを再開しました。プロンプトを編集するかバージョンを選び、「生成」を押してください。</translation>
     </message>
     <message>
         <source>Share usage statistics</source>
-        <translation>使用統計を共有</translation>
+        <translation>利用統計を共有</translation>
     </message>
     <message>
         <source>Sharp, clean result for real maps</source>
@@ -4507,7 +4507,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Show a layer, or start with a sample.</source>
-        <translation>layer を表示するか、サンプルから始めましょう。</translation>
+        <translation>レイヤを表示するか、サンプルから始めましょう。</translation>
     </message>
     <message>
         <source>Show it and generate</source>
@@ -4515,35 +4515,35 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Show the AI a style, a legend or an object to match.</source>
-        <translation>一致させたいスタイル、凡例、オブジェクトを AI に見せてください。</translation>
+        <translation>合わせたいスタイル、凡例、オブジェクトをAIに見せてください。</translation>
     </message>
     <message>
         <source>Show the plugin's panel.</source>
-        <translation>plugin のパネルを表示します。</translation>
+        <translation>プラグインのパネルを表示します。</translation>
     </message>
     <message>
         <source>Show this layer in the Layers panel</source>
-        <translation>この layer を Layers パネルに表示</translation>
+        <translation>このレイヤをレイヤパネルに表示</translation>
     </message>
     <message>
         <source>Sign in</source>
-        <translation>サインイン</translation>
+        <translation>ログイン</translation>
     </message>
     <message>
         <source>Sign in to see your plan</source>
-        <translation>サインインしてプランを確認</translation>
+        <translation>ログインしてプランを確認</translation>
     </message>
     <message>
         <source>Sign in to see your plan.</source>
-        <translation>サインインしてプランを確認してください。</translation>
+        <translation>ログインしてプランを確認してください。</translation>
     </message>
     <message>
         <source>Sign out, then sign in again.</source>
-        <translation>サインアウトして、再度サインインしてください。</translation>
+        <translation>ログアウトしてから、もう一度ログインしてください。</translation>
     </message>
     <message>
         <source>Sign-in, plan and privacy</source>
-        <translation>サインイン、プラン、プライバシー</translation>
+        <translation>ログイン、プラン、プライバシー</translation>
     </message>
     <message>
         <source>Sketch where the AI should act.</source>
@@ -4551,11 +4551,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Softer outlines for natural shapes like trees.</source>
-        <translation>木などの自然な形状向けの、やわらかい輪郭。</translation>
+        <translation>木などの自然な形に合う、やわらかい輪郭にします。</translation>
     </message>
     <message>
         <source>Start from {label}</source>
-        <translation>{label} から開始</translation>
+        <translation>{label}から開始</translation>
     </message>
     <message>
         <source>Start the next edit from</source>
@@ -4563,7 +4563,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Start the next edit from this version</source>
-        <translation>次回の編集をこのバージョンから開始</translation>
+        <translation>次の編集をこのバージョンから始めます。</translation>
     </message>
     <message>
         <source>Still generating. The result is added to your map when ready.</source>
@@ -4571,59 +4571,59 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Still waiting, but AI Edit cannot reach the server to check your sign-in.</source>
-        <translation>まだ待機中ですが、AI Edit はサーバーに接続できず、サインイン状態を確認できません。</translation>
+        <translation>まだ待機中ですが、AI Editはサーバーに接続できず、ログイン状態を確認できません。</translation>
     </message>
     <message>
         <source>Straight lines. Click the first point to close, Shift keeps 45 degree angles.</source>
-        <translation>直線。最初の点をクリックして閉じます。Shift で 45 度の角度を維持します。</translation>
+        <translation>直線です。最初の点をクリックして閉じます。Shiftで45度の角度を保てます。</translation>
     </message>
     <message>
         <source>Stroke color</source>
-        <translation>ストロークの色</translation>
+        <translation>ストローク色</translation>
     </message>
     <message>
         <source>Strokes count only inside your zone.</source>
-        <translation>ストロークはゾーン内のみカウントされます。</translation>
+        <translation>範囲内のストロークだけが対象になります。</translation>
     </message>
     <message>
         <source>Subscription inactive. Manage it on terra-lab.ai.</source>
-        <translation>サブスクリプションが無効です。terra-lab.ai で管理してください。</translation>
+        <translation>サブスクリプションが無効です。terra-lab.aiで管理してください。</translation>
     </message>
     <message>
         <source>Swipe between the original map and this result</source>
-        <translation>元の地図とこの結果をスワイプで切り替え</translation>
+        <translation>元の地図とこの結果をスワイプで切り替えます。</translation>
     </message>
     <message>
         <source>Team seats, custom quota, invoices</source>
-        <translation>チームのシート、カスタムクォータ、請求書</translation>
+        <translation>チーム用ライセンス、カスタム利用枠、請求書</translation>
     </message>
     <message>
         <source>TerraLab blog</source>
-        <translation>TerraLab ブログ</translation>
+        <translation>TerraLabブログ</translation>
     </message>
     <message>
         <source>TerraLab is busy right now</source>
-        <translation>TerraLab は現在混み合っています</translation>
+        <translation>TerraLabは現在混み合っています</translation>
     </message>
     <message>
         <source>That click missed the map. Try again on the map itself.</source>
-        <translation>クリックが地図から外れました。地図上でもう一度試してください。</translation>
+        <translation>クリックが地図から外れました。地図上でもう一度お試しください。</translation>
     </message>
     <message>
         <source>That email does not match. Try again.</source>
-        <translation>メールアドレスが一致しません。もう一度試してください。</translation>
+        <translation>メールアドレスが一致しません。もう一度お試しください。</translation>
     </message>
     <message>
         <source>The AI Edit drawing layer is hidden.</source>
-        <translation>AI Edit の描画 layer が非表示です。</translation>
+        <translation>AI Editの描画レイヤが非表示です。</translation>
     </message>
     <message>
         <source>The Free plan takes up to {n} references.</source>
-        <translation>Free プランでは最大 {n} 個の参照を利用できます。</translation>
+        <translation>Freeプランで使える参照は最大{n}件です。</translation>
     </message>
     <message>
         <source>The Free plan takes {n} reference.</source>
-        <translation>Free プランでは {n} 個の参照を利用できます。</translation>
+        <translation>Freeプランで使える参照は{n}件です。</translation>
     </message>
     <message>
         <source>The account could not be deleted.</source>
@@ -4631,27 +4631,27 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>The free plan includes {n} reference. Remove it to add another.</source>
-        <translation>Free プランには {n} 個の参照が含まれます。別の参照を追加するには削除してください。</translation>
+        <translation>Freeプランに含まれる参照は{n}件です。別の参照を追加するには、先に削除してください。</translation>
     </message>
     <message>
         <source>The free plan includes {n} references. Remove one to add another.</source>
-        <translation>Free プランには {n} 個の参照が含まれます。別の参照を追加するには 1 つ削除してください。</translation>
+        <translation>Freeプランに含まれる参照は{n}件です。別の参照を追加するには、1件削除してください。</translation>
     </message>
     <message>
         <source>The imagery this session was edited on is not in this project. Add its Original to see your edits in context.</source>
-        <translation>このセッションで編集した画像がこのプロジェクトにありません。コンテキスト内で編集を確認するには、その Original を追加してください。</translation>
+        <translation>このセッションで編集した元の画像が、このプロジェクトにありません。編集結果を重ねて確認するには、元画像を追加してください。</translation>
     </message>
     <message>
         <source>The layer keeps its last result.</source>
-        <translation>layer は最後の結果を保持します。</translation>
+        <translation>レイヤは最後の結果を保持します。</translation>
     </message>
     <message>
         <source>The map area you select and your prompt go to our image generation partner only to produce the result, and it deletes them within 30 days.</source>
-        <translation>選択した地図範囲と prompt は、結果を生成するためだけに当社の画像生成パートナーに送信され、30 日以内に削除されます。</translation>
+        <translation>選択した範囲とプロンプトは、結果を生成するためだけに当社の画像生成パートナーに送信され、30日以内に削除されます。</translation>
     </message>
     <message>
         <source>The map this layer came from was removed. Vectorize it again.</source>
-        <translation>この layer の元の地図が削除されました。もう一度ベクター化してください。</translation>
+        <translation>このレイヤの元の地図が削除されました。もう一度ベクタ化してください。</translation>
     </message>
     <message>
         <source>The next edit starts from it.</source>
@@ -4659,27 +4659,27 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>The polygons could not be added to your map. Try again.</source>
-        <translation>ポリゴンを地図に追加できませんでした。もう一度試してください。</translation>
+        <translation>ポリゴンを地図に追加できませんでした。もう一度お試しください。</translation>
     </message>
     <message>
         <source>The prompts could not load</source>
-        <translation>prompt を読み込めませんでした</translation>
+        <translation>プロンプトを読み込めませんでした</translation>
     </message>
     <message>
         <source>The written tutorial, on the TerraLab blog.</source>
-        <translation>TerraLab ブログのテキストチュートリアル。</translation>
+        <translation>TerraLabブログにある記事のチュートリアルです。</translation>
     </message>
     <message>
         <source>They help us fix bugs. You can switch them off in Settings whenever you want.</source>
-        <translation>バグの修正に役立ちます。Settings でいつでもオフにできます。</translation>
+        <translation>バグの修正に役立ちます。「設定」でいつでもオフにできます。</translation>
     </message>
     <message>
         <source>This Quality is not in your plan. Upgrade to Pro to use it.</source>
-        <translation>この Quality はご利用のプランに含まれていません。使用するには Pro にアップグレードしてください。</translation>
+        <translation>この品質はご利用のプランに含まれていません。使うにはProにアップグレードしてください。</translation>
     </message>
     <message>
         <source>This computer is no longer signed in</source>
-        <translation>このコンピューターはサインイン済みではなくなりました</translation>
+        <translation>このコンピュータはログインが解除されました</translation>
     </message>
     <message>
         <source>This looks like a photo. Pick a color below.</source>
@@ -4691,7 +4691,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>This result has no saved map zone, so it cannot be reused.</source>
-        <translation>この結果には保存された地図ゾーンがないため、再利用できません。</translation>
+        <translation>この結果には保存された範囲がないため、再利用できません。</translation>
     </message>
     <message>
         <source>Tips</source>
@@ -4699,11 +4699,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Too many attempts. Try again in {seconds} seconds.</source>
-        <translation>試行回数が多すぎます。{seconds} 秒後にもう一度試してください。</translation>
+        <translation>試行回数が多すぎます。{seconds}秒後にもう一度お試しください。</translation>
     </message>
     <message>
         <source>Too many attempts. Try again soon.</source>
-        <translation>試行回数が多すぎます。しばらくしてからもう一度試してください。</translation>
+        <translation>試行回数が多すぎます。しばらくしてから、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Tools</source>
@@ -4711,11 +4711,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Try again in a moment.</source>
-        <translation>しばらくしてからもう一度試してください。</translation>
+        <translation>しばらくしてから、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Try one word, like "trees"</source>
-        <translation>「trees」のように 1 語で試してください</translation>
+        <translation>「木」のように、1語で検索してみてください</translation>
     </message>
     <message>
         <source>Turn buildings, trees or water into polygons.</source>
@@ -4727,7 +4727,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Turn this result into polygons you can edit</source>
-        <translation>この結果を編集可能なポリゴンに変換</translation>
+        <translation>この結果を編集できるポリゴンに変換します。</translation>
     </message>
     <message>
         <source>Turned off</source>
@@ -4735,7 +4735,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Turns a flat-color map into polygons, one class per color.</source>
-        <translation>単色の地図をポリゴンに変換します。色ごとに 1 クラスです。</translation>
+        <translation>単色の地図をポリゴンに変換します。色ごとに1クラスです。</translation>
     </message>
     <message>
         <source>Tutorials</source>
@@ -4743,7 +4743,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Type your email to confirm:</source>
-        <translation>確認のためメールアドレスを入力してください:</translation>
+        <translation>確認のため、メールアドレスを入力してください：</translation>
     </message>
     <message>
         <source>Undo the last stroke ({shortcut})</source>
@@ -4751,7 +4751,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Up to 12 reference images</source>
-        <translation>最大 12 枚の参照画像</translation>
+        <translation>最大12枚の参照画像</translation>
     </message>
     <message>
         <source>Update</source>
@@ -4767,27 +4767,27 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Update to keep using AI Edit. It takes one click in the QGIS Plugin Manager, and the plugin reloads on its own.</source>
-        <translation>AI Edit を使い続けるには更新してください。QGIS Plugin Manager でワンクリックするだけで、plugin は自動的に再読み込みされます。</translation>
+        <translation>AI Editを使い続けるには、更新してください。QGISのプラグインマネージャでワンクリックで更新でき、プラグインは自動的に再読み込みされます。</translation>
     </message>
     <message>
         <source>Updating the layer...</source>
-        <translation>layer を更新しています...</translation>
+        <translation>レイヤを更新中…</translation>
     </message>
     <message>
         <source>Usage</source>
-        <translation>使用状況</translation>
+        <translation>利用状況</translation>
     </message>
     <message>
         <source>Usage statistics</source>
-        <translation>使用統計</translation>
+        <translation>利用統計</translation>
     </message>
     <message>
         <source>Usage stats are on.</source>
-        <translation>使用統計はオンです。</translation>
+        <translation>利用統計はオンです。</translation>
     </message>
     <message>
         <source>Vectorize cancelled.</source>
-        <translation>ベクタライズがキャンセルされました。</translation>
+        <translation>ベクタ化をキャンセルしました。</translation>
     </message>
     <message>
         <source>Versions</source>
@@ -4799,7 +4799,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Wait for this edit to finish</source>
-        <translation>この編集が完了するまでお待ちください</translation>
+        <translation>この編集が完了するまでお待ちください。</translation>
     </message>
     <message>
         <source>We will look into it and get back to you.</source>
@@ -4815,11 +4815,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Where AI Edit writes its generated GeoTIFFs. Leave empty to use {folder} (or the saved project folder).</source>
-        <translation>AI Edit が生成した GeoTIFF の書き込み先です。空のままにすると {folder}（または保存済みプロジェクトフォルダー）を使用します。</translation>
+        <translation>AI Editが生成したGeoTIFFの書き込み先です。空のままにすると{folder}（または保存済みプロジェクトのフォルダ）を使用します。</translation>
     </message>
     <message>
         <source>Where should the AI edit?</source>
-        <translation>AI にどこを編集させますか？</translation>
+        <translation>どこをAIで編集しますか？</translation>
     </message>
     <message>
         <source>While drawing</source>
@@ -4831,11 +4831,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>You can sign back in anytime.</source>
-        <translation>いつでも再度サインインできます。</translation>
+        <translation>いつでも再度ログインできます。</translation>
     </message>
     <message>
         <source>You have {installed}.</source>
-        <translation>{installed} があります。</translation>
+        <translation>現在のバージョンは{installed}です。</translation>
     </message>
     <message>
         <source>You've used this month's free edits</source>
@@ -4843,7 +4843,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Your computer</source>
-        <translation>お使いのコンピューター</translation>
+        <translation>コンピュータ</translation>
     </message>
     <message>
         <source>Your drawing</source>
@@ -4851,31 +4851,31 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Your drawing won't be used</source>
-        <translation>あなたの描画は使用されません</translation>
+        <translation>描画は使用されません</translation>
     </message>
     <message>
         <source>Your email</source>
-        <translation>あなたのメールアドレス</translation>
+        <translation>メールアドレス</translation>
     </message>
     <message>
         <source>Your generations stay in your history until you delete them. On {pro} you can set 30 days, 90 days or 1 year in Settings.</source>
-        <translation>生成した画像は、削除するまで履歴に残ります。{pro} では、設定で 30 日、90 日、または 1 年を選択できます。</translation>
+        <translation>生成した画像は、削除するまで履歴に残ります。{pro}では、「設定」で保持期間を30日、90日、1年から選べます。</translation>
     </message>
     <message>
         <source>Your generations, history and prompts are erased.</source>
-        <translation>生成した画像、履歴、および prompts は消去されます。</translation>
+        <translation>生成した画像、履歴、プロンプトは消去されます。</translation>
     </message>
     <message>
         <source>Your map, before any AI edit</source>
-        <translation>AI 編集前のマップ</translation>
+        <translation>AI編集前の地図</translation>
     </message>
     <message>
         <source>Your network blocked the connection (HTTP {status}). Ask your IT team to allow terra-lab.ai.</source>
-        <translation>お使いのネットワークが接続をブロックしました（HTTP {status}）。IT チームに terra-lab.ai のアクセス許可を依頼してください。</translation>
+        <translation>ネットワークが接続をブロックしました（HTTP {status}）。社内のIT管理者にterra-lab.aiへのアクセス許可を依頼してください。</translation>
     </message>
     <message>
         <source>Your session is saved. Reopen it from Sessions, the clock at the top.</source>
-        <translation>セッションは保存されています。上部の時計（Sessions）から再度開いてください。</translation>
+        <translation>セッションは保存されています。上部の時計アイコン「セッション」から再度開けます。</translation>
     </message>
     <message>
         <source>Your zone is off the imagery. Draw it over your layers.</source>
@@ -4883,39 +4883,39 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Your zone is too small. Draw it at least {pct}% of the map width.</source>
-        <translation>ゾーンが小さすぎます。マップ幅の少なくとも {pct}% で描いてください。</translation>
+        <translation>範囲が小さすぎます。地図の幅の{pct}%以上の大きさで描いてください。</translation>
     </message>
     <message>
         <source>Your {total} free edits return next month</source>
-        <translation>{total} 回の無料編集は来月に復活します</translation>
+        <translation>無料編集{total}回は来月リセットされます</translation>
     </message>
     <message>
         <source>Your {total} free edits return on {date}</source>
-        <translation>{total} 回の無料編集は {date} に復活します</translation>
+        <translation>無料編集{total}回は{date}にリセットされます</translation>
     </message>
     <message>
         <source>by TerraLab</source>
-        <translation>TerraLab 提供</translation>
+        <translation>TerraLab提供</translation>
     </message>
     <message>
         <source>credits left of {limit}</source>
-        <translation>残りクレジット {limit}</translation>
+        <translation>残りクレジット（上限{limit}）</translation>
     </message>
     <message>
         <source>no AI edit</source>
-        <translation>AI 編集なし</translation>
+        <translation>AI編集なし</translation>
     </message>
     <message>
         <source>{count} in {k} classes</source>
-        <translation>{k} クラスに {count} 件</translation>
+        <translation>{count}（{k}クラス）</translation>
     </message>
     <message>
         <source>{head} “{name}”: {count}.</source>
-        <translation>{head} “{name}”: {count} 件。</translation>
+        <translation>{head}「{name}」：{count}。</translation>
     </message>
     <message>
         <source>{hex} is already listed as “{name}”. It is checked.</source>
-        <translation>{hex} は既に “{name}” として登録されています。チェック済みです。</translation>
+        <translation>{hex}はすでに「{name}」として登録されています。チェック済みです。</translation>
     </message>
     <message>
         <source>{label} {n}</source>
@@ -4923,31 +4923,31 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>{map} polygons</source>
-        <translation>{map} ポリゴン</translation>
+        <translation>{map}のポリゴン</translation>
     </message>
     <message>
         <source>{n} of {limit}</source>
-        <translation>{n} / {limit}</translation>
+        <translation>{n}/{limit}</translation>
     </message>
     <message>
         <source>{n} polygons</source>
-        <translation>{n} ポリゴン</translation>
+        <translation>ポリゴン{n}個</translation>
     </message>
     <message>
         <source>{n} strokes</source>
-        <translation>{n} ストローク</translation>
+        <translation>ストローク{n}本</translation>
     </message>
     <message>
         <source>{n} were not added: {names}. {reason}</source>
-        <translation>{n} 件は追加されませんでした: {names}。{reason}</translation>
+        <translation>{n}件は追加されませんでした：{names}。{reason}</translation>
     </message>
     <message>
         <source>{ref} and {markup} show the AI what you mean. The {library} has ready-made prompts.</source>
-        <translation>{ref} と {markup} は、AI にあなたの意図を示します。{library} には既製の prompts が用意されています。</translation>
+        <translation>{ref}と{markup}は、やりたいことをAIに示します。{library}には、すぐ使えるプロンプトが用意されています。</translation>
     </message>
     <message>
         <source>“Color tolerance” at {n} matches no pixel. Raise it.</source>
-        <translation>“Color tolerance” を {n} にしても一致するピクセルがありません。値を上げてください。</translation>
+        <translation>「色の許容範囲」を{n}にしても、一致するピクセルがありません。値を大きくしてください。</translation>
     </message>
     <message>
         <source>“Remove speckle” at {n} px removed every shape. Lower it.</source>
@@ -4955,7 +4955,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>“{name}” updated: {count}.</source>
-        <translation>“{name}” を更新しました: {count} 件。</translation>
+        <translation>「{name}」を更新しました：{count}。</translation>
     </message>
     <message>
         <source>&#x27;Color tolerance&#x27; at {n} matches no pixel. Raise it.</source>
@@ -5075,7 +5075,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Open QGIS&#x27;s Data Source Manager to add data</source>
-        <translation>データを追加するには、QGIS のデータソースマネージャーを開いてください</translation>
+        <translation>データを追加するには、QGISのデータソースマネージャを開いてください。</translation>
     </message>
     <message>
         <source>Original, before any edit</source>
@@ -5127,7 +5127,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Show the plugin&#x27;s panel.</source>
-        <translation>plugin のパネルを表示します。</translation>
+        <translation>プラグインのパネルを表示します。</translation>
     </message>
     <message>
         <source>Size</source>
@@ -5139,7 +5139,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Try one word, like &quot;trees&quot;</source>
-        <translation>「trees」のように 1 語で試してください</translation>
+        <translation>「木」のように、1語で検索してみてください</translation>
     </message>
     <message>
         <source>Turn on a layer, or start with a sample.</source>
@@ -5171,19 +5171,19 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>{n} stroke. Click Done to guide the edit with it.</source>
-        <translation>{n} 本のストローク。完了をクリックすると編集のガイドに使用されます。</translation>
+        <translation>ストローク{n}本。「完了」をクリックすると、編集のガイドとして使われます。</translation>
     </message>
     <message>
         <source>{n} strokes. Click Done to guide the edit with them.</source>
-        <translation>{n} 本のストローク。完了をクリックすると編集のガイドに使用されます。</translation>
+        <translation>ストローク{n}本。「完了」をクリックすると、編集のガイドとして使われます。</translation>
     </message>
     <message>
         <source>1 layer above not sent: plan limit</source>
-        <translation>上にあるlayer 1件は送信されません: プランの上限</translation>
+        <translation>上のレイヤ1件は送信されません：プランの上限</translation>
     </message>
     <message>
         <source>&lt; 0.1 km²</source>
-        <translation>&lt; 0.1 km²</translation>
+        <translation>0.1km²未満</translation>
     </message>
     <message>
         <source>AI Edit needs an image under your data.</source>
@@ -5191,7 +5191,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Add at least 3 points</source>
-        <translation>ポイントを3つ以上追加してください</translation>
+        <translation>点を3つ以上追加してください</translation>
     </message>
     <message>
         <source>Add satellite imagery here</source>
@@ -5199,11 +5199,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>At this zoom one pixel covers about {m} m. Zoom in or draw a smaller zone for buildings, trees or roads.</source>
-        <translation>このズームでは1ピクセルが約{m} mをカバーします。建物、樹木、道路には、ズームインするか、より小さいゾーンを描いてください。</translation>
+        <translation>このズームでは1ピクセルが約{m}mに相当します。建物、樹木、道路を扱うには、ズームインするか、範囲を小さく描いてください。</translation>
     </message>
     <message>
         <source>Cancel to pick another layer.</source>
-        <translation>キャンセルして別のlayerを選択してください。</translation>
+        <translation>キャンセルして別のレイヤを選択してください。</translation>
     </message>
     <message>
         <source>Cancelled before starting the run.</source>
@@ -5215,11 +5215,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Capturing your zone...</source>
-        <translation>ゾーンを取得しています...</translation>
+        <translation>範囲を取得中…</translation>
     </message>
     <message>
         <source>Click to add points, or drag a box</source>
-        <translation>クリックしてポイントを追加、またはボックスをドラッグ</translation>
+        <translation>クリックで点を追加、またはドラッグで四角形を描く</translation>
     </message>
     <message>
         <source>Could not get your settings from the server.</source>
@@ -5227,15 +5227,15 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Could not get your settings from the server. Press Generate to try again.</source>
-        <translation>サーバーから設定を取得できませんでした。生成を押して再試行してください。</translation>
+        <translation>サーバーから設定を取得できませんでした。「生成」を押して、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Could not start the edit. No credit was used. Press Generate to try again.</source>
-        <translation>編集を開始できませんでした。クレジットは消費されていません。生成を押して再試行してください。</translation>
+        <translation>編集を開始できませんでした。クレジットは消費されていません。「生成」を押して、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Credits renew on {date}</source>
-        <translation>クレジットは{date}に更新されます</translation>
+        <translation>クレジットは{date}にリセットされます</translation>
     </message>
     <message>
         <source>Double-click, right-click or press Enter to finish</source>
@@ -5243,11 +5243,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Draw a line, then say: add a path along the pink line.</source>
-        <translation>線を描いてから、こう言います: ピンクの線に沿ってパスを追加して。</translation>
+        <translation>線を描いてから、こう指示します：「ピンクの線に沿って道を追加して」。</translation>
     </message>
     <message>
         <source>Draw a zone on the map to start.</source>
-        <translation>開始するには、マップ上にゾーンを描いてください。</translation>
+        <translation>開始するには、地図上に範囲を描いてください。</translation>
     </message>
     <message>
         <source>Fill the holes inside each shape, except where another checked class sits.</source>
@@ -5255,11 +5255,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Generating your image...</source>
-        <translation>画像を生成しています...</translation>
+        <translation>画像を生成中…</translation>
     </message>
     <message>
         <source>Getting ready...</source>
-        <translation>準備しています...</translation>
+        <translation>準備中…</translation>
     </message>
     <message>
         <source>Image to edit</source>
@@ -5271,15 +5271,15 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Keep clicking to add points</source>
-        <translation>クリックを続けてポイントを追加</translation>
+        <translation>クリックを続けて点を追加</translation>
     </message>
     <message>
         <source>Keep this result, draw a new zone with this prompt</source>
-        <translation>この結果を保持し、このpromptで新しいゾーンを描く</translation>
+        <translation>この結果を残して、このプロンプトで新しい範囲を描きます。</translation>
     </message>
     <message>
         <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size”, or raise “Color tolerance”.</source>
-        <translation>この設定では図形が残りません。“Expand/Contract”を0に近づける、“Min polygon size”を下げる、または“Color tolerance”を上げてください。</translation>
+        <translation>この設定では図形が残りません。「膨張／収縮」を0に近づけるか、「最小ポリゴンサイズ」を小さくするか、「色の許容範囲」を大きくしてください。</translation>
     </message>
     <message>
         <source>Open my dashboard</source>
@@ -5291,19 +5291,19 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Outline an area, say what to change, get a new map layer.</source>
-        <translation>エリアを囲み、変更内容を伝えると、新しいマップlayerが得られます。</translation>
+        <translation>範囲を囲んで変更内容を伝えると、新しい地図レイヤが作成されます。</translation>
     </message>
     <message>
         <source>Pick a zone, a selection or a polygon layer already in the project</source>
-        <translation>プロジェクト内のゾーン、選択範囲、またはポリゴンlayerを選択</translation>
+        <translation>プロジェクトにある範囲、選択範囲、またはポリゴンレイヤを選べます。</translation>
     </message>
     <message>
         <source>Pick the layer to edit first.</source>
-        <translation>先に編集するlayerを選択してください。</translation>
+        <translation>先に編集するレイヤを選択してください。</translation>
     </message>
     <message>
         <source>Pick {base} first, then try again.</source>
-        <translation>先に{base}を選択してから、再試行してください。</translation>
+        <translation>先に{base}を選択してから、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Please describe what you want to change (at least {chars} characters).</source>
@@ -5311,7 +5311,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Prompt cut to {count} characters, the most AI Edit accepts.</source>
-        <translation>promptは{count}文字に短縮されました。AI Editが受け付ける最大数です。</translation>
+        <translation>プロンプトを{count}文字に切り詰めました。AI Editが受け付ける上限です。</translation>
     </message>
     <message>
         <source>Same edit elsewhere</source>
@@ -5319,11 +5319,11 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Same prompt, same base: a new variation</source>
-        <translation>同じprompt、同じベース: 新しいバリエーション</translation>
+        <translation>同じプロンプト、同じベースで、新しいバリエーションを生成します。</translation>
     </message>
     <message>
         <source>Save or discard your edits on the vector layer, then run Vectorize again.</source>
-        <translation>ベクターlayerの編集を保存または破棄してから、ベクター化を再度実行してください。</translation>
+        <translation>ベクタレイヤの編集を保存または破棄してから、もう一度「ベクタ化」を実行してください。</translation>
     </message>
     <message>
         <source>Shapes smaller than this join the class around them, so no hole is left.</source>
@@ -5331,27 +5331,27 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>Sign in again to generate.</source>
-        <translation>生成するには再度サインインしてください。</translation>
+        <translation>生成するには、もう一度ログインしてください。</translation>
     </message>
     <message>
         <source>Sign-in timed out. Click Sign in to try again.</source>
-        <translation>サインインがタイムアウトしました。サインインをクリックして再試行してください。</translation>
+        <translation>ログインがタイムアウトしました。「ログイン」をクリックして、もう一度お試しください。</translation>
     </message>
     <message>
         <source>Signed in (from {}).</source>
-        <translation>サインインしました（{}から）。</translation>
+        <translation>ログインしました（{}から）。</translation>
     </message>
     <message>
         <source>Signed in as {} (from {}).</source>
-        <translation>{}としてサインインしました（{}から）。</translation>
+        <translation>{}としてログインしました（{}から）。</translation>
     </message>
     <message>
         <source>Signed in.</source>
-        <translation>サインインしました。</translation>
+        <translation>ログインしました。</translation>
     </message>
     <message>
         <source>Signed out</source>
-        <translation>サインアウトしました</translation>
+        <translation>ログアウトしています</translation>
     </message>
     <message>
         <source>That shape is too thin or too small to edit. Pick another one.</source>
@@ -5359,27 +5359,27 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>That zone cannot be placed on this map. Draw one instead.</source>
-        <translation>そのゾーンはこのマップに配置できません。代わりに描いてください。</translation>
+        <translation>その範囲はこの地図に配置できません。代わりに範囲を描いてください。</translation>
     </message>
     <message>
         <source>That zone is no longer in the project. Pick another one.</source>
-        <translation>そのゾーンはプロジェクトにありません。別のものを選択してください。</translation>
+        <translation>その範囲はプロジェクトにありません。別の範囲を選択してください。</translation>
     </message>
     <message>
         <source>The image was generated but could not be saved to your output folder. It is kept in your prompt library: open the Recent tab and download the AI result, or change the output folder and try again.</source>
-        <translation>画像は生成されましたが、出力フォルダーに保存できませんでした。promptライブラリに保存されています: 最近タブを開いてAIの結果をダウンロードするか、出力フォルダーを変更して再試行してください。</translation>
+        <translation>画像は生成されましたが、出力フォルダに保存できませんでした。ライブラリに保存されています。「最近」タブを開いて「AIの結果」をダウンロードするか、出力フォルダを変更してもう一度お試しください。</translation>
     </message>
     <message>
         <source>The layer the AI edits. Visible layers above it are sent as references.</source>
-        <translation>AIが編集するlayerです。その上にある表示中のlayerは参照として送信されます。</translation>
+        <translation>AIが編集するレイヤです。その上にある表示中のレイヤは参照として送信されます。</translation>
     </message>
     <message>
         <source>The map CRS changed after you drew the zone. Draw the zone again.</source>
-        <translation>ゾーンを描いた後にマップのCRSが変更されました。ゾーンを描き直してください。</translation>
+        <translation>範囲を描いた後に、地図のCRSが変更されました。範囲を描き直してください。</translation>
     </message>
     <message>
         <source>The map had not finished loading, so nothing was sent and no credit was used. Wait for the map to appear, then press Generate again.</source>
-        <translation>マップの読み込みが完了していなかったため、何も送信されず、クレジットも消費されていません。マップが表示されるのを待ってから、生成を再度押してください。</translation>
+        <translation>地図の読み込みが完了していなかったため、何も送信されず、クレジットも消費されていません。地図が表示されるのを待ってから、もう一度「生成」を押してください。</translation>
     </message>
     <message>
         <source>The result could not be downloaded to QGIS.</source>
@@ -5387,7 +5387,7 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>The result was saved but could not be added to the map. It is in Recent in your library.</source>
-        <translation>結果は保存されましたが、マップに追加できませんでした。ライブラリの最近にあります。</translation>
+        <translation>結果は保存されましたが、地図に追加できませんでした。ライブラリの「最近」にあります。</translation>
     </message>
     <message>
         <source>The service could not complete this request.</source>
@@ -5395,15 +5395,15 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>The service is busy. Please try again shortly.</source>
-        <translation>サービスが混み合っています。しばらくしてから再試行してください。</translation>
+        <translation>サービスが混み合っています。しばらくしてから、もう一度お試しください。</translation>
     </message>
     <message>
         <source>The version this came from is not in this session.</source>
-        <translation>これの元になったバージョンは、このセッションにありません。</translation>
+        <translation>元にしたバージョンが、このセッションにありません。</translation>
     </message>
     <message>
         <source>This edit is taking longer than expected. Your result may still arrive in Recent in your library in a few minutes.</source>
-        <translation>この編集は想定より時間がかかっています。数分後にライブラリの最近に結果が届く可能性があります。</translation>
+        <translation>この編集は想定より時間がかかっています。数分後に、ライブラリの「最近」に結果が届く場合があります。</translation>
     </message>
     <message>
         <source>This file cannot be read. Check that it still exists and that you can open it.</source>
@@ -5411,103 +5411,151 @@ We'd love to hear from you!</source>
     </message>
     <message>
         <source>This sign-in is for a different TerraLab product. Sign in again from AI Edit.</source>
-        <translation>このサインインは別のTerraLab製品のものです。AI Editから再度サインインしてください。</translation>
+        <translation>このログインは別のTerraLab製品のものです。AI Editからもう一度ログインしてください。</translation>
     </message>
     <message>
         <source>This sign-in was revoked. Sign in again.</source>
-        <translation>このサインインは取り消されました。再度サインインしてください。</translation>
+        <translation>このログインは取り消されました。もう一度ログインしてください。</translation>
     </message>
     <message>
         <source>This zone cannot be used.</source>
-        <translation>このゾーンは使用できません。</translation>
+        <translation>この範囲は使用できません。</translation>
     </message>
     <message>
         <source>This zone could not be checked. Draw it again.</source>
-        <translation>このゾーンを確認できませんでした。描き直してください。</translation>
+        <translation>この範囲を確認できませんでした。描き直してください。</translation>
     </message>
     <message>
         <source>We lost contact with the server during your edit. It may still finish: check Recent in your library in a few minutes before trying again.</source>
-        <translation>編集中にサーバーとの接続が切れました。まだ完了する可能性があります: 再試行する前に、数分後にライブラリの最近を確認してください。</translation>
+        <translation>編集中にサーバーとの接続が切れました。処理はこのまま完了する場合があります。もう一度試す前に、数分後にライブラリの「最近」を確認してください。</translation>
     </message>
     <message>
         <source>You are signed in. Outline an area on the example map to make an edit.</source>
-        <translation>サインインしています。例のマップでエリアを囲んで編集を行ってください。</translation>
+        <translation>ログイン済みです。サンプルの地図で範囲を囲んで、編集を実行してください。</translation>
     </message>
     <message>
         <source>You are signed out. Click Sign in to continue.</source>
-        <translation>サインアウトしています。続行するにはサインインをクリックしてください。</translation>
+        <translation>ログアウトしています。続行するには「ログイン」をクリックしてください。</translation>
     </message>
     <message>
         <source>You are signed out. Sign in again to use AI Edit.</source>
-        <translation>サインアウトしています。AI Editを使用するには再度サインインしてください。</translation>
+        <translation>ログアウトしています。AI Editを使用するには、もう一度ログインしてください。</translation>
     </message>
     <message>
         <source>You are signed out. Sign in to use AI Edit.</source>
-        <translation>サインアウトしています。AI Editを使用するにはサインインしてください。</translation>
+        <translation>ログアウトしています。AI Editを使用するには、ログインしてください。</translation>
     </message>
     <message>
         <source>You've used this month's {limit} free credits. They renew at your next monthly reset.</source>
-        <translation>今月の無料クレジット{limit}を使い切りました。次回の月次リセットで更新されます。</translation>
+        <translation>今月の無料クレジット{limit}を使い切りました。クレジットは次回の月次リセットで再び使えるようになります。</translation>
     </message>
     <message>
         <source>Your account changed. Please try again.</source>
-        <translation>アカウントが変更されました。再試行してください。</translation>
+        <translation>アカウントが変更されました。もう一度お試しください。</translation>
     </message>
     <message>
         <source>Your output folder could not be used, so the result was saved in {folder}. You can pick another folder in the settings.</source>
-        <translation>出力フォルダーを使用できなかったため、結果は{folder}に保存されました。設定で別のフォルダーを選択できます。</translation>
+        <translation>出力フォルダを使用できなかったため、結果は{folder}に保存しました。「設定」で別のフォルダを選択できます。</translation>
     </message>
     <message>
         <source>Your result may still appear in Recent in your library.</source>
-        <translation>結果はライブラリの最近にまだ表示される場合があります。</translation>
+        <translation>結果は、ライブラリの「最近」に表示される場合があります。</translation>
     </message>
     <message>
         <source>Your sign-in has expired. Sign in again to continue.</source>
-        <translation>サインインの有効期限が切れました。続行するには再度サインインしてください。</translation>
+        <translation>ログインの有効期限が切れました。続行するには、もう一度ログインしてください。</translation>
     </message>
     <message>
         <source>Your sign-in is no longer valid. Click Sign in to sign in again.</source>
-        <translation>サインインは無効になりました。サインインをクリックして再度サインインしてください。</translation>
+        <translation>ログインが無効になりました。「ログイン」をクリックして、もう一度ログインしてください。</translation>
     </message>
     <message>
         <source>Your sign-in is no longer valid. Sign in again.</source>
-        <translation>サインインは無効になりました。再度サインインしてください。</translation>
+        <translation>ログインが無効になりました。もう一度ログインしてください。</translation>
     </message>
     <message>
         <source>Your zone was cleared: no layer is visible on the map anymore.</source>
-        <translation>ゾーンはクリアされました: マップに表示中のlayerがなくなりました。</translation>
+        <translation>範囲をクリアしました：地図に表示中のレイヤがなくなりました。</translation>
     </message>
     <message>
         <source>or use an existing zone</source>
-        <translation>または既存のゾーンを使用</translation>
+        <translation>または既存の範囲を使用</translation>
     </message>
     <message>
         <source>{area} km²</source>
-        <translation>{area} km²</translation>
+        <translation>{area}km²</translation>
     </message>
     <message>
         <source>{area}, very large</source>
-        <translation>{area}、非常に大きい</translation>
+        <translation>{area}、非常に広い</translation>
     </message>
     <message>
         <source>{layer} ({count} selected)</source>
-        <translation>{layer}（{count}件選択中）</translation>
+        <translation>{layer}（選択済み{count}件）</translation>
     </message>
     <message>
         <source>{name} draws nothing inside your zone</source>
-        <translation>{name}はゾーン内に何も描画しません</translation>
+        <translation>{name}には範囲内に表示される内容がありません</translation>
     </message>
     <message>
         <source>{n} layers above not sent: plan limit</source>
-        <translation>上にあるlayer {n}件は送信されません: プランの上限</translation>
+        <translation>上のレイヤ{n}件は送信されません：プランの上限</translation>
     </message>
     <message>
         <source>Download incomplete: the image ends early ({got} bytes)</source>
-        <translation>ダウンロードが不完全です: 画像が途中で終わっています ({got} バイト)</translation>
+        <translation>ダウンロードが不完全です：画像が途中で終わっています（{got}バイト）</translation>
     </message>
     <message>
         <source>Your image could not be sent: the connection is too slow or was cut. Try again, or pick a lower resolution.</source>
-        <translation>画像を送信できませんでした: 接続が遅すぎるか、切断されました。もう一度お試しください。解像度を下げると改善することがあります。</translation>
+        <translation>画像を送信できませんでした：接続が遅すぎるか、切断されました。もう一度お試しください。解像度を下げると改善することがあります。</translation>
+    </message>
+    <message>
+        <source>2. Click to contact us</source>
+        <translation>2. クリックしてお問い合わせ</translation>
+    </message>
+    <message>
+        <source>AI Edit settings are still loading. Draw the zone again in a moment.</source>
+        <translation>AI Editの設定を読み込み中です。しばらくしてからゾーンをもう一度描いてください。</translation>
+    </message>
+    <message>
+        <source>Connect to the internet to load AI Edit settings.</source>
+        <translation>AI Editの設定を読み込むには、インターネットに接続してください。</translation>
+    </message>
+    <message>
+        <source>Copy link</source>
+        <translation>リンクをコピー</translation>
+    </message>
+    <message>
+        <source>Could not reach the server to prepare your zone. Check your connection and try again.</source>
+        <translation>ゾーンを準備するためのサーバーに接続できませんでした。接続を確認して、もう一度お試しください。</translation>
+    </message>
+    <message>
+        <source>Custom needs?</source>
+        <translation>特別なご要望がありますか？</translation>
+    </message>
+    <message>
+        <source>Free plan with AI edits every month. Signing up takes 15 seconds in your browser.</source>
+        <translation>Freeプランでは毎月AI編集をご利用いただけます。新規登録はブラウザで15秒です。</translation>
+    </message>
+    <message>
+        <source>Loading settings from the server...</source>
+        <translation>サーバーから設定を読み込み中…</translation>
+    </message>
+    <message>
+        <source>Sign in to see this template's prompt</source>
+        <translation>ログインしてこのテンプレートのプロンプトを表示</translation>
+    </message>
+    <message>
+        <source>Sign in to use this template</source>
+        <translation>ログインしてこのテンプレートを使用</translation>
+    </message>
+    <message>
+        <source>Up to {n} reference images</source>
+        <translation>参照画像は最大{n}枚</translation>
+    </message>
+    <message>
+        <source>price loading</source>
+        <translation>価格を読み込み中</translation>
     </message>
 </context>
 </TS>

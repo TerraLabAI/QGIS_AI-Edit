@@ -13,7 +13,8 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ....core import qt_compat as QtC
-from ....core.config_store import get_export_copy
+from ....core.config_store import ConfigMissing, get_export_copy
+from ....core.generation.vectorization_service import refine_defaults
 from ....core.i18n import tr
 from ...dock import design_tokens as T
 from ...panel_helpers import (
@@ -27,10 +28,14 @@ from ...panel_helpers import (
 
 
 
-_REFINE_TOLERANCE_DEFAULT = 90
-_REFINE_SIMPLIFY_DEFAULT = 1.0
-_REFINE_SIEVE_DEFAULT = 10
-_REFINE_MIN_PIXELS_DEFAULT = 50
+
+
+def _served_refine_defaults() -> dict | None:
+
+    try:
+        return refine_defaults()
+    except ConfigMissing:
+        return None
 
 
 
@@ -72,6 +77,11 @@ class RefineUiMixin:
 
 
         group = PanelSection(get_export_copy("widgets.refine_ui.refine_group_title", tr("Refine")))
+
+
+        served = _served_refine_defaults()
+        self._refine_defaults_pending = served is None
+        start = served or {"tolerance": 0, "simplify": 0.0, "sieve": 0, "min_pixels": 0}
         content_layout = QVBoxLayout()
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(T.SPACE_CARD)
@@ -170,7 +180,7 @@ class RefineUiMixin:
                 "widgets.refine_ui.color_tolerance_tip_short",
                 tr("How far a pixel's color may drift from its class. Higher takes in noisy shades."),
             ),
-            0, 255, _REFINE_TOLERANCE_DEFAULT,
+            0, 255, start["tolerance"],
         )
 
         content_layout.addWidget(
@@ -183,7 +193,7 @@ class RefineUiMixin:
                 "widgets.refine_ui.simplify_outline_tip",
                 tr("Reduce small variations in the outline (0 = no change)."),
             ),
-            0.0, 50.0, _REFINE_SIMPLIFY_DEFAULT, 0.5,
+            0.0, 50.0, start["simplify"], 0.5,
         )
         self._round_corners_check = _check_row(
             content_layout,
@@ -215,7 +225,7 @@ class RefineUiMixin:
                 "widgets.refine_ui.remove_speckle_tip",
                 tr("Drop connected blobs smaller than this many pixels before tracing."),
             ),
-            0, 2000, _REFINE_SIEVE_DEFAULT,
+            0, 2000, start["sieve"],
         )
 
         self._sieve_spin.setSuffix(" px")
@@ -240,7 +250,7 @@ class RefineUiMixin:
                 "widgets.refine_ui.min_polygon_size_tip_merge",
                 tr("Shapes smaller than this join the class around them, so no hole is left."),
             ),
-            0, 100000, _REFINE_MIN_PIXELS_DEFAULT,
+            0, 100000, start["min_pixels"],
         )
         self._min_pixels_spin.setSuffix(" px")
 
@@ -290,12 +300,16 @@ class RefineUiMixin:
         return group
 
     def _refine_at_defaults(self) -> bool:
+        served = _served_refine_defaults()
+        if served is None:
+
+            return True
         return (
-            self._tolerance_spin.value() == _REFINE_TOLERANCE_DEFAULT
-            and self._sieve_spin.value() == _REFINE_SIEVE_DEFAULT
-            and abs(self._simplify_spin.value() - _REFINE_SIMPLIFY_DEFAULT) < 1e-9
+            self._tolerance_spin.value() == served["tolerance"]
+            and self._sieve_spin.value() == served["sieve"]
+            and abs(self._simplify_spin.value() - served["simplify"]) < 1e-9
             and self._expand_spin.value() == 0
-            and self._min_pixels_spin.value() == _REFINE_MIN_PIXELS_DEFAULT
+            and self._min_pixels_spin.value() == served["min_pixels"]
             and not self._round_corners_check.isChecked()
             and not self._fill_holes_check.isChecked()
         )
@@ -310,17 +324,28 @@ class RefineUiMixin:
         self._reset_refine_spinboxes()
         self._on_refine_changed()
 
+    def _ensure_refine_defaults(self) -> bool:
+
+
+        if not getattr(self, "_refine_defaults_pending", False):
+            return True
+        if _served_refine_defaults() is None:
+            return False
+        self._reset_refine_spinboxes()
+        return True
+
     def _reset_refine_spinboxes(self) -> None:
-        tolerance_default = _REFINE_TOLERANCE_DEFAULT
-        sieve_default = _REFINE_SIEVE_DEFAULT
-        simplify_default = _REFINE_SIMPLIFY_DEFAULT
-        min_pixels_default = _REFINE_MIN_PIXELS_DEFAULT
+        served = _served_refine_defaults()
+        if served is None:
+            self._sync_refine_reset()
+            return
+        self._refine_defaults_pending = False
         for spin, default in (
-            (self._tolerance_spin, tolerance_default),
-            (self._sieve_spin, sieve_default),
-            (self._simplify_spin, simplify_default),
+            (self._tolerance_spin, served["tolerance"]),
+            (self._sieve_spin, served["sieve"]),
+            (self._simplify_spin, served["simplify"]),
             (self._expand_spin, 0),
-            (self._min_pixels_spin, min_pixels_default),
+            (self._min_pixels_spin, served["min_pixels"]),
         ):
             spin.blockSignals(True)
             spin.setValue(default)

@@ -12,6 +12,7 @@ from ..core.config_store import get_export_copy, get_export_dial
 from ..core.errors import NETWORK_ERROR_CODES
 from ..core.i18n import tr
 from ..core.logger import log_debug, log_warning
+from ..core.paywall_state import remember_usage, usage_epoch
 from ..core.product_identity import PRODUCT_ID
 from ..core.request_context import plugin_version, request_context
 from .blocking_request import BlockingRequest
@@ -205,6 +206,7 @@ class TerraLabClient:
         upload_token: str | None = None,
         context_images: list[str] | None = None,
         context_image_notes: list[str] | None = None,
+        context_image_meta: list[dict | None] | None = None,
         guidance_image: str | None = None,
         guidance_upload_token: str | None = None,
         centroid_lat: float | None = None,
@@ -223,6 +225,10 @@ class TerraLabClient:
         template_name: str | None = None,
         idempotency_key: str | None = None,
     ) -> dict:
+
+
+
+
 
 
 
@@ -270,6 +276,11 @@ class TerraLabClient:
 
             if context_image_notes and any(n for n in context_image_notes):
                 payload["context_image_notes"] = context_image_notes
+            if (
+                context_image_meta and len(context_image_meta) == len(context_images)
+                and any(context_image_meta)
+            ):
+                payload["context_image_meta"] = context_image_meta
 
 
 
@@ -394,9 +405,13 @@ class TerraLabClient:
     def get_usage(self, auth: dict, timeout_ms: int | None = None, retry: bool = True) -> dict:
 
 
+        epoch = usage_epoch()
         if not retry:
-            return self._request("GET", "/api/plugin/usage", auth=auth, timeout_ms=timeout_ms)
-        return self._read("/api/plugin/usage", auth=auth, timeout_ms=timeout_ms)
+            usage = self._request("GET", "/api/plugin/usage", auth=auth, timeout_ms=timeout_ms)
+        else:
+            usage = self._read("/api/plugin/usage", auth=auth, timeout_ms=timeout_ms)
+        remember_usage(usage, epoch)
+        return usage
 
     def get_favorites(self, auth: dict) -> dict:
 
@@ -527,7 +542,11 @@ class TerraLabClient:
         path = "/api/plugin/account"
         if include_usage:
             path += "?include=usage"
-        return self._read(path, auth=auth, timeout_ms=_startup_timeout_ms())
+        epoch = usage_epoch()
+        account = self._read(path, auth=auth, timeout_ms=_startup_timeout_ms())
+        if isinstance(account, dict):
+            remember_usage(account.get("usage"), epoch)
+        return account
 
     def get_export_config(self) -> dict:
 
@@ -538,7 +557,11 @@ class TerraLabClient:
 
 
         path = _with_context("/api/plugin/bootstrap")
-        return self._read(path, auth=auth or None, timeout_ms=_startup_timeout_ms())
+        epoch = usage_epoch()
+        bundle = self._read(path, auth=auth or None, timeout_ms=_startup_timeout_ms())
+        if isinstance(bundle, dict):
+            remember_usage(bundle.get("usage"), epoch)
+        return bundle
 
     def get_config(self, product: str, auth: dict | None = None) -> dict:
 
@@ -633,14 +656,19 @@ class TerraLabClient:
         )
 
     def analyze_pixels(
-        self, auth: dict, kind: str, width: int, height: int, rgb: str, seg_hint: bool = False
+        self, auth: dict, kind: str, width: int, height: int, rgb: str,
+        seg_hint: bool = False, request_id: str | None = None,
     ) -> dict:
+
+
 
 
 
         payload = {"kind": kind, "width": int(width), "height": int(height), "rgb": rgb}
         if seg_hint:
             payload["seg_hint"] = True
+        if request_id:
+            payload["request_id"] = request_id
         return self._request(
             "POST",
             "/api/ai-edit/analyze-pixels",
@@ -653,13 +681,15 @@ class TerraLabClient:
 
 
 
-        return self._request(
-            "POST",
-            "/api/ai-edit/export-size",
-            auth=auth,
-            body=json_body(inputs),
-            timeout_ms=get_export_dial("pipeline.terralab_client.quick_post_timeout_ms", _TIMEOUT_QUICK_POST_MS),
-        )
+
+
+
+
+        body = json_body(inputs)
+        timeout_ms = _startup_timeout_ms()
+        return self._with_read_retry(lambda: self._request(
+            "POST", "/api/ai-edit/export-size", auth=auth, body=body, timeout_ms=timeout_ms,
+        ))
 
     def analyze_palette(self, auth: dict, total: int, bins: list) -> dict:
 
@@ -686,14 +716,22 @@ class TerraLabClient:
 
 
 
-        result = self._request("GET", path, auth=auth, timeout_ms=timeout_ms)
+        return self._with_read_retry(
+            lambda: self._request("GET", path, auth=auth, timeout_ms=timeout_ms)
+        )
+
+    @staticmethod
+    def _with_read_retry(send) -> dict:
+
+
+        result = send()
         for delay in _READ_RETRY_DELAYS_S:
             if not _should_retry_read(result):
                 return result
             log_debug(f"Read retry in {delay:.0f}s after {result.get('code')}")
             if _wait_cancellable(delay):
                 return _cancelled_result()
-            result = self._request("GET", path, auth=auth, timeout_ms=timeout_ms)
+            result = send()
         return result
 
     def _request(

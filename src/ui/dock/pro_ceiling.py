@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import html
+
 from qgis.PyQt.QtWidgets import QApplication, QPushButton
 
 from ...core import qt_compat as QtC
@@ -17,13 +19,24 @@ from ...core.config_store import get_activation_copy, get_export_copy, get_expor
 from ...core.date_format import format_reset_date
 from ...core.i18n import tr
 from ...core.number_format import format_count
-from ...core.pro_ceiling import pro_ceiling_contact_email
+from ...core.pro_ceiling import is_contact_link, pro_ceiling_contact_email
+from .design_tokens import LINK_INK
 
 _COPIED_MS = 2000
 
 
-def copy_cta_text() -> str:
+def copy_cta_text(contact: str | None = None) -> str:
+
+    value = pro_ceiling_contact_email() if contact is None else contact
+    if is_contact_link(value):
+        return tr("Copy link")
     return get_activation_copy("pro_ceiling.copy_cta", tr("Copy email"))
+
+
+def contact_link_html(url: str) -> str:
+
+    return '<a href="{}" style="color: {};">{}</a>'.format(
+        html.escape(url, quote=True), LINK_INK, html.escape(tr("Contact us")))
 
 
 def copied_text() -> str:
@@ -32,6 +45,10 @@ def copied_text() -> str:
 
 def custom_needs_line(email: str) -> str:
 
+
+
+    if is_contact_link(email):
+        return "<qt>{} {}</qt>".format(html.escape(tr("Custom needs?")), contact_link_html(email))
     text = get_activation_copy("pro_ceiling.custom_needs", tr("Custom needs? Write to us: {email}"))
     return text.replace("{email}", email)
 
@@ -72,11 +89,13 @@ class DockProCeilingMixin:
         self.hide_prewall_info()
         self._limit_cta_url = manage_url
 
+
+        contact = pro_ceiling_contact_email()
         self._pro_limit_card.show_contact(
             title,
             body,
-            copy_cta_text(),
-            pro_ceiling_contact_email(),
+            copy_cta_text(contact),
+            f"<qt>{contact_link_html(contact)}</qt>" if is_contact_link(contact) else contact,
             get_export_copy("dock.build.manage_plan_btn", tr("Manage plan")),
             self.pro_limit_reset_note(),
         )
@@ -118,7 +137,7 @@ class DockProCeilingMixin:
 
 
         self._prewall_url = email
-        self._prewall_banner.show_low_contact(text, copy_cta_text(), custom_needs_line(email))
+        self._prewall_banner.show_low_contact(text, copy_cta_text(email), custom_needs_line(email))
 
     def _on_pro_contact_clicked(self, button: QPushButton | None = None) -> None:
 
@@ -126,4 +145,5 @@ class DockProCeilingMixin:
         from ...core import telemetry_events as te
         telemetry.track(te.SUBSCRIBE_LINK_CLICKED, {"source": "pro_contact"})
         target = button if isinstance(button, QPushButton) else self._pro_limit_card.ghost_button
-        copy_email_to_clipboard(target, pro_ceiling_contact_email())
+        contact = pro_ceiling_contact_email()
+        copy_email_to_clipboard(target, contact, idle_text=copy_cta_text(contact))

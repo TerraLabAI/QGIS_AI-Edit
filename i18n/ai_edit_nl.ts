@@ -17,7 +17,7 @@
     </message>
     <message>
         <source>See an example</source>
-        <translation>Bekijk een voorbeeld</translation>
+        <translation>Voorbeeld bekijken</translation>
     </message>
     <message>
         <source>Your selection and prompt may be processed outside the EU {dot} {privacy}</source>
@@ -37,7 +37,7 @@
     </message>
     <message>
         <source>Very large zone (about {km2} km²): the AI keeps only broad shapes at this size. Select a smaller area for object-level edits.</source>
-        <translation>Zeer grote zone (ongeveer {km2} km²): de AI behoudt op deze grootte alleen grove vormen. Selecteer een kleiner gebied voor bewerkingen op objectniveau.</translation>
+        <translation>Zeer grote zone (ongeveer {km2} km²): de AI behoudt op deze grootte alleen grove vormen. Kies een kleiner gebied voor bewerkingen op objectniveau.</translation>
     </message>
     <message>
         <source>Sessions</source>
@@ -45,7 +45,7 @@
     </message>
     <message>
         <source>Search your sessions</source>
-        <translation>Zoek in uw sessies</translation>
+        <translation>Zoek in je sessies</translation>
     </message>
     <message>
         <source>No session matches.</source>
@@ -97,11 +97,11 @@
     </message>
     <message>
         <source>Show a project: renders, plans, simulations, before/after</source>
-        <translation>Een project tonen: renders, plannen, simulaties, voor/na</translation>
+        <translation>Een project presenteren: renders, plannen, simulaties, voor/na</translation>
     </message>
     <message>
         <source>Extract data: detect, segment, count, map</source>
-        <translation>Data extraheren: detecteren, segmenteren, tellen, karteren</translation>
+        <translation>Gegevens extraheren: detecteren, segmenteren, tellen, karteren</translation>
     </message>
     <message>
         <source>Repair imagery: sharpen, upscale, fix gaps and seams</source>
@@ -185,7 +185,7 @@
     </message>
     <message>
         <source>Top picks</source>
-        <translation>Topkeuzes</translation>
+        <translation>Aanraders</translation>
     </message>
     <message>
         <source>What the community runs most often</source>
@@ -233,7 +233,7 @@
     </message>
     <message>
         <source>Cancelling sign-in</source>
-        <translation>Aanmelden annuleren</translation>
+        <translation>Inloggen wordt geannuleerd</translation>
     </message>
     <message>
         <source>No credit was used.</source>
@@ -245,27 +245,27 @@
     </message>
     <message>
         <source>Your subscription has expired.</source>
-        <translation>Uw abonnement is verlopen.</translation>
+        <translation>Je abonnement is verlopen.</translation>
     </message>
     <message>
         <source>Your subscription is inactive.</source>
-        <translation>Uw abonnement is inactief.</translation>
+        <translation>Je abonnement is niet actief.</translation>
     </message>
     <message>
         <source>Your free trial has ended.</source>
-        <translation>Uw gratis proefperiode is beëindigd.</translation>
+        <translation>Je gratis proefperiode is afgelopen.</translation>
     </message>
     <message>
         <source>This license is already in use on the maximum number of computers. Free one in your account, or wait for an inactive one to expire.</source>
-        <translation>Deze licentie wordt al gebruikt op het maximale aantal computers. Maak er een vrij in uw account, of wacht tot een inactieve computer verloopt.</translation>
+        <translation>Deze licentie wordt al gebruikt op het maximale aantal computers. Maak er een vrij in je account of wacht tot een inactieve computer verloopt.</translation>
     </message>
     <message>
         <source>Manage your computers</source>
-        <translation>Beheer uw computers</translation>
+        <translation>Beheer je computers</translation>
     </message>
     <message>
         <source>No internet connection. Check your network and try again.</source>
-        <translation>Geen internetverbinding. Controleer uw netwerk en probeer het opnieuw.</translation>
+        <translation>Geen internetverbinding. Controleer je netwerk en probeer het opnieuw.</translation>
     </message>
     <message>
         <source>No internet connection.</source>
@@ -277,7 +277,7 @@
     </message>
     <message>
         <source>The request timed out.</source>
-        <translation>De aanvraag is verlopen.</translation>
+        <translation>De aanvraag duurde te lang.</translation>
     </message>
     <message>
         <source>Secure connection failed.</source>
@@ -297,15 +297,15 @@
     </message>
     <message>
         <source>AI Edit outputs an image, not a vector file. For polygons (SHP, GeoJSON), pick a Segment or Land cover template, then ‘Vectorize this result’. For precise object outlines, try our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin.</source>
-        <translation>AI Edit levert een afbeelding, geen vectorbestand. Voor polygonen (SHP, GeoJSON) kiest u een Segment- of Bodembedekking-sjabloon en klikt u vervolgens op ‘Vectoriseer dit resultaat’. Voor nauwkeurige objectcontouren probeert u onze plug-in &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt;.</translation>
+        <translation>AI Edit levert een afbeelding, geen vectorbestand. Voor polygonen (SHP, GeoJSON) kies je een sjabloon Segmenteren of Bodembedekking en klik je daarna op ‘Dit resultaat vectoriseren’. Voor nauwkeurige objectcontouren probeer je onze plugin &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt;.</translation>
     </message>
     <message>
         <source>AI Edit edits the image, it doesn't answer questions or count. Describe a visual change, e.g. colour the buildings red.</source>
-        <translation>AI Edit bewerkt de afbeelding; het beantwoordt geen vragen en telt niet. Beschrijf een visuele verandering, bijv. kleur de gebouwen rood.</translation>
+        <translation>AI Edit bewerkt de afbeelding, maar beantwoordt geen vragen en telt niet. Beschrijf een visuele wijziging, bijv. kleur de gebouwen rood.</translation>
     </message>
     <message>
         <source>AI Edit can't measure or count. Our &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; plugin is built for that: it outlines objects as polygons QGIS can count and measure.</source>
-        <translation>AI Edit kan niet meten of tellen. Daarvoor is onze plug-in &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; gemaakt: die tekent objecten als polygonen die QGIS kan tellen en meten.</translation>
+        <translation>AI Edit kan niet meten of tellen. Daarvoor is onze plugin &lt;a href='ai_seg'&gt;AI Segmentation&lt;/a&gt; gemaakt: die tekent objecten als polygonen die QGIS kan tellen en meten.</translation>
     </message>
     <message>
         <source>Zoomed out: the AI won't see small features (buildings, cars, trees) at this scale. Zoom in for object-level detail.</source>
@@ -365,13 +365,13 @@
     </message>
     <message>
         <source>AI Edit by TerraLab</source>
-        <translation>AI Edit door TerraLab</translation>
+        <translation>AI Edit van TerraLab</translation>
     </message>
     <message>
         <source>AI Edit by TerraLab
 AI-powered image editing for geospatial data</source>
-        <translation>AI Edit door TerraLab
-AI-gestuurde beeldbewerking voor geospatiale data</translation>
+        <translation>AI Edit van TerraLab
+Beeldbewerking met AI voor geodata</translation>
     </message>
     <message>
         <source>AI Edit needs a standard CRS (EPSG code). Your project uses a custom CRS without an authority ID.</source>
@@ -391,7 +391,7 @@ AI-gestuurde beeldbewerking voor geospatiale data</translation>
     </message>
     <message>
         <source>Account migration required, please re-login from the website.</source>
-        <translation>Accountmigratie vereist; meld u opnieuw aan via de website.</translation>
+        <translation>Je account moet worden gemigreerd. Log opnieuw in via de website.</translation>
     </message>
     <message>
         <source>Activate</source>
@@ -407,7 +407,7 @@ AI-gestuurde beeldbewerking voor geospatiale data</translation>
     </message>
     <message>
         <source>Add to favorites</source>
-        <translation>Toevoegen aan favorieten</translation>
+        <translation>Aan favorieten toevoegen</translation>
     </message>
     <message>
         <source>Added to map.</source>
@@ -459,7 +459,7 @@ AI-gestuurde beeldbewerking voor geospatiale data</translation>
     </message>
     <message>
         <source>Browse templates, your recent prompts, and favorites.</source>
-        <translation>Blader door sjablonen, uw recente prompts en favorieten.</translation>
+        <translation>Blader door sjablonen, je recente prompts en favorieten.</translation>
     </message>
     <message>
         <source>Browse the library (view only while generating).</source>
@@ -481,7 +481,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Cancel anytime</source>
-        <translation>Op elk moment opzegbaar</translation>
+        <translation>Altijd opzegbaar</translation>
     </message>
     <message>
         <source>Cancel the running generation first (close the dock)</source>
@@ -497,7 +497,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Cannot reach server. Check your internet connection.</source>
-        <translation>Kan de server niet bereiken. Controleer uw internetverbinding.</translation>
+        <translation>Kan de server niet bereiken. Controleer je internetverbinding.</translation>
     </message>
     <message>
         <source>Cannot read file: {err}</source>
@@ -517,19 +517,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Check QGIS proxy settings: Settings &gt; Options &gt; Network</source>
-        <translation>Controleer de proxy-instellingen van QGIS: Instellingen &gt; Opties &gt; Netwerk</translation>
+        <translation>Controleer de proxyinstellingen van QGIS: Extra &gt; Opties &gt; Netwerk</translation>
     </message>
     <message>
         <source>Check your dashboard</source>
-        <translation>Bekijk uw dashboard</translation>
+        <translation>Bekijk je dashboard</translation>
     </message>
     <message>
         <source>Check your internet connection</source>
-        <translation>Controleer uw internetverbinding</translation>
+        <translation>Controleer je internetverbinding</translation>
     </message>
     <message>
         <source>Choose output folder</source>
-        <translation>Kies uitvoermap</translation>
+        <translation>Map voor uitvoer kiezen</translation>
     </message>
     <message>
         <source>Circle</source>
@@ -621,15 +621,15 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Copy your logs with the button below and send them to our support email.</source>
-        <translation>Kopieer uw logboeken met de knop hieronder en stuur ze naar ons support-e-mailadres.</translation>
+        <translation>Kopieer je logs met de knop hieronder en stuur ze naar ons support-e-mailadres.</translation>
     </message>
     <message>
         <source>Could not add layer: {msg}</source>
-        <translation>Kan laag niet toevoegen: {msg}</translation>
+        <translation>Kan de laag niet toevoegen: {msg}</translation>
     </message>
     <message>
         <source>Could not add to map: {msg}</source>
-        <translation>Kan niet aan de kaart toevoegen: {msg}</translation>
+        <translation>Toevoegen aan de kaart mislukt: {msg}</translation>
     </message>
     <message>
         <source>Could not download the reference image.</source>
@@ -645,7 +645,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Could not open raster</source>
-        <translation>Kan raster niet openen</translation>
+        <translation>Kan het raster niet openen</translation>
     </message>
     <message>
         <source>Could not place the zone on the current map.</source>
@@ -673,7 +673,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Custom color...</source>
-        <translation>Aangepaste kleur…</translation>
+        <translation>Aangepaste kleur...</translation>
     </message>
     <message>
         <source>DATE</source>
@@ -745,7 +745,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Download the AI result as a georeferenced GeoTIFF (.tif)</source>
-        <translation>Download het AI-resultaat als een gegeoreferenceerde GeoTIFF (.tif)</translation>
+        <translation>Download het AI-resultaat als gegeorefereerde GeoTIFF (.tif)</translation>
     </message>
     <message>
         <source>Download the original input as a georeferenced GeoTIFF (.tif)</source>
@@ -781,7 +781,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Drop connected blobs smaller than this many pixels before tracing.</source>
-        <translation>Verwijder verbonden vlekken kleiner dan dit aantal pixels vóór het traceren.</translation>
+        <translation>Verwijder verbonden vlekjes kleiner dan dit aantal pixels vóór het vectoriseren.</translation>
     </message>
     <message>
         <source>Drop polygons smaller than this many pixels after tracing. Useful for cleaning up speckle that the sieve missed.</source>
@@ -825,7 +825,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Expand/Contract:</source>
-        <translation>Uitbreiden/Inkrimpen:</translation>
+        <translation>Vergroten/verkleinen:</translation>
     </message>
     <message>
         <source>Export error: {error}</source>
@@ -833,7 +833,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Failed to create GeoTIFF at {path}</source>
-        <translation>Kan GeoTIFF niet aanmaken op {path}</translation>
+        <translation>Kan GeoTIFF niet maken op {path}</translation>
     </message>
     <message>
         <source>Failed to create valid raster layer from {path}</source>
@@ -853,7 +853,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Failed to render layer</source>
-        <translation>Kan laag niet renderen</translation>
+        <translation>Kan de laag niet renderen</translation>
     </message>
     <message>
         <source>The image was generated but could not be saved to your output folder ({err}). It is kept in your prompt library: open the Recent tab and download the AI result, or change the output folder and try again.</source>
@@ -881,7 +881,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Fill holes:</source>
-        <translation>Gaten opvullen:</translation>
+        <translation>Gaten vullen:</translation>
     </message>
     <message>
         <source>Fill interior holes in the selection</source>
@@ -893,7 +893,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Free trial</source>
-        <translation>Gratis proefperiode</translation>
+        <translation>Proefperiode</translation>
     </message>
     <message>
         <source>Free plan is limited to {n} reference image.</source>
@@ -925,15 +925,15 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Generation cancelled</source>
-        <translation>Generatie geannuleerd</translation>
+        <translation>Genereren geannuleerd</translation>
     </message>
     <message>
         <source>Generation failed</source>
-        <translation>Generatie mislukt</translation>
+        <translation>Genereren mislukt</translation>
     </message>
     <message>
         <source>Generation failed, please try again.</source>
-        <translation>Generatie mislukt, probeer het opnieuw.</translation>
+        <translation>Genereren mislukt, probeer het opnieuw.</translation>
     </message>
     <message>
         <source>Generation restored. Adjust and generate again.</source>
@@ -961,7 +961,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Grabbing your masterpiece...</source>
-        <translation>Uw meesterwerk wordt opgehaald...</translation>
+        <translation>Je meesterwerk wordt opgehaald...</translation>
     </message>
     <message>
         <source>Guidance tips</source>
@@ -997,11 +997,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Image format {fmt} is not supported by your QGIS GDAL build. Please update QGIS or contact support.</source>
-        <translation>Afbeeldingsformaat {fmt} wordt niet ondersteund door uw QGIS GDAL-build. Werk QGIS bij of neem contact op met support.</translation>
+        <translation>Afbeeldingsformaat {fmt} wordt niet ondersteund door de GDAL-build van je QGIS. Werk QGIS bij of neem contact op met support.</translation>
     </message>
     <message>
         <source>Image too large (max 50 MB)</source>
-        <translation>Afbeelding te groot (max. 50 MB)</translation>
+        <translation>Afbeelding te groot (max. 50 MB)</translation>
     </message>
     <message>
         <source>Image too large. Try selecting a smaller area or lowering the resolution.</source>
@@ -1025,7 +1025,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Invalid input. Check your prompt and the selected area.</source>
-        <translation>Ongeldige invoer. Controleer uw prompt en het geselecteerde gebied.</translation>
+        <translation>Ongeldige invoer. Controleer je prompt en het geselecteerde gebied.</translation>
     </message>
     <message>
         <source>Invalid input. Try a different image or selection.</source>
@@ -1033,7 +1033,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>That does not look like an activation key. Most people do not need one: just use the Sign in button. A key starts with tl_ and is only for admin-issued or offline activation.</source>
-        <translation>Dat ziet er niet uit als een activeringssleutel. De meeste mensen hebben er geen nodig: gebruik gewoon de knop Aanmelden. Een sleutel begint met tl_ en is alleen bedoeld voor door de beheerder verstrekte of offline activering.</translation>
+        <translation>Dat ziet er niet uit als een activeringssleutel. De meeste mensen hebben er geen nodig: gebruik gewoon de knop Inloggen. Een sleutel begint met tl_ en is alleen bedoeld voor door de beheerder verstrekte of offline activering.</translation>
     </message>
     <message>
         <source>Have a key? Enter it manually</source>
@@ -1041,7 +1041,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Invalid request. Check your prompt and the selected area, then try again.</source>
-        <translation>Ongeldig verzoek. Controleer uw prompt en het geselecteerde gebied, en probeer het opnieuw.</translation>
+        <translation>Ongeldig verzoek. Controleer je prompt en het geselecteerde gebied en probeer het opnieuw.</translation>
     </message>
     <message>
         <source>Key</source>
@@ -1061,7 +1061,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Link not opening? Copy link</source>
-        <translation>Link opent niet? Link kopiëren</translation>
+        <translation>Opent de link niet? Link kopiëren</translation>
     </message>
     <message>
         <source>Load this prompt, its reference images, and the same map zone back into AI Edit, replacing what you have now.</source>
@@ -1117,7 +1117,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Monthly limit reached ({used}/{limit}).</source>
-        <translation>Maandelijkse limiet bereikt ({used}/{limit}).</translation>
+        <translation>Maandlimiet bereikt ({used}/{limit}).</translation>
     </message>
     <message>
         <source>New version available: v{version}</source>
@@ -1145,7 +1145,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>No pixels matched the selected color</source>
-        <translation>Geen pixels kwamen overeen met de geselecteerde kleur</translation>
+        <translation>Geen enkele pixel komt overeen met de geselecteerde kleur</translation>
     </message>
     <message>
         <source>No polygons remained after filtering (try a wider tolerance or smaller min size)</source>
@@ -1169,7 +1169,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Nothing here yet. The generations you run will land here, ready to reopen, reuse, or add back to the map.</source>
-        <translation>Hier is nog niets. De generaties die u uitvoert, komen hier terecht, klaar om opnieuw te openen, te herbruiken of terug aan de kaart toe te voegen.</translation>
+        <translation>Hier is nog niets. Je generaties verschijnen hier, klaar om opnieuw te openen, te hergebruiken of weer aan de kaart toe te voegen.</translation>
     </message>
     <message>
         <source>OK</source>
@@ -1189,7 +1189,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Open your dashboard to upgrade or wait for renewal.</source>
-        <translation>Open uw dashboard om te upgraden, of wacht op verlenging.</translation>
+        <translation>Open je dashboard om te upgraden of wacht op verlenging.</translation>
     </message>
     <message>
         <source>Original</source>
@@ -1197,11 +1197,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Outline</source>
-        <translation>Contour</translation>
+        <translation>Omtrek</translation>
     </message>
     <message>
         <source>Output folder</source>
-        <translation>Uitvoermap</translation>
+        <translation>Map voor uitvoer</translation>
     </message>
     <message>
         <source>Pencil</source>
@@ -1217,7 +1217,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Pick an AI Edit output to vectorize.</source>
-        <translation>Kies een AI Edit-uitvoer om te vectoriseren.</translation>
+        <translation>Kies een resultaat van AI Edit om te vectoriseren.</translation>
     </message>
     <message>
         <source>Pick an example</source>
@@ -1241,7 +1241,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Please describe what you want to change (at least 10 characters, 2 words).</source>
-        <translation>Beschrijf wat u wilt veranderen (minimaal 10 tekens, 2 woorden).</translation>
+        <translation>Beschrijf wat je wilt wijzigen (minimaal 10 tekens, 2 woorden).</translation>
     </message>
     <message>
         <source>Please enter your activation key.</source>
@@ -1289,7 +1289,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Raster is too large for in-memory vectorize ({mp:.0f} megapixels). Crop the layer first or run a tiled workflow.</source>
-        <translation>Raster is te groot voor vectoriseren in geheugen ({mp:.0f} megapixels). Snijd de laag eerst bij of gebruik een tegelworkflow.</translation>
+        <translation>Het raster is te groot om in het geheugen te vectoriseren ({mp:.0f} megapixels). Snijd de laag eerst bij of gebruik een workflow met tegels.</translation>
     </message>
     <message>
         <source>Raster layer has no on-disk source file</source>
@@ -1305,7 +1305,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Reduce small variations in the outline (0 = no change).</source>
-        <translation>Vermindert kleine variaties in de contour (0 = geen verandering).</translation>
+        <translation>Vermindert kleine variaties in de omtrek (0 = geen wijziging).</translation>
     </message>
     <message>
         <source>Reference</source>
@@ -1333,7 +1333,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Remove from favorites</source>
-        <translation>Verwijderen uit favorieten</translation>
+        <translation>Uit favorieten verwijderen</translation>
     </message>
     <message>
         <source>Remove speckle:</source>
@@ -1341,11 +1341,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Report a problem</source>
-        <translation>Een probleem melden</translation>
+        <translation>Probleem melden</translation>
     </message>
     <message>
         <source>Resets</source>
-        <translation>Vernieuwt</translation>
+        <translation>Reset op</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -1373,11 +1373,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Retry</source>
-        <translation>Opnieuw proberen</translation>
+        <translation>Opnieuw</translation>
     </message>
     <message>
         <source>Reuse this setup</source>
-        <translation>Deze configuratie opnieuw gebruiken</translation>
+        <translation>Opzet hergebruiken</translation>
     </message>
     <message>
         <source>Round corners for natural shapes like trees and bushes. Increase 'Simplify outline' for smoother results.</source>
@@ -1401,11 +1401,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Save generation image</source>
-        <translation>Generatieafbeelding opslaan</translation>
+        <translation>Afbeelding opslaan</translation>
     </message>
     <message>
         <source>Save georeferenced GeoTIFF</source>
-        <translation>Gegeoreferenceerde GeoTIFF opslaan</translation>
+        <translation>Gegeorefereerde GeoTIFF opslaan</translation>
     </message>
     <message>
         <source>Save reference image</source>
@@ -1429,11 +1429,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Segment elements on raster images using AI (opens AI Segmentation plugin)</source>
-        <translation>Segmenteer elementen op rasterafbeeldingen met AI (opent de AI Segmentation-plugin)</translation>
+        <translation>Segmenteer objecten op rasterafbeeldingen met AI (opent de plugin AI Segmentation)</translation>
     </message>
     <message>
         <source>Select reference images or layers</source>
-        <translation>Selecteer referentieafbeeldingen of lagen</translation>
+        <translation>Referentieafbeeldingen of lagen kiezen</translation>
     </message>
     <message>
         <source>Selected zone too small. Draw a rectangle at least {pct}% of the canvas size.</source>
@@ -1441,7 +1441,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>You can only draw inside the selected zone.</source>
-        <translation>U kunt alleen binnen de geselecteerde zone tekenen.</translation>
+        <translation>Je kunt alleen binnen de geselecteerde zone tekenen.</translation>
     </message>
     <message>
         <source>Selection</source>
@@ -1449,7 +1449,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Sending your image to the AI...</source>
-        <translation>Uw afbeelding wordt naar de AI verzonden...</translation>
+        <translation>Je afbeelding wordt naar de AI verzonden...</translation>
     </message>
     <message>
         <source>Server returned an empty response (0 bytes)</source>
@@ -1485,11 +1485,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Show</source>
-        <translation>Weergeven</translation>
+        <translation>Tonen</translation>
     </message>
     <message>
         <source>Show again</source>
-        <translation>Opnieuw weergeven</translation>
+        <translation>Opnieuw tonen</translation>
     </message>
     <message>
         <source>Show fewer categories</source>
@@ -1521,7 +1521,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Show {n} more</source>
-        <translation>{n} meer weergeven</translation>
+        <translation>Nog {n} tonen</translation>
     </message>
     <message>
         <source>Show {n} more categories</source>
@@ -1533,7 +1533,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Simplify outline:</source>
-        <translation>Contour vereenvoudigen:</translation>
+        <translation>Omtrek vereenvoudigen:</translation>
     </message>
     <message>
         <source>Something not working?</source>
@@ -1545,7 +1545,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Start a new AI edit session</source>
-        <translation>Start een nieuwe AI Edit-sessie</translation>
+        <translation>Start een nieuwe sessie met AI Edit</translation>
     </message>
     <message>
         <source>Status check failed</source>
@@ -1625,11 +1625,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>This key belongs to a different product. Use your AI Edit key.</source>
-        <translation>Deze sleutel behoort tot een ander product. Gebruik uw AI Edit-sleutel.</translation>
+        <translation>Deze sleutel hoort bij een ander product. Gebruik de sleutel voor AI Edit.</translation>
     </message>
     <message>
         <source>This project's CRS is invalid. Set a project CRS before drawing a zone.</source>
-        <translation>Het CRS van dit project is ongeldig. Stel een project-CRS in voordat u een zone tekent.</translation>
+        <translation>Het CRS van dit project is ongeldig. Stel een project-CRS in voordat je een zone tekent.</translation>
     </message>
     <message>
         <source>This raster needs at least 3 bands (RGB).</source>
@@ -1641,7 +1641,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>This zone crosses the antimeridian (180 deg longitude). AI Edit does not support that yet. Split your zone into two.</source>
-        <translation>Deze zone kruist de antimeridiaan (180° lengtegraad). AI Edit ondersteunt dit nog niet. Splits uw zone in twee.</translation>
+        <translation>Deze zone kruist de antimeridiaan (180° lengtegraad). AI Edit ondersteunt dit nog niet. Splits je zone in twee.</translation>
     </message>
     <message>
         <source>Too many requests, please wait a moment.</source>
@@ -1649,7 +1649,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Too much image data to send. Remove a reference image or lower the resolution, then try again.</source>
-        <translation>Te veel afbeeldingsgegevens om te verzenden. Verwijder een referentieafbeelding of verlaag de resolutie, en probeer het opnieuw.</translation>
+        <translation>Te veel afbeeldingsgegevens om te verzenden. Verwijder een referentieafbeelding of verlaag de resolutie en probeer het opnieuw.</translation>
     </message>
     <message>
         <source>Tool</source>
@@ -1665,7 +1665,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Try again, or check your internet speed</source>
-        <translation>Probeer het opnieuw, of controleer uw internetsnelheid</translation>
+        <translation>Probeer het opnieuw of controleer je internetsnelheid</translation>
     </message>
     <message>
         <source>Tutorial</source>
@@ -1713,7 +1713,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Upload session does not match your account.</source>
-        <translation>Uploadsessie komt niet overeen met uw account.</translation>
+        <translation>Uploadsessie komt niet overeen met je account.</translation>
     </message>
     <message>
         <source>Upload session expired, please retry.</source>
@@ -1729,7 +1729,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Use this prompt</source>
-        <translation>Deze prompt gebruiken</translation>
+        <translation>Prompt gebruiken</translation>
     </message>
     <message>
         <source>Validate the activation key you pasted</source>
@@ -1761,11 +1761,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>{n} color zones detected in this result</source>
-        <translation>{n} kleurzones gedetecteerd in dit resultaat</translation>
+        <translation>{n} kleurvlakken gevonden in dit resultaat</translation>
     </message>
     <message>
         <source>{n} color zone detected in this result</source>
-        <translation>{n} kleurzone gedetecteerd in dit resultaat</translation>
+        <translation>{n} kleurvlak gevonden in dit resultaat</translation>
     </message>
     <message>
         <source>Turn the colored zones into editable polygons</source>
@@ -1777,7 +1777,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Vectorizing...</source>
-        <translation>Bezig met vectoriseren...</translation>
+        <translation>Vectoriseren...</translation>
     </message>
     <message>
         <source>Version details</source>
@@ -1797,7 +1797,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>What should the AI change?</source>
-        <translation>Wat moet de AI veranderen?</translation>
+        <translation>Wat moet de AI wijzigen?</translation>
     </message>
     <message>
         <source>Where AI Edit writes its generated GeoTIFFs. Leave empty to use ~/Documents/AI Edit/ (or the saved project folder).</source>
@@ -1809,7 +1809,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Your prompt</source>
-        <translation>Uw prompt</translation>
+        <translation>Je prompt</translation>
     </message>
     <message>
         <source>Your prompts</source>
@@ -1817,11 +1817,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Your result</source>
-        <translation>Uw resultaat</translation>
+        <translation>Je resultaat</translation>
     </message>
     <message>
         <source>Your subscription has expired or been canceled. Renew at terra-lab.ai/dashboard</source>
-        <translation>Uw abonnement is verlopen of opgezegd. Verleng het op terra-lab.ai/dashboard</translation>
+        <translation>Je abonnement is verlopen of opgezegd. Verleng het op terra-lab.ai/dashboard</translation>
     </message>
     <message>
         <source>Zone is too close to a pole (above {limit} degrees latitude). AI Edit cannot estimate ground resolution there.</source>
@@ -1849,7 +1849,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>just now</source>
-        <translation>net nu</translation>
+        <translation>zojuist</translation>
     </message>
     <message>
         <source>or</source>
@@ -1881,7 +1881,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>{n} h ago</source>
-        <translation>{n} u geleden</translation>
+        <translation>{n} uur geleden</translation>
     </message>
     <message>
         <source>{n} mark. Click Done to save it as a reference image.</source>
@@ -1905,7 +1905,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>{} outputs are unlocked with a subscription.</source>
-        <translation>{} uitvoer wordt ontgrendeld met een abonnement.</translation>
+        <translation>Kwaliteit {} krijg je met een abonnement.</translation>
     </message>
     <message>
         <source>Reuse prompt</source>
@@ -1913,7 +1913,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>from {base}</source>
-        <translation>vanaf {base}</translation>
+        <translation>vanuit {base}</translation>
     </message>
     <message>
         <source>clean source</source>
@@ -1933,7 +1933,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Generate from {base}</source>
-        <translation>Genereren vanaf {base}</translation>
+        <translation>Genereren vanuit {base}</translation>
     </message>
     <message>
         <source>Start from</source>
@@ -1945,11 +1945,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Generation failed: the request was blocked by a safety filter. You have not been charged. Try rephrasing your prompt.</source>
-        <translation>Generatie mislukt: het verzoek is geblokkeerd door een veiligheidsfilter. Er is niets in rekening gebracht. Probeer uw prompt anders te formuleren.</translation>
+        <translation>Genereren mislukt: het verzoek is geblokkeerd door een veiligheidsfilter. Er is niets in rekening gebracht. Probeer je prompt anders te formuleren.</translation>
     </message>
     <message>
         <source>Generation failed: the AI returned no image. You have not been charged. AI Edit draws on the map and cannot answer questions, so describe the change you want to see, then try again.</source>
-        <translation>Generatie mislukt: de AI heeft geen afbeelding teruggegeven. Er is niets in rekening gebracht. AI Edit tekent op de kaart en beantwoordt geen vragen, dus beschrijf de gewenste wijziging en probeer het opnieuw.</translation>
+        <translation>Genereren mislukt: de AI heeft geen afbeelding teruggegeven. Er is niets in rekening gebracht. AI Edit tekent op de kaart en beantwoordt geen vragen, dus beschrijf de gewenste wijziging en probeer het opnieuw.</translation>
     </message>
     <message>
         <source>Our image servers are busy right now. You have not been charged. Please wait a moment and try again.</source>
@@ -1973,7 +1973,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Segment</source>
-        <translation>Segmentatie</translation>
+        <translation>Segmenteren</translation>
     </message>
     <message>
         <source>Climate scenarios</source>
@@ -1981,23 +1981,23 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Urban scenarios</source>
-        <translation>Stedelijke scenario's</translation>
+        <translation>Stadsscenario's</translation>
     </message>
     <message>
         <source>Energy &amp; solar</source>
-        <translation>Energie &amp; zonne-energie</translation>
+        <translation>Energie en zon</translation>
     </message>
     <message>
         <source>Cleanup &amp; enhance</source>
-        <translation>Opschonen &amp; verbeteren</translation>
+        <translation>Opschonen en verbeteren</translation>
     </message>
     <message>
         <source>Presentation renders</source>
-        <translation>Presentatierenders</translation>
+        <translation>Presentatiebeelden</translation>
     </message>
     <message>
         <source>Forestry &amp; vegetation</source>
-        <translation>Bosbouw &amp; vegetatie</translation>
+        <translation>Bosbouw en vegetatie</translation>
     </message>
     <message>
         <source>Agriculture</source>
@@ -2005,15 +2005,15 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Archaeology &amp; heritage</source>
-        <translation>Archeologie &amp; erfgoed</translation>
+        <translation>Archeologie en erfgoed</translation>
     </message>
     <message>
         <source>Geology &amp; mining</source>
-        <translation>Geologie &amp; mijnbouw</translation>
+        <translation>Geologie en mijnbouw</translation>
     </message>
     <message>
         <source>Water &amp; hydrology</source>
-        <translation>Water &amp; hydrologie</translation>
+        <translation>Water en hydrologie</translation>
     </message>
     <message>
         <source>Activate AI Edit</source>
@@ -2057,7 +2057,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Browser page open. Finish signing in to connect.</source>
-        <translation>Browserpagina geopend. Voltooi het aanmelden om te verbinden.</translation>
+        <translation>Browserpagina geopend. Rond het inloggen af om AI Edit te koppelen.</translation>
     </message>
     <message>
         <source>Still waiting. If the page did not open or shows an error, click Open again or enter your key manually.</source>
@@ -2069,27 +2069,27 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>This account has no active AI Edit plan. Reactivate it on terra-lab.ai, then click Connect again.</source>
-        <translation>Dit account heeft geen actief AI Edit-abonnement. Reactiveer het op terra-lab.ai en klik dan opnieuw op Verbinden.</translation>
+        <translation>Dit account heeft geen actief abonnement voor AI Edit. Activeer het opnieuw op terra-lab.ai en klik daarna nogmaals op Inloggen.</translation>
     </message>
     <message>
         <source>Sign-in was cancelled in the browser. Click Connect to try again.</source>
-        <translation>Het aanmelden is geannuleerd in de browser. Klik op Verbinden om het opnieuw te proberen.</translation>
+        <translation>Het inloggen is in de browser geannuleerd. Klik op Inloggen om het opnieuw te proberen.</translation>
     </message>
     <message>
         <source>Connecting AI Edit</source>
-        <translation>AI Edit wordt verbonden</translation>
+        <translation>AI Edit wordt gekoppeld</translation>
     </message>
     <message>
         <source>Edit your map with AI</source>
-        <translation>Bewerk uw kaart met AI</translation>
+        <translation>Bewerk je kaart met AI</translation>
     </message>
     <message>
         <source>Sign in / Sign up to start</source>
-        <translation>Aanmelden / Registreren om te starten</translation>
+        <translation>Inloggen of account aanmaken</translation>
     </message>
     <message>
         <source>Sign in via your browser to start using AI Edit</source>
-        <translation>Meld u aan via uw browser om AI Edit te gaan gebruiken</translation>
+        <translation>Log in via je browser om AI Edit te gaan gebruiken</translation>
     </message>
     <message>
         <source>Use an activation key</source>
@@ -2105,11 +2105,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Sign out</source>
-        <translation>Afmelden</translation>
+        <translation>Uitloggen</translation>
     </message>
     <message>
         <source>Sign out of AI Edit?</source>
-        <translation>Afmelden bij AI Edit?</translation>
+        <translation>Uitloggen bij AI Edit?</translation>
     </message>
     <message>
         <source>You can sign back in anytime from QGIS.</source>
@@ -2229,7 +2229,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Checking imagery availability</source>
-        <translation>Beschikbaarheid van beeldmateriaal wordt gecontroleerd</translation>
+        <translation>Beschikbaarheid van beelden wordt gecontroleerd</translation>
     </message>
     <message>
         <source>Class name</source>
@@ -2261,11 +2261,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Couldn't load the example basemap. Check your internet connection, or add your own layer (GeoTIFF, WMS, XYZ).</source>
-        <translation>Kan de voorbeeld-basiskaart niet laden. Controleer uw internetverbinding of voeg uw eigen laag toe (GeoTIFF, WMS, XYZ).</translation>
+        <translation>Kan de voorbeeldbasiskaart niet laden. Controleer je internetverbinding of voeg je eigen laag toe (GeoTIFF, WMS, XYZ).</translation>
     </message>
     <message>
         <source>Couldn't open your browser. Copy the link and open it manually.</source>
-        <translation>Kan uw browser niet openen. Kopieer de link en open deze handmatig.</translation>
+        <translation>Kan je browser niet openen. Kopieer de link en open deze handmatig.</translation>
     </message>
     <message>
         <source>Couldn't save the updated features to the file.</source>
@@ -2273,7 +2273,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Credit refunded.</source>
-        <translation>Credit terugbetaald.</translation>
+        <translation>Credit teruggegeven.</translation>
     </message>
     <message>
         <source>Downloading reference image</source>
@@ -2301,11 +2301,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Free plan, {n} AI edits every month. Signing up takes 15 seconds in your browser.</source>
-        <translation>Free-plan, {n} AI-bewerkingen per maand. Aanmelden duurt 15 seconden in je browser.</translation>
+        <translation>Free-abonnement, {n} AI-bewerkingen per maand. Een account aanmaken duurt 15 seconden in je browser.</translation>
     </message>
     <message>
         <source>Free-text label written to each polygon's class_name attribute.</source>
-        <translation>Vrije tekst die naar het class_name-attribuut van elke polygoon wordt geschreven.</translation>
+        <translation>Vrije tekst die wordt geschreven naar het attribuut class_name van elke polygoon.</translation>
     </message>
     <message>
         <source>Go back to the class list to check, rename or recolor classes, then vectorize again.</source>
@@ -2313,7 +2313,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>If a credit was charged, it will be refunded.</source>
-        <translation>Als er een credit is afgeschreven, wordt deze terugbetaald.</translation>
+        <translation>Als er een credit is afgeschreven, krijg je die terug.</translation>
     </message>
     <message>
         <source>Keep your marks on the zone to guide the edit, and close Mark up</source>
@@ -2325,7 +2325,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Loading imagery...</source>
-        <translation>Beeldmateriaal laden…</translation>
+        <translation>Beelden laden...</translation>
     </message>
     <message>
         <source>New here?</source>
@@ -2381,7 +2381,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Server returned a non-image response, retrying download</source>
-        <translation>De server gaf een antwoord terug dat geen afbeelding is, download wordt opnieuw geprobeerd</translation>
+        <translation>Server gaf geen afbeelding terug, download wordt opnieuw geprobeerd</translation>
     </message>
     <message>
         <source>Share of the map covered by this color.</source>
@@ -2389,7 +2389,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Still waiting. If the page did not open or shows an error, click Open again or copy the link into another browser.</source>
-        <translation>Nog steeds aan het wachten. Als de pagina niet is geopend of een fout toont, klik dan opnieuw op Openen of kopieer de link naar een andere browser.</translation>
+        <translation>Nog steeds aan het wachten. Als de pagina niet is geopend of een fout toont, klik op “Opnieuw openen” of kopieer de link naar een andere browser.</translation>
     </message>
     <message>
         <source>Team or organization?</source>
@@ -2401,7 +2401,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>The service is temporarily unavailable (server error). Your connection is fine - please try again in a few minutes.</source>
-        <translation>De service is tijdelijk niet beschikbaar (serverfout). Uw verbinding is in orde - probeer het over een paar minuten opnieuw.</translation>
+        <translation>De service is tijdelijk niet beschikbaar (serverfout). Je verbinding is in orde. Probeer het over een paar minuten opnieuw.</translation>
     </message>
     <message>
         <source>Then type what to change on your imagery, and get the result back as a georeferenced layer.</source>
@@ -2409,7 +2409,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Trace this color as polygons. Unchecked colors are treated as background.</source>
-        <translation>Deze kleur als polygonen overtrekken. Niet-aangevinkte kleuren worden als achtergrond behandeld.</translation>
+        <translation>Deze kleur vectoriseren naar polygonen. Niet-aangevinkte kleuren worden als achtergrond behandeld.</translation>
     </message>
     <message>
         <source>Vector</source>
@@ -2425,7 +2425,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Waiting for the example basemap to finish loading before you generate</source>
-        <translation>Wachten tot de voorbeeld-basiskaart klaar is met laden voordat u genereert</translation>
+        <translation>Wachten tot de voorbeeldbasiskaart is geladen voordat je genereert</translation>
     </message>
     <message>
         <source>Watch the tutorial</source>
@@ -2501,7 +2501,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>This shape is too thin, too small, or crosses itself. Draw it again.</source>
-        <translation>Deze vorm is te dun, te klein, of kruist zichzelf. Teken hem opnieuw.</translation>
+        <translation>Deze vorm is te dun of te klein, of kruist zichzelf. Teken de vorm opnieuw.</translation>
     </message>
     <message>
         <source>Crop</source>
@@ -2537,7 +2537,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Before and after comparison</source>
-        <translation>Vergelijking voor / na</translation>
+        <translation>Vergelijking voor en na</translation>
     </message>
     <message>
         <source>Could not start the generation: {error}</source>
@@ -2585,7 +2585,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Sign-in failed unexpectedly. Click Connect to try again.</source>
-        <translation>Het aanmelden is onverwacht mislukt. Klik op Verbinden om het opnieuw te proberen.</translation>
+        <translation>Inloggen is onverwacht mislukt. Klik op “Inloggen” om het opnieuw te proberen.</translation>
     </message>
     <message>
         <source>The request failed unexpectedly.</source>
@@ -2693,7 +2693,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>This deletes its generations and their images from TerraLab servers. Layers already in your project stay. This cannot be undone.</source>
-        <translation>Dit verwijdert de generaties en afbeeldingen van de TerraLab-servers. Lagen die al in uw project staan blijven. Dit kan niet ongedaan worden gemaakt.</translation>
+        <translation>Dit verwijdert de generaties en afbeeldingen van de TerraLab-servers. Lagen die al in je project staan, blijven staan. Dit kan niet ongedaan worden gemaakt.</translation>
     </message>
     <message>
         <source>Title</source>
@@ -2717,7 +2717,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Load a sample image</source>
-        <translation>Een voorbeeldafbeelding laden</translation>
+        <translation>Voorbeeldafbeelding laden</translation>
     </message>
     <message>
         <source>Open QGIS's Data Source Manager to add imagery</source>
@@ -2757,7 +2757,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Resume this session</source>
-        <translation>Deze sessie hervatten</translation>
+        <translation>Sessie hervatten</translation>
     </message>
     <message>
         <source>Session</source>
@@ -2785,7 +2785,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Re-check your topmost layer in the Layers panel</source>
-        <translation>Vink de bovenste laag in het lagenpaneel opnieuw aan</translation>
+        <translation>Vink de bovenste laag opnieuw aan in het paneel Lagen</translation>
     </message>
     <message>
         <source>Past sessions</source>
@@ -2797,7 +2797,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Name your marks in the prompt, e.g. "add a pond inside the circle". The marks guide the AI and won't appear in the result.</source>
-        <translation>Benoem je markeringen in de prompt, bijv. "voeg een vijver toe binnen de cirkel". De markeringen sturen de AI en verschijnen niet in het resultaat.</translation>
+        <translation>Benoem je markeringen in de prompt, bijv. “voeg een vijver toe in de cirkel”. De markeringen sturen de AI en verschijnen niet in het resultaat.</translation>
     </message>
     <message>
         <source>From your computer</source>
@@ -2813,7 +2813,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Snapshot one of this project's layers at your zone. The layer itself is not changed and stays where it is.</source>
-        <translation>Maakt een momentopname van een laag van dit project op je zone. De laag zelf verandert niet en blijft waar hij is.</translation>
+        <translation>Een momentopname maken van een laag van dit project binnen je zone. De laag zelf verandert niet en blijft waar hij is.</translation>
     </message>
     <message>
         <source>No references yet. Add one to guide the AI.</source>
@@ -2869,7 +2869,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Adding session input to the map</source>
-        <translation>Sessie-invoer wordt aan de kaart toegevoegd</translation>
+        <translation>Invoerafbeelding van de sessie wordt aan de kaart toegevoegd</translation>
     </message>
     <message>
         <source>Your {total} free generations return on {date}</source>
@@ -2909,7 +2909,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>A bridge that calls this over a network usually gives up waiting after about a minute. The generation is NOT lost when that happens: it keeps running in QGIS and finishes on its own. Poll '{status_label}' until BUSY is false, then read the new layer in the project. Do not submit the run again, that is a second charge.</source>
-        <translation>Een bridge die dit via een netwerk aanroept, stopt meestal na ongeveer een minuut met wachten. De generatie gaat NIET verloren wanneer dat gebeurt: deze blijft in QGIS draaien en wordt vanzelf voltooid. Controleer '{status_label}' totdat BUSY false is en lees daarna de nieuwe laag in het project. Dien de uitvoering niet opnieuw in, want dat brengt een tweede kostenpost met zich mee.</translation>
+        <translation>Een bridge die dit via een netwerk aanroept, stopt meestal na ongeveer een minuut met wachten. De generatie gaat dan NIET verloren: deze blijft in QGIS draaien en wordt vanzelf voltooid. Vraag '{status_label}' steeds opnieuw op tot BUSY false is en lees daarna de nieuwe laag in het project. Start de uitvoering niet opnieuw, want dat wordt een tweede keer in rekening gebracht.</translation>
     </message>
     <message>
         <source>A generation is already running</source>
@@ -2917,15 +2917,15 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>AI Edit did not take the run.</source>
-        <translation>AI Edit heeft de uitvoering niet gestart.</translation>
+        <translation>AI Edit heeft de uitvoering niet geaccepteerd.</translation>
     </message>
     <message>
         <source>AI Edit is not ready. Open the AI Edit panel and finish the setup.</source>
-        <translation>AI Edit is niet gereed. Open het AI Edit-paneel en voltooi de configuratie.</translation>
+        <translation>AI Edit is niet gereed. Open het paneel van AI Edit en voltooi de configuratie.</translation>
     </message>
     <message>
         <source>AI Edit rewrites aerial and satellite imagery from a text prompt and gives the result back as a georeferenced image on the map. Land cover classification, building footprints, cloud removal, object removal, super resolution upscaling, flood simulation, coloring an old map. One prompt, one picture back.</source>
-        <translation>AI Edit herschrijft lucht- en satellietbeelden op basis van een tekstprompt en geeft het resultaat terug als een gegeorefereerd beeld op de kaart. Classificatie van landbedekking, gebouwcontouren, wolken verwijderen, objecten verwijderen, opschalen naar superresolutie, overstromingen simuleren, een oude kaart inkleuren. Eén prompt, één beeld als resultaat.</translation>
+        <translation>AI Edit herschrijft lucht- en satellietbeelden op basis van een tekstprompt en geeft het resultaat terug als een gegeorefereerd beeld op de kaart. Classificatie van bodembedekking, gebouwcontouren, wolken verwijderen, objecten verwijderen, opschalen naar superresolutie, overstromingen simuleren, een oude kaart inkleuren. Eén prompt, één beeld als resultaat.</translation>
     </message>
     <message>
         <source>Added to the project: {layers}.</source>
@@ -2949,19 +2949,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Class name written on every polygon (optional)</source>
-        <translation>Klassenaam die op elke polygoon wordt geschreven (optioneel)</translation>
+        <translation>Klasnaam die op elke polygoon wordt geschreven (optioneel)</translation>
     </message>
     <message>
         <source>Class name: written on every polygon, so several runs over the same image stay apart once they are merged.</source>
-        <translation>Klassenaam: wordt op elke polygoon geschreven, zodat meerdere uitvoeringen op hetzelfde beeld gescheiden blijven wanneer ze worden samengevoegd.</translation>
+        <translation>Klasnaam: wordt op elke polygoon geschreven, zodat meerdere uitvoeringen op hetzelfde beeld gescheiden blijven wanneer ze worden samengevoegd.</translation>
     </message>
     <message>
         <source>Color to trace</source>
-        <translation>Te traceren kleur</translation>
+        <translation>Kleur om te vectoriseren</translation>
     </message>
     <message>
         <source>Color to trace: the exact color of the class in the picture. Widen the tolerance when the color is not perfectly flat; narrow it when two classes bleed into each other. The tracer uses {tolerance} when you leave it empty.</source>
-        <translation>Te traceren kleur: de exacte kleur van de klasse in het beeld. Vergroot de tolerantie wanneer de kleur niet volledig egaal is; verklein deze wanneer twee klassen in elkaar overlopen. De tracer gebruikt {tolerance} wanneer je dit leeg laat.</translation>
+        <translation>Kleur om te vectoriseren: de exacte kleur van de klasse in het beeld. Vergroot de tolerantie als de kleur niet helemaal egaal is en verklein haar als twee klassen in elkaar overlopen. Laat je dit leeg, dan wordt {tolerance} gebruikt.</translation>
     </message>
     <message>
         <source>Color tolerance 0 to 255 (leave empty for {tolerance})</source>
@@ -2977,11 +2977,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Every generation is billed to the signed-in account, and a free account may only ask for the smallest output size. Run '{status_id}' to read the balance and the plan before anything is spent. Plan limits: {pricing_url}</source>
-        <translation>Elke generatie wordt in rekening gebracht bij het aangemelde account en een gratis account kan alleen de kleinste uitvoergrootte aanvragen. Voer '{status_id}' uit om het saldo en abonnement te lezen voordat er kosten worden gemaakt. Abonnementslimieten: {pricing_url}</translation>
+        <translation>Elke generatie wordt in rekening gebracht bij het ingelogde account en een gratis account kan alleen de kleinste uitvoergrootte aanvragen. Voer '{status_id}' uit om het saldo en het abonnement te lezen voordat er kosten worden gemaakt. Abonnementslimieten: {pricing_url}</translation>
     </message>
     <message>
         <source>Generate and edit satellite or aerial imagery with AI: classify land cover, remove clouds and objects, upscale to super resolution, simulate floods</source>
-        <translation>Genereer en bewerk satelliet- of luchtbeelden met AI: classificeer landbedekking, verwijder wolken en objecten, schaal op naar superresolutie, simuleer overstromingen</translation>
+        <translation>Satellietbeelden of luchtfoto's genereren en bewerken met AI: bodembedekking classificeren, wolken en objecten verwijderen, opschalen naar superresolutie, overstromingen simuleren</translation>
     </message>
     <message>
         <source>Map area to edit</source>
@@ -2997,11 +2997,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>No account is needed for this one. The AI Edit plugin has to be loaded, and nothing else: the tracing reads the picture on this computer and sends nothing.</source>
-        <translation>Hiervoor is geen account nodig. De AI Edit-plugin moet geladen zijn, en verder niets: de tracing leest het beeld op deze computer en verzendt niets.</translation>
+        <translation>Hiervoor is geen account nodig. De plugin AI Edit moet geladen zijn, meer niet: de vectorisatie leest het beeld op deze computer en verzendt niets.</translation>
     </message>
     <message>
         <source>Number of polygons traced</source>
-        <translation>Aantal getraceerde polygonen</translation>
+        <translation>Aantal gevectoriseerde polygonen</translation>
     </message>
     <message>
         <source>Output size, leave empty for the one selected in the panel</source>
@@ -3017,11 +3017,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Pick the color to trace, as a color or as '#rrggbb'.</source>
-        <translation>Kies de te traceren kleur, als kleur of als '#rrggbb'.</translation>
+        <translation>Kies de kleur om te vectoriseren, als kleur of als '#rrggbb'.</translation>
     </message>
     <message>
         <source>Plan on the signed-in account</source>
-        <translation>Abonnement van het aangemelde account</translation>
+        <translation>Abonnement van het ingelogde account</translation>
     </message>
     <message>
         <source>Plugin installed</source>
@@ -3033,7 +3033,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Prompt preset id (optional)</source>
-        <translation>Id van de promptvoorinstelling (optioneel)</translation>
+        <translation>ID van promptsjabloon (optioneel)</translation>
     </message>
     <message>
         <source>Ready to run</source>
@@ -3041,7 +3041,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Result image to trace (leave empty for the newest one)</source>
-        <translation>Resultaatbeeld om te traceren (laat leeg voor het nieuwste beeld)</translation>
+        <translation>Resultaatbeeld om te vectoriseren (laat leeg voor het nieuwste beeld)</translation>
     </message>
     <message>
         <source>Rewrites the imagery over a map area from a text prompt and puts the result on the map as a georeferenced image layer, lined up with the area you gave it.</source>
@@ -3065,7 +3065,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Source image: leave it empty to use the newest AI Edit result in the project, or name a raster layer to trace a different one. The layer has to be in the project, not a file picked from disk.</source>
-        <translation>Bronbeeld: laat leeg om het nieuwste AI Edit-resultaat in het project te gebruiken, of geef de naam van een rasterlaag op om een ander beeld te traceren. De laag moet in het project staan en mag geen bestand zijn dat vanaf schijf is geselecteerd.</translation>
+        <translation>Bronbeeld: laat leeg om het nieuwste resultaat van AI Edit in het project te gebruiken, of geef de naam van een rasterlaag op om een ander beeld te vectoriseren. De laag moet in het project staan en mag geen bestand zijn dat van schijf is gekozen.</translation>
     </message>
     <message>
         <source>State</source>
@@ -3081,19 +3081,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Still running after {seconds} seconds. The run was NOT cancelled and is still going. Poll '{status_id}' until BUSY is false, then read the new layer in the project. Do not submit it again.</source>
-        <translation>Na {seconds} seconden wordt de uitvoering nog steeds uitgevoerd. De uitvoering is NIET geannuleerd en loopt nog. Controleer '{status_id}' totdat BUSY false is en lees daarna de nieuwe laag in het project. Dien deze niet opnieuw in.</translation>
+        <translation>Na {seconds} seconden loopt de uitvoering nog. Ze is NIET geannuleerd. Vraag '{status_id}' steeds opnieuw op tot BUSY false is en lees daarna de nieuwe laag in het project. Start haar niet opnieuw.</translation>
     </message>
     <message>
         <source>Still running after {seconds}s. {panel_line}</source>
-        <translation>Na {seconds}s wordt de uitvoering nog steeds uitgevoerd. {panel_line}</translation>
+        <translation>Na {seconds} s loopt de uitvoering nog. {panel_line}</translation>
     </message>
     <message>
         <source>That image is not in the project, so there is nothing to trace beside. Add the layer to the project first, then run this again.</source>
-        <translation>Dat beeld staat niet in het project, dus er is niets om naast te traceren. Voeg de laag eerst aan het project toe en voer dit daarna opnieuw uit.</translation>
+        <translation>Dat beeld staat niet in het project, dus de polygonen kunnen er niet naast worden geplaatst. Voeg de laag eerst aan het project toe en voer dit daarna opnieuw uit.</translation>
     </message>
     <message>
         <source>The AI Edit plugin is not loaded. Enable it in Plugins &gt; Manage and Install Plugins, then reopen this algorithm. (Looked for: {keys})</source>
-        <translation>De AI Edit-plugin is niet geladen. Schakel deze in via Plugins &gt; Manage and Install Plugins en open dit algoritme daarna opnieuw. (Gezocht naar: {keys})</translation>
+        <translation>De plugin AI Edit is niet geladen. Schakel de plugin in via Plug-ins &gt; Plug-ins beheren en installeren en open dit algoritme daarna opnieuw. (Gezocht naar: {keys})</translation>
     </message>
     <message>
         <source>The AI Edit status call returned nothing usable.</source>
@@ -3105,7 +3105,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>The area is read from the map canvas view, so the imagery under it is what the AI sees. Zoom in far enough that the detail you are asking about is visible, and hide any layer you do not want sent.</source>
-        <translation>Het gebied wordt gelezen uit de kaartcanvasweergave, dus de beelden eronder zijn wat AI ziet. Zoom voldoende in zodat het gevraagde detail zichtbaar is en verberg alle lagen die je niet wilt verzenden.</translation>
+        <translation>Het gebied wordt gelezen uit het kaartvenster, dus de beelden eronder zijn wat de AI ziet. Zoom ver genoeg in zodat het detail waar je naar vraagt zichtbaar is en verberg lagen die je niet wilt versturen.</translation>
     </message>
     <message>
         <source>The balance could not be read, so CREDITS_REMAINING is -1 rather than a count. Reason: {reason}.</source>
@@ -3113,11 +3113,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>The imagery is never sent anywhere for this: the tracing is local, and it is not billed to any plan.</source>
-        <translation>De beelden worden hiervoor nergens naartoe verzonden: de tracing is lokaal en wordt niet in rekening gebracht bij een abonnement.</translation>
+        <translation>De beelden worden hiervoor nergens naartoe verzonden: de vectorisatie gebeurt lokaal en wordt bij geen enkel abonnement in rekening gebracht.</translation>
     </message>
     <message>
         <source>The run ended without adding a layer. Read the AI Edit panel for the reason.</source>
-        <translation>De uitvoering is beëindigd zonder een laag toe te voegen. Lees het AI Edit-paneel voor de reden.</translation>
+        <translation>De uitvoering is beëindigd zonder een laag toe te voegen. Kijk in het paneel van AI Edit voor de reden.</translation>
     </message>
     <message>
         <source>The status call returned nothing usable.</source>
@@ -3125,19 +3125,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>The tracing finished but its layer is not in the project.</source>
-        <translation>De tracing is voltooid, maar de bijbehorende laag staat niet in het project.</translation>
+        <translation>De vectorisatie is voltooid, maar de bijbehorende laag staat niet in het project.</translation>
     </message>
     <message>
         <source>This QGIS build exposes no way to keep the run on the main thread. These algorithms drive the AI Edit panel, and driving it from a background thread would take QGIS down, so the run is refused. Update QGIS, or use the panel itself.</source>
-        <translation>Deze QGIS-build biedt geen manier om de uitvoering op de hoofdthread te houden. Deze algoritmen sturen het AI Edit-paneel aan en dat vanuit een achtergrondthread doen zou QGIS laten crashen, dus de uitvoering wordt geweigerd. Werk QGIS bij of gebruik het paneel zelf.</translation>
+        <translation>Deze QGIS-build biedt geen manier om de uitvoering op de hoofdthread te houden. Deze algoritmen sturen het paneel van AI Edit aan. Dat vanuit een achtergrondthread doen zou QGIS laten crashen, dus de uitvoering wordt geweigerd. Werk QGIS bij of gebruik het paneel zelf.</translation>
     </message>
     <message>
         <source>This run takes 30 to 120 seconds, and QGIS stays busy for the caller until it ends. Never start it again while it is running: a second run costs the user money.</source>
-        <translation>Deze uitvoering duurt 30 tot 120 seconden en QGIS blijft voor de aanroeper bezig totdat deze is beëindigd. Start de uitvoering nooit opnieuw terwijl deze loopt: een tweede uitvoering kost de gebruiker geld.</translation>
+        <translation>Deze uitvoering duurt 30 tot 120 seconden en QGIS blijft voor de aanroeper bezet tot ze klaar is. Start haar nooit opnieuw terwijl ze loopt: een tweede uitvoering kost de gebruiker geld.</translation>
     </message>
     <message>
         <source>This runs on the AI service, so it needs an internet connection and a signed-in TerraLab account. Open the AI Edit panel once to sign in.</source>
-        <translation>Dit wordt uitgevoerd op de AI-service en vereist daarom een internetverbinding en een aangemeld TerraLab-account. Open het AI Edit-paneel eenmaal om je aan te melden.</translation>
+        <translation>Dit wordt uitgevoerd op de AI-service en vereist daarom een internetverbinding en een ingelogd TerraLab-account. Open het paneel van AI Edit één keer om in te loggen.</translation>
     </message>
     <message>
         <source>This takes 30 to 120 seconds and QGIS stays busy until it ends. Do not start it again: a second run costs money.</source>
@@ -3149,47 +3149,47 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Traced {count} polygon(s) from {image}.</source>
-        <translation>{count} polygoon of polygonen getraceerd uit {image}.</translation>
+        <translation>Polygonen gevectoriseerd uit {image}: {count}.</translation>
     </message>
     <message>
         <source>Tracing color {color} on {image}.</source>
-        <translation>Kleur {color} wordt getraceerd op {image}.</translation>
+        <translation>Kleur {color} van {image} wordt gevectoriseerd.</translation>
     </message>
     <message>
         <source>Turns one flat color of an AI Edit result image into polygons you can edit, measure and export. It runs on your machine, spends nothing, and usually takes a few seconds.</source>
-        <translation>Zet één egale kleur van een AI Edit-resultaatbeeld om in polygonen die je kunt bewerken, meten en exporteren. Het wordt op je machine uitgevoerd, kost niets en duurt meestal enkele seconden.</translation>
+        <translation>Zet één egale kleur van een resultaatbeeld van AI Edit om in polygonen die je kunt bewerken, meten en exporteren. Het draait op je computer, kost niets en duurt meestal een paar seconden.</translation>
     </message>
     <message>
         <source>Two algorithms do the work, and you can run either by id:
   {generate_id} - '{generate_label}'. Give it a map area and a prompt. It returns a new image layer over that area. It runs on the AI service, takes 30 to 120 seconds, and QGIS stays busy until it ends. Never start it twice: a second run costs the user money.
   {vectorize_id} - '{vectorize_label}'. Give it one flat color of a result image and it traces that color into a polygon layer. Free, local, needs no account, and usually a few seconds.</source>
-        <translation>Twee algoritmen voeren het werk uit en je kunt elk algoritme op id uitvoeren:
-  {generate_id} - '{generate_label}'. Geef een kaartgebied en een prompt op. Het retourneert een nieuwe beeldlaag over dat gebied. Het wordt uitgevoerd op de AI-service, duurt 30 tot 120 seconden en QGIS blijft bezig totdat het is beëindigd. Start het nooit tweemaal: een tweede uitvoering kost de gebruiker geld.
-  {vectorize_id} - '{vectorize_label}'. Geef één egale kleur van een resultaatbeeld op en het traceert die kleur naar een polygoonlaag. Gratis, lokaal, geen account nodig en meestal binnen enkele seconden voltooid.</translation>
+        <translation>Twee algoritmen doen het werk en je kunt ze allebei op id uitvoeren:
+  {generate_id}: '{generate_label}'. Geef een kaartgebied en een prompt op. Het retourneert een nieuwe beeldlaag over dat gebied. Het draait op de AI-service, duurt 30 tot 120 seconden en QGIS blijft bezig tot het klaar is. Start het nooit twee keer: een tweede uitvoering kost de gebruiker geld.
+  {vectorize_id}: '{vectorize_label}'. Geef één egale kleur van een resultaatbeeld op en het vectoriseert die kleur naar een polygoonlaag. Gratis, lokaal, geen account nodig en meestal klaar in een paar seconden.</translation>
     </message>
     <message>
         <source>Type a prompt, for example 'remove the clouds'.</source>
-        <translation>Typ een prompt, bijvoorbeeld 'remove the clouds'.</translation>
+        <translation>Typ een prompt, bijvoorbeeld “verwijder de wolken”.</translation>
     </message>
     <message>
         <source>Use it after '{generate_id}' has painted a class in one color, for example 'color every building red and everything else grey'. Point this algorithm at red and you get one polygon per building.</source>
-        <translation>Gebruik dit nadat '{generate_id}' een klasse in één kleur heeft weergegeven, bijvoorbeeld 'color every building red and everything else grey'. Richt dit algoritme op rood en je krijgt één polygoon per gebouw.</translation>
+        <translation>Gebruik dit nadat '{generate_id}' een klasse in één kleur heeft ingekleurd, bijvoorbeeld “kleur alle gebouwen rood en laat de rest grijs”. Richt dit algoritme op rood en je krijgt één polygoon per gebouw.</translation>
     </message>
     <message>
         <source>Vectorize a color of an AI result into polygons (land cover classes, raster to vector)</source>
-        <translation>Zet een kleur van een AI-resultaat om in polygonen (landbedekkingsklassen, raster naar vector)</translation>
+        <translation>Een kleur van een AI-resultaat vectoriseren naar polygonen (bodembedekkingsklassen, raster naar vector)</translation>
     </message>
     <message>
         <source>What it is for: classify land cover, extract building footprints as a colored picture, remove clouds, remove cars or buildings, upscale to super resolution, simulate a flood, color an old scanned map, restore a damaged photo.</source>
-        <translation>Waarvoor het dient: landbedekking classificeren, gebouwcontouren als een gekleurd beeld extraheren, wolken verwijderen, auto's of gebouwen verwijderen, opschalen naar superresolutie, een overstroming simuleren, een oude gescande kaart inkleuren, een beschadigde foto herstellen.</translation>
+        <translation>Waarvoor het dient: bodembedekking classificeren, gebouwcontouren als een gekleurd beeld extraheren, wolken verwijderen, auto's of gebouwen verwijderen, opschalen naar superresolutie, een overstroming simuleren, een oude gescande kaart inkleuren, een beschadigde foto herstellen.</translation>
     </message>
     <message>
         <source>What it returns: SUBMITTED (whether the run started), STATE ('done', 'generating', 'cancelled' or 'idle'), RESULT_LAYERS (the names of the image layers this run added to the project) and STATUS. There is no file output: the plugin adds the georeferenced result to the project itself, under its own layer group.</source>
-        <translation>Wat het retourneert: SUBMITTED (of de uitvoering is gestart), STATE ('done', 'generating', 'cancelled' of 'idle'), RESULT_LAYERS (de namen van de beeldlagen die deze uitvoering aan het project heeft toegevoegd) en STATUS. Er is geen bestandsuitvoer: de plugin voegt het gegeorefereerde resultaat zelf toe aan het project, onder de eigen laaggroep.</translation>
+        <translation>Wat het retourneert: SUBMITTED (of de uitvoering is gestart), STATE ('done', 'generating', 'cancelled' of 'idle'), RESULT_LAYERS (de namen van de beeldlagen die deze uitvoering aan het project heeft toegevoegd) en STATUS. Er is geen bestandsuitvoer: de plugin voegt het gegeorefereerde resultaat zelf toe aan het project, in een eigen laaggroep.</translation>
     </message>
     <message>
         <source>What it returns: no file output. The plugin adds one styled polygon layer to the project beside the image it came from, and this algorithm reports LAYER_NAME, FEATURE_COUNT and STATUS. That layer lives in memory until you save it, so use 'Make permanent' on it, or export it, before closing the project.</source>
-        <translation>Wat het retourneert: geen bestandsuitvoer. De plugin voegt één opgemaakte polygoonlaag toe aan het project naast het beeld waaruit deze afkomstig is, en dit algoritme rapporteert LAYER_NAME, FEATURE_COUNT en STATUS. Die laag blijft in het geheugen totdat je deze opslaat, dus gebruik 'Make permanent' op de laag of exporteer deze voordat je het project sluit.</translation>
+        <translation>Wat het retourneert: geen bestandsuitvoer. De plugin voegt één polygoonlaag met stijl toe aan het project, naast het beeld waaruit deze afkomstig is, en dit algoritme rapporteert LAYER_NAME, FEATURE_COUNT en STATUS. Die laag staat in het geheugen tot je haar opslaat, dus gebruik er “Permanent maken” op of exporteer haar voordat je het project sluit.</translation>
     </message>
     <message>
         <source>What the user has to do</source>
@@ -3197,27 +3197,27 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>What this one returns: INSTALLED and READY (true or false), STATE (READY, NEEDS_ACTIVATION or NO_PANEL), ACTION_REQUIRED (what a person has to do when READY is false), PLAN ('free', 'pro' or empty when unknown), CREDITS_REMAINING, BUSY (true while a generation is already running) and NEXT_ALGORITHMS. CREDITS_REMAINING is -1 when the account did not report a number, which usually means nobody is signed in yet.</source>
-        <translation>Wat dit retourneert: INSTALLED en READY (true of false), STATE (READY, NEEDS_ACTIVATION of NO_PANEL), ACTION_REQUIRED (wat iemand moet doen wanneer READY false is), PLAN ('free', 'pro' of leeg wanneer onbekend), CREDITS_REMAINING, BUSY (true wanneer er al een generatie wordt uitgevoerd) en NEXT_ALGORITHMS. CREDITS_REMAINING is -1 wanneer het account geen aantal rapporteerde, wat meestal betekent dat nog niemand is aangemeld.</translation>
+        <translation>Wat dit retourneert: INSTALLED en READY (true of false), STATE (READY, NEEDS_ACTIVATION of NO_PANEL), ACTION_REQUIRED (wat iemand moet doen wanneer READY false is), PLAN ('free', 'pro' of leeg wanneer onbekend), CREDITS_REMAINING, BUSY (true wanneer er al een generatie wordt uitgevoerd) en NEXT_ALGORITHMS. CREDITS_REMAINING is -1 wanneer het account geen aantal rapporteerde, wat meestal betekent dat nog niemand is ingelogd.</translation>
     </message>
     <message>
         <source>What to type in 'Prompt': plain words describing the picture you want back, for example 'color every building red and everything else grey' or 'remove the clouds' or 'upscale and sharpen'.</source>
-        <translation>Wat je in 'Prompt' moet typen: gewone woorden die het gewenste beeld beschrijven, bijvoorbeeld 'color every building red and everything else grey', 'remove the clouds' of 'upscale and sharpen'.</translation>
+        <translation>Wat je in 'Prompt' moet typen: gewone woorden die het gewenste beeld beschrijven, bijvoorbeeld “kleur alle gebouwen rood en laat de rest grijs”, “verwijder de wolken” of “schaal op en verscherp”.</translation>
     </message>
     <message>
         <source>When BUSY is true, a generation is already running. Wait for it and poll this algorithm again rather than starting another one.</source>
-        <translation>Wanneer BUSY true is, wordt er al een generatie uitgevoerd. Wacht totdat deze is voltooid en controleer dit algoritme opnieuw in plaats van een nieuwe generatie te starten.</translation>
+        <translation>Wanneer BUSY true is, wordt er al een generatie uitgevoerd. Wacht tot deze klaar is en vraag dit algoritme opnieuw op in plaats van een nieuwe generatie te starten.</translation>
     </message>
     <message>
         <source>When READY is false, read ACTION_REQUIRED out to the user and stop. Signing in happens in the AI Edit panel in QGIS, not from here, and no algorithm can do it for the user.</source>
-        <translation>Wanneer READY false is, geef ACTION_REQUIRED door aan de gebruiker en stop. Aanmelden gebeurt in het AI Edit-paneel in QGIS, niet vanaf hier, en geen algoritme kan dit namens de gebruiker doen.</translation>
+        <translation>Wanneer READY false is, geef ACTION_REQUIRED door aan de gebruiker en stop. Inloggen gebeurt in het paneel van AI Edit in QGIS, niet vanaf hier, en geen enkel algoritme kan dit voor de gebruiker doen.</translation>
     </message>
     <message>
         <source>completed, {count} layer(s) added</source>
-        <translation>voltooid, {count} laag of lagen toegevoegd</translation>
+        <translation>voltooid, toegevoegde lagen: {count}</translation>
     </message>
     <message>
         <source>completed, {count} polygon(s) in one layer</source>
-        <translation>voltooid, {count} polygoon of polygonen in één laag</translation>
+        <translation>voltooid, polygonen in één laag: {count}</translation>
     </message>
     <message>
         <source>failed: {reason}</source>
@@ -3285,15 +3285,15 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Monthly limit reached ({used}/{limit})</source>
-        <translation>Maandelijkse limiet bereikt ({used}/{limit})</translation>
+        <translation>Maandlimiet bereikt ({used}/{limit})</translation>
     </message>
     <message>
         <source>Need more this month? Write to us and we set up a plan that fits your volume.</source>
-        <translation>Deze maand meer nodig? Schrijf ons en we stellen een plan op dat bij uw volume past.</translation>
+        <translation>Deze maand meer nodig? Schrijf ons, dan stellen we een abonnement samen dat bij je volume past.</translation>
     </message>
     <message>
         <source>{left} of {total} credits left this month</source>
-        <translation>{left} van {total} credits over deze maand</translation>
+        <translation>Nog {left} van {total} credits deze maand</translation>
         <source>Select a raster layer to edit:</source>
         <translation>Selecteer een rasterlaag om te bewerken:</translation>
     </message>
@@ -3311,11 +3311,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Your zone is outside "{layer}". Pick the right raster or draw inside it.</source>
-        <translation>Je zone ligt buiten "{layer}". Kies het juiste raster of teken erbinnen.</translation>
+        <translation>Je zone ligt buiten “{layer}”. Kies het juiste raster of teken erbinnen.</translation>
     </message>
     <message>
         <source>Part of your zone is outside "{layer}". That part will come back blank.</source>
-        <translation>Een deel van je zone ligt buiten "{layer}". Dat deel komt leeg terug.</translation>
+        <translation>Een deel van je zone ligt buiten “{layer}”. Dat deel komt leeg terug.</translation>
     </message>
     <message>
         <source>Looking for building, tree or road outlines? AI Segmentation traces them as real geometry.</source>
@@ -3359,11 +3359,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>"{layer}" does not cover your zone. It is sent as a whole image.</source>
-        <translation>"{layer}" dekt je zone niet. Ze wordt als hele afbeelding verzonden.</translation>
+        <translation>“{layer}” dekt je zone niet. Ze wordt als hele afbeelding verzonden.</translation>
     </message>
     <message>
         <source>Could not capture the map. Zoom in and try again.</source>
-        <translation>Kon de kaart niet vastleggen. Zoom in en probeer opnieuw.</translation>
+        <translation>Kan de kaart niet vastleggen. Zoom in en probeer het opnieuw.</translation>
     </message>
     <message>
         <source>A layer is cropped to your zone, a map capture is what you see. Say in the prompt what the AI should take from each.</source>
@@ -3375,11 +3375,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Copy email</source>
-        <translation>E-mailadres kopiëren</translation>
+        <translation>E-mail kopiëren</translation>
     </message>
     <message>
         <source>Custom needs? Write to us: {email}</source>
-        <translation>Aangepaste behoeften? Schrijf naar: {email}</translation>
+        <translation>Maatwerk nodig? Schrijf ons: {email}</translation>
     </message>
     <message>
         <source>Add imagery</source>
@@ -3391,7 +3391,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Add imagery first</source>
-        <translation>Voeg eerst beeldmateriaal toe</translation>
+        <translation>Voeg eerst beelden toe</translation>
     </message>
     <message>
         <source>An edit is already running</source>
@@ -3471,7 +3471,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Edit your prompt</source>
-        <translation>Prompt bewerken</translation>
+        <translation>Bewerk je prompt</translation>
     </message>
     <message>
         <source>Open the prompt library</source>
@@ -3503,7 +3503,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>1 stroke</source>
-        <translation>1 penseelstreek</translation>
+        <translation>1 markering</translation>
     </message>
     <message>
         <source>&lt;b&gt;Draw&lt;/b&gt;&lt;br&gt;Draw lines, arrows or circles on the map to show the AI what to change and where. Your drawing is sent with the prompt as visual guidance.</source>
@@ -3515,15 +3515,15 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Higher quality is sharper and more precise, and costs more credits. Standard (1K), Detailed (2K), Maximum (4K).</source>
-        <translation>&lt;b&gt;Kwaliteit&lt;/b&gt;&lt;br&gt;Een hogere kwaliteit is scherper en nauwkeuriger en kost meer credits. Standaard (1K), Gedetailleerd (2K), Maximum (4K).</translation>
+        <translation>&lt;b&gt;Kwaliteit&lt;/b&gt;&lt;br&gt;Een hogere kwaliteit is scherper en nauwkeuriger en kost meer credits. Standaard (1K), Gedetailleerd (2K), Maximaal (4K).</translation>
     </message>
     <message>
         <source>&lt;b&gt;References&lt;/b&gt;&lt;br&gt;Add an image or data file from disk, or one of your project's layers, as guidance for the AI. You can also drag a layer from the Layers panel straight into the prompt box. Everything is cropped to your zone.</source>
-        <translation>&lt;b&gt;Referenties&lt;/b&gt;&lt;br&gt;Voeg een afbeelding of gegevensbestand van je schijf toe, of een van de layers van je project, als aanwijzing voor de AI. Je kunt ook een layer vanuit het deelvenster Layers rechtstreeks naar het promptvak slepen. Alles wordt bijgesneden tot je zone.</translation>
+        <translation>&lt;b&gt;Referenties&lt;/b&gt;&lt;br&gt;Voeg een afbeelding of gegevensbestand van je schijf toe, of een van de lagen van je project, als aanwijzing voor de AI. Je kunt ook een laag uit het paneel Lagen rechtstreeks naar het promptvak slepen. Alles wordt bijgesneden tot je zone.</translation>
     </message>
     <message>
         <source>A newer version is ready. Opens the QGIS plugin manager on it.</source>
-        <translation>Een nieuwere versie is beschikbaar. Opent de QGIS-pluginbeheerder voor deze versie.</translation>
+        <translation>Er is een nieuwere versie beschikbaar. Opent Plug-ins beheren en installeren in QGIS, bij deze plugin.</translation>
     </message>
     <message>
         <source>AI Edit Pro</source>
@@ -3531,11 +3531,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>AI Edit Settings</source>
-        <translation>AI Edit-instellingen</translation>
+        <translation>AI Edit: instellingen</translation>
     </message>
     <message>
         <source>AI Edit Settings...</source>
-        <translation>AI Edit-instellingen...</translation>
+        <translation>AI Edit: instellingen...</translation>
     </message>
     <message>
         <source>AI Edit and your data</source>
@@ -3543,7 +3543,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>About 150 edits a month and higher-resolution results. Cancel anytime.</source>
-        <translation>Ongeveer 150 bewerkingen per maand en resultaten met een hogere resolutie. Op elk moment opzegbaar.</translation>
+        <translation>Ongeveer 150 bewerkingen per maand en resultaten met een hogere resolutie. Altijd opzegbaar.</translation>
     </message>
     <message>
         <source>Above 0 grows every shape outward, below 0 shrinks it inward.</source>
@@ -3559,7 +3559,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Account deletion scheduled</source>
-        <translation>Verwijdering van account gepland</translation>
+        <translation>Accountverwijdering gepland</translation>
     </message>
     <message>
         <source>Account not deleted.</source>
@@ -3575,11 +3575,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Add a layer, or start with a sample.</source>
-        <translation>Voeg een layer toe of begin met een voorbeeld.</translation>
+        <translation>Voeg een laag toe of begin met een voorbeeld.</translation>
     </message>
     <message>
         <source>Add the Original</source>
-        <translation>Het origineel toevoegen</translation>
+        <translation>Origineel toevoegen</translation>
     </message>
     <message>
         <source>Added</source>
@@ -3615,7 +3615,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>All TerraLab plugins are signed out. To cancel, sign in on terra-lab.ai.</source>
-        <translation>Bij alle TerraLab plugins is de sessie afgemeld. Om te annuleren, meld je aan op terra-lab.ai.</translation>
+        <translation>Je bent uitgelogd bij alle TerraLab-plugins. Log in op terra-lab.ai om te annuleren.</translation>
     </message>
     <message>
         <source>Amber</source>
@@ -3631,19 +3631,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Any subscription stops renewing.</source>
-        <translation>Elk abonnement stopt met verlengen.</translation>
+        <translation>Een eventueel abonnement wordt niet meer verlengd.</translation>
     </message>
     <message>
         <source>Apply the next change to the picked version, on the same zone</source>
-        <translation>Pas de volgende wijziging toe op de geselecteerde versie, in dezelfde zone</translation>
+        <translation>De volgende wijziging toepassen op de gekozen versie, in dezelfde zone</translation>
     </message>
     <message>
         <source>Ask your IT team to allow terra-lab.ai, or import your company root certificate in Settings &gt; Options &gt; Authentication</source>
-        <translation>Vraag je IT-team om terra-lab.ai toe te staan, of importeer het hoofdcertificaat van je bedrijf via Instellingen &gt; Opties &gt; Authenticatie</translation>
+        <translation>Vraag je IT-afdeling om terra-lab.ai toe te staan, of importeer het rootcertificaat van je bedrijf via Extra &gt; Opties &gt; Authenticatie</translation>
     </message>
     <message>
         <source>Ask your IT team to allow terra-lab.ai.</source>
-        <translation>Vraag je IT-team om terra-lab.ai toe te staan.</translation>
+        <translation>Vraag je IT-afdeling om terra-lab.ai toe te staan.</translation>
     </message>
     <message>
         <source>Back to the classes: check, rename or recolor, then vectorize again.</source>
@@ -3663,7 +3663,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Billing</source>
-        <translation>Facturatie</translation>
+        <translation>Facturering</translation>
     </message>
     <message>
         <source>Blog</source>
@@ -3675,7 +3675,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Browse the top picks</source>
-        <translation>De beste keuzes bekijken</translation>
+        <translation>Bekijk de aanraders</translation>
     </message>
     <message>
         <source>Bug, question or idea? Write to us.</source>
@@ -3683,7 +3683,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Cancel on terra-lab.ai during the grace period. After that, it is final.</source>
-        <translation>Annuleer op terra-lab.ai tijdens de respijtperiode. Daarna is het definitief.</translation>
+        <translation>Annuleer op terra-lab.ai tijdens de bedenktijd. Daarna is het definitief.</translation>
     </message>
     <message>
         <source>Cancel the zone</source>
@@ -3707,7 +3707,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Clear the search</source>
-        <translation>De zoekopdracht wissen</translation>
+        <translation>Zoekopdracht wissen</translation>
     </message>
     <message>
         <source>Click a color on the map to add it as a class.</source>
@@ -3719,7 +3719,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Click each point, double-click to finish.</source>
-        <translation>Klik op elk punt en dubbelklik om te voltooien.</translation>
+        <translation>Klik voor elk punt en dubbelklik om af te ronden.</translation>
     </message>
     <message>
         <source>Click to end the comparison</source>
@@ -3731,7 +3731,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Close the panel</source>
-        <translation>Het deelvenster sluiten</translation>
+        <translation>Het paneel sluiten</translation>
     </message>
     <message>
         <source>Close the zone</source>
@@ -3747,11 +3747,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Confirm with your email. Cancel on terra-lab.ai during the grace period.</source>
-        <translation>Bevestig met je e-mailadres. Annuleer op terra-lab.ai tijdens de respijtperiode.</translation>
+        <translation>Bevestig met je e-mailadres. Annuleer op terra-lab.ai tijdens de bedenktijd.</translation>
     </message>
     <message>
         <source>Confirmation refused. Close and try again.</source>
-        <translation>Bevestiging geweigerd. Sluit en probeer opnieuw.</translation>
+        <translation>Bevestiging geweigerd. Sluit dit venster en probeer het opnieuw.</translation>
     </message>
     <message>
         <source>Continue</source>
@@ -3763,7 +3763,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Contracting by {n} px erased every shape. Set “Expand/Contract” closer to 0.</source>
-        <translation>Een verkleining met {n} px heeft elke vorm gewist. Stel 'Uitbreiden/inkrimpen' dichter bij 0 in.</translation>
+        <translation>Een verkleining met {n} px heeft elke vorm gewist. Stel “Vergroten/verkleinen” dichter bij 0 in.</translation>
     </message>
     <message>
         <source>Copy your logs and send them to us. We will look into it.</source>
@@ -3771,11 +3771,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Could not add {name}. {reason}</source>
-        <translation>Kon {name} niet toevoegen. {reason}</translation>
+        <translation>Kan {name} niet toevoegen. {reason}</translation>
     </message>
     <message>
         <source>Could not capture your zone: {error}</source>
-        <translation>Je zone kon niet worden vastgelegd: {error}</translation>
+        <translation>Kan je zone niet vastleggen: {error}</translation>
     </message>
     <message>
         <source>Could not download the reference.</source>
@@ -3799,7 +3799,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Custom needs</source>
-        <translation>Aangepaste behoeften</translation>
+        <translation>Maatwerk</translation>
     </message>
     <message>
         <source>Cyan</source>
@@ -3811,7 +3811,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Data erased after the grace period.</source>
-        <translation>Gegevens gewist na de respijtperiode.</translation>
+        <translation>Gegevens gewist na de bedenktijd.</translation>
     </message>
     <message>
         <source>Data erased on {date}.</source>
@@ -3831,7 +3831,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Delete your account?</source>
-        <translation>Uw account verwijderen?</translation>
+        <translation>Je account verwijderen?</translation>
     </message>
     <message>
         <source>Deleting account</source>
@@ -3839,7 +3839,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Deleting...</source>
-        <translation>Bezig met verwijderen...</translation>
+        <translation>Verwijderen...</translation>
     </message>
     <message>
         <source>Deletion already scheduled. Cancel on terra-lab.ai.</source>
@@ -3847,7 +3847,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Deletion already set for {date}. Cancel on terra-lab.ai.</source>
-        <translation>Verwijdering al ingesteld voor {date}. Annuleer op terra-lab.ai.</translation>
+        <translation>Verwijdering al gepland op {date}. Annuleer op terra-lab.ai.</translation>
     </message>
     <message>
         <source>Describe the change, e.g. turn the fields into a forest</source>
@@ -3863,7 +3863,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Detailed and Maximum quality</source>
-        <translation>Gedetailleerde en Maximale kwaliteit</translation>
+        <translation>Kwaliteit Gedetailleerd en Maximaal</translation>
     </message>
     <message>
         <source>Download Original as a georeferenced GeoTIFF (.tif)</source>
@@ -3879,11 +3879,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Drag a box on the map. Esc cancels.</source>
-        <translation>Sleep een vak op de kaart. Esc annuleert.</translation>
+        <translation>Sleep een kader op de kaart. Esc annuleert.</translation>
     </message>
     <message>
         <source>Drag across an area. Shift draws a true circle.</source>
-        <translation>Sleep over een gebied. Shift tekent een echte cirkel.</translation>
+        <translation>Sleep over een gebied. Met Shift teken je een echte cirkel.</translation>
     </message>
     <message>
         <source>Drag across the area to circle it.</source>
@@ -3895,7 +3895,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Drag from the start to the tip. Shift keeps 45 degree angles.</source>
-        <translation>Sleep van het begin naar de punt. Shift houdt hoeken van 45 graden aan.</translation>
+        <translation>Sleep van het begin naar de punt. Met Shift teken je in hoeken van 45 graden.</translation>
     </message>
     <message>
         <source>Drag on the map to draw freely.</source>
@@ -3911,7 +3911,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Drawing a zone</source>
-        <translation>Zone wordt getekend</translation>
+        <translation>Een zone tekenen</translation>
     </message>
     <message>
         <source>Drop polygons smaller than this after tracing.</source>
@@ -3919,7 +3919,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Drop this zone and go back to the start</source>
-        <translation>Deze zone verwijderen en terug naar het begin</translation>
+        <translation>Deze zone wissen en teruggaan naar het begin</translation>
     </message>
     <message>
         <source>Duration</source>
@@ -3927,7 +3927,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Each change updates the same layer.</source>
-        <translation>Elke wijziging werkt dezelfde layer bij.</translation>
+        <translation>Elke wijziging werkt dezelfde laag bij.</translation>
     </message>
     <message>
         <source>Edit the selected area with AI (Enter)</source>
@@ -3935,19 +3935,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Erases all data, stops every TerraLab plugin</source>
-        <translation>Wist alle gegevens en stopt elke TerraLab plugin</translation>
+        <translation>Wist alle gegevens en stopt elke TerraLab-plugin</translation>
     </message>
     <message>
         <source>Errors, versions and features used, linked to your account. Never your imagery, layers or coordinates. On Pro, counts only.</source>
-        <translation>Fouten, versies en gebruikte functies, gekoppeld aan uw account. Nooit uw beeldmateriaal, layers of coördinaten. Op Pro alleen aantallen.</translation>
+        <translation>Fouten, versies en gebruikte functies, gekoppeld aan je account. Nooit je beelden, lagen of coördinaten. Op Pro alleen aantallen.</translation>
     </message>
     <message>
         <source>Every TerraLab plugin stops, on all computers.</source>
-        <translation>Elke TerraLab plugin stopt, op alle computers.</translation>
+        <translation>Elke TerraLab-plugin stopt, op alle computers.</translation>
     </message>
     <message>
         <source>Every edit you run lands here, grouped by place, ready to pick up again.</source>
-        <translation>Elke wijziging die u uitvoert komt hier terecht, gegroepeerd per plaats, klaar om opnieuw op te pakken.</translation>
+        <translation>Elke bewerking die je uitvoert komt hier terecht, gegroepeerd per plaats, klaar om weer op te pakken.</translation>
     </message>
     <message>
         <source>Everything we make</source>
@@ -3963,7 +3963,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Finish signing in on the page that just opened</source>
-        <translation>Voltooi het aanmelden op de pagina die zojuist is geopend</translation>
+        <translation>Rond het inloggen af op de pagina die zojuist is geopend</translation>
     </message>
     <message>
         <source>For a team?</source>
@@ -3971,19 +3971,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Free credits used up this month</source>
-        <translation>Gratis tegoeden deze maand opgebruikt</translation>
+        <translation>Gratis credits van deze maand opgebruikt</translation>
     </message>
     <message>
         <source>Free plan</source>
-        <translation>Gratis abonnement</translation>
+        <translation>Free-abonnement</translation>
     </message>
     <message>
         <source>Free plan limit reached.</source>
-        <translation>Limiet van het gratis abonnement bereikt.</translation>
+        <translation>Limiet van het Free-abonnement bereikt.</translation>
     </message>
     <message>
         <source>From zone to finished edit</source>
-        <translation>Van zone naar voltooide wijziging</translation>
+        <translation>Van zone naar voltooide bewerking</translation>
     </message>
     <message>
         <source>Generate a flat-color map first, then come back.</source>
@@ -3991,11 +3991,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Generate the edit on your zone</source>
-        <translation>Genereer de wijziging voor uw zone</translation>
+        <translation>Genereer de bewerking op je zone</translation>
     </message>
     <message>
         <source>Generate without it</source>
-        <translation>Genereren zonder</translation>
+        <translation>Zonder die laag genereren</translation>
     </message>
     <message>
         <source>Generated in the USA.</source>
@@ -4003,11 +4003,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Get Pro</source>
-        <translation>Pro aanschaffen</translation>
+        <translation>Neem Pro</translation>
     </message>
     <message>
         <source>Get better results</source>
-        <translation>Betere resultaten krijgen</translation>
+        <translation>Betere resultaten</translation>
     </message>
     <message>
         <source>Go back one step</source>
@@ -4027,31 +4027,31 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Hints you closed in the panel</source>
-        <translation>Tips die u in het panel hebt gesloten</translation>
+        <translation>Tips die je in het paneel hebt gesloten</translation>
     </message>
     <message>
         <source>How far a pixel's color may drift from its class. Higher takes in noisy shades.</source>
-        <translation>Hoe ver de kleur van een pixel mag afwijken van de klasse. Een hogere waarde neemt meer ruisende tinten mee.</translation>
+        <translation>Hoe ver de kleur van een pixel mag afwijken van de klasse. Een hogere waarde neemt ook ruisige tinten mee.</translation>
     </message>
     <message>
         <source>Ideas and workflows</source>
-        <translation>Ideeën en werkprocessen</translation>
+        <translation>Ideeën en workflows</translation>
     </message>
     <message>
         <source>If your browser works, turn on Settings &gt; Options &gt; Network &gt; Use proxy for web access.</source>
-        <translation>Als uw browser werkt, schakel Instellingen &gt; Opties &gt; Netwerk &gt; Proxy gebruiken voor webtoegang in.</translation>
+        <translation>Als je browser werkt, schakel je Extra &gt; Opties &gt; Netwerk &gt; Proxy gebruiken voor toegang tot web in.</translation>
     </message>
     <message>
         <source>Image too large. Draw a smaller zone or pick a lower Quality.</source>
-        <translation>Afbeelding te groot. Teken een kleinere zone of kies een lagere Kwaliteit.</translation>
+        <translation>Afbeelding te groot. Teken een kleinere zone of kies een lagere kwaliteit.</translation>
     </message>
     <message>
         <source>In your prompt, say what to take from each: "roof colours from reference 1".</source>
-        <translation>Zeg in uw prompt wat u van elk exemplaar wilt overnemen: "dak kleuren uit referentie 1".</translation>
+        <translation>Zeg in je prompt wat je van elke referentie wilt overnemen: “dakkleuren van referentie 1”.</translation>
     </message>
     <message>
         <source>Install in QGIS</source>
-        <translation>In QGIS installeren</translation>
+        <translation>Installeren in QGIS</translation>
     </message>
     <message>
         <source>Installed</source>
@@ -4059,15 +4059,15 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>It is installed but did not start. Restart QGIS to use it.</source>
-        <translation>Het is geïnstalleerd maar is niet gestart. Start QGIS opnieuw om het te gebruiken.</translation>
+        <translation>De plugin is geïnstalleerd maar niet gestart. Herstart QGIS om hem te gebruiken.</translation>
     </message>
     <message>
         <source>It is installed but switched off. Turns it on and opens it.</source>
-        <translation>Het is geïnstalleerd maar uitgeschakeld. Schakelt het in en opent het.</translation>
+        <translation>De plugin is geïnstalleerd maar uitgeschakeld. Schakelt hem in en opent hem.</translation>
     </message>
     <message>
         <source>Its companion files are missing ({missing}). Drop the whole set together.</source>
-        <translation>De bijbehorende bestanden ontbreken ({missing}). Plaats de volledige set samen.</translation>
+        <translation>Bijbehorende bestanden ontbreken ({missing}). Sleep de hele set samen hierheen.</translation>
     </message>
     <message>
         <source>Keep editing with Pro</source>
@@ -4075,19 +4075,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Keep the polygons on your map and close this panel</source>
-        <translation>Houd de polygonen op uw kaart en sluit dit panel</translation>
+        <translation>Polygonen op je kaart laten staan en dit paneel sluiten</translation>
     </message>
     <message>
         <source>Keep this result on your map and start over on a new zone. The session stays in Sessions.</source>
-        <translation>Houd dit resultaat op uw kaart en begin opnieuw met een nieuwe zone. De sessie blijft in Sessies.</translation>
+        <translation>Laat dit resultaat op je kaart staan en begin opnieuw met een nieuwe zone. De sessie blijft in Sessies.</translation>
     </message>
     <message>
         <source>Keep your strokes to guide the edit. They are removed from the result.</source>
-        <translation>Houd uw streken aan om de wijziging te sturen. Ze worden uit het resultaat verwijderd.</translation>
+        <translation>Behoud je markeringen om de bewerking te sturen. Ze worden uit het resultaat verwijderd.</translation>
     </message>
     <message>
         <source>Kept in France.</source>
-        <translation>Behouden in Frankrijk.</translation>
+        <translation>Bewaard in Frankrijk.</translation>
     </message>
     <message>
         <source>Keyboard shortcuts</source>
@@ -4095,7 +4095,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Last free edit this month.</source>
-        <translation>Laatste gratis wijziging van deze maand.</translation>
+        <translation>Laatste gratis bewerking van deze maand.</translation>
     </message>
     <message>
         <source>Leave empty for the default folder</source>
@@ -4111,7 +4111,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Like it? Pro adds Detailed and Maximum quality, and commercial use.</source>
-        <translation>Bevalt het? Pro voegt Gedetailleerde en Maximale kwaliteit en commercieel gebruik toe.</translation>
+        <translation>Bevalt het? Pro voegt de kwaliteit Gedetailleerd en Maximaal toe, plus commercieel gebruik.</translation>
     </message>
     <message>
         <source>Limit reached. Remove one to add another.</source>
@@ -4119,11 +4119,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Linked to your account, no imagery</source>
-        <translation>Gekoppeld aan uw account, geen beeldmateriaal</translation>
+        <translation>Gekoppeld aan je account, zonder beelden</translation>
     </message>
     <message>
         <source>Load this prompt, its references and the same map zone back into AI Edit, replacing what you have now.</source>
-        <translation>Laad deze prompt, de referenties en dezelfde kaartzone opnieuw in AI Edit, en vervang daarmee wat u nu hebt.</translation>
+        <translation>Laad deze prompt, de referenties en dezelfde kaartzone opnieuw in AI Edit en vervang daarmee wat je nu hebt.</translation>
     </message>
     <message>
         <source>Locked while the AI generates</source>
@@ -4143,7 +4143,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Map view</source>
-        <translation>Kaartweergave</translation>
+        <translation>Kaartvenster</translation>
     </message>
     <message>
         <source>More edits, commercial use</source>
@@ -4163,7 +4163,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Needs a restart</source>
-        <translation>Herstart vereist</translation>
+        <translation>Herstart nodig</translation>
     </message>
     <message>
         <source>Network error. Check your internet connection.</source>
@@ -4187,11 +4187,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>No map to vectorize yet</source>
-        <translation>Nog geen kaart om te vectoriseren</translation>
+        <translation>Nog geen kaart te vectoriseren</translation>
     </message>
     <message>
         <source>No matches found</source>
-        <translation>Geen overeenkomsten gevonden</translation>
+        <translation>Niets gevonden</translation>
     </message>
     <message>
         <source>No pixel matches the checked colors. Adjust a color, or add one with “Add color from map”.</source>
@@ -4211,7 +4211,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>No shape reaches {n} px. Lower “Min polygon size”.</source>
-        <translation>Geen shape bereikt {n} px. Verlaag “Min. polygoongrootte”.</translation>
+        <translation>Geen enkele vorm bereikt {n} px. Verlaag “Min. polygoongrootte”.</translation>
     </message>
     <message>
         <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size” or “Remove speckle”, or raise “Color tolerance”.</source>
@@ -4219,7 +4219,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>No strokes yet</source>
-        <translation>Nog geen lijnen</translation>
+        <translation>Nog geen markeringen</translation>
     </message>
     <message>
         <source>Not an image or a map file QGIS can open.</source>
@@ -4227,15 +4227,15 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Not signed in</source>
-        <translation>Niet aangemeld</translation>
+        <translation>Niet ingelogd</translation>
     </message>
     <message>
         <source>Nothing was sent. Press Generate again to read the notice.</source>
-        <translation>Er is niets verzonden. Druk opnieuw op Genereren om de melding te lezen.</translation>
+        <translation>Er is niets verzonden. Klik opnieuw op “Genereren” om de melding te lezen.</translation>
     </message>
     <message>
         <source>Nothing yet. The AI works from your zone and prompt only.</source>
-        <translation>Nog niets. De AI werkt alleen met jouw zone en prompt.</translation>
+        <translation>Nog niets. De AI werkt alleen met je zone en prompt.</translation>
     </message>
     <message>
         <source>Open</source>
@@ -4243,15 +4243,15 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Open QGIS's Data Source Manager to add data</source>
-        <translation>Open de Data Source Manager van QGIS om data toe te voegen</translation>
+        <translation>Open Databronnen beheren in QGIS om data toe te voegen</translation>
     </message>
     <message>
         <source>Open a prompt or a past edit and press its star: it will wait for you here.</source>
-        <translation>Open een prompt of een eerdere bewerking en klik op het sterretje: hier wacht het op je.</translation>
+        <translation>Open een prompt of een eerdere bewerking en klik op de ster: die wacht dan hier op je.</translation>
     </message>
     <message>
         <source>Open dashboard</source>
-        <translation>Open dashboard</translation>
+        <translation>Dashboard openen</translation>
     </message>
     <message>
         <source>Open in QGIS</source>
@@ -4259,15 +4259,15 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Open the AI Edit page</source>
-        <translation>Open de AI Edit-pagina</translation>
+        <translation>De pagina van AI Edit openen</translation>
     </message>
     <message>
         <source>Open the Library</source>
-        <translation>Open de Bibliotheek</translation>
+        <translation>Bibliotheek openen</translation>
     </message>
     <message>
         <source>Open your sessions</source>
-        <translation>Open je sessies</translation>
+        <translation>Je sessies openen</translation>
     </message>
     <message>
         <source>Opens in your browser</source>
@@ -4275,7 +4275,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Opens the QGIS plugin manager on this plugin.</source>
-        <translation>Opent de QGIS pluginmanager op deze plugin.</translation>
+        <translation>Opent Plug-ins beheren en installeren in QGIS bij deze plugin.</translation>
     </message>
     <message>
         <source>Opens your dashboard in the browser</source>
@@ -4283,19 +4283,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Or drop images and layers here</source>
-        <translation>Of sleep afbeeldingen en layers hierheen</translation>
+        <translation>Of sleep afbeeldingen en lagen hierheen</translation>
     </message>
     <message>
         <source>Other TerraLab plugins for QGIS</source>
-        <translation>Andere TerraLab plugins voor QGIS</translation>
+        <translation>Andere TerraLab-plugins voor QGIS</translation>
     </message>
     <message>
         <source>Other TerraLab plugins...</source>
-        <translation>Andere TerraLab plugins...</translation>
+        <translation>Andere TerraLab-plugins...</translation>
     </message>
     <message>
         <source>Outline an area, say what to change</source>
-        <translation>Teken een gebied af en vertel wat er moet veranderen</translation>
+        <translation>Omlijn een gebied en zeg wat er moet veranderen</translation>
     </message>
     <message>
         <source>Output size</source>
@@ -4303,7 +4303,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Outside the prompt box</source>
-        <translation>Buiten het promptvak</translation>
+        <translation>Buiten het promptveld</translation>
     </message>
     <message>
         <source>Outside your zone, sent whole</source>
@@ -4319,7 +4319,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Pick a map under Layer first.</source>
-        <translation>Kies eerst een kaart onder Layer.</translation>
+        <translation>Kies eerst een kaart onder “Laag”.</translation>
     </message>
     <message>
         <source>Pick a tool to draw.</source>
@@ -4327,11 +4327,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Plan not loaded</source>
-        <translation>Plan niet geladen</translation>
+        <translation>Abonnement niet geladen</translation>
     </message>
     <message>
         <source>Plan, payment and invoices</source>
-        <translation>Plan, betaling en facturen</translation>
+        <translation>Abonnement, betaling en facturen</translation>
     </message>
     <message>
         <source>Preview</source>
@@ -4347,19 +4347,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Pro plan</source>
-        <translation>Pro-plan</translation>
+        <translation>Pro-abonnement</translation>
     </message>
     <message>
         <source>Pro unlocks Detailed and Maximum, for printing and zooming in</source>
-        <translation>Pro ontgrendelt Detailed en Maximum, voor afdrukken en inzoomen</translation>
+        <translation>Met Pro krijg je Gedetailleerd en Maximaal, om af te drukken en in te zoomen</translation>
     </message>
     <message>
         <source>Project layer</source>
-        <translation>Projectlayer</translation>
+        <translation>Projectlaag</translation>
     </message>
     <message>
         <source>Prompts and edits you starred.</source>
-        <translation>Prompts en bewerkingen die je een ster gaf.</translation>
+        <translation>Prompts en bewerkingen waaraan je een ster gaf.</translation>
     </message>
     <message>
         <source>Prompts, References, Draw, Vectorize</source>
@@ -4367,19 +4367,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Proven prompts to start from. Open one to see it before and after.</source>
-        <translation>Bewezen prompts om mee te starten. Open er een om het voor en na te zien.</translation>
+        <translation>Beproefde prompts om mee te starten. Open er een om voor en na te vergelijken.</translation>
     </message>
     <message>
         <source>Proxy connection failed. Check QGIS proxy settings (Settings &gt; Options &gt; Network).</source>
-        <translation>Proxyverbinding mislukt. Controleer de proxy-instellingen van QGIS (Instellingen &gt; Opties &gt; Netwerk).</translation>
+        <translation>Proxyverbinding mislukt. Controleer de proxy-instellingen van QGIS (Extra &gt; Opties &gt; Netwerk).</translation>
     </message>
     <message>
         <source>QGIS could not turn it on. Tick it in Plugins &gt; Manage and Install Plugins.</source>
-        <translation>QGIS kon het niet inschakelen. Vink het aan in Plugins &gt; Plugins beheren en installeren.</translation>
+        <translation>QGIS kon de plugin niet inschakelen. Vink hem aan in Plug-ins &gt; Plug-ins beheren en installeren.</translation>
     </message>
     <message>
         <source>Raise the timeout in Settings &gt; Options &gt; Network.</source>
-        <translation>Verhoog de time-out in Instellingen &gt; Opties &gt; Netwerk.</translation>
+        <translation>Verhoog de time-out in Extra &gt; Opties &gt; Netwerk.</translation>
     </message>
     <message>
         <source>Read the guide</source>
@@ -4407,11 +4407,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Remove every stroke. Undo cannot bring them back.</source>
-        <translation>Verwijder alle lijnen. Ongedaan maken kan ze niet terugbrengen.</translation>
+        <translation>Alle markeringen verwijderen. Ongedaan maken kan ze niet terugbrengen.</translation>
     </message>
     <message>
         <source>Remove the last point</source>
-        <translation>Verwijder het laatste punt</translation>
+        <translation>Het laatste punt verwijderen</translation>
     </message>
     <message>
         <source>Remove {name}</source>
@@ -4431,11 +4431,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Reset settings</source>
-        <translation>Instellingen resetten</translation>
+        <translation>Reset instellingen</translation>
     </message>
     <message>
         <source>Restart QGIS</source>
-        <translation>QGIS opnieuw starten</translation>
+        <translation>QGIS herstarten</translation>
     </message>
     <message>
         <source>Result</source>
@@ -4443,11 +4443,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Results for "{query}"</source>
-        <translation>Resultaten voor "{query}"</translation>
+        <translation>Resultaten voor “{query}”</translation>
     </message>
     <message>
         <source>Run QGIS from a single sentence.</source>
-        <translation>Bestuur QGIS vanuit een enkele zin.</translation>
+        <translation>Bedien QGIS met één zin.</translation>
     </message>
     <message>
         <source>Save reference</source>
@@ -4463,7 +4463,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Secure connection failed, often because of company SSL inspection. Ask your IT team to allow terra-lab.ai, or import your company root certificate in Settings &gt; Options &gt; Authentication.</source>
-        <translation>Beveiligde verbinding mislukt, vaak door SSL-inspectie van het bedrijf. Vraag je IT-team om terra-lab.ai toe te staan, of importeer het rootcertificaat van je bedrijf in Instellingen &gt; Opties &gt; Authenticatie.</translation>
+        <translation>Beveiligde verbinding mislukt, vaak door SSL-inspectie van het bedrijf. Vraag je IT-afdeling om terra-lab.ai toe te staan, of importeer het rootcertificaat van je bedrijf in Extra &gt; Opties &gt; Authenticatie.</translation>
     </message>
     <message>
         <source>See Pro</source>
@@ -4471,7 +4471,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>See it in action</source>
-        <translation>Zie het in actie</translation>
+        <translation>Bekijk het in actie</translation>
     </message>
     <message>
         <source>See plans on terra-lab.ai</source>
@@ -4479,7 +4479,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>See usage</source>
-        <translation>Bekijk verbruik</translation>
+        <translation>Bekijk gebruik</translation>
     </message>
     <message>
         <source>See what Pro unlocks</source>
@@ -4491,11 +4491,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Session expired. Sign out and back in.</source>
-        <translation>Sessie verlopen. Meld je af en weer aan.</translation>
+        <translation>Sessie verlopen. Log uit en log weer in.</translation>
     </message>
     <message>
         <source>Session reopened. Edit the prompt or pick a version, then Generate.</source>
-        <translation>Sessie heropend. Bewerk de prompt of kies een versie en klik op Genereren.</translation>
+        <translation>Sessie heropend. Bewerk de prompt of kies een versie en klik op “Genereren”.</translation>
     </message>
     <message>
         <source>Share usage statistics</source>
@@ -4511,11 +4511,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Show it and generate</source>
-        <translation>Toon het en genereer</translation>
+        <translation>Tonen en genereren</translation>
     </message>
     <message>
         <source>Show the AI a style, a legend or an object to match.</source>
-        <translation>Toon de AI een stijl, een legenda of een object om te matchen.</translation>
+        <translation>Laat de AI een stijl, een legenda of een object zien om op af te stemmen.</translation>
     </message>
     <message>
         <source>Show the plugin's panel.</source>
@@ -4523,27 +4523,27 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Show this layer in the Layers panel</source>
-        <translation>Toon deze laag in het Lagen-paneel</translation>
+        <translation>Toon deze laag in het paneel Lagen</translation>
     </message>
     <message>
         <source>Sign in</source>
-        <translation>Aanmelden</translation>
+        <translation>Inloggen</translation>
     </message>
     <message>
         <source>Sign in to see your plan</source>
-        <translation>Meld je aan om je abonnement te zien</translation>
+        <translation>Log in om je abonnement te zien</translation>
     </message>
     <message>
         <source>Sign in to see your plan.</source>
-        <translation>Meld je aan om je abonnement te zien.</translation>
+        <translation>Log in om je abonnement te zien.</translation>
     </message>
     <message>
         <source>Sign out, then sign in again.</source>
-        <translation>Meld je af en daarna weer aan.</translation>
+        <translation>Log uit en log daarna opnieuw in.</translation>
     </message>
     <message>
         <source>Sign-in, plan and privacy</source>
-        <translation>Aanmelden, abonnement en privacy</translation>
+        <translation>Inloggen, abonnement en privacy</translation>
     </message>
     <message>
         <source>Sketch where the AI should act.</source>
@@ -4551,19 +4551,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Softer outlines for natural shapes like trees.</source>
-        <translation>Zachtere contouren voor natuurlijke vormen zoals bomen.</translation>
+        <translation>Zachtere omtrekken voor natuurlijke vormen zoals bomen.</translation>
     </message>
     <message>
         <source>Start from {label}</source>
-        <translation>Begin vanaf {label}</translation>
+        <translation>Starten vanuit {label}</translation>
     </message>
     <message>
         <source>Start the next edit from</source>
-        <translation>Begin de volgende bewerking vanaf</translation>
+        <translation>Volgende bewerking vanuit</translation>
     </message>
     <message>
         <source>Start the next edit from this version</source>
-        <translation>Begin de volgende bewerking vanaf deze versie</translation>
+        <translation>De volgende bewerking starten vanuit deze versie</translation>
     </message>
     <message>
         <source>Still generating. The result is added to your map when ready.</source>
@@ -4571,7 +4571,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Still waiting, but AI Edit cannot reach the server to check your sign-in.</source>
-        <translation>Nog aan het wachten, maar AI Edit kan de server niet bereiken om je aanmelding te controleren.</translation>
+        <translation>Nog aan het wachten, maar AI Edit kan de server niet bereiken om je login te controleren.</translation>
     </message>
     <message>
         <source>Straight lines. Click the first point to close, Shift keeps 45 degree angles.</source>
@@ -4583,7 +4583,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Strokes count only inside your zone.</source>
-        <translation>Lijnen tellen alleen binnen je zone.</translation>
+        <translation>Markeringen tellen alleen binnen je zone.</translation>
     </message>
     <message>
         <source>Subscription inactive. Manage it on terra-lab.ai.</source>
@@ -4591,11 +4591,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Swipe between the original map and this result</source>
-        <translation>Veeg tussen de originele kaart en dit resultaat</translation>
+        <translation>Originele kaart en dit resultaat vergelijken met een schuifbalk</translation>
     </message>
     <message>
         <source>Team seats, custom quota, invoices</source>
-        <translation>Teamlicenties, aangepast quotum, facturen</translation>
+        <translation>Teamplaatsen, aangepaste limiet, facturen</translation>
     </message>
     <message>
         <source>TerraLab blog</source>
@@ -4603,11 +4603,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>TerraLab is busy right now</source>
-        <translation>TerraLab is momenteel druk bezig</translation>
+        <translation>Het is nu erg druk bij TerraLab</translation>
     </message>
     <message>
         <source>That click missed the map. Try again on the map itself.</source>
-        <translation>Die klik miste de kaart. Probeer het opnieuw op de kaart zelf.</translation>
+        <translation>Je klikte naast de kaart. Probeer het opnieuw op de kaart zelf.</translation>
     </message>
     <message>
         <source>That email does not match. Try again.</source>
@@ -4619,11 +4619,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>The Free plan takes up to {n} references.</source>
-        <translation>Het Gratis abonnement ondersteunt tot {n} referenties.</translation>
+        <translation>Het Free-abonnement biedt maximaal {n} referenties.</translation>
     </message>
     <message>
         <source>The Free plan takes {n} reference.</source>
-        <translation>Het Gratis abonnement ondersteunt {n} referentie.</translation>
+        <translation>Het Free-abonnement biedt {n} referentie.</translation>
     </message>
     <message>
         <source>The account could not be deleted.</source>
@@ -4631,11 +4631,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>The free plan includes {n} reference. Remove it to add another.</source>
-        <translation>Het gratis abonnement bevat {n} referentie. Verwijder deze om er nog een toe te voegen.</translation>
+        <translation>Het Free-abonnement biedt {n} referentie. Verwijder die om er nog een toe te voegen.</translation>
     </message>
     <message>
         <source>The free plan includes {n} references. Remove one to add another.</source>
-        <translation>Het gratis abonnement bevat {n} referenties. Verwijder er een om er nog een toe te voegen.</translation>
+        <translation>Het Free-abonnement biedt maximaal {n} referenties. Verwijder er één om er nog een toe te voegen.</translation>
     </message>
     <message>
         <source>The imagery this session was edited on is not in this project. Add its Original to see your edits in context.</source>
@@ -4655,7 +4655,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>The next edit starts from it.</source>
-        <translation>De volgende bewerking begint hiervan.</translation>
+        <translation>De volgende bewerking start vanuit deze versie.</translation>
     </message>
     <message>
         <source>The polygons could not be added to your map. Try again.</source>
@@ -4663,7 +4663,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>The prompts could not load</source>
-        <translation>De prompts konden niet worden geladen</translation>
+        <translation>Prompts laden mislukt</translation>
     </message>
     <message>
         <source>The written tutorial, on the TerraLab blog.</source>
@@ -4675,11 +4675,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>This Quality is not in your plan. Upgrade to Pro to use it.</source>
-        <translation>Deze kwaliteit zit niet in je abonnement. Upgrade naar Pro om het te gebruiken.</translation>
+        <translation>Deze kwaliteit zit niet in je abonnement. Upgrade naar Pro om die te gebruiken.</translation>
     </message>
     <message>
         <source>This computer is no longer signed in</source>
-        <translation>Deze computer is niet meer aangemeld</translation>
+        <translation>Deze computer is niet meer ingelogd</translation>
     </message>
     <message>
         <source>This looks like a photo. Pick a color below.</source>
@@ -4703,11 +4703,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Too many attempts. Try again soon.</source>
-        <translation>Te veel pogingen. Probeer het binnenkort opnieuw.</translation>
+        <translation>Te veel pogingen. Probeer het straks opnieuw.</translation>
     </message>
     <message>
         <source>Tools</source>
-        <translation>Hulpmiddelen</translation>
+        <translation>Gereedschap</translation>
     </message>
     <message>
         <source>Try again in a moment.</source>
@@ -4715,7 +4715,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Try one word, like "trees"</source>
-        <translation>Probeer één woord, zoals "bomen"</translation>
+        <translation>Probeer één woord, zoals “bomen”</translation>
     </message>
     <message>
         <source>Turn buildings, trees or water into polygons.</source>
@@ -4735,7 +4735,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Turns a flat-color map into polygons, one class per color.</source>
-        <translation>Zet een kaart met vlakke kleuren om in polygonen, één klasse per kleur.</translation>
+        <translation>Zet een kaart met effen kleuren om in polygonen, één klasse per kleur.</translation>
     </message>
     <message>
         <source>Tutorials</source>
@@ -4747,7 +4747,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Undo the last stroke ({shortcut})</source>
-        <translation>De laatste lijn ongedaan maken ({shortcut})</translation>
+        <translation>Laatste markering ongedaan maken ({shortcut})</translation>
     </message>
     <message>
         <source>Up to 12 reference images</source>
@@ -4767,11 +4767,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Update to keep using AI Edit. It takes one click in the QGIS Plugin Manager, and the plugin reloads on its own.</source>
-        <translation>Werk bij om AI Edit te blijven gebruiken. Het kost één klik in de QGIS Plugin Manager, en de plugin herlaadt vanzelf.</translation>
+        <translation>Werk bij om AI Edit te blijven gebruiken. Het kost één klik in Plug-ins beheren en installeren van QGIS, en de plugin herlaadt vanzelf.</translation>
     </message>
     <message>
         <source>Updating the layer...</source>
-        <translation>Layer wordt bijgewerkt...</translation>
+        <translation>Laag wordt bijgewerkt...</translation>
     </message>
     <message>
         <source>Usage</source>
@@ -4807,7 +4807,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>What will you edit first?</source>
-        <translation>Wat ga je eerst bewerken?</translation>
+        <translation>Wat ga je als eerste bewerken?</translation>
     </message>
     <message>
         <source>What would you like to edit?</source>
@@ -4839,7 +4839,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>You've used this month's free edits</source>
-        <translation>Je hebt de gratis bewerkingen van deze maand gebruikt</translation>
+        <translation>Je gratis bewerkingen van deze maand zijn op</translation>
     </message>
     <message>
         <source>Your computer</source>
@@ -4859,11 +4859,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Your generations stay in your history until you delete them. On {pro} you can set 30 days, 90 days or 1 year in Settings.</source>
-        <translation>Je gegenereerde afbeeldingen blijven in je geschiedenis tot je ze verwijdert. Met {pro} kun je in Instellingen 30 dagen, 90 dagen of 1 jaar instellen.</translation>
+        <translation>Je generaties blijven in je geschiedenis tot je ze verwijdert. Met {pro} kun je in Instellingen 30 dagen, 90 dagen of 1 jaar instellen.</translation>
     </message>
     <message>
         <source>Your generations, history and prompts are erased.</source>
-        <translation>Je gegenereerde afbeeldingen, geschiedenis en prompts worden gewist.</translation>
+        <translation>Je generaties, geschiedenis en prompts worden gewist.</translation>
     </message>
     <message>
         <source>Your map, before any AI edit</source>
@@ -4871,7 +4871,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Your network blocked the connection (HTTP {status}). Ask your IT team to allow terra-lab.ai.</source>
-        <translation>Je netwerk heeft de verbinding geblokkeerd (HTTP {status}). Vraag je IT-team om terra-lab.ai toe te staan.</translation>
+        <translation>Je netwerk heeft de verbinding geblokkeerd (HTTP {status}). Vraag je IT-afdeling om terra-lab.ai toe te staan.</translation>
     </message>
     <message>
         <source>Your session is saved. Reopen it from Sessions, the clock at the top.</source>
@@ -4883,19 +4883,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Your zone is too small. Draw it at least {pct}% of the map width.</source>
-        <translation>Je zone is te klein. Teken hem op minstens {pct}% van de kaartbreedte.</translation>
+        <translation>Je zone is te klein. Teken een zone van minstens {pct}% van de kaartbreedte.</translation>
     </message>
     <message>
         <source>Your {total} free edits return next month</source>
-        <translation>Je {total} gratis bewerkingen komen volgende maand terug</translation>
+        <translation>Volgende maand heb je weer {total} gratis bewerkingen</translation>
     </message>
     <message>
         <source>Your {total} free edits return on {date}</source>
-        <translation>Je {total} gratis bewerkingen komen terug op {date}</translation>
+        <translation>Op {date} heb je weer {total} gratis bewerkingen</translation>
     </message>
     <message>
         <source>by TerraLab</source>
-        <translation>door TerraLab</translation>
+        <translation>van TerraLab</translation>
     </message>
     <message>
         <source>credits left of {limit}</source>
@@ -4915,7 +4915,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>{hex} is already listed as “{name}”. It is checked.</source>
-        <translation>{hex} staat al genoteerd als “{name}”. Het is aangevinkt.</translation>
+        <translation>{hex} staat al in de lijst als “{name}” en is aangevinkt.</translation>
     </message>
     <message>
         <source>{label} {n}</source>
@@ -4935,7 +4935,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>{n} strokes</source>
-        <translation>{n} streken</translation>
+        <translation>{n} markeringen</translation>
     </message>
     <message>
         <source>{n} were not added: {names}. {reason}</source>
@@ -4947,7 +4947,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>“Color tolerance” at {n} matches no pixel. Raise it.</source>
-        <translation>“Kleurtolerantie” op {n} komt met geen enkele pixel overeen. Verhoog het.</translation>
+        <translation>Met “Kleurtolerantie” op {n} komt geen enkele pixel overeen. Verhoog de waarde.</translation>
     </message>
     <message>
         <source>“Remove speckle” at {n} px removed every shape. Lower it.</source>
@@ -5075,7 +5075,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Open QGIS&#x27;s Data Source Manager to add data</source>
-        <translation>Open het databronbeheer van QGIS om gegevens toe te voegen</translation>
+        <translation>Open Databronnen beheren in QGIS om data toe te voegen</translation>
     </message>
     <message>
         <source>Original, before any edit</source>
@@ -5139,7 +5139,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Try one word, like &quot;trees&quot;</source>
-        <translation>Probeer één woord, zoals &quot;bomen&quot;</translation>
+        <translation>Probeer één woord, zoals “bomen”</translation>
     </message>
     <message>
         <source>Turn on a layer, or start with a sample.</source>
@@ -5167,23 +5167,23 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>You&#x27;ve used this month&#x27;s free edits</source>
-        <translation>Je hebt de gratis bewerkingen van deze maand gebruikt</translation>
+        <translation>Je gratis bewerkingen van deze maand zijn op</translation>
     </message>
     <message>
         <source>{n} stroke. Click Done to guide the edit with it.</source>
-        <translation>{n} streek. Klik op Klaar om de bewerking ermee te sturen.</translation>
+        <translation>{n} markering. Klik op “Klaar” om de bewerking ermee te sturen.</translation>
     </message>
     <message>
         <source>{n} strokes. Click Done to guide the edit with them.</source>
-        <translation>{n} streken. Klik op Klaar om de bewerking ermee te sturen.</translation>
+        <translation>{n} markeringen. Klik op “Klaar” om de bewerking ermee te sturen.</translation>
     </message>
     <message>
         <source>1 layer above not sent: plan limit</source>
-        <translation>1 laag erboven niet verzonden: limiet van je abonnement</translation>
+        <translation>1 laag erboven niet verstuurd: limiet van je abonnement</translation>
     </message>
     <message>
         <source>&lt; 0.1 km²</source>
-        <translation>&lt; 0,1 km²</translation>
+        <translation>&lt; 0,1 km²</translation>
     </message>
     <message>
         <source>AI Edit needs an image under your data.</source>
@@ -5195,11 +5195,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Add satellite imagery here</source>
-        <translation>Voeg hier satellietbeelden toe</translation>
+        <translation>Satellietbeelden hier toevoegen</translation>
     </message>
     <message>
         <source>At this zoom one pixel covers about {m} m. Zoom in or draw a smaller zone for buildings, trees or roads.</source>
-        <translation>Bij deze zoom beslaat één pixel ongeveer {m} m. Zoom in of teken een kleiner gebied voor gebouwen, bomen of wegen.</translation>
+        <translation>Op dit zoomniveau beslaat één pixel ongeveer {m} m. Zoom in of teken een kleinere zone voor gebouwen, bomen of wegen.</translation>
     </message>
     <message>
         <source>Cancel to pick another layer.</source>
@@ -5207,15 +5207,15 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Cancelled before starting the run.</source>
-        <translation>Geannuleerd voordat de bewerking begon.</translation>
+        <translation>Geannuleerd voordat de uitvoering begon.</translation>
     </message>
     <message>
         <source>Cancelled before tracing.</source>
-        <translation>Geannuleerd voordat het traceren begon.</translation>
+        <translation>Geannuleerd voordat het vectoriseren begon.</translation>
     </message>
     <message>
         <source>Capturing your zone...</source>
-        <translation>Je gebied wordt vastgelegd...</translation>
+        <translation>Je zone wordt vastgelegd...</translation>
     </message>
     <message>
         <source>Click to add points, or drag a box</source>
@@ -5227,19 +5227,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Could not get your settings from the server. Press Generate to try again.</source>
-        <translation>Je instellingen konden niet van de server worden opgehaald. Druk op Generate om het opnieuw te proberen.</translation>
+        <translation>Je instellingen konden niet van de server worden opgehaald. Klik op “Genereren” om het opnieuw te proberen.</translation>
     </message>
     <message>
         <source>Could not start the edit. No credit was used. Press Generate to try again.</source>
-        <translation>De bewerking kon niet worden gestart. Er is geen tegoed gebruikt. Druk op Generate om het opnieuw te proberen.</translation>
+        <translation>De bewerking kon niet worden gestart. Er is geen credit gebruikt. Klik op “Genereren” om het opnieuw te proberen.</translation>
     </message>
     <message>
         <source>Credits renew on {date}</source>
-        <translation>Tegoeden worden vernieuwd op {date}</translation>
+        <translation>Nieuwe credits op {date}</translation>
     </message>
     <message>
         <source>Double-click, right-click or press Enter to finish</source>
-        <translation>Dubbelklik, klik met de rechtermuisknop of druk op Enter om te voltooien</translation>
+        <translation>Dubbelklik, klik met rechts of druk op Enter om af te ronden</translation>
     </message>
     <message>
         <source>Draw a line, then say: add a path along the pink line.</source>
@@ -5247,11 +5247,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Draw a zone on the map to start.</source>
-        <translation>Teken een gebied op de kaart om te beginnen.</translation>
+        <translation>Teken een zone op de kaart om te beginnen.</translation>
     </message>
     <message>
         <source>Fill the holes inside each shape, except where another checked class sits.</source>
-        <translation>Vul de gaten binnen elke vorm, behalve waar een andere geselecteerde klasse ligt.</translation>
+        <translation>Vul de gaten in elke vorm, behalve waar een andere aangevinkte klasse ligt.</translation>
     </message>
     <message>
         <source>Generating your image...</source>
@@ -5259,11 +5259,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Getting ready...</source>
-        <translation>Bezig met voorbereiden...</translation>
+        <translation>Even geduld...</translation>
     </message>
     <message>
         <source>Image to edit</source>
-        <translation>Afbeelding om te bewerken</translation>
+        <translation>Te bewerken afbeelding</translation>
     </message>
     <message>
         <source>Invalid server response</source>
@@ -5275,11 +5275,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Keep this result, draw a new zone with this prompt</source>
-        <translation>Bewaar dit resultaat en teken een nieuw gebied met deze prompt</translation>
+        <translation>Bewaar dit resultaat en teken een nieuwe zone met deze prompt</translation>
     </message>
     <message>
         <source>No shapes left with these settings. Set “Expand/Contract” closer to 0, lower “Min polygon size”, or raise “Color tolerance”.</source>
-        <translation>Met deze instellingen zijn er geen vormen over. Zet “Expand/Contract” dichter bij 0, verlaag “Min polygon size” of verhoog “Color tolerance”.</translation>
+        <translation>Met deze instellingen blijven er geen vormen over. Zet “Vergroten/verkleinen” dichter bij 0, verlaag “Min. polygoongrootte” of verhoog “Kleurtolerantie”.</translation>
     </message>
     <message>
         <source>Open my dashboard</source>
@@ -5287,15 +5287,15 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Other</source>
-        <translation>Andere</translation>
+        <translation>Overig</translation>
     </message>
     <message>
         <source>Outline an area, say what to change, get a new map layer.</source>
-        <translation>Omlijn een gebied, zeg wat er moet veranderen en krijg een nieuwe maplaag.</translation>
+        <translation>Omlijn een gebied, zeg wat er moet veranderen en krijg een nieuwe kaartlaag.</translation>
     </message>
     <message>
         <source>Pick a zone, a selection or a polygon layer already in the project</source>
-        <translation>Kies een gebied, selectie of polygonenlaag die al in het project staat</translation>
+        <translation>Kies een zone, een selectie of een polygoonlaag die al in het project staat</translation>
     </message>
     <message>
         <source>Pick the layer to edit first.</source>
@@ -5323,35 +5323,35 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Save or discard your edits on the vector layer, then run Vectorize again.</source>
-        <translation>Sla je bewerkingen op de vectorlaag op of verwijder ze, en voer Vectorize daarna opnieuw uit.</translation>
+        <translation>Sla je wijzigingen in de vectorlaag op of verwerp ze, en voer daarna “Vectoriseren” opnieuw uit.</translation>
     </message>
     <message>
         <source>Shapes smaller than this join the class around them, so no hole is left.</source>
-        <translation>Vormen die kleiner zijn dan dit worden onderdeel van de klasse eromheen, zodat er geen gat overblijft.</translation>
+        <translation>Vormen die kleiner zijn dan deze waarde worden bij de omliggende klasse gevoegd, zodat er geen gat overblijft.</translation>
     </message>
     <message>
         <source>Sign in again to generate.</source>
-        <translation>Meld je opnieuw aan om te genereren.</translation>
+        <translation>Log opnieuw in om te genereren.</translation>
     </message>
     <message>
         <source>Sign-in timed out. Click Sign in to try again.</source>
-        <translation>De aanmelding is verlopen. Klik op Sign in om het opnieuw te proberen.</translation>
+        <translation>Inloggen duurde te lang. Klik op “Inloggen” om het opnieuw te proberen.</translation>
     </message>
     <message>
         <source>Signed in (from {}).</source>
-        <translation>Aangemeld (vanuit {}).</translation>
+        <translation>Ingelogd (via {}).</translation>
     </message>
     <message>
         <source>Signed in as {} (from {}).</source>
-        <translation>Aangemeld als {} (vanuit {}).</translation>
+        <translation>Ingelogd als {} (via {}).</translation>
     </message>
     <message>
         <source>Signed in.</source>
-        <translation>Aangemeld.</translation>
+        <translation>Ingelogd.</translation>
     </message>
     <message>
         <source>Signed out</source>
-        <translation>Afgemeld</translation>
+        <translation>Uitgelogd</translation>
     </message>
     <message>
         <source>That shape is too thin or too small to edit. Pick another one.</source>
@@ -5359,15 +5359,15 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>That zone cannot be placed on this map. Draw one instead.</source>
-        <translation>Dat gebied kan niet op deze kaart worden geplaatst. Teken er een.</translation>
+        <translation>Die zone kan niet op deze kaart worden geplaatst. Teken er zelf een.</translation>
     </message>
     <message>
         <source>That zone is no longer in the project. Pick another one.</source>
-        <translation>Dat gebied staat niet meer in het project. Kies een ander.</translation>
+        <translation>Die zone staat niet meer in het project. Kies een andere.</translation>
     </message>
     <message>
         <source>The image was generated but could not be saved to your output folder. It is kept in your prompt library: open the Recent tab and download the AI result, or change the output folder and try again.</source>
-        <translation>De afbeelding is gegenereerd maar kon niet in je uitvoermap worden opgeslagen. Ze staat in je promptbibliotheek: open het tabblad Recent en download het AI-resultaat, of wijzig de uitvoermap en probeer het opnieuw.</translation>
+        <translation>De afbeelding is gegenereerd maar kon niet in je map voor uitvoer worden opgeslagen. Ze staat in je promptbibliotheek: open het tabblad Recent en download het AI-resultaat, of wijzig de map voor uitvoer en probeer het opnieuw.</translation>
     </message>
     <message>
         <source>The layer the AI edits. Visible layers above it are sent as references.</source>
@@ -5375,11 +5375,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>The map CRS changed after you drew the zone. Draw the zone again.</source>
-        <translation>Het CRS van de kaart is gewijzigd nadat je het gebied tekende. Teken het gebied opnieuw.</translation>
+        <translation>Het CRS van de kaart is gewijzigd nadat je de zone tekende. Teken de zone opnieuw.</translation>
     </message>
     <message>
         <source>The map had not finished loading, so nothing was sent and no credit was used. Wait for the map to appear, then press Generate again.</source>
-        <translation>De kaart was nog niet volledig geladen, dus er is niets verzonden en er is geen tegoed gebruikt. Wacht tot de kaart verschijnt en druk daarna opnieuw op Generate.</translation>
+        <translation>De kaart was nog niet volledig geladen, dus er is niets verzonden en er is geen credit gebruikt. Wacht tot de kaart verschijnt en klik daarna opnieuw op “Genereren”.</translation>
     </message>
     <message>
         <source>The result could not be downloaded to QGIS.</source>
@@ -5395,11 +5395,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>The service is busy. Please try again shortly.</source>
-        <translation>De service is bezig. Probeer het over een moment opnieuw.</translation>
+        <translation>De service is momenteel bezet. Probeer het straks opnieuw.</translation>
     </message>
     <message>
         <source>The version this came from is not in this session.</source>
-        <translation>De versie waar dit vandaan kwam, bevindt zich niet in deze sessie.</translation>
+        <translation>De versie waarvan dit afkomstig is, zit niet in deze sessie.</translation>
     </message>
     <message>
         <source>This edit is taking longer than expected. Your result may still arrive in Recent in your library in a few minutes.</source>
@@ -5411,19 +5411,19 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>This sign-in is for a different TerraLab product. Sign in again from AI Edit.</source>
-        <translation>Deze aanmelding is voor een ander TerraLab-product. Meld je opnieuw aan vanuit AI Edit.</translation>
+        <translation>Deze login hoort bij een ander TerraLab-product. Log opnieuw in vanuit AI Edit.</translation>
     </message>
     <message>
         <source>This sign-in was revoked. Sign in again.</source>
-        <translation>Deze aanmelding is ingetrokken. Meld je opnieuw aan.</translation>
+        <translation>Deze login is ingetrokken. Log opnieuw in.</translation>
     </message>
     <message>
         <source>This zone cannot be used.</source>
-        <translation>Dit gebied kan niet worden gebruikt.</translation>
+        <translation>Deze zone kan niet worden gebruikt.</translation>
     </message>
     <message>
         <source>This zone could not be checked. Draw it again.</source>
-        <translation>Dit gebied kon niet worden gecontroleerd. Teken het opnieuw.</translation>
+        <translation>Deze zone kon niet worden gecontroleerd. Teken de zone opnieuw.</translation>
     </message>
     <message>
         <source>We lost contact with the server during your edit. It may still finish: check Recent in your library in a few minutes before trying again.</source>
@@ -5431,23 +5431,23 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>You are signed in. Outline an area on the example map to make an edit.</source>
-        <translation>Je bent aangemeld. Omlijn een gebied op de voorbeeldkaart om een bewerking te maken.</translation>
+        <translation>Je bent ingelogd. Omlijn een gebied op de voorbeeldkaart om een bewerking te maken.</translation>
     </message>
     <message>
         <source>You are signed out. Click Sign in to continue.</source>
-        <translation>Je bent afgemeld. Klik op Sign in om door te gaan.</translation>
+        <translation>Je bent uitgelogd. Klik op “Inloggen” om door te gaan.</translation>
     </message>
     <message>
         <source>You are signed out. Sign in again to use AI Edit.</source>
-        <translation>Je bent afgemeld. Meld je opnieuw aan om AI Edit te gebruiken.</translation>
+        <translation>Je bent uitgelogd. Log opnieuw in om AI Edit te gebruiken.</translation>
     </message>
     <message>
         <source>You are signed out. Sign in to use AI Edit.</source>
-        <translation>Je bent afgemeld. Meld je aan om AI Edit te gebruiken.</translation>
+        <translation>Je bent uitgelogd. Log in om AI Edit te gebruiken.</translation>
     </message>
     <message>
         <source>You've used this month's {limit} free credits. They renew at your next monthly reset.</source>
-        <translation>Je hebt de {limit} gratis tegoeden van deze maand gebruikt. Ze worden vernieuwd bij je volgende maandelijkse reset.</translation>
+        <translation>Je hebt de {limit} gratis credits van deze maand gebruikt. Ze worden vernieuwd bij je volgende maandelijkse reset.</translation>
     </message>
     <message>
         <source>Your account changed. Please try again.</source>
@@ -5455,7 +5455,7 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Your output folder could not be used, so the result was saved in {folder}. You can pick another folder in the settings.</source>
-        <translation>Je uitvoermap kon niet worden gebruikt, dus het resultaat is opgeslagen in {folder}. Je kunt een andere map kiezen in de instellingen.</translation>
+        <translation>Je map voor uitvoer kon niet worden gebruikt, dus het resultaat is opgeslagen in {folder}. Je kunt een andere map kiezen in de instellingen.</translation>
     </message>
     <message>
         <source>Your result may still appear in Recent in your library.</source>
@@ -5463,27 +5463,27 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Your sign-in has expired. Sign in again to continue.</source>
-        <translation>Je aanmelding is verlopen. Meld je opnieuw aan om door te gaan.</translation>
+        <translation>Je login is verlopen. Log opnieuw in om door te gaan.</translation>
     </message>
     <message>
         <source>Your sign-in is no longer valid. Click Sign in to sign in again.</source>
-        <translation>Je aanmelding is niet meer geldig. Klik op Sign in om je opnieuw aan te melden.</translation>
+        <translation>Je login is niet meer geldig. Klik op “Inloggen” om opnieuw in te loggen.</translation>
     </message>
     <message>
         <source>Your sign-in is no longer valid. Sign in again.</source>
-        <translation>Je aanmelding is niet meer geldig. Meld je opnieuw aan.</translation>
+        <translation>Je login is niet meer geldig. Log opnieuw in.</translation>
     </message>
     <message>
         <source>Your zone was cleared: no layer is visible on the map anymore.</source>
-        <translation>Je gebied is gewist: er is geen laag meer zichtbaar op de kaart.</translation>
+        <translation>Je zone is gewist: er is geen laag meer zichtbaar op de kaart.</translation>
     </message>
     <message>
         <source>or use an existing zone</source>
-        <translation>of gebruik een bestaand gebied</translation>
+        <translation>of gebruik een bestaande zone</translation>
     </message>
     <message>
         <source>{area} km²</source>
-        <translation>{area} km²</translation>
+        <translation>{area} km²</translation>
     </message>
     <message>
         <source>{area}, very large</source>
@@ -5495,11 +5495,11 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>{name} draws nothing inside your zone</source>
-        <translation>{name} tekent niets binnen je gebied</translation>
+        <translation>{name} tekent niets binnen je zone</translation>
     </message>
     <message>
         <source>{n} layers above not sent: plan limit</source>
-        <translation>{n} lagen erboven niet verzonden: limiet van je abonnement</translation>
+        <translation>{n} lagen erboven niet verstuurd: limiet van je abonnement</translation>
     </message>
     <message>
         <source>Download incomplete: the image ends early ({got} bytes)</source>
@@ -5507,7 +5507,55 @@ We horen graag van u!</translation>
     </message>
     <message>
         <source>Your image could not be sent: the connection is too slow or was cut. Try again, or pick a lower resolution.</source>
-        <translation>Uw afbeelding kon niet worden verzonden: de verbinding is te traag of werd verbroken. Probeer opnieuw, of kies een lagere resolutie.</translation>
+        <translation>Je afbeelding kon niet worden verstuurd: de verbinding is te traag of werd verbroken. Probeer het opnieuw of kies een lagere resolutie.</translation>
+    </message>
+    <message>
+        <source>2. Click to contact us</source>
+        <translation>2. Klik om contact met ons op te nemen</translation>
+    </message>
+    <message>
+        <source>AI Edit settings are still loading. Draw the zone again in a moment.</source>
+        <translation>De instellingen van AI Edit worden nog geladen. Teken de zone zo opnieuw.</translation>
+    </message>
+    <message>
+        <source>Connect to the internet to load AI Edit settings.</source>
+        <translation>Maak verbinding met internet om de instellingen van AI Edit te laden.</translation>
+    </message>
+    <message>
+        <source>Copy link</source>
+        <translation>Link kopiëren</translation>
+    </message>
+    <message>
+        <source>Could not reach the server to prepare your zone. Check your connection and try again.</source>
+        <translation>De server kon niet worden bereikt om je zone voor te bereiden. Controleer je verbinding en probeer het opnieuw.</translation>
+    </message>
+    <message>
+        <source>Custom needs?</source>
+        <translation>Maatwerk nodig?</translation>
+    </message>
+    <message>
+        <source>Free plan with AI edits every month. Signing up takes 15 seconds in your browser.</source>
+        <translation>Free-abonnement met AI-bewerkingen elke maand. Een account aanmaken duurt 15 seconden in je browser.</translation>
+    </message>
+    <message>
+        <source>Loading settings from the server...</source>
+        <translation>Instellingen laden vanaf de server...</translation>
+    </message>
+    <message>
+        <source>Sign in to see this template's prompt</source>
+        <translation>Log in om de prompt van dit sjabloon te zien</translation>
+    </message>
+    <message>
+        <source>Sign in to use this template</source>
+        <translation>Log in om dit sjabloon te gebruiken</translation>
+    </message>
+    <message>
+        <source>Up to {n} reference images</source>
+        <translation>Tot {n} referentieafbeeldingen</translation>
+    </message>
+    <message>
+        <source>price loading</source>
+        <translation>prijs wordt geladen</translation>
     </message>
 </context>
 </TS>

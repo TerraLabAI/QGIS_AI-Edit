@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import base64
+import dataclasses
 import os
 import shutil
 import tempfile
@@ -20,18 +21,16 @@ from qgis.PyQt.QtCore import QSize
 from qgis.PyQt.QtGui import QImage, QImageReader
 
 from . import qt_compat as QtC
-from .config_store import get_export_copy, get_export_dial
+from .config_store import ConfigMissing, get_export_copy, get_export_dial, require_dial
 from .i18n import tr
 from .logger import log_debug, log_warning
 
-MAX_REFERENCES = 12
 MAX_SOURCE_BYTES = 50 * 1024 * 1024
 
 
 
-TARGET_LONGEST_SIDE_PX = 1024
-JPEG_QUALITY = 85
-WEBP_QUALITY = 85
+
+
 _TMP_PREFIX = "qgis-ai-edit-refs-"
 _active_dirs: set[str] = set()
 
@@ -84,13 +83,37 @@ def sweep_stale_reference_dirs(now: float | None = None) -> int:
 def max_references() -> int:
 
 
-    return get_export_dial("reference_encode.max_references", MAX_REFERENCES)
+
+    return int(require_dial("reference_encode.max_references", lo=1, hi=100))
+
+
+def _cap_for_add() -> int:
+
+    try:
+        return max_references()
+    except ConfigMissing:
+        raise ReferenceImageStoreError(tr("Loading settings from the server...")) from None
+
+
+def _served_encoding() -> dict | None:
+
+    try:
+        return {
+            "longest_side_px": int(require_dial("reference_encode.longest_side_px", lo=16, hi=16384)),
+            "jpeg_quality": int(require_dial("reference_encode.jpeg_quality", lo=1, hi=100)),
+            "webp_quality": int(require_dial("reference_encode.webp_quality", lo=1, hi=100)),
+        }
+    except ConfigMissing:
+        return None
 
 
 def _longest_side_target(width: int, height: int) -> QSize | None:
 
 
-    target = get_export_dial("reference_encode.longest_side_px", TARGET_LONGEST_SIDE_PX)
+    enc = _served_encoding()
+    if enc is None:
+        return None
+    target = enc["longest_side_px"]
     if max(width, height) <= target:
         return None
     if width >= height:
@@ -206,6 +229,9 @@ class ReferenceImage:
     whole_layer: bool = False
 
 
+    pending_encode: bool = False
+
+
 class ReferenceImageStoreError(Exception):
     pass
 
@@ -274,7 +300,7 @@ class ReferenceImageStore:
 
 
 
-        cap = max_references()
+        cap = _cap_for_add()
         if len(self._refs) >= cap:
             raise ReferenceImageStoreError(
                 tr("Maximum {n} reference images reached").format(n=cap)
@@ -316,13 +342,15 @@ class ReferenceImageStore:
                 get_export_copy("pipeline.reference_image_store.decode_failed", tr("Failed to decode image"))
             )
 
-        image = _fit_longest_side(image)
-
         ref_id = uuid.uuid4().hex[:12]
-        dest_path = os.path.join(self._session_dir(), f"{ref_id}.jpg")
-
-        quality = min(100, get_export_dial("reference_encode.jpeg_quality", JPEG_QUALITY))
-        if not self._save_image(image, dest_path, "JPEG", quality):
+        enc = _served_encoding()
+        if enc is None:
+            dest_path = os.path.join(self._session_dir(), f"{ref_id}.png")
+            saved = self._save_image(image, dest_path, "PNG")
+        else:
+            dest_path = os.path.join(self._session_dir(), f"{ref_id}.jpg")
+            saved = self._save_image(_fit_longest_side(image), dest_path, "JPEG", enc["jpeg_quality"])
+        if not saved:
             raise ReferenceImageStoreError(
                 get_export_copy(
                     "pipeline.reference_image_store.write_compressed_failed",
@@ -341,6 +369,7 @@ class ReferenceImageStore:
             source_filename=os.path.basename(source_path),
             size_bytes=final_size,
             source_kind="file",
+            pending_encode=enc is None,
         )
         self._refs[ref_id] = record
         log_debug(
@@ -367,7 +396,7 @@ class ReferenceImageStore:
 
 
 
-        cap = max_references()
+        cap = _cap_for_add()
         if len(self._refs) >= cap:
             raise ReferenceImageStoreError(
                 tr("Maximum {n} reference images reached").format(n=cap)
@@ -377,22 +406,16 @@ class ReferenceImageStore:
                 get_export_copy("pipeline.reference_image_store.render_failed", tr("Failed to render layer"))
             )
 
-        image = _fit_longest_side(image)
-
         ref_id = uuid.uuid4().hex[:12]
-        dest_path = os.path.join(self._session_dir(), f"{ref_id}.webp")
-        quality = min(100, get_export_dial("reference_encode.webp_quality", WEBP_QUALITY))
-        if not self._save_image(image, dest_path, "WEBP", quality):
-
-
-            dest_path = os.path.join(self._session_dir(), f"{ref_id}.png")
-            if not self._save_image(image, dest_path, "PNG"):
-                raise ReferenceImageStoreError(
-                    get_export_copy(
-                        "pipeline.reference_image_store.write_rendered_failed",
-                        tr("Failed to write rendered image"),
-                    )
+        enc = _served_encoding()
+        dest_path = self._write_render(image, ref_id, enc)
+        if dest_path is None:
+            raise ReferenceImageStoreError(
+                get_export_copy(
+                    "pipeline.reference_image_store.write_rendered_failed",
+                    tr("Failed to write rendered image"),
                 )
+            )
 
         try:
             final_size = os.path.getsize(dest_path)
@@ -406,6 +429,7 @@ class ReferenceImageStore:
             size_bytes=final_size,
             source_kind=source_kind,
             whole_layer=bool(whole_layer),
+            pending_encode=enc is None,
         )
         self._refs[ref_id] = record
         log_debug(
@@ -413,6 +437,58 @@ class ReferenceImageStore:
             f"final_size={final_size}, count={len(self._refs)}"
         )
         return record
+
+    def _write_render(self, image: QImage, ref_id: str, enc: dict | None) -> str | None:
+
+
+
+        if enc is None:
+            dest_path = os.path.join(self._session_dir(), f"{ref_id}.png")
+            return dest_path if self._save_image(image, dest_path, "PNG") else None
+        image = _fit_longest_side(image)
+        dest_path = os.path.join(self._session_dir(), f"{ref_id}.webp")
+        if self._save_image(image, dest_path, "WEBP", enc["webp_quality"]):
+            return dest_path
+
+
+        dest_path = os.path.join(self._session_dir(), f"{ref_id}.png")
+        return dest_path if self._save_image(image, dest_path, "PNG") else None
+
+    def encode_pending(self) -> bool:
+
+
+
+
+        pending = [r for r in self._refs.values() if r.pending_encode]
+        if not pending:
+            return True
+        enc = _served_encoding()
+        if enc is None:
+            return False
+        for record in pending:
+            image = QImage(record.path)
+            if image.isNull():
+                continue
+            new_id = uuid.uuid4().hex[:12]
+            if record.source_kind == "file":
+                new_path = os.path.join(self._session_dir(), f"{new_id}.jpg")
+                if not self._save_image(_fit_longest_side(image), new_path, "JPEG", enc["jpeg_quality"]):
+                    continue
+            else:
+                new_path = self._write_render(image, new_id, enc)
+                if new_path is None:
+                    continue
+            try:
+                size = os.path.getsize(new_path)
+            except OSError:
+                size = 0
+            old_path = record.path
+            self._refs[record.id] = dataclasses.replace(
+                record, path=new_path, size_bytes=size, pending_encode=False
+            )
+            if not self._delete_file(old_path):
+                self._pending_deletes.append(old_path)
+        return True
 
     def set_note(self, ref_id: str, note: str) -> None:
 
@@ -482,6 +558,9 @@ class ReferenceImageStore:
 
 
 
+
+
+        self.encode_pending()
         return [record.path for record in self._refs.values()]
 
     def get_all_b64(self) -> list[str]:

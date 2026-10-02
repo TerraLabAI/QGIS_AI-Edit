@@ -106,12 +106,9 @@ class DockChromeMixin:
         hint_card_layout = QVBoxLayout(hint_card)
         hint_card_layout.setContentsMargins(12, 10, 12, 10)
         hint_card_layout.setSpacing(SPACE_CARD + 2)
-        from ...core.paywall_state import advertised_free_generations
-
+        self._free_plan_label = None
         for line in (
-            tr("Free plan, {n} AI edits every month. Signing up takes 15 "
-               "seconds in your browser.").replace(
-                   "{n}", str(advertised_free_generations())),
+            self._free_plan_line(),
 
 
 
@@ -131,6 +128,8 @@ class DockChromeMixin:
             lbl.setStyleSheet(BODY_QSS)
             row.addWidget(lbl, 1)
             hint_card_layout.addLayout(row)
+            if self._free_plan_label is None:
+                self._free_plan_label = lbl
         connect_layout.addWidget(hint_card)
 
         layout.addWidget(self._connect_section)
@@ -212,6 +211,29 @@ class DockChromeMixin:
         layout.addWidget(self._activation_message)
 
         return widget
+
+    @staticmethod
+    def _free_plan_line() -> str:
+
+        from ...core.paywall_state import advertised_free_generations
+
+        free_n = advertised_free_generations()
+        if free_n is None:
+            return tr("Free plan with AI edits every month. Signing up "
+                      "takes 15 seconds in your browser.")
+        return tr("Free plan, {n} AI edits every month. Signing up "
+                  "takes 15 seconds in your browser.").replace("{n}", str(free_n))
+
+    def refresh_free_plan_line(self) -> None:
+
+
+        label = getattr(self, "_free_plan_label", None)
+        if label is None:
+            return
+        try:
+            label.setText(self._free_plan_line())
+        except RuntimeError:  # nosec B110
+            pass
 
     def _build_warning_widget(self) -> QWidget:
 

@@ -60,7 +60,7 @@ _KNOWN_PRESET_FIELDS = frozenset({
 
 
 
-_CLIENT_PRESET_FIELDS = frozenset({"from_recent", "from_favorites", "ts"})
+_CLIENT_PRESET_FIELDS = frozenset({"from_recent", "from_favorites", "ts", "placeholder"})
 
 
 
@@ -132,7 +132,10 @@ def _preset_extras(preset: dict) -> dict:
     return extras
 
 
-def _normalize_preset(preset: dict, source_category: str) -> dict:
+def _normalize_preset(preset: dict, source_category: str, placeholder: bool = False) -> dict:
+
+
+
 
 
 
@@ -164,4 +167,56 @@ def _normalize_preset(preset: dict, source_category: str) -> dict:
         "demo_url_before": preset.get("demo_url_before"),
         "demo_url_after": preset.get("demo_url_after"),
     })
+    if placeholder or is_placeholder_preset(normalized):
+
+
+        normalized["placeholder"] = True
+        normalized["prompt"] = ""
     return normalized
+
+
+def _same_preset_text(a: Any, b: Any) -> bool:
+    if not isinstance(a, str) or not isinstance(b, str):
+        return False
+    return " ".join(a.split()).casefold() == " ".join(b.split()).casefold()
+
+
+def is_placeholder_preset(preset: Any) -> bool:
+
+
+
+
+
+
+    if not isinstance(preset, dict):
+        return False
+    if preset.get("from_recent") or preset.get("from_favorites"):
+        return False
+    if preset.get("placeholder") is True:
+        return True
+    prompt = preset.get("prompt")
+    label = preset.get("label")
+    if isinstance(prompt, dict) and isinstance(label, dict):
+        variants = [(k, v) for k, v in prompt.items() if isinstance(v, str) and v.strip()]
+        if not variants:
+            return True
+        return all(_same_preset_text(v, label.get(k)) for k, v in variants)
+    text = _pick_label(prompt, "")
+    if not isinstance(text, str) or not text.strip():
+        return True
+    return _same_preset_text(text, _pick_label(label, ""))
+
+
+def catalog_has_placeholders(catalog: Any) -> bool:
+
+    if not isinstance(catalog, dict):
+        return False
+    if catalog.get("prompts") == "placeholder":
+        return True
+    for cat in catalog.get("categories") or []:
+        if not isinstance(cat, dict):
+            continue
+        for preset in cat.get("presets") or []:
+            if is_placeholder_preset(preset):
+                return True
+    return False

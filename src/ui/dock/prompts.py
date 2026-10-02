@@ -7,14 +7,13 @@ from qgis.PyQt.QtWidgets import QTextEdit
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
-from ...core.config_store import get_export_copy, get_export_dial
+from ...core.config_store import ConfigMissing, get_export_copy, require_dial
 from ...core.i18n import tr
 from ...core.number_format import format_count
 from ...core.prompts.prompt_minimum import (
-    MIN_PROMPT_CHARS,
-    MIN_PROMPT_WORDS,
     PromptMinimumCheck,
     check_prompt_minimum,
+    served_max_prompt_chars,
 )
 from ...core.prompts.prompt_presets import detect_prompt_guidance
 from ..onboarding_hint import (
@@ -26,11 +25,7 @@ from ..onboarding_hint import (
 )
 from .blocked_reasons import GENERATE_BLOCK_NO_ZONE, cjk_prompt_minimum_text
 from .design_tokens import BTN_GHOST_WIDE_QSS, BTN_PRIMARY_WIDE_QSS
-from .style import MAX_PROMPT_CHARS
 from .zone_sources import large_zone_km2
-
-
-_COARSE_ZONE_M_PER_PX = 10.0
 
 _NUMBERS_RE = re.compile(r"\d+")
 
@@ -42,17 +37,13 @@ def _min_prompt_warning(check: PromptMinimumCheck) -> str:
 
 
 
-
-
-
     if check.cjk_chars:
         return cjk_prompt_minimum_text(check.dials)
     min_chars, min_words = check.dials.min_chars, check.dials.min_words
     sentence = tr("Please describe what you want to change (at least 10 characters, 2 words).")
-    if (min_chars, min_words) != (MIN_PROMPT_CHARS, MIN_PROMPT_WORDS):
-        if len(_NUMBERS_RE.findall(sentence)) >= 2:
-            live = iter((str(min_chars), str(min_words)))
-            sentence = _NUMBERS_RE.sub(lambda m: next(live, m.group(0)), sentence, count=2)
+    if len(_NUMBERS_RE.findall(sentence)) >= 2:
+        live = iter((str(min_chars), str(min_words)))
+        sentence = _NUMBERS_RE.sub(lambda m: next(live, m.group(0)), sentence, count=2)
 
     return get_export_copy("prompt.too_short", sentence, escape=True)
 
@@ -184,7 +175,7 @@ class DockPromptMixin:
 
 
         area_threshold = large_zone_km2()
-        if area_km2 is not None and area_km2 >= area_threshold:
+        if area_km2 is not None and area_threshold is not None and area_km2 >= area_threshold:
             shipped = tr(
                 "Very large zone (about {km2} km²): the AI keeps only broad "
                 "shapes at this size. Select a smaller area for object-level "
@@ -198,8 +189,16 @@ class DockPromptMixin:
             self._zone_guidance_hint.setText(msg)
             self._zone_guidance_hint.setVisible(True)
             return
-        threshold = get_export_dial("guidance.coarse_zone_m_per_px", _COARSE_ZONE_M_PER_PX)
-        coarse = ground_resolution_m is not None and ground_resolution_m >= threshold
+
+        try:
+            threshold = require_dial("guidance.coarse_zone_m_per_px", lo=0)
+        except ConfigMissing:
+            threshold = None
+        coarse = (
+            threshold is not None
+            and ground_resolution_m is not None
+            and ground_resolution_m >= threshold
+        )
         if not coarse:
             self._zone_guidance_hint.setVisible(False)
             return
@@ -297,8 +296,9 @@ class DockPromptMixin:
         result, cut = self._enforce_prompt_max_length(self._result_prompt_input)
         if cut:
 
-            max_chars = get_export_dial("limits.max_prompt_chars", MAX_PROMPT_CHARS)
-            self._show_status_box(self._prompt_cut_text(max_chars), "warning")
+            max_chars = served_max_prompt_chars()
+            if max_chars is not None:
+                self._show_status_box(self._prompt_cut_text(max_chars), "warning")
         result = result.strip()
         self._update_result_generate_enabled(result)
         self._clear_active_template_if_empty(result_prompt=result)
@@ -346,7 +346,9 @@ class DockPromptMixin:
         label = getattr(self, "_prompt_cut_notice", None)
         if label is None:
             return
-        max_chars = get_export_dial("limits.max_prompt_chars", MAX_PROMPT_CHARS)
+        max_chars = served_max_prompt_chars()
+        if max_chars is None:
+            return
         if cut:
             label.setText(self._prompt_cut_text(max_chars))
             label.setVisible(True)
@@ -359,9 +361,9 @@ class DockPromptMixin:
 
 
 
-        max_chars = get_export_dial("limits.max_prompt_chars", MAX_PROMPT_CHARS)
+        max_chars = served_max_prompt_chars()
         plain = text_edit.toPlainText()
-        if len(plain) <= max_chars:
+        if max_chars is None or len(plain) <= max_chars:
             return plain, False
         plain = plain[:max_chars]
         cursor_pos = text_edit.textCursor().position()

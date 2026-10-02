@@ -142,6 +142,11 @@ class RunLifecycleMixin:
         layer_name = friendly_vector_layer_name(name_base, raster.name())
 
 
+        if not self._ensure_refine_defaults():
+            self._show_status(tr("Loading settings from the server..."), is_error=False)
+            return
+
+
 
         self.cancel_pending_task()
 

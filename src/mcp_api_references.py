@@ -19,6 +19,7 @@ from typing import Any
 from qgis.core import QgsProject, QgsRasterLayer, QgsRectangle
 
 from .core.served_url_checks import SERVED_URL_FORBIDDEN_RE
+from .mcp_api_guide import reference_limit_note
 from .mcp_api_support import (
     _find_project_layer,
     _never_raises,
@@ -460,10 +461,7 @@ class ReferencesMixin:
                 "so it stays out of the picture being edited."
             )
         if not added:
-            notes.append(
-                "Not added. The free plan takes one reference at a time, and there is a "
-                "hard ceiling on any plan. Call clear_references() first."
-            )
+            notes.append(reference_limit_note())
         if added and not has_zone:
             notes.append(
                 "No zone is selected, so this picture was cropped to whatever ground the "

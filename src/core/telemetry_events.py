@@ -38,6 +38,9 @@ TEMPLATE_SELECTED = "template_selected"
 GENERATION_STARTED = "generation_started"
 GENERATION_COMPLETED = "generation_completed"
 GENERATION_FAILED = "generation_failed"
+
+
+CONFIG_GATE_WAITED = "config_gate_waited"
 GENERATION_CANCELLED = "generation_cancelled"
 FIRST_GENERATION_MILESTONE = "first_generation_milestone"
 
@@ -146,6 +149,7 @@ ALL_EVENTS = frozenset({
     GENERATION_STARTED,
     GENERATION_COMPLETED,
     GENERATION_FAILED,
+    CONFIG_GATE_WAITED,
     GENERATION_CANCELLED,
     FIRST_GENERATION_MILESTONE,
     TRIAL_EXHAUSTED_VIEWED,
@@ -207,6 +211,7 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     GENERATION_STARTED: ("used_template", "used_markup", "has_geo_context", "is_retry"),
     GENERATION_COMPLETED: ("is_retry", "used_markup", "used_template", "output_rescued"),
     GENERATION_FAILED: ("error_code", "is_retry"),
+    CONFIG_GATE_WAITED: ("feature", "config_source", "signed_in"),
     GENERATION_CANCELLED: (),
     FIRST_GENERATION_MILESTONE: (),
     TRIAL_EXHAUSTED_VIEWED: ("is_free_tier",),

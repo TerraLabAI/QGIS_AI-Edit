@@ -14,7 +14,6 @@ from ...core.i18n import tr
 from ...core.number_format import format_count
 from ...core.paywall_state import total_free_generations
 from ...core.pro_ceiling import pro_ceiling_enabled
-from ...core.resolution_labels import DEFAULT_RESOLUTION_CREDIT_COSTS
 from .blocked_reasons import LAUNCH_BLOCK_NO_KEY
 from .design_tokens import FONT_HINT, GREEN_TEXT, LINK_INK, RED_TEXT
 
@@ -274,9 +273,9 @@ class DockAccountMixin:
 
         if not self._cached_limit:
             return ""
-        unit_cost = self._resolution_credit_costs.get(
-            "1K", DEFAULT_RESOLUTION_CREDIT_COSTS["1K"]
-        )
+        unit_cost = self._resolution_credit_costs.get("1K")
+        if not unit_cost:
+            return ""
         total = total_free_generations(self._cached_limit, unit_cost)
         if not total:
             return ""

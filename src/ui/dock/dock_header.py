@@ -200,9 +200,10 @@ def build_dock_header(dock: AIEditDockWidget) -> QWidget:
     brand_row.addWidget(wordmark, 0, Qt.AlignmentFlag.AlignVCenter)
 
     def open_product_page() -> None:
+        from ...core.auth.activation_manager import get_server_url
         from ..external_url import open_external
 
-        open_external(DOCK_BRANDING_URL)
+        open_external(get_server_url("branding_url", DOCK_BRANDING_URL))
 
     brand.clicked.connect(open_product_page)
     row.addWidget(brand, 0)

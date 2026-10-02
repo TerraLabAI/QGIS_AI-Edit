@@ -14,15 +14,11 @@
 
 
 
-
-
-
-
 from __future__ import annotations
 
 import re
 
-from ..config_store import get_export_block, get_export_dial_seq, get_export_dial_str
+from ..config_store import get_export_block, get_export_dial_seq
 
 
 
@@ -109,68 +105,6 @@ def _matches(name: str, text: str) -> bool:
     if _search_all(_served_table(name), text[:_MAX_TABLE_SCAN_CHARS]):
         return True
     return _search_all(_served_patterns("prompt_rules." + name), text[:_MAX_SERVED_SCAN_CHARS])
-
-
-
-_FREEFORM_VECTOR_COLOR = "#FF0000"
-_HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
-
-
-def freeform_vector_color() -> str:
-
-
-
-
-
-
-    served = get_export_dial_str("prompt_rules.vector_color", _FREEFORM_VECTOR_COLOR)
-    return served.upper() if _HEX_COLOR_RE.match(served) else _FREEFORM_VECTOR_COLOR
-
-
-def detect_freeform_vector_intent(prompt_text: str) -> str | None:
-
-
-
-
-
-
-
-
-
-
-    if not prompt_text:
-        return None
-    text = prompt_text.strip()
-    if not text:
-        return None
-    if _matches("lulc", text):
-        return None
-    if _matches("color_word", text):
-        return None
-    if not _matches("detect_verb", text):
-        return None
-    return freeform_vector_color()
-
-
-def detect_seg_context(prompt_text: str) -> bool:
-
-
-
-
-
-
-
-
-    if not prompt_text:
-        return False
-    text = prompt_text.strip()
-    if not text:
-        return False
-    return (
-        _matches("lulc", text)
-        or _matches("detect_verb", text)
-        or _matches("seg_style", text)
-    )
 
 
 def detect_prompt_guidance(prompt_text: str, has_template: bool = False) -> str | None:

@@ -138,6 +138,7 @@ class ActivationMixin:
 
         if not has_tuned_config():
             self._refresh_tuned_config()
+        self._refresh_catalog_after_sign_in()
 
 
         if not getattr(self, "_activation_config_keyed", False):
@@ -201,10 +202,10 @@ class ActivationMixin:
                 _enrich_error_message(message, rejection_code), is_error=True
             )
             return
-        self._last_key_validation_unix = 0.0
-        clear_activation()
-        self._auth_manager.set_activation_key("")
-        self._dock_widget.set_activated(False)
+
+
+
+        self._on_sign_out()
         if rejection_code in PLAN_STOPPED_CODES:
 
 
@@ -274,9 +275,22 @@ class ActivationMixin:
         self._last_key_validation_unix = 0.0
 
 
-        for attr in ("_key_validation_worker", "_credits_loader"):
+
+
+
+        for attr in (
+            "_key_validation_worker",
+            "_credits_loader",
+            "_tuned_config_task",
+            "_activation_config_loader",
+            "_catalog_loader",
+            "_bootstrap_task",
+        ):
             drain_task(getattr(self, attr, None), REQUEST_TASK_SIGNALS)
             setattr(self, attr, None)
+
+
+        self._drop_config_gate_waiter()
         cancel_history = getattr(self, "_cancel_history_tasks", None)
         if callable(cancel_history):
             cancel_history()
@@ -288,6 +302,24 @@ class ActivationMixin:
 
         self._clear_local_conversations()
         self._dock_widget.set_activated(False)
+
+
+        try:
+            from ...core.prompts.prompt_presets_client import drop_signed_in_prompts
+
+            self._dock_widget.set_server_catalog(drop_signed_in_prompts())
+        except Exception as err:  # nosec B110
+            log_debug(f"Signed-in prompts not dropped: {err}")
+        self._load_server_catalog(force=True)
+
+
+        self._activation_config_keyed = False
+        self._warm_activation_config()
+
+
+
+        self._load_export_config()
+        self._dock_widget.refresh_free_plan_line()
         log_debug("Signed out")
 
     def _on_account_deleted(self):
@@ -324,8 +356,12 @@ class ActivationMixin:
         self._refresh_credits()
 
 
-        if not has_tuned_config():
-            self._refresh_tuned_config()
+
+
+
+        self._refresh_tuned_config()
+        self._warm_activation_config()
+        self._refresh_catalog_after_sign_in()
 
 
 
@@ -669,6 +705,19 @@ class ActivationMixin:
         if self._dock_widget:
             self._dock_widget.set_checking_credits(False)
             self._dock_widget.set_launch_enabled(True)
+
+    def _refresh_price_displays(self):
+
+
+
+        if self._dock_widget is None or not self._auth_manager.has_activation_key():
+            return
+        try:
+            usage = self._auth_manager._fresh_cached_usage()
+        except Exception:  # nosec B110
+            usage = None
+        if isinstance(usage, dict) and "images_used" in usage:
+            self._on_credits_loaded(usage)
 
     def _on_credits_loaded(self, usage: dict):
 

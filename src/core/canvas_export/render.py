@@ -18,11 +18,7 @@ from ..i18n import tr
 from ..logger import log_debug, log_warning
 from .export_config import _get_align, _get_max_dimension, chosen_input_format
 from .render_set import drop_layers
-from .sizing import (
-    _RESOLUTION_TARGET_PX,
-    _adjust_extent_to_aspect,
-    _aspect_dims,
-)
+from .sizing import _adjust_extent_to_aspect
 
 
 
@@ -175,7 +171,6 @@ def _is_usable_size(size, align: int, max_dim: int) -> bool:
 def prepare_export(
     map_settings: QgsMapSettings,
     extent: QgsRectangle,
-    target_resolution: str | None = None,
     markup_layer: QgsMapLayer | None = None,
     exclude_layer_ids: set[str] | None = None,
     layers: list | None = None,
@@ -235,14 +230,9 @@ def prepare_export(
     if align > max_dim:
         raise ValueError("Pixel alignment exceeds maximum export dimension")
     map_crs = map_settings.destinationCrs()
-    if _is_usable_size(size, align, max_dim):
-        out_w, out_h = int(size[0]), int(size[1])
-    elif target_resolution and target_resolution in _RESOLUTION_TARGET_PX:
-        out_w, out_h = _aspect_dims(
-            extent, min(_RESOLUTION_TARGET_PX[target_resolution], max_dim), align, max_dim
-        )
-    else:
-        out_w, out_h = _aspect_dims(extent, max_dim, align, max_dim)
+    if not _is_usable_size(size, align, max_dim):
+        raise ValueError("No usable export size from the server")
+    out_w, out_h = int(size[0]), int(size[1])
     adjusted_extent = _adjust_extent_to_aspect(extent, out_w, out_h)
 
     settings = _clone_map_settings(map_settings)

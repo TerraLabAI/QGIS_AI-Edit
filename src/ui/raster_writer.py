@@ -16,7 +16,6 @@ from qgis.core import QgsProject, QgsRasterLayer
 
 from ..core.i18n import tr
 from ..core.logger import log_warning
-from ..core.prompts.prompt_presets import lookup_template_by_prompt
 from ..core.raster_writer import (
     BEFORE_PATH_PROPERTY,
     OUTPUT_DIR_SETTING,
@@ -58,10 +57,11 @@ def _humanize_prompt(prompt: str, max_chars: int = 30) -> str:
     return text[:1].upper() + text[1:]
 
 
-def _build_layer_name(prompt: str) -> str:
-    match = lookup_template_by_prompt(prompt) if prompt else None
-    if match is not None:
-        return match[1]
+def _build_layer_name(prompt: str, template_name: str = "") -> str:
+
+
+    if template_name and template_name.strip():
+        return template_name.strip()
     humanized = _humanize_prompt(prompt)
     return humanized or "AI Edit result"
 
@@ -100,12 +100,13 @@ def add_geotiff_to_project(
     prompt: str = "",
     crs_wkt: str = "",
     before_path: str = "",
+    template_name: str = "",
 ) -> QgsRasterLayer:
 
 
 
 
-    display_name = _build_layer_name(prompt)
+    display_name = _build_layer_name(prompt, template_name)
 
     existing_names = {lyr.name() for lyr in QgsProject.instance().mapLayers().values()}
     if display_name in existing_names:

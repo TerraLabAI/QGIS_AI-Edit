@@ -19,7 +19,7 @@ from qgis.PyQt.QtWidgets import (
 
 from ....core import telemetry
 from ....core import telemetry_events as te
-from ....core.auth.activation_manager import build_utm_url, get_contact_call_url, get_support_email, get_tutorial_url
+from ....core.auth.activation_manager import get_contact_call_url, get_server_url, get_tutorial_url
 from ....core.config_store import get_export_copy
 from ....core.i18n import tr
 from ....core.logger import log_warning
@@ -325,7 +325,7 @@ class HelpPagesMixin:
         urls = {
             "settings_tutorial": get_tutorial_url(),
             "settings_guide": guide_url("settings_guide"),
-            "settings_blog": build_utm_url("/blog", "settings_blog"),
+            "settings_blog": get_server_url("blog_url", "https://terra-lab.ai/blog"),
         }
 
         if urls["settings_tutorial"].split("?")[0] == urls["settings_guide"].split("?")[0]:
@@ -413,11 +413,13 @@ class HelpPagesMixin:
 
 
 
+        from ....core.pro_ceiling import is_contact_link
         from ...dock.pro_ceiling import copy_email_to_clipboard
         from ...keyboard_focus import settle_dialog_default_button
-        from ..error_report_dialog import SUPPORT_EMAIL
+        from ..error_report_dialog import support_contact
 
-        support_email = get_support_email(SUPPORT_EMAIL)
+        support_email = support_contact()
+        is_link = is_contact_link(support_email)
         call_url = get_contact_call_url()
         title = get_export_copy("dock.tools_footer.contact_us_title", tr("Contact us"))
         dlg = QDialog(self)
@@ -450,8 +452,9 @@ class HelpPagesMixin:
         buttons.setContentsMargins(0, 0, 0, 0)
         buttons.setSpacing(8)
         buttons.addStretch(1)
-        copy_label = get_export_copy("dock.tools_footer.copy_email_btn", tr("Copy email"))
-        if call_url:
+        copy_label = (tr("Copy link") if is_link else
+                      get_export_copy("dock.tools_footer.copy_email_btn", tr("Copy email")))
+        if call_url and not (is_link and call_url == support_email):
             call_btn = make_button(
                 get_export_copy("dock.tools_footer.book_call_btn", tr("Book a call")),
                 BTN_GHOST_QSS, dlg)

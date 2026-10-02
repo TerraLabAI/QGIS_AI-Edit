@@ -8,8 +8,6 @@
 
 from __future__ import annotations
 
-import os
-import re
 from typing import Any
 
 from ..config_store import get_export_dial
@@ -30,16 +28,11 @@ from .preset_normalize import (
     _pick_label,
     _preset_extras,
 )
-from .prompt_detect import (
-    detect_freeform_vector_intent,
-    detect_prompt_guidance,
-    detect_seg_context,
-)
+from .prompt_detect import detect_prompt_guidance
 from .prompt_format import format_template_prompt
 
 
 __all__ = [
-    "_CATEGORY_ORDER",
     "_CLIENT_PRESET_FIELDS",
     "_current_lang",
     "_is_json_shaped",
@@ -51,9 +44,7 @@ __all__ = [
     "_normalize_preset",
     "_pick_label",
     "_preset_extras",
-    "detect_freeform_vector_intent",
     "detect_prompt_guidance",
-    "detect_seg_context",
     "format_template_prompt",
     "get_all_categories",
     "get_need_groups",
@@ -61,90 +52,9 @@ __all__ = [
     "get_need_tiles",
     "get_preset_by_id",
     "get_top_picks",
-    "get_vector_hints",
     "invalidate_catalog_memo",
-    "lookup_template_by_prompt",
     "seed_catalog_memo",
-]
-
-
-def _normalize_for_match(s: str) -> str:
-
-    return re.sub(r"\s+", " ", (s or "")).strip()
-
-
-_CATEGORY_LABELS = {
-    "cartography": "Cartography",
-    "landcover": "Land cover",
-    "segment": "Segment",
-    "climate": "Climate scenarios",
-    "urban": "Urban scenarios",
-    "energy": "Energy & solar",
-    "cleanup": "Cleanup & enhance",
-    "presentation": "Presentation renders",
-    "forestry": "Forestry & vegetation",
-    "agriculture": "Agriculture",
-    "archaeology": "Archaeology & heritage",
-    "geology": "Geology & mining",
-    "hydrology": "Water & hydrology",
-}
-
-
-
-
-
-
-
-
-
-
-
-_NEED_LABELS = {
-    "project": "Show",
-    "classify": "Extract",
-    "render": "Repair",
-}
-
-_NEED_TAGLINES = {
-    "project": "Show a project: renders, plans, simulations, before/after",
-    "classify": "Extract data: detect, segment, count, map",
-    "render": "Repair imagery: sharpen, upscale, fix gaps and seams",
-}
-
-_NEED_ORDER = ["project", "classify", "render"]
-
-_CATEGORY_NEED = {
-    "climate": "project",
-    "urban": "project",
-    "energy": "project",
-    "cartography": "project",
-    "presentation": "project",
-    "archaeology": "project",
-    "landcover": "classify",
-    "segment": "classify",
-    "forestry": "classify",
-    "agriculture": "classify",
-    "geology": "classify",
-    "hydrology": "classify",
-    "cleanup": "render",
-}
-
-
-
-_CATEGORY_ORDER = [
-    "climate",
-    "urban",
-    "energy",
-    "cartography",
-    "presentation",
-    "archaeology",
-    "landcover",
-    "segment",
-    "forestry",
-    "agriculture",
-    "geology",
-    "hydrology",
-    "cleanup",
+    "template_label",
 ]
 
 
@@ -173,7 +83,6 @@ def invalidate_catalog_memo() -> None:
 
     _catalog_memo["catalog"] = None
     _catalog_memo["loaded"] = False
-    _clear_match_indexes()
 
 
 def seed_catalog_memo(catalog: dict | None) -> None:
@@ -186,53 +95,9 @@ def seed_catalog_memo(catalog: dict | None) -> None:
 
     _catalog_memo["catalog"] = catalog
     _catalog_memo["loaded"] = True
-    _clear_match_indexes()
-
-
-
-
-
-
-
-
-_SHOW_EXPERIMENTAL_MEMO: bool | None = None
-
-
-def _read_show_experimental_flag() -> bool:
-
-
-    plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    env_path = os.path.join(plugin_dir, ".env.local")
-    if not os.path.isfile(env_path):
-        return False
-    try:
-        with open(env_path, encoding="utf-8-sig", errors="replace") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" not in line:
-                    continue
-                key, _, value = line.partition("=")
-                if key.strip() == "SHOW_EXPERIMENTAL":
-                    return value.strip().strip('"').strip("'").lower() == "true"
-    except OSError:
-        return False
-    return False
-
-
-def _show_experimental() -> bool:
-    global _SHOW_EXPERIMENTAL_MEMO
-    if _SHOW_EXPERIMENTAL_MEMO is None:
-        _SHOW_EXPERIMENTAL_MEMO = _read_show_experimental_flag()
-    return _SHOW_EXPERIMENTAL_MEMO
 
 
 def _iter_server_presets(catalog: dict | None):
-
-
-
-
 
 
 
@@ -249,19 +114,6 @@ def _iter_server_presets(catalog: dict | None):
                 yield key, p
 
 
-def _iter_live_presets(catalog: dict | None):
-
-
-
-
-
-    show_experimental = _show_experimental()
-    for key, p in _iter_server_presets(catalog):
-        if p.get("experimental") and not show_experimental:
-            continue
-        yield key, p
-
-
 def _iter_prompt_variants(prompt_field: Any):
 
 
@@ -274,87 +126,23 @@ def _iter_prompt_variants(prompt_field: Any):
                 yield v
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-_match_index: dict[str, Any] = {"source": None, "by_prompt": None, "by_id": None}
-
-
-def _clear_match_indexes() -> None:
-    _match_index.update(source=None, by_prompt=None, by_id=None, language=None)
-
-
-def _match_indexes(catalog: dict | None) -> tuple[dict, dict]:
-
-
-
-
-
-    language = _current_lang()
-    current = dict(_match_index)
-    if (
-        current["by_prompt"] is None or catalog is not current["source"]
-        or current.get("language") != language
-    ):
-        by_prompt: dict[str, tuple[str, str]] = {}
-        by_id: dict[str, tuple[str | None, list[dict] | None]] = {}
-        for _cat_key, p in _iter_server_presets(catalog):
-            preset_id = p.get("id", "")
-            label = _pick_label(p.get("label"), preset_id)
-            for variant in _iter_prompt_variants(p.get("prompt")):
-                key = _normalize_for_match(variant)
-                if key and key not in by_prompt:
-                    by_prompt[key] = (preset_id, label)
-            if isinstance(preset_id, str) and preset_id and preset_id not in by_id:
-                classes = p.get("vector_classes")
-                if not isinstance(classes, list) or not classes:
-                    classes = None
-                color = p.get("vector_color")
-                if not isinstance(color, str) or not color:
-                    color = None
-                by_id[preset_id] = (color, classes)
-        _match_index.update(by_prompt=by_prompt, by_id=by_id, source=catalog, language=language)
-        return by_prompt, by_id
-    return current["by_prompt"], current["by_id"]
-
-
-def lookup_template_by_prompt(prompt_text: str) -> tuple[str, str] | None:
-
-
-
-
-
-    norm = _normalize_for_match(prompt_text)
-    if not norm:
-        return None
-    by_prompt, _by_id = _match_indexes(_cached_catalog())
-    return by_prompt.get(norm)
-
-
-def get_vector_hints(template_id: str) -> tuple[str | None, list[dict] | None]:
-
-
-
-
-
-
+def template_label(template_id: str) -> str | None:
 
 
 
     if not template_id:
-        return None, None
-    _by_prompt, by_id = _match_indexes(_cached_catalog())
-    return by_id.get(template_id, (None, None))
+        return None
+    for _cat_key, p in _iter_server_presets(_cached_catalog()):
+        if p.get("id") == template_id:
+            return _pick_label(p.get("label"), template_id)
+    return None
+
+
+def _normalize_served(preset: dict, cat_key: str, catalog: dict | None) -> dict:
+
+
+    placeholder = isinstance(catalog, dict) and catalog.get("prompts") == "placeholder"
+    return _normalize_preset(preset, cat_key, placeholder=placeholder)
 
 
 def _build_prompt_lookup(catalog: dict | None) -> dict[str, dict]:
@@ -364,9 +152,8 @@ def _build_prompt_lookup(catalog: dict | None) -> dict[str, dict]:
 
 
 
-
     lookup: dict[str, dict] = {}
-    for cat_key, p in _iter_live_presets(catalog):
+    for cat_key, p in _iter_server_presets(catalog):
         label = _pick_label(p.get("label"), p.get("id", ""))
         for variant in _iter_prompt_variants(p.get("prompt")):
             key = variant.strip()
@@ -380,10 +167,9 @@ def _build_preset_lookup(catalog: dict | None) -> dict[str, dict]:
 
 
 
-
     lookup: dict[str, dict] = {}
-    for cat_key, p in _iter_live_presets(catalog):
-        norm = _normalize_preset(p, cat_key)
+    for cat_key, p in _iter_server_presets(catalog):
+        norm = _normalize_served(p, cat_key, catalog)
         for variant in _iter_prompt_variants(p.get("prompt")):
             key = variant.strip()
             if key and key not in lookup:
@@ -404,9 +190,9 @@ def get_preset_by_id(preset_id: str, server_catalog: dict | None = None) -> dict
         return None
     if server_catalog is None:
         server_catalog = _cached_catalog()
-    for cat_key, p in _iter_live_presets(server_catalog):
+    for cat_key, p in _iter_server_presets(server_catalog):
         if p.get("id") == preset_id:
-            return _normalize_preset(p, cat_key)
+            return _normalize_served(p, cat_key, server_catalog)
     return None
 
 
@@ -505,7 +291,10 @@ def get_top_picks(server_catalog: dict | None = None) -> list[dict]:
 
     if server_catalog is None:
         server_catalog = _cached_catalog()
-    live = [_normalize_preset(p, cat_key) for cat_key, p in _iter_live_presets(server_catalog)]
+    live = [
+        _normalize_served(p, cat_key, server_catalog)
+        for cat_key, p in _iter_server_presets(server_catalog)
+    ]
     picks = [p for p in live if p["top_pick"]]
     if not picks:
         return live[:_top_picks_fallback_size()]
@@ -537,57 +326,64 @@ def _find_server_category(catalog: dict | None, cat_key: str) -> dict | None:
     return None
 
 
+def _served_needs(catalog: dict | None) -> list[dict]:
+
+    if not isinstance(catalog, dict):
+        return []
+    out: list[dict] = []
+    seen: set[str] = set()
+    for entry in catalog.get("needs", []) or []:
+        key = entry.get("key") if isinstance(entry, dict) else None
+        if isinstance(key, str) and key and key not in seen:
+            out.append(entry)
+            seen.add(key)
+    return out
+
+
+def _need_keys(catalog: dict | None) -> list[str]:
+    return [entry["key"] for entry in _served_needs(catalog)]
+
+
 def _themed_category_label(cat_key: str, catalog: dict | None) -> str:
-
-
-
-
 
     cat = _find_server_category(catalog, cat_key)
     if cat is not None:
         resolved = _pick_label(cat.get("label"), "")
         if resolved:
             return resolved
-    local = _CATEGORY_LABELS.get(cat_key)
-    return tr(local) if local else cat_key
+    return cat_key
 
 
-def _category_need(cat_key: str, catalog: dict | None) -> str:
-
+def _category_need(cat_key: str, catalog: dict | None) -> str | None:
 
 
     cat = _find_server_category(catalog, cat_key)
     if cat is not None:
         need = cat.get("need")
-        if isinstance(need, str) and need in _NEED_LABELS:
+        if isinstance(need, str) and need in _need_keys(catalog):
             return need
-    return _CATEGORY_NEED.get(cat_key, _NEED_ORDER[0])
+    return None
 
 
-def _preset_need(preset: dict, catalog: dict | None) -> str:
+def _preset_need(preset: dict, catalog: dict | None) -> str | None:
 
 
 
 
     need = preset.get("need")
-    if isinstance(need, str) and need in _NEED_LABELS:
+    if isinstance(need, str) and need in _need_keys(catalog):
         return need
     return _category_need(preset.get("source_category", ""), catalog)
 
 
 def _all_category_keys(catalog: dict | None) -> list[str]:
 
-
-
-
-    keys = list(_CATEGORY_ORDER)
-    seen = set(keys)
+    keys: list[str] = []
     if isinstance(catalog, dict):
         for cat in catalog.get("categories", []) or []:
             key = cat.get("key") if isinstance(cat, dict) else None
-            if isinstance(key, str) and key not in seen:
+            if isinstance(key, str) and key not in keys:
                 keys.append(key)
-                seen.add(key)
     return keys
 
 
@@ -595,44 +391,28 @@ def get_need_groups(server_catalog: dict | None = None) -> list[dict]:
 
 
 
-
-
-
     if server_catalog is None:
         server_catalog = _cached_catalog()
-
-    server_needs: dict[str, dict] = {}
-    if isinstance(server_catalog, dict):
-        for entry in server_catalog.get("needs", []) or []:
-            if isinstance(entry, dict) and isinstance(entry.get("key"), str):
-                server_needs[entry["key"]] = entry
-
-    groups: list[dict] = []
-    for need_key in _NEED_ORDER:
-        srv = server_needs.get(need_key) or {}
-        groups.append({
-            "key": need_key,
-            "label": _pick_label(srv.get("label"), "") or tr(_NEED_LABELS[need_key]),
-            "tagline": (
-                _pick_label(srv.get("tagline"), "") or tr(_NEED_TAGLINES[need_key])
-            ),
-            "categories": [
-                c for c in _all_category_keys(server_catalog)
-                if _category_need(c, server_catalog) == need_key
-            ],
-        })
-    return groups
+    keys = _all_category_keys(server_catalog)
+    return [{
+        "key": entry["key"],
+        "label": _pick_label(entry.get("label"), entry["key"]),
+        "tagline": _pick_label(entry.get("tagline"), ""),
+        "categories": [c for c in keys if _category_need(c, server_catalog) == entry["key"]],
+    } for entry in _served_needs(server_catalog)]
 
 
 def _presets_by_need(server_catalog: dict | None) -> dict[str, list[dict]]:
 
 
-    buckets: dict[str, list[dict]] = {k: [] for k in _NEED_ORDER}
     if server_catalog is None:
         server_catalog = _cached_catalog()
+    buckets: dict[str, list[dict]] = {k: [] for k in _need_keys(server_catalog)}
     for cat in _themed_categories(server_catalog):
         for preset in cat["presets"]:
-            buckets.setdefault(_preset_need(preset, server_catalog), []).append(preset)
+            need = _preset_need(preset, server_catalog)
+            if need is not None:
+                buckets.setdefault(need, []).append(preset)
     return buckets
 
 
@@ -729,8 +509,8 @@ def get_all_categories(server_catalog: dict | None = None) -> list[dict]:
 def _themed_categories(catalog: dict | None) -> list[dict]:
 
     by_category: dict[str, list[dict]] = {}
-    for category, preset in _iter_live_presets(catalog):
-        by_category.setdefault(category, []).append(_normalize_preset(preset, category))
+    for category, preset in _iter_server_presets(catalog):
+        by_category.setdefault(category, []).append(_normalize_served(preset, category, catalog))
     return [{
         "key": key,
         "label": _themed_category_label(key, catalog),

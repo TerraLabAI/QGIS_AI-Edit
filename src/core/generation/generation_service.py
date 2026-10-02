@@ -97,6 +97,37 @@ def normalize_context_image_notes(
     return aligned if any(aligned) else None
 
 
+_FAILURE_CODES = frozenset({"safety_block", "invalid_request", "no_image", "busy", "timeout", "unknown"})
+
+
+def _failure_code(resp: dict) -> str | None:
+
+
+    code = resp.get("failure_code") if isinstance(resp, dict) else None
+    return code if isinstance(code, str) and code in _FAILURE_CODES else None
+
+
+def _stamp_prompt_hints(ctx, resp: dict) -> None:
+
+
+
+
+
+    template_id = resp.get("template_id")
+    if not ctx.template_id and isinstance(template_id, str) and template_id:
+        ctx.template_id = template_id
+        from ..prompts.prompt_presets import template_label
+
+        ctx.template_name = template_label(template_id)
+    classes = resp.get("vector_classes")
+    ctx.vector_classes = copy.deepcopy(classes) if isinstance(classes, list) and classes else None
+    color = resp.get("vector_color")
+    if not (isinstance(color, str) and color):
+        color = resp.get("freeform_vector_intent")
+    ctx.vector_color = color if isinstance(color, str) and color else None
+    ctx.seg_intent = resp.get("seg_context") is True
+
+
 def _cancelled_message() -> str:
     return get_export_copy("pipeline.generation_service.generation_cancelled", tr("Generation cancelled"))
 
@@ -229,6 +260,7 @@ class GenerationService(GenerationUploadMixin):
         ctx=None,
         context_images: list[str] | None = None,
         context_image_notes: list[str] | None = None,
+        context_image_meta: list[dict | None] | None = None,
         guidance_image: str | None = None,
         guidance_format: str | None = None,
         is_cancelled: Callable[[], bool] | None = None,
@@ -247,6 +279,12 @@ class GenerationService(GenerationUploadMixin):
         auth = dict(auth)
         context_images = list(context_images) if context_images else None
         notes = normalize_context_image_notes(context_images, context_image_notes)
+        meta = (
+            copy.deepcopy(context_image_meta)
+            if context_images and context_image_meta and len(context_image_meta) == len(context_images)
+            and any(context_image_meta)
+            else None
+        )
 
         ctx_count = len(context_images) if context_images else 0
         note_count = sum(1 for n in (notes or []) if n)
@@ -276,6 +314,7 @@ class GenerationService(GenerationUploadMixin):
             upload_token=upload_token,
             context_images=context_images,
             context_image_notes=notes,
+            context_image_meta=meta,
             guidance_inline=guidance_inline,
             guidance_upload_token=guidance_upload_token,
             geo_kwargs=self._build_geo_kwargs(ctx),
@@ -348,6 +387,7 @@ class GenerationService(GenerationUploadMixin):
         upload_token: str | None,
         context_images: list[str] | None,
         context_image_notes: list[str] | None,
+        context_image_meta: list[dict | None] | None,
         guidance_inline: str | None,
         guidance_upload_token: str | None,
         geo_kwargs: dict,
@@ -388,6 +428,7 @@ class GenerationService(GenerationUploadMixin):
                 auth=auth,
                 context_images=context_images,
                 context_image_notes=context_image_notes,
+                context_image_meta=context_image_meta,
                 guidance_image=guidance_inline,
                 guidance_upload_token=guidance_upload_token,
                 idempotency_key=idempotency_key,
@@ -485,6 +526,7 @@ class GenerationService(GenerationUploadMixin):
             ctx.credit_cost = resp.get("credit_cost")
             ctx.estimated_time_seconds = estimated_time
             ctx.max_wait_seconds = max_wait
+            _stamp_prompt_hints(ctx, resp)
 
 
         if resp.get("status") == "completed" and _image_url(resp):
@@ -642,6 +684,7 @@ class GenerationService(GenerationUploadMixin):
                     ctx.poll_count = polls
                     ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
                     ctx.final_status = "failed"
+                    ctx.failure_code = _failure_code(status_resp)
                 return GenerationResult(
                     success=False,
                     error=status_resp.get("error") or _generation_failed_message(),
@@ -743,6 +786,7 @@ class GenerationService(GenerationUploadMixin):
                         ctx.poll_count = polls
                         ctx.total_wait_seconds = round(time.monotonic() - submit_time, 1)
                         ctx.final_status = "failed"
+                        ctx.failure_code = _failure_code(final)
                     return GenerationResult(
                         success=False,
                         error=final.get("error") or _generation_failed_message(),

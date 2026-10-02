@@ -1,45 +1,11 @@
 from __future__ import annotations
 
-import math
-
 from qgis.core import QgsRectangle
-
-from ..config_store import ServerDialMap
 
 
 __all__ = [
     "_adjust_extent_to_aspect",
-    "_aspect_dims",
-    "_RESOLUTION_TARGET_PX",
 ]
-
-
-
-
-_RESOLUTION_TARGET_PX = ServerDialMap(
-    "resolution_targets_px", {"1K": 1024, "2K": 2048, "4K": 4096}
-)
-
-
-def _aspect_dims(
-    extent: QgsRectangle, longest: int, align: int, max_dim: int
-) -> tuple[int, int]:
-
-    max_dim = _aligned_limit(extent, align, max_dim)
-    longest = min(max_dim, max(align, longest))
-    ext_ratio = extent.width() / extent.height()
-    if ext_ratio >= 1:
-        out_w = longest
-        out_h = max(align, int(round(longest / ext_ratio)))
-    else:
-        out_h = longest
-        out_w = max(align, int(round(longest * ext_ratio)))
-
-    out_w = max(align, (out_w // align) * align)
-    out_h = max(align, (out_h // align) * align)
-    out_w = min(max_dim, out_w)
-    out_h = min(max_dim, out_h)
-    return out_w, out_h
 
 
 def _adjust_extent_to_aspect(
@@ -65,12 +31,3 @@ def _adjust_extent_to_aspect(
         extent.xMaximum(),
         cy + new_half_h,
     )
-
-
-def _aligned_limit(extent, align, max_dim):
-
-    if not all(math.isfinite(v) and v > 0 for v in (extent.width(), extent.height())):
-        raise ValueError("Invalid extent: width and height must be positive")
-    if align <= 0 or max_dim < align:
-        raise ValueError("Invalid pixel alignment")
-    return (max_dim // align) * align

@@ -55,7 +55,7 @@ from typing import Any
 from qgis.core import QgsProject, QgsRasterLayer
 
 from .mcp_api_generation import GenerationMixin
-from .mcp_api_guide import GUIDE, WORKFLOW
+from .mcp_api_guide import GUIDE_MISSING_TEXT, WORKFLOW, guide_text
 from .mcp_api_history import HistoryMixin
 from .mcp_api_library import LibraryMixin
 from .mcp_api_markup import MarkupMixin
@@ -163,6 +163,18 @@ def _image_layer_names() -> list[str]:
     ]
 
 
+def _load_saved_config() -> None:
+
+
+
+    try:
+        from .core.config_store import ensure_saved_config_loaded
+
+        ensure_saved_config_loaded()
+    except Exception:  # nosec B110
+        pass
+
+
 class EditMCPAPI(
     ZoneMixin,
     GenerationMixin,
@@ -179,6 +191,7 @@ class EditMCPAPI(
 
     def __init__(self, plugin):
         self._plugin = plugin
+        _load_saved_config()
 
 
 
@@ -236,6 +249,7 @@ class EditMCPAPI(
     def _server_config_ok(self) -> bool:
 
         try:
+            _load_saved_config()
             from .core.canvas_export.export_config import has_server_config, has_tuned_config
             return bool(has_server_config() and has_tuned_config())
         except Exception:
@@ -372,9 +386,13 @@ class EditMCPAPI(
 
 
 
+
+
+        text = guide_text()
         return {
             "api_version": API_VERSION,
-            "text": GUIDE,
+            "text": text if text is not None else GUIDE_MISSING_TEXT,
+            "guide_loaded": text is not None,
             "workflow": copy.deepcopy(WORKFLOW),
         }
 
@@ -412,7 +430,7 @@ class EditMCPAPI(
             default_tier_for,
             free_tier_allowed_tiers,
         )
-        from .core.paywall_state import classify_paywall_state
+        from .core.paywall_state import served_paywall_state
         from .core.resolution_labels import resolution_tiers
 
         auth = getattr(self._plugin, "_auth_manager", None)
@@ -429,15 +447,8 @@ class EditMCPAPI(
         used, limit = usage.get("used"), usage.get("limit")
         if isinstance(used, (int, float)) and isinstance(limit, (int, float)):
             remaining = max(0, int(limit) - int(used))
-        paywall = None
-        if remaining is not None:
-            costs = getattr(self._dock(), "_resolution_credit_costs", None)
-            current = self._selected_resolution()
-            unit = None
-            if isinstance(costs, dict) and current:
-                unit = costs.get(current)
-            if isinstance(unit, (int, float)) and unit > 0:
-                paywall = classify_paywall_state(remaining, int(unit))
+
+        paywall = served_paywall_state() or None
 
         return {
             "signed_in": signed_in,
@@ -463,24 +474,26 @@ class EditMCPAPI(
 
 
         from .core.entitlements import free_tier_allowed_tiers
-        from .core.resolution_labels import (
-            DEFAULT_RESOLUTION_CREDIT_COSTS,
-            resolution_tiers,
-        )
+        from .core.resolution_labels import resolution_tiers, served_credit_costs
 
         dock = self._dock()
         costs = getattr(dock, "_resolution_credit_costs", None) if dock is not None else None
         free_tier = self._is_free_tier()
         tiers = list(resolution_tiers())
         allowed = list(free_tier_allowed_tiers()) if free_tier else tiers
-        return {
+        costs = dict(costs) if isinstance(costs, dict) and costs else served_credit_costs()
+        answer = {
             "resolutions": tiers,
-            "credit_costs": dict(costs) if isinstance(costs, dict)
-            else dict(DEFAULT_RESOLUTION_CREDIT_COSTS),
+            "credit_costs": costs,
             "allowed": allowed,
             "current": self._selected_resolution(),
             "free_tier": free_tier,
         }
+        if not costs:
+
+            answer["credit_costs_status"] = "loading"
+            answer["note"] = "Prices are loading from the server. Ask again in a moment."
+        return answer
 
 
 
@@ -648,4 +661,6 @@ def get_api():
 
 
     plugin = _find_plugin()
+    if plugin is not None:
+        _load_saved_config()
     return getattr(plugin, "mcp_api", None) if plugin is not None else None

@@ -16,11 +16,11 @@ from qgis.PyQt.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 from ....core import telemetry
 from ....core import telemetry_events as te
 from ....core.auth.activation_manager import get_contact_call_url, get_dashboard_url
-from ....core.config_store import get_export_copy
+from ....core.config_store import ConfigMissing, get_export_copy, get_export_copy_list
 from ....core.date_format import format_reset_date
 from ....core.i18n import tr
 from ....core.number_format import format_count
-from ....core.pro_ceiling import pro_ceiling_contact_email
+from ....core.pro_ceiling import is_contact_link, pro_ceiling_contact_email
 from ...dock.design_tokens import (
     ACCENT,
     BTN_GHOST_QSS,
@@ -29,6 +29,43 @@ from ...dock.design_tokens import (
 from ...external_url import open_external
 from .plan_state import AccountPlan, plan_display_name
 from .widgets import BillingCard, BillingCardRow, Page, make_button, make_usage_bar, muted_label
+
+
+_MAX_REFERENCES_SLOT = "{max_references}"
+
+
+def _pro_reference_cap() -> int | None:
+
+    from ....core.reference_image_store import max_references
+
+    try:
+        return max_references()
+    except ConfigMissing:
+        return None
+
+
+def _pro_points() -> list[str]:
+
+
+    cap = _pro_reference_cap()
+    served = get_export_copy_list("dialogs.account_settings_dialog.pro_points")
+    if served is not None:
+        points = []
+        for line in served:
+            if _MAX_REFERENCES_SLOT in line:
+                if cap is None:
+                    continue
+                line = line.replace(_MAX_REFERENCES_SLOT, format_count(cap))
+            points.append(line)
+        return points
+    points = [
+        get_export_copy("dialogs.account_settings_dialog.pro_point_quality", tr("Detailed and Maximum quality")),
+        get_export_copy("dialogs.account_settings_dialog.pro_point_commercial", tr("Commercial use")),
+    ]
+    if cap is not None:
+        points.append(tr("Up to {n} reference images").format(n=format_count(cap)))
+    points.append(tr("Cancel anytime"))
+    return points
 
 
 class BillingPageMixin:
@@ -102,19 +139,14 @@ class BillingPageMixin:
     def _billing_offer_card(self, parent: QWidget, plan: AccountPlan) -> BillingCard:
 
         card = BillingCard(tr("AI Edit Pro"), parent)
-        card.add_headline(tr("Keep editing with Pro"))
+        card.add_headline(get_export_copy(
+            "dialogs.account_settings_dialog.pro_headline",
+            tr("Keep editing with Pro"),
+        ))
         if plan.left == 0:
             card.add_status(tr("Free credits used up this month"))
-        card.add_point(get_export_copy(
-            "dialogs.account_settings_dialog.pro_point_quality",
-            tr("Detailed and Maximum quality"),
-        ), ACCENT)
-        card.add_point(get_export_copy(
-            "dialogs.account_settings_dialog.pro_point_commercial",
-            tr("Commercial use"),
-        ), ACCENT)
-        card.add_point(tr("Up to 12 reference images"), ACCENT)
-        card.add_point(tr("Cancel anytime"), ACCENT)
+        for point in _pro_points():
+            card.add_point(point, ACCENT)
         upgrade = QPushButton(tr("Upgrade to Pro"), card)
         upgrade.clicked.connect(self._on_upgrade)
 
@@ -157,16 +189,22 @@ class BillingPageMixin:
         row.setContentsMargins(0, 6, 0, 0)
         row.setSpacing(8)
         contact_email = pro_ceiling_contact_email()
-        copy_btn = make_button(
-            get_export_copy("dialogs.account_settings_dialog.copy_email_button", tr("Copy email")),
-            BTN_GHOST_QSS, card)
+        is_link = is_contact_link(contact_email)
+        if is_link:
+
+
+            open_btn = make_button(tr("Contact us"), BTN_GHOST_QSS, card)
+            open_btn.setToolTip(contact_email)
+            open_btn.clicked.connect(lambda: self._open_contact_call(contact_email))
+            row.addWidget(open_btn)
+        copy_btn = make_button(self._copy_contact_text(is_link), BTN_GHOST_QSS, card)
         copy_btn.setToolTip(contact_email)
         copy_btn.clicked.connect(lambda: self._on_copy_contact_email(copy_btn, contact_email))
         row.addWidget(copy_btn)
 
 
         call_url = get_contact_call_url()
-        if call_url:
+        if call_url and not (is_link and call_url == contact_email):
             call_btn = make_button(
                 get_export_copy("dialogs.account_settings_dialog.book_call_button", tr("Book a call")),
                 BTN_GHOST_QSS, card)
@@ -180,6 +218,12 @@ class BillingPageMixin:
         open_external(get_dashboard_url())
 
     @staticmethod
+    def _copy_contact_text(is_link: bool) -> str:
+        if is_link:
+            return tr("Copy link")
+        return get_export_copy("dialogs.account_settings_dialog.copy_email_button", tr("Copy email"))
+
+    @staticmethod
     def _on_copy_contact_email(button, address: str) -> None:
 
         from ...dock.pro_ceiling import copy_email_to_clipboard
@@ -188,7 +232,7 @@ class BillingPageMixin:
         copy_email_to_clipboard(
             button,
             address,
-            idle_text=get_export_copy("dialogs.account_settings_dialog.copy_email_button", tr("Copy email")),
+            idle_text=BillingPageMixin._copy_contact_text(is_contact_link(address)),
         )
 
     @staticmethod

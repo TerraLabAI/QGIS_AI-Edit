@@ -9,11 +9,50 @@
 
 from __future__ import annotations
 
-from .config_store import get_export_copy, get_export_dial_seq
+from collections.abc import Mapping
+
+from .config_store import ConfigMissing, get_export_copy, get_export_dial_seq, require_table
 from .i18n import tr
 
 
-DEFAULT_RESOLUTION_CREDIT_COSTS: dict[str, int] = {"1K": 20, "2K": 30, "4K": 40}
+def served_credit_costs() -> dict[str, int]:
+
+
+
+
+
+
+    try:
+        table = require_table("resolution_credit_costs")
+    except ConfigMissing:
+        return {}
+    if not isinstance(table, dict):
+        return {}
+    costs: dict[str, int] = {}
+    for tier, value in list(table.items())[:16]:
+        if isinstance(tier, str) and not isinstance(value, bool) and isinstance(value, (int, float)):
+            if value > 0 and float(value).is_integer():
+                costs[tier] = int(value)
+    return costs
+
+
+class _ServedCreditCosts(Mapping):
+
+
+
+
+    def __getitem__(self, tier):
+        return served_credit_costs()[tier]
+
+    def __iter__(self):
+        return iter(served_credit_costs())
+
+    def __len__(self):
+        return len(served_credit_costs())
+
+
+
+DEFAULT_RESOLUTION_CREDIT_COSTS = _ServedCreditCosts()
 
 
 

@@ -114,6 +114,12 @@ def _words(parent: QWidget, qss: str, selectable: bool = False) -> QLabel:
     return label
 
 
+def _open_contact_link(url: str) -> None:
+    from ..external_url import open_external
+
+    open_external(url)
+
+
 class QuotaCard(QWidget):
 
 
@@ -209,6 +215,7 @@ class QuotaCard(QWidget):
         col.addWidget(self._actions)
 
         self._escape = _words(card, HINT_QSS, selectable=True)
+        self._escape.linkActivated.connect(_open_contact_link)
         col.addWidget(self._escape)
         outer.addWidget(card)
         self._parts = (self._row, self._title, self._note, self._plan,
@@ -235,7 +242,7 @@ class QuotaCard(QWidget):
         self._compact.setText(text)
         self._set_compact_kind(ghost=True, text=button_text)
         self.dismiss_button.setVisible(True)
-        self._escape.setText(escape)
+        self._set_escape(escape)
         self._show_only(self._row, self._escape if escape else None)
 
     def show_wall(self, title: str, note: str, pitch: str, button_text: str, escape: str) -> None:
@@ -246,7 +253,7 @@ class QuotaCard(QWidget):
         self._pitch.setText(pitch)
         self._pitch.setVisible(bool(pitch))
         self.wide_button.setText(button_text)
-        self._escape.setText(escape)
+        self._set_escape(escape)
         self._show_only(self._title, self._note if note else None, self._plan,
                         self._escape if escape else None)
 
@@ -262,7 +269,7 @@ class QuotaCard(QWidget):
         self.ghost_button.setVisible(bool(ghost_text))
         self.manage_button.setText(manage_text)
         self.manage_button.setVisible(bool(manage_text))
-        self._escape.setText(escape)
+        self._set_escape(escape)
         self._show_only(self._title, self._note if note else None,
                         self._body if body else None, self._actions,
                         self._escape if escape else None)
@@ -280,6 +287,16 @@ class QuotaCard(QWidget):
     def hideEvent(self, event):  # noqa: N802
         super().hideEvent(event)
         self.shown_changed.emit(False)
+
+    def _set_escape(self, escape: str) -> None:
+
+
+        rich = isinstance(escape, str) and escape.startswith("<qt>")
+        self._escape.setTextFormat(Qt.TextFormat.RichText if rich else Qt.TextFormat.PlainText)
+        self._escape.setTextInteractionFlags(
+            Qt.TextInteractionFlag.LinksAccessibleByMouse if rich
+            else Qt.TextInteractionFlag.TextSelectableByMouse)
+        self._escape.setText(escape or "")
 
     def _show_only(self, *parts) -> None:
         self._card.setStyleSheet(_card_qss(self.state))

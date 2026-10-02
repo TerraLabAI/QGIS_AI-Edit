@@ -304,6 +304,12 @@ class GalleryMixin:
         for card in cards:
             if not _is_alive(card) or getattr(card, "_thumbs_requested", True):
                 continue
+
+
+
+
+            if not viewport.isAncestorOf(card):
+                continue
             try:
                 top = card.mapTo(viewport, QPoint(0, 0)).y()
             except (RuntimeError, TypeError):

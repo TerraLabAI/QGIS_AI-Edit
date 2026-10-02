@@ -14,19 +14,10 @@
 
 
 
-
-
-
 from __future__ import annotations
 
-from .config_store import get_export_block, get_export_dial_str
+from .config_store import ConfigMissing, get_export_block, require_str
 from .resolution_labels import resolution_tiers
-
-
-FREE_TIER_ALLOWED: tuple[str, ...] = ("1K",)
-FREE_TIER_DEFAULT = "1K"
-
-PAID_TIER_DEFAULT = "2K"
 
 
 _MAX_FREE_TIERS = 8
@@ -64,25 +55,28 @@ def _served_free_plan() -> tuple[tuple[str, ...], str] | None:
         if entry not in served:
             served.append(entry)
 
-
-    merged = list(FREE_TIER_ALLOWED)
-    merged += [tier for tier in served if tier not in merged]
-    if default not in merged:
+    if default not in served:
         return None
-    return tuple(merged), default
+    return tuple(served), default
+
+
+def _cheapest_tier() -> str:
+
+
+    return resolution_tiers()[0]
 
 
 def free_tier_allowed_tiers() -> tuple[str, ...]:
 
     plan = _served_free_plan()
-    return plan[0] if plan is not None else FREE_TIER_ALLOWED
+    return plan[0] if plan is not None else (_cheapest_tier(),)
 
 
 def free_tier_default() -> str:
 
 
     plan = _served_free_plan()
-    return plan[1] if plan is not None else FREE_TIER_DEFAULT
+    return plan[1] if plan is not None else _cheapest_tier()
 
 
 def paid_tier_default() -> str:
@@ -90,11 +84,11 @@ def paid_tier_default() -> str:
 
 
 
-    return get_export_dial_str(
-        "entitlements.paid_tier_default",
-        PAID_TIER_DEFAULT,
-        allowed=resolution_tiers(),
-    )
+    try:
+        tier = require_str("entitlements.paid_tier_default")
+    except ConfigMissing:
+        return _cheapest_tier()
+    return tier if tier in resolution_tiers() else _cheapest_tier()
 
 
 def is_tier_allowed(tier: str, is_free_tier: bool) -> bool:

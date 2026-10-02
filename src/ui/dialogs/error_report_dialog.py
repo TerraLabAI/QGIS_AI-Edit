@@ -30,7 +30,8 @@ from ...core.config_store import get_export_copy, get_export_dial
 from ...core.i18n import tr
 from ...core.log_scrub import scrub_user_paths
 from ...core.logger import log_warning
-from ..external_url import open_mailto
+from ...core.pro_ceiling import is_contact_link
+from ..external_url import open_external, open_mailto
 from ..keyboard_focus import settle_dialog_default_button
 
 
@@ -41,7 +42,14 @@ _ERROR_DISPLAY_MAX_CHARS = 500
 _COPY_LABEL_RESET_MS = 2000
 
 
-SUPPORT_EMAIL = "yvann.barbot@terra-lab.ai"
+def support_contact() -> str:
+
+
+
+    from ...core.pro_ceiling import pro_ceiling_contact_email
+
+    return get_support_email(pro_ceiling_contact_email())
+
 
 
 
@@ -264,11 +272,16 @@ class ErrorReportDialog(QDialog):
         self._copy_btn.clicked.connect(self._on_copy)
         layout.addWidget(self._copy_btn)
 
-        self._email_btn = QPushButton(
-            tr("2. Click to send to {email}").format(
-                email=get_support_email(SUPPORT_EMAIL)))
-        self._email_btn.setToolTip(get_export_copy(
-            "dialogs.error_report_dialog.email_button_tooltip", tr("Open email client")))
+        contact = support_contact()
+        if is_contact_link(contact):
+            self._email_btn = QPushButton(tr("2. Click to contact us"))
+            self._email_btn.setToolTip(contact)
+        else:
+            self._email_btn = QPushButton(
+                tr("2. Click to send to {email}").format(email=contact))
+        if not is_contact_link(contact):
+            self._email_btn.setToolTip(get_export_copy(
+                "dialogs.error_report_dialog.email_button_tooltip", tr("Open email client")))
         self._email_btn.setStyleSheet(BTN_GHOST_QSS)
         self._email_btn.setFixedHeight(BTN_PX)
         self._email_btn.setCursor(QtC.PointingHandCursor)
@@ -296,7 +309,10 @@ class ErrorReportDialog(QDialog):
 
     def _on_open_email(self):
         subject = quote("AI Edit - Bug Report")
-        address = get_support_email(SUPPORT_EMAIL)
+        address = support_contact()
+        if is_contact_link(address):
+            open_external(address)
+            return
         if open_mailto(f"mailto:{address}?subject={subject}"):
             return
 
@@ -324,9 +340,7 @@ def show_error_report(parent, error_message: str = "", request_id: str = "") -> 
         detail = plain_error_text(error_message) or get_export_copy(
             "dialogs.error_report_dialog.no_details_fallback",
             tr("No additional details are available."))
-        contact = tr("Please contact {email} for help.").format(
-            email=get_support_email(SUPPORT_EMAIL)
-        )
+        contact = tr("Please contact {email} for help.").format(email=support_contact())
         max_chars = get_export_dial(
             "dialogs.error_report_dialog.error_display_max_chars", _ERROR_DISPLAY_MAX_CHARS)
         try:

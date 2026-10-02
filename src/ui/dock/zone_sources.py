@@ -28,7 +28,7 @@ from qgis.PyQt.QtWidgets import (
     QMenu,
 )
 
-from ...core.config_store import get_export_dial
+from ...core.config_store import ConfigMissing, require_dial
 from ...core.i18n import tr
 from ...core.number_format import format_count
 from . import design_tokens as tokens
@@ -37,7 +37,6 @@ from . import design_tokens as tokens
 
 
 
-_LARGE_ZONE_KM2 = 20.0
 
 
 
@@ -49,9 +48,13 @@ _ROW_MAX_PX = 260
 _MAX_SOURCES = 24
 
 
-def large_zone_km2() -> float:
+def large_zone_km2() -> float | None:
 
-    return float(get_export_dial("guidance.large_zone_km2", _LARGE_ZONE_KM2))
+
+    try:
+        return float(require_dial("guidance.large_zone_km2", lo=0))
+    except ConfigMissing:
+        return None
 
 
 def format_area_km2(km2: float) -> str:
@@ -85,7 +88,8 @@ def describe_source(source) -> str:
     area = format_area_km2(getattr(source, "area_km2", 0.0) or 0.0)
     if not area:
         return label
-    if float(getattr(source, "area_km2", 0.0) or 0.0) >= large_zone_km2():
+    threshold = large_zone_km2()
+    if threshold is not None and float(getattr(source, "area_km2", 0.0) or 0.0) >= threshold:
         area = tr("{area}, very large").format(area=area)
     return f"{label}  ·  {area}"
 

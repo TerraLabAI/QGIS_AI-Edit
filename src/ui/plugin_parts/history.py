@@ -222,12 +222,13 @@ class HistoryMixin(SessionBaseNoticeMixin):
         input_url = job.get("input_url")
         prompt = job.get("prompt") or ""
         request_id = job.get("request_id") or ""
+        template_name = job.get("template_name") or ""
         output_dir = get_output_dir()
         client = self._client
 
         def _work(
             url=output_url, in_url=input_url, ed=extent_dict, wkt=crs_wkt,
-            p=prompt, d=output_dir, rid=request_id,
+            p=prompt, d=output_dir, rid=request_id, tn=template_name,
         ):
             from ..raster_writer import before_file_base, write_geotiff
 
@@ -249,6 +250,7 @@ class HistoryMixin(SessionBaseNoticeMixin):
                 "path": path, "before_path": before_path,
                 "prompt": p, "crs_wkt": wkt,
                 "request_id": rid, "source": "download",
+                "template_name": tn,
             }
 
         return _work
@@ -278,6 +280,7 @@ class HistoryMixin(SessionBaseNoticeMixin):
                 (result or {}).get("prompt", ""),
                 crs_wkt=(result or {}).get("crs_wkt", ""),
                 before_path=(result or {}).get("before_path", ""),
+                template_name=(result or {}).get("template_name") or "",
             )
         except Exception as err:  # noqa: BLE001
             self._track_history_error("add_to_map_layer_failed")
@@ -827,6 +830,7 @@ class HistoryMixin(SessionBaseNoticeMixin):
                 (result or {}).get("prompt", ""),
                 crs_wkt=(result or {}).get("crs_wkt", ""),
                 before_path=(result or {}).get("before_path", ""),
+                template_name=(result or {}).get("template_name") or "",
             )
         except Exception as err:  # noqa: BLE001
             self._track_history_error("version_layer_add_failed")

@@ -6,12 +6,18 @@ qgisMaximumVersion=4.99
 # Qt6 builds of QGIS 3.x refuse to load a plugin that omits this line.
 # QGIS 4 dropped the check and a Qt5 build never runs it.
 supportsQt6=True
-version=1.11.0
+version=1.12.0
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.12.0
+    - The zone is an "Area of interest" layer, saved with the project and shared by our other plugins
+    - Generate starts on slow connections, with the layers above the image still sent as references
+    - Opening Sessions no longer crashes QGIS
+    - Clearer interface text in all 11 languages
+
     1.11.0
     - On a slow or unstable connection, AI Edit waits and retries instead of failing
     - A result cut off while downloading resumes where it stopped, never saved half-empty
@@ -32,12 +38,6 @@ changelog=
 
     1.9.2
     - Smaller download: the same plugin, without the developer notes in its source
-
-    1.9.1
-    - Signed in to AI Agent or AI Segmentation? AI Edit now signs you in on the same account
-    - A zone you already drew is offered again on the zone step
-    - QGIS no longer freezes at startup while AI Edit connects
-    - Vectorize works on rasters whose projection is set on the layer only
 
 about=
     Show a project before it exists, on the aerial imagery you already have open

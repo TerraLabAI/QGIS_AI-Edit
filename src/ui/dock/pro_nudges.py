@@ -10,6 +10,8 @@
 
 
 
+
+
 from __future__ import annotations
 
 from datetime import date
@@ -17,8 +19,8 @@ from datetime import date
 from qgis.PyQt.QtCore import QSettings, QSize, Qt
 from qgis.PyQt.QtWidgets import QPushButton, QWidget
 
-from ...core.auth.activation_manager import get_subscribe_url
-from ...core.config_store import get_export_copy
+from ...core.auth.activation_manager import get_subscribe_url, is_feature_on
+from ...core.config_store import ConfigMissing, get_export_copy, require_str
 from ...core.i18n import tr
 from ..icons import icon_for
 from . import design_tokens as tokens
@@ -66,6 +68,19 @@ def _this_month() -> str:
     return date.today().strftime("%Y-%m")
 
 
+def _after_success_period() -> str | None:
+
+
+
+    try:
+        once_per = require_str("nudges.after_success.once_per").lower()
+    except ConfigMissing:
+        return None
+    if once_per == "month":
+        return _this_month()
+    return None
+
+
 class DockProNudgesMixin:
 
 
@@ -95,7 +110,8 @@ class DockProNudgesMixin:
 
 
         show = (
-            bool(getattr(self, "_activated", False))
+            is_feature_on("pro_nudge")
+            and bool(getattr(self, "_activated", False))
             and bool(getattr(self, "_is_free_tier", False))
             and bool(getattr(self, "_tier_confirmed", False))
         )
@@ -125,8 +141,12 @@ class DockProNudgesMixin:
             return
         if self._is_free_tier_exhausted():
             return
+        if not is_feature_on("pro_nudge"):
+            return
+        month = _after_success_period()
+        if month is None:
+            return
         settings = QSettings()
-        month = _this_month()
         if str(settings.value(_AFTER_SUCCESS_KEY, "") or "") == month:
             return
         settings.setValue(_AFTER_SUCCESS_KEY, month)

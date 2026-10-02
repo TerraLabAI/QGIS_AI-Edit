@@ -4,13 +4,14 @@ import os
 
 from ..api.terralab_client import TerraLabClient
 from ..core.auth.auth_manager import AuthManager
-from ..core.config_store import ConfigStore, set_store
+from ..core.config_store import ConfigStore, ensure_saved_config_loaded, set_store
 from ..core.generation.generation_service import GenerationService
 from ..core.logger import log_warning
 from ..core.qt_compat import QAction, QShortcut
 from ..core.reference_image_store import ReferenceImageStore
 from ..workers.export_worker import ExportWorker
 from .plugin_parts.activation import ActivationMixin
+from .plugin_parts.config_gate import ConfigGateMixin
 from .plugin_parts.conversations import ConversationsMixin
 from .plugin_parts.generation import GenerationMixin
 from .plugin_parts.generation_results import GenerationResultsMixin
@@ -31,6 +32,7 @@ class AIEditPlugin(
     LaunchShortcutMixin,
     ProcessingRegistrationMixin,
     StartupMixin,
+    ConfigGateMixin,
     ActivationMixin,
     ZoneVersionsMixin,
     HistoryMixin,
@@ -85,8 +87,11 @@ class AIEditPlugin(
 
         self._bootstrap_task = None
         self._tuned_config_task = None
+
+        self._config_gate_waiter = None
         self._export_size_task = None
         self._zone_size_task = None
+        self._zone_tier_size_task = None
         self._size_request_token = None
 
 
@@ -190,6 +195,9 @@ class AIEditPlugin(
 
         self._config_store = ConfigStore()
         set_store(self._config_store)
+
+
+        ensure_saved_config_loaded()
         self._client = self._create_client()
         self._auth_manager = AuthManager(self._client)
         self._generation_service = GenerationService(self._client)

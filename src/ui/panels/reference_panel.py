@@ -813,11 +813,20 @@ class ReferencePanel(QWidget):
             left_out = int(self._strip.layers_above_left_out())
         except (AttributeError, TypeError, ValueError):
             left_out = 0
-        self._left_out_label.setText(
-            tr("{n} layers above not sent: plan limit").format(n=left_out)
-            if left_out > 1 else
-            tr("1 layer above not sent: plan limit"))
-        self._left_out_label.setVisible(left_out > 0)
+        try:
+            waiting = bool(self._strip.layers_above_waiting_config())
+        except AttributeError:
+            waiting = False
+        if waiting:
+
+
+            self._left_out_label.setText(tr("Loading settings from the server..."))
+        else:
+            self._left_out_label.setText(
+                tr("{n} layers above not sent: plan limit").format(n=left_out)
+                if left_out > 1 else
+                tr("1 layer above not sent: plan limit"))
+        self._left_out_label.setVisible(waiting or left_out > 0)
         for position, record in enumerate(records):
             card = _ReferenceCard(
                 record,
@@ -860,11 +869,10 @@ class ReferencePanel(QWidget):
         else:
             self.setFocus(Qt.FocusReason.OtherFocusReason)
 
-    def _open_preview(self, image_path: str) -> None:
-        record = next(
-            (r for r in self._store.list() if r.path == image_path), None
-        )
-        open_reference_preview(self, image_path, reference_preview_title(record))
+    def _open_preview(self, ref_id: str) -> None:
+        record = next((r for r in self._store.list() if r.id == ref_id), None)
+        if record is not None:
+            open_reference_preview(self, record.path, reference_preview_title(record))
 
 
 

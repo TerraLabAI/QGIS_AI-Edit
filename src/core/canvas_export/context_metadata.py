@@ -11,7 +11,6 @@ from qgis.core import (
     QgsRectangle,
 )
 
-from ..config_store import get_export_dial_seq
 from .native_resolution import _zone_dims_meters, finest_native_mpp
 from .render import ExportPrep
 
@@ -97,59 +96,6 @@ def _bbox_wgs84(extent: QgsRectangle, src_crs) -> dict | None:
         return None
 
 
-
-
-_BASEMAP_HOSTS = (
-    ("google", "Google"),
-    ("gstatic", "Google"),
-    ("virtualearth", "Bing"),
-    ("bing", "Bing"),
-    ("geopf.fr", "IGN"),
-    ("ign.fr", "IGN"),
-    ("geoportail", "IGN"),
-    ("arcgisonline", "Esri"),
-    ("esri", "Esri"),
-    ("mapbox", "Mapbox"),
-    ("openstreetmap", "OSM"),
-    ("tile.osm", "OSM"),
-    ("cartocdn", "Carto"),
-    ("swisstopo", "Swisstopo"),
-)
-
-
-
-
-_MAX_BASEMAP_HOST_CHARS = 40
-_MAX_BASEMAP_HOSTS = 40
-
-
-def _basemap_host_pairs() -> tuple[tuple[str, str], ...]:
-
-
-
-
-
-
-
-    base = tuple(f"{needle}|{label}" for needle, label in _BASEMAP_HOSTS)
-    pairs: list[tuple[str, str]] = []
-    for entry in get_export_dial_seq(
-        "basemap_hosts_extra", base, max_len=_MAX_BASEMAP_HOSTS
-    ):
-        needle, sep, label = entry.partition("|")
-        needle = needle.strip().lower()
-        label = label.strip()
-        if not sep or not needle or not label:
-            continue
-        if (
-            len(needle) > _MAX_BASEMAP_HOST_CHARS
-            or len(label) > _MAX_BASEMAP_HOST_CHARS
-        ):
-            continue
-        pairs.append((needle, label))
-    return tuple(pairs)
-
-
 def _basemap_label(layer) -> str | None:
 
 
@@ -172,9 +118,6 @@ def _basemap_label(layer) -> str | None:
         url = (params.get("url") or [""])[0]
         kind = "XYZ" if (params.get("type") or [""])[0] == "xyz" else "WMS"
         host = (urlsplit(url).hostname or "").lower()
-        for needle, label in _basemap_host_pairs():
-            if needle in host:
-                return label
         return (f"{kind}:{host}" if host else kind)[:64]
     except Exception:
         return None

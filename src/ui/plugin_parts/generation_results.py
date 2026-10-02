@@ -64,6 +64,7 @@ class GenerationResultsMixin:
         snap = ctx_snapshot or {}
         template_id = snap.get("template_id")
         template_name = snap.get("template_name")
+        failure_code = snap.get("failure_code")
         self._cleanup_worker()
 
 
@@ -154,16 +155,13 @@ class GenerationResultsMixin:
             self._dock_widget.set_status(
                 _prompt_blocked_message(message, normalized_code), is_error=True
             )
-        elif _is_model_failure(message, normalized_code):
+        elif _is_model_failure(failure_code, normalized_code):
 
 
 
 
 
-
-
-
-            if _is_safety_block(message):
+            if _is_safety_block(failure_code):
                 enriched = get_export_copy(
                     "flows.generation_results.safety_block",
                     tr(
@@ -185,8 +183,8 @@ class GenerationResultsMixin:
                     ), escape=True,
                 )
             self._dock_widget.set_status(enriched, is_error=True)
-            self._offer_model_failure_action(_is_safety_block(message))
-        elif _is_service_busy(message, normalized_code):
+            self._offer_model_failure_action(_is_safety_block(failure_code))
+        elif _is_service_busy(failure_code, normalized_code):
 
 
             enriched = get_export_copy(
@@ -362,6 +360,7 @@ class GenerationResultsMixin:
                 result_info.get("prompt", ""),
                 crs_wkt=result_info.get("crs_wkt", ""),
                 before_path=result_info.get("before_geotiff_path", ""),
+                template_name=template_name or "",
             )
             try:
                 self._iface.setActiveLayer(layer)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import time
 
@@ -10,16 +11,11 @@ from qgis.PyQt.QtWidgets import QPushButton
 from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.auth.activation_manager import ACTIVATION_TIMESTAMP_KEY, has_consent, save_consent
+from ...core.config_store import get_config_origin
 from ...core.entitlements import coerce_tier
-from ...core.errors import build_failure_props
+from ...core.errors import NETWORK_ERROR_CODES, build_failure_props
 from ...core.i18n import tr
 from ...core.logger import log, log_debug, log_warning
-from ...core.prompts.prompt_presets import (
-    detect_freeform_vector_intent,
-    detect_seg_context,
-    get_vector_hints,
-    lookup_template_by_prompt,
-)
 from ...core.version_lineage import original_version_record
 from ...workers.export_worker import ExportWorker
 from ...workers.generic_request_task import GenericRequestTask
@@ -32,8 +28,34 @@ from ..canvas_exporter import (
     prepare_export,
 )
 from ..raster_writer import get_output_dir
+from .config_gate import ConfigGateWaiter
+from .errors import _enrich_error_message
 from .lifecycle import teardown_step
 from .zone_versions import zone_crs_changed_message
+
+
+_EXPORT_SIZE_CACHE_MAX = 8
+
+
+_EXPORT_SIZE_KEY_RATIO_DECIMALS = 4
+
+
+def export_size_inputs(map_settings, extent, tier: str | None) -> dict | None:
+
+
+    if tier:
+        return {"ratio": extent.width() / extent.height(), "tier": tier}
+    return native_size_inputs(map_settings, extent)
+
+
+def _export_size_key(inputs: dict) -> str:
+
+
+    keyed = dict(inputs)
+    ratio = keyed.get("ratio")
+    if isinstance(ratio, float):
+        keyed["ratio"] = round(ratio, _EXPORT_SIZE_KEY_RATIO_DECIMALS)
+    return json.dumps(keyed, sort_keys=True, default=str)
 
 
 def _served_size(result) -> tuple[int, int] | None:
@@ -142,24 +164,37 @@ class GenerationMixin:
 
 
 
+
+
+        from ...core.auth.activation_manager import get_tutorial_url, is_feature_on
+        from ...core.config_store import ConfigMissing, require_bool, require_dial
+
+        if getattr(self, "_tutorial_nudge_shown", False):
+            return
+        if not is_feature_on("tutorial_nudge"):
+            return
+        try:
+            duration_s = int(require_dial("nudges.tutorial.message_duration_s", lo=1, hi=120))
+            once_per_install = require_bool("nudges.tutorial.once_per_install")
+        except ConfigMissing:
+            return
         try:
             settings = QSettings()
-            if settings.value("AIEdit/tutorial_simple_shown", False, type=bool):
+            if once_per_install and settings.value("AIEdit/tutorial_simple_shown", False, type=bool):
                 return
-            settings.setValue("AIEdit/tutorial_simple_shown", True)
+            self._tutorial_nudge_shown = True
+            if once_per_install:
+                settings.setValue("AIEdit/tutorial_simple_shown", True)
         except Exception:  # nosec B110
             return
         try:
-            from qgis.core import Qgis
-
-            from ...core.auth.activation_manager import get_tutorial_url
             message = '{} <a href="{}">{}</a>'.format(
                 tr("New here?"),
                 get_tutorial_url(),
                 tr("Watch the tutorial"),
             )
             self._iface.messageBar().pushMessage(
-                "AI Edit", message, level=Qgis.MessageLevel.Info, duration=10
+                "AI Edit", message, level=Qgis.MessageLevel.Info, duration=duration_s
             )
         except Exception:  # nosec B110
             pass
@@ -298,16 +333,25 @@ class GenerationMixin:
 
 
 
-        if not has_server_config() or not has_tuned_config():
-            self._generate_waiting_for_config = (prompt, is_retry)
-            self._refresh_tuned_config()
-            if self._tuned_config_task is None:
+        if not (has_server_config() and has_tuned_config()):
+            if not self._auth_manager.get_auth_header():
 
-                self._generate_waiting_for_config = None
                 self._dock_widget.set_status(tr("Sign in again to generate."), is_error=True)
                 return
-            self._dock_widget.set_status(tr("Getting ready..."), is_error=False)
-            return
+            if not self._require_config(ConfigGateWaiter(
+                "generate",
+                ready=lambda: has_server_config() and has_tuned_config(),
+                resume=lambda p=prompt, r=is_retry: self._on_generate(p, is_retry=r),
+                waiting_text=tr("Getting ready..."),
+                still_missing_text=tr(
+                    "Could not get your settings from the server. Press Generate to try again."
+                ),
+                failed_text=lambda code: _enrich_error_message(
+                    tr("Could not get your settings from the server."), code
+                ),
+                show_retry=False,
+            )):
+                return
 
 
 
@@ -331,19 +375,10 @@ class GenerationMixin:
 
 
 
+
         armed = self._dock_widget.get_active_template()
-        match = armed or lookup_template_by_prompt(prompt)
-        if match:
-            ctx.template_id, ctx.template_name = match
-            ctx.vector_color, ctx.vector_classes = get_vector_hints(ctx.template_id)
-        else:
-
-
-
-            ctx.vector_color = detect_freeform_vector_intent(prompt)
-
-
-        ctx.seg_intent = detect_seg_context(prompt)
+        if armed:
+            ctx.template_id, ctx.template_name = armed
 
 
 
@@ -420,32 +455,96 @@ class GenerationMixin:
 
 
 
+
+
+
         extent = self._selected_extent
         token = object()
         self._size_request_token = token
 
-        def _continue(size, t=token):
-            self._continue_generation(t, size, prompt, ctx, suggested_res, markup_layer, base_layer, is_retry)
+        def _continue(size, failure=("", ""), t=token):
+            self._continue_generation(
+                t, size, failure, prompt, ctx, suggested_res, markup_layer, base_layer, is_retry
+            )
 
+        inputs = export_size_inputs(self._canvas.mapSettings(), extent, suggested_res)
+        cached = self._cached_export_size(inputs)
+        if cached is not None:
+            _continue(cached)
+            return
         auth = self._auth_manager.get_auth_header()
-        if suggested_res:
-            inputs = {"ratio": extent.width() / extent.height(), "tier": suggested_res}
-        else:
-            inputs = native_size_inputs(self._canvas.mapSettings(), extent)
-        if not auth or not inputs:
+        if not auth:
+            _continue(None, ("NO_KEY", ""))
+            return
+        if not inputs:
             _continue(None)
             return
+
+        def _answered(result, i=inputs):
+            size = _served_size(result)
+            if size is not None:
+                self._remember_export_size(i, size)
+                _continue(size)
+                return
+            _continue(None, ("SERVER_ERROR", "unusable export size answer"))
+
         task = GenericRequestTask(
             "AI Edit export size",
             lambda c=self._client, a=auth, i=inputs: c.get_export_size(a, i),
             silent=True,
         )
-        task.succeeded.connect(lambda result: _continue(_served_size(result)))
-        task.failed.connect(lambda _msg, _code: _continue(None))
+        task.succeeded.connect(_answered)
+        task.failed.connect(lambda msg, code: _continue(None, (code, msg)))
         self._export_size_task = task
         QgsApplication.taskManager().addTask(task)
 
-    def _continue_generation(self, token, size, prompt, ctx, suggested_res, markup_layer, base_layer, is_retry):
+    def _cached_export_size(self, inputs) -> tuple[int, int] | None:
+        cache = getattr(self, "_export_size_cache", None) or {}
+        return cache.get(_export_size_key(inputs)) if inputs else None
+
+    def _remember_export_size(self, inputs, size) -> None:
+
+
+        if not inputs or size is None:
+            return
+        cache = getattr(self, "_export_size_cache", None)
+        if cache is None:
+            cache = {}
+            self._export_size_cache = cache
+        key = _export_size_key(inputs)
+        cache.pop(key, None)
+        if len(cache) >= _EXPORT_SIZE_CACHE_MAX:
+            cache.pop(next(iter(cache)), None)
+        cache[key] = size
+
+    def _export_size_unavailable(self, code: str = "", message: str = "") -> None:
+
+
+
+
+        self._dock_widget.set_generating(False)
+        self._restore_failed_iteration()
+        code = (code or "").strip().upper()
+        if code == "NO_KEY":
+            msg = tr("Sign in again to generate.")
+        elif not code or code in NETWORK_ERROR_CODES or code == "UNKNOWN":
+            msg = tr("Could not reach the server to prepare your zone. Check your connection and try again.")
+        else:
+
+
+            msg = _enrich_error_message(message, "NO_KEY" if code == "NO_AUTH" else code)
+        self._dock_widget.set_status(msg, is_error=True)
+        self._last_generation_error = msg
+        self._last_generation_error_code = code or "EXPORT_SIZE_UNAVAILABLE"
+        telemetry.track(
+            te.EXPORT_FAILED,
+            build_failure_props("export", code or "export_size_unavailable", "export size request failed"),
+        )
+
+    def _continue_generation(
+        self, token, size, failure, prompt, ctx, suggested_res, markup_layer, base_layer, is_retry
+    ):
+
 
 
         if token is not self._size_request_token or self._dock_widget is None:
@@ -454,6 +553,9 @@ class GenerationMixin:
         self._export_size_task = None
         if not self._selected_extent:
             self._dock_widget.set_generating(False)
+            return
+        if size is None:
+            self._export_size_unavailable(*failure)
             return
 
 
@@ -470,7 +572,6 @@ class GenerationMixin:
             prep = prepare_export(
                 map_settings,
                 self._selected_extent,
-                target_resolution=suggested_res,
                 markup_layer=markup_layer,
                 layers=render_layers,
                 size=size,
@@ -499,6 +600,7 @@ class GenerationMixin:
             "crs_wkt": map_settings.destinationCrs().toWkt(),
             "is_retry": is_retry,
             "input_layer_kind": input_layer_kind(base_layer),
+            "size": size,
         }
 
         worker = ExportWorker(prep)
@@ -723,6 +825,16 @@ class GenerationMixin:
         if tag and tag[0] is self._selected_extent:
             self._zone_crs_tag = (actual_extent, tag[1])
         self._selected_extent = actual_extent
+
+
+
+        if pending.get("size") is not None and suggested_res:
+            try:
+                self._remember_export_size(
+                    export_size_inputs(None, actual_extent, suggested_res), pending["size"]
+                )
+            except (ArithmeticError, AttributeError, TypeError) as err:
+                log_debug(f"Export size not kept for the adjusted zone: {err}")
         self._show_selection_rectangle(actual_extent, self._selected_polygon)
 
 
@@ -782,6 +894,10 @@ class GenerationMixin:
             self._dock_widget.wait_reference_layers_above()
         except (AttributeError, RuntimeError):
             pass
+        try:
+            context_image_meta = self._dock_widget.reference_context_image_meta()
+        except (AttributeError, RuntimeError):
+            context_image_meta = []
         self._worker = GenerationWorker(
             client=self._client,
             auth_manager=self._auth_manager,
@@ -799,6 +915,7 @@ class GenerationMixin:
             suggested_resolution=suggested_res,
             context_image_paths=self._reference_store.snapshot_paths(),
             context_image_notes=self._reference_store.snapshot_notes(),
+            context_image_meta=context_image_meta,
             guidance_image=guidance_b64 or None,
             guidance_format=guidance_format or None,
         )
@@ -819,7 +936,12 @@ class GenerationMixin:
 
 
         try:
+            config_source, config_age_s = get_config_origin()
             telemetry.track(te.GENERATION_STARTED, self._enrich_generation_props({
+
+
+                "config_source": config_source,
+                **({"config_age_s": config_age_s} if config_age_s is not None else {}),
                 "prompt_length": len(prompt),
                 "aspect_ratio": aspect_ratio,
                 "resolution": suggested_res,

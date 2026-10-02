@@ -16,7 +16,7 @@ from ....core import qt_compat as QtC
 from ....core.config_store import get_export_copy
 from ....core.date_format import format_smart_date
 from ....core.i18n import tr
-from ....core.prompts.prompt_presets import lookup_template_by_prompt
+from ....core.prompts.prompt_presets import template_label as _template_label
 from ...dock import design_tokens as tk
 from .card_grid import add_row_height_filler, focus_neighbour_card, focus_out_of_grid
 from .cards import _CARD_FOCUS, build_card_slider
@@ -114,11 +114,9 @@ class _GenerationCard(QFrame):
 
 
 
-
-
         prompt_raw = job.get("prompt") or ""
-        template_match = lookup_template_by_prompt(prompt_raw)
-        template_label = template_match[1] if template_match else ""
+        template_label = _template_label(str(job.get("template_id") or "")) or ""
+        template_match = bool(template_label)
         named = " ".join((title or "").split())
         self.setAccessibleName(
             named or template_label or prompt_raw
