@@ -141,6 +141,7 @@ class DockLibraryMixin:
                         self.history_restore.emit(restore)
                     return None
                 preset = dlg.get_selected_preset()
+                self._example_zone_pending = bool(preset) and dlg.wants_example_zone()
                 if (
                     preset
                     and not preset.get("from_recent")
@@ -179,6 +180,7 @@ class DockLibraryMixin:
 
         preset = self._open_templates_dialog(open_sessions=True)
         if preset:
+            self._request_example_zone(preset)
             self.prime_prompt_from_preset(preset)
 
     def _on_library_history_synced(self, recent: list, favorites: list) -> None:
@@ -219,12 +221,36 @@ class DockLibraryMixin:
         if not preset:
             return
 
+        self._request_example_zone(preset)
         self.prime_prompt_from_preset(preset)
 
 
 
         target = self._result_prompt_input if self._result_section.isVisible() else self._prompt_input
         target.setFocus()
+
+    def _request_example_zone(self, preset: dict) -> None:
+
+
+        if not getattr(self, "_example_zone_pending", False):
+            return
+        self._example_zone_pending = False
+        self.example_zone_requested.emit(dict(preset))
+
+    def _apply_example_resolution(self, preset: dict) -> None:
+
+
+        from ...core.entitlements import is_tier_allowed
+
+        example = preset.get("example") if isinstance(preset, dict) else None
+        res = str((example or {}).get("resolution") or "") if isinstance(example, dict) else ""
+        costs = getattr(self, "_resolution_credit_costs", None) or {}
+        if not res or (costs and res not in costs) or not is_tier_allowed(res, self._is_free_tier):
+            return
+        self._selected_resolution = res
+        self._resolution_user_choice = True
+        self._refresh_resolution_triggers()
+        self._update_generate_button_text()
 
     def prime_prompt_from_preset(self, preset: dict):
 

@@ -180,6 +180,7 @@ class DockGenerationStateMixin:
         if layout.tip_held is not None:
             self._set_guide_ai_tip_held(layout.tip_held)
         self._set_layer_header_state(layout.layer_header)
+        self._place_wall()
 
     def set_zone_selected(self):
 
@@ -680,6 +681,8 @@ class DockGenerationStateMixin:
 
         del layer_name
         self._saved_layer_id = layer_id
+
+        self.update_result_layer_line()
 
         self._maybe_show_after_success()
 

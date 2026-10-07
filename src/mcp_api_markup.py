@@ -10,6 +10,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+
 from .mcp_api_support import _never_raises, not_found_error
 
 
@@ -49,6 +52,9 @@ class MarkupMixin:
 
 
 
+
+
+
         manager = self._markup_manager()
         count = 0
         will_render = False
@@ -58,9 +64,21 @@ class MarkupMixin:
                 will_render = bool(manager.markup_will_render())
             except Exception:  # nosec B110
                 pass
+        layer = manager.layer() if manager is not None else None
+        strokes = []
+        crs = None
+        if layer is not None and layer.isValid():
+            crs = layer.crs().authid() or layer.crs().toWkt()
+            strokes = sorted(
+                [(feature.id(), bytes(feature.geometry().asWkb()).hex(), feature.attributes())
+                 for feature in layer.getFeatures()], key=lambda row: row[0])
+        content = {"strokes": strokes, "crs": crs, "will_render": will_render}
+        digest = hashlib.sha256(json.dumps(content, ensure_ascii=False, default=str,
+                                           sort_keys=True).encode("utf-8")).hexdigest()
         return {
             "active": getattr(self._plugin, "_in_tool_panel", None) == "markup",
             "annotation_count": count,
+            "content_digest": digest,
             "will_render": will_render,
             "shapes": list(MARKUP_SHAPES),
             "actions": list(MARKUP_ACTIONS),

@@ -175,7 +175,8 @@ class DockToolsFooterMixin:
             self.set_launch_block_reason(reason)
             self._past_sessions_link.setVisible(True)
             if getattr(self, "_launch_hero", None) is not None:
-                self._launch_hero.setVisible(True)
+
+                self._launch_hero.setVisible(not self._wall_full_up())
 
     def _tool_panel_open(self) -> bool:
 

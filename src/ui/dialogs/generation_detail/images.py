@@ -113,7 +113,7 @@ class ImageLoadMixin:
                 self._demo_loader.request(rid, f"ref{i}", url)
 
     def _on_image_loaded(self, key: str, which: str, pixmap) -> None:
-        if self._slider is None or which not in ("before", "after"):
+        if self._slider is None or which not in ("before", "after", "vector"):
             return
         is_full = key == self._full_key
         is_thumb = key == self._thumb_key
@@ -128,12 +128,10 @@ class ImageLoadMixin:
             return
         if is_full:
             self._full_done.add(which)
-        if which == "before":
-            self._slider.set_before(pixmap)
-        else:
-            self._slider.set_after(pixmap)
+        self._flow_pixmaps[which] = pixmap
+        self._apply_flow_step()
 
-        if is_full or not self._aspect_locked:
+        if which != "vector" and (is_full or not self._aspect_locked):
             self._adopt_aspect(pixmap)
 
     def _on_image_failed(self, key: str, which: str) -> None:

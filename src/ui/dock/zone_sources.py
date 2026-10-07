@@ -107,15 +107,16 @@ class DockZoneSourcesMixin:
         link = getattr(self, "_zone_source_link", None)
         if link is None:
             return
-        count = 0
+
+
         try:
             from ...core import zone_of_interest as zoi
 
-            count = len(zoi.zone_sources(limit=_MAX_SOURCES))
+            found = zoi.has_zone_sources()
         except Exception:  # noqa: BLE001
-            count = 0
+            found = False
 
-        link.setVisible(count > 0)
+        link.setVisible(found)
 
     def _on_zone_source_link_clicked(self) -> None:
 

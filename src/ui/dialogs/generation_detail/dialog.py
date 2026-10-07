@@ -13,6 +13,7 @@ from ....core.prompts import prompt_history
 from ...keyboard_focus import settle_dialog_default_button
 from ...panel_helpers import screen_for_dialog
 from .build import _DIALOG_MARGIN_PX, _PANE_GAP_PX, BuildUiMixin
+from .example_flow import FLOW_ROW_EXTRA_PX, FLOW_STEP_AI_EDIT, ExampleFlowMixin
 from .images import ImageLoadMixin
 from .styles import _DETAIL_DIALOG_QSS, _PRIMARY_BTN, _STAR_FILLED_SVG, _STAR_OUTLINE_SVG
 from .widgets import _AspectBox
@@ -24,7 +25,7 @@ _SCREEN_WIDTH_RATIO = 0.96
 _SCREEN_HEIGHT_RATIO = 0.92
 
 
-class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
+class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, ExampleFlowMixin, QDialog):
 
 
 
@@ -96,6 +97,11 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
             self._thumb_key = str((preset or {}).get("id") or "")
             self._full_key = self._thumb_key + "_preview"
         self._full_done: set[str] = set()
+
+
+        self._flow_step = FLOW_STEP_AI_EDIT
+        self._flow_pixmaps: dict = {}
+        self._flow_steps_widget = None
 
         self._loader_hooked = False
         self._has_images = self._build_ui()
@@ -170,6 +176,8 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
 
         width = int(disp_w) + info_w + _PANE_GAP_PX + 2 * _DIALOG_MARGIN_PX
         height = int(disp_h) + 2 * _DIALOG_MARGIN_PX
+        if self._flow_steps_widget is not None:
+            height += FLOW_ROW_EXTRA_PX
 
 
 
@@ -201,6 +209,7 @@ class GenerationDetailDialog(BuildUiMixin, ImageLoadMixin, QDialog):
 
 
     def outcome(self) -> str | None:
+
 
 
 

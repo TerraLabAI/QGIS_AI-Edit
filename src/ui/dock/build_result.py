@@ -13,6 +13,7 @@ from qgis.PyQt.QtGui import QKeySequence
 from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -218,7 +219,33 @@ def _build_result_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
         f" min-height: {BTN_PRIMARY_WIDE_PX - 2}px; }}"
     )
     dock._result_exit_btn.clicked.connect(dock._on_exit_clicked)
-    result_actions_row.addWidget(dock._result_exit_btn, 0)
+
+
+
+
+    dock._result_exit_btn.setParent(dock._result_section)
+    dock._result_exit_btn.setVisible(False)
+
+    dock._result_go_again_btn = QPushButton(
+        get_export_copy("dock.build_result.go_again_btn", tr("Go again"))
+    )
+    dock._result_go_again_btn.setToolTip(get_export_copy(
+        "dock.build_result.go_again_tooltip",
+        tr("Try again, the same edit elsewhere, or a new edit"),
+    ))
+    dock._result_go_again_btn.setCursor(QtC.PointingHandCursor)
+    dock._result_go_again_btn.setMinimumWidth(88)
+    dock._result_go_again_btn.setMinimumHeight(BTN_PRIMARY_WIDE_PX)
+    dock._result_go_again_btn.setStyleSheet(
+        BTN_GHOST_QSS
+        + f"QPushButton {{ border-radius: {RADIUS_PILL_WIDE}px;"
+        f" min-height: {BTN_PRIMARY_WIDE_PX - 2}px; }}"
+        "QPushButton::menu-indicator { width: 0px; }"
+    )
+    go_again_menu = QMenu(dock._result_go_again_btn)
+    go_again_menu.aboutToShow.connect(lambda d=dock, m=go_again_menu: _fill_go_again_menu(d, m))
+    dock._result_go_again_btn.setMenu(go_again_menu)
+    result_actions_row.addWidget(dock._result_go_again_btn, 0)
 
     dock._result_prompt_layout.addLayout(result_actions_row)
 
@@ -230,8 +257,18 @@ def _build_result_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
     dock._result_prompt_layout.addWidget(dock._version_strip)
 
 
-    dock._result_prompt_layout.addWidget(build_rerun_row(dock))
+    rerun_row = build_rerun_row(dock)
+    dock._result_prompt_layout.addWidget(rerun_row)
     dock._result_prompt_layout.addWidget(build_result_tools_row(dock))
+
+
+
+
+    dock._result_layer_line = QLabel()
+    dock._result_layer_line.setWordWrap(True)
+    dock._result_layer_line.setStyleSheet(HINT_QSS + " padding: 2px 2px 0 2px;")
+    dock._result_layer_line.setVisible(False)
+    dock._result_prompt_layout.addWidget(dock._result_layer_line)
 
 
 
@@ -249,6 +286,28 @@ def _build_result_section(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
 
     dock._result_section.setVisible(False)
     main_layout.addWidget(dock._result_section)
+
+
+def _fill_go_again_menu(dock: AIEditDockWidget, menu: QMenu) -> None:
+
+
+    menu.clear()
+    picked = dock._version_strip.selected_index()
+    if picked > 0:
+        act = menu.addAction(tr("Try again"))
+        act.setToolTip(tr("Same prompt, same base: a new variation"))
+        act.triggered.connect(dock._result_try_again_btn.click)
+    if dock._version_strip.count() > 1:
+        act = menu.addAction(tr("Same edit elsewhere"))
+        act.setToolTip(tr("Keep this result, draw a new zone with this prompt"))
+        act.triggered.connect(dock._result_elsewhere_btn.click)
+    act = menu.addAction(get_export_copy("dock.build_result.new_edit_btn", tr("New edit")))
+    act.setToolTip(get_export_copy(
+        "dock.build_result.new_edit_sessions_tooltip",
+        tr("Keep this result on your map and start over on a new zone. The session stays in Sessions."),
+    ))
+    act.triggered.connect(dock._result_exit_btn.click)
+    menu.setToolTipsVisible(True)
 
 
 def _build_prewall_banner(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> None:
@@ -276,6 +335,14 @@ def _build_trial_info_box(dock: AIEditDockWidget, main_layout: QVBoxLayout) -> N
 
     dock._trial_info_box.shown_changed.connect(lambda _up: dock._update_generate_style())
     dock._trial_info_box.shown_changed.connect(lambda _up: dock._update_launch_style())
+    dock._trial_info_box.shown_changed.connect(lambda _up: dock._update_result_generate_enabled())
+
+    dock._trial_info_box.shown_changed.connect(dock._on_wall_shown_changed)
+    dock._trial_info_box.not_now_clicked.connect(dock._on_wall_not_now)
+
+    dock._trial_info_box.wide_button.setObjectName("aiEditWallGetPro")
+    dock._trial_info_box.not_now_button.setObjectName("aiEditWallNotNow")
+    dock._trial_info_box.compact_button.setObjectName("aiEditWallRowGetPro")
     dock._trial_info_url = ""
     main_layout.addWidget(dock._trial_info_box)
 

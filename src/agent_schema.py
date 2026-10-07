@@ -71,6 +71,8 @@ READ_ONLY_METHODS = {
     "get_session",
     "get_top_picks",
     "get_zone",
+    "get_input_layer",
+    "get_interactive_state",
     "list_favorite_prompts",
     "list_generations",
     "list_recent_prompts",

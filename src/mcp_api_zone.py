@@ -180,7 +180,8 @@ class ZoneMixin:
             out["width"] = extent.width()
             out["height"] = extent.height()
         try:
-            out["crs"] = self._canvas_crs().authid()
+            crs = self._canvas_crs()
+            out["crs"] = crs.authid() or crs.toWkt()
         except Exception:  # nosec B110
             pass
         has_shape = polygon is not None and not polygon.isEmpty()

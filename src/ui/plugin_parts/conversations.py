@@ -17,6 +17,7 @@ from ...core.logger import log_debug, log_warning
 from ...core.privacy_notice import has_accepted_privacy_notice
 from ...core.prompts import conversation_thumbs, history_cache
 from ...core.prompts.conversation_summary import conversation_entries
+from ...core.qimage_strips import pixmap_from_bytes
 from ...workers.generic_request_task import GenericRequestTask
 
 
@@ -204,7 +205,8 @@ class ConversationsMixin:
 
 
             try:
-                loaded = pixmap.loadFromData(blob) and not pixmap.isNull()
+                pixmap = pixmap_from_bytes(blob)
+                loaded = not pixmap.isNull()
             except Exception:
                 loaded = False
             if loaded:

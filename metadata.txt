@@ -6,12 +6,18 @@ qgisMaximumVersion=4.99
 # Qt6 builds of QGIS 3.x refuse to load a plugin that omits this line.
 # QGIS 4 dropped the check and a Qt5 build never runs it.
 supportsQt6=True
-version=1.12.0
+version=1.13.0
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.13.0
+    - Pick 2K or 4K output, with the ground resolution and the credit cost shown on Generate
+    - Library examples show a finished result; Try on this zone runs the same edit on your map
+    - Saved GeoTIFFs get neutral names (ai_edit_date_vN) and never carry your prompt
+    - Choose how long edit history is kept in Settings; the Processing toolbox no longer freezes QGIS
+
     1.12.0
     - The zone is an "Area of interest" layer, saved with the project and shared by our other plugins
     - Generate starts on slow connections, with the layers above the image still sent as references
@@ -35,9 +41,6 @@ changelog=
     - Vectorized classes fit together with no gap or overlap, rounded corners included
     - Shapes under the minimum size join the class around them instead of leaving holes
     - A class renamed in the attribute table stays visible on the map
-
-    1.9.2
-    - Smaller download: the same plugin, without the developer notes in its source
 
 about=
     Show a project before it exists, on the aerial imagery you already have open

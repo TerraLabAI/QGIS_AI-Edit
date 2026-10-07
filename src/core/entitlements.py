@@ -17,13 +17,14 @@
 from __future__ import annotations
 
 from .config_store import ConfigMissing, get_export_block, require_str
-from .resolution_labels import resolution_tiers
+from .resolution_labels import api_resolution_tiers, resolution_tiers
 
 
 _MAX_FREE_TIERS = 8
 
 
 def _served_free_plan() -> tuple[tuple[str, ...], str] | None:
+
 
 
 
@@ -44,16 +45,22 @@ def _served_free_plan() -> tuple[tuple[str, ...], str] | None:
     if not default:
         return None
 
-    offered = resolution_tiers()
+
+
+    offered = api_resolution_tiers()
     served: list[str] = []
     for item in raw_tiers[:_MAX_FREE_TIERS]:
         if not isinstance(item, str):
             return None
         entry = item.strip()
+
+
         if entry not in offered:
-            return None
+            continue
         if entry not in served:
             served.append(entry)
+    if not served:
+        return None
 
     if default not in served:
         return None
@@ -102,9 +109,22 @@ def coerce_tier(tier: str, is_free_tier: bool) -> str:
 
 
 
+    if tier not in api_resolution_tiers():
+
+        return default_tier_for(is_free_tier)
     if is_tier_allowed(tier, is_free_tier):
         return tier
     return free_tier_default()
+
+
+def coerce_dock_tier(tier: str, is_free_tier: bool) -> str:
+
+
+
+
+    if tier not in resolution_tiers():
+        return default_tier_for(is_free_tier)
+    return coerce_tier(tier, is_free_tier)
 
 
 def default_tier_for(is_free_tier: bool) -> str:

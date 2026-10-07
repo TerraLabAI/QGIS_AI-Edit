@@ -548,6 +548,24 @@ class TerraLabClient:
             remember_usage(account.get("usage"), epoch)
         return account
 
+    def get_data_retention(self, auth: dict) -> dict:
+
+
+
+
+        return self._read("/api/plugin/data-retention", auth=auth)
+
+    def set_data_retention(self, auth: dict, days: int | None) -> dict:
+
+        body = json_body({"history_retention_days": days})
+        return self._request(
+            "POST",
+            "/api/plugin/data-retention",
+            auth=auth,
+            body=body,
+            timeout_ms=get_export_dial("pipeline.terralab_client.write_timeout_ms", _TIMEOUT_WRITE_MS),
+        )
+
     def get_export_config(self) -> dict:
 
         return self._read(_with_context("/api/ai-edit/export-config"), timeout_ms=_startup_timeout_ms())

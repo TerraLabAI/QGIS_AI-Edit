@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import tempfile
 import time
 import uuid
@@ -26,8 +27,12 @@ from .output_paths import (  # noqa: F401
     set_output_dir,
 )
 from .output_paths import unique_output_path as _unique_output_path
-from .plain_image_rescue import AI_DISCLAIMER_TEXT, detect_image_format, rescue_plain_image
-from .slug import slugify as _slugify
+from .plain_image_rescue import (
+    AI_DISCLAIMER_TEXT,
+    _xml_text,
+    detect_image_format,
+    rescue_plain_image,
+)
 
 
 
@@ -224,9 +229,22 @@ def read_crop_polygon_wkt(geotiff_path: str) -> str | None:
         return None
 
 
-def _output_file_base(prompt: str) -> str:
-    slug = (_slugify(prompt)[:40] if prompt else "") or "ai_edit"
-    return f"{slug}_{time.strftime('%Y%m%d_%H%M%S')}"
+def _output_file_base(directory: str) -> str:
+
+
+
+
+    day = time.strftime("%Y-%m-%d")
+    pattern = re.compile(rf"^ai_edit_{day}_v(\d+)(?:_\d+)?(?:_before)?\.tif$")
+    highest = 0
+    try:
+        for name in os.listdir(directory):
+            match = pattern.match(name)
+            if match:
+                highest = max(highest, int(match.group(1)))
+    except OSError:
+        pass
+    return f"ai_edit_{day}_v{highest + 1}"
 
 
 
@@ -264,6 +282,34 @@ def _png_through_qt(image_data: bytes) -> bytes | None:
         return None
 
 
+_DIGITAL_SOURCE_TYPE_AI = (
+    "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia"
+)
+
+
+def ai_generated_xmp(request_id: str | None, created_iso: str) -> str:
+
+
+
+
+    rid_line = f"\n   <dc:identifier>{_xml_text(str(request_id))}</dc:identifier>" if request_id else ""
+    return (
+        '<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>\n'
+        '<x:xmpmeta xmlns:x="adobe:ns:meta/">\n'
+        ' <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\n'
+        '  <rdf:Description rdf:about=""\n'
+        '    xmlns:Iptc4xmpExt="http://iptc.org/std/Iptc4xmpExt/2008-02-29/"\n'
+        '    xmlns:xmp="http://ns.adobe.com/xap/1.0/"\n'
+        '    xmlns:dc="http://purl.org/dc/elements/1.1/">\n'
+        f"   <Iptc4xmpExt:DigitalSourceType>{_DIGITAL_SOURCE_TYPE_AI}</Iptc4xmpExt:DigitalSourceType>\n"
+        "   <xmp:CreatorTool>TerraLab AI Edit</xmp:CreatorTool>\n"
+        f"   <xmp:CreateDate>{_xml_text(created_iso)}</xmp:CreateDate>"
+        f"{rid_line}\n"
+        "  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n"
+        '<?xpacket end="w"?>'
+    )
+
+
 def write_geotiff(
     image_data: bytes,
     extent_dict: dict,
@@ -272,7 +318,10 @@ def write_geotiff(
     prompt: str = "",
     ctx=None,
     file_base: str | None = None,
+    request_id: str | None = None,
 ) -> str:
+
+
 
 
 
@@ -281,12 +330,12 @@ def write_geotiff(
     try:
         return _write_geotiff_gdal(
             image_data, extent_dict, crs_wkt, output_dir, prompt=prompt, ctx=ctx,
-            file_base=file_base,
+            file_base=file_base, request_id=request_id,
         )
     except Exception as gtiff_err:
         rescued = rescue_plain_image(
             image_data, _valid_extent(extent_dict, ("xmin", "ymin", "xmax", "ymax")), crs_wkt,
-            file_base or _output_file_base(prompt),
+            file_base or _output_file_base(output_dir),
         )
         if rescued is None:
             raise
@@ -318,11 +367,10 @@ def _write_geotiff_gdal(
     prompt: str = "",
     ctx=None,
     file_base: str | None = None,
+    request_id: str | None = None,
 ) -> str:
 
     _restore_qgis_proj_paths()
-    file_base = file_base or _output_file_base(prompt)
-
 
 
     try:
@@ -336,6 +384,7 @@ def _write_geotiff_gdal(
 
 
     resolved_dir = ascii_safe_dir(resolved_dir)
+    file_base = file_base or _output_file_base(resolved_dir)
 
     xmin = extent_dict["xmin"]
     ymin = extent_dict["ymin"]
@@ -507,7 +556,11 @@ def _write_geotiff_gdal(
             log_warning("CRS embedding failed; writing GeoTIFF without projection")
 
         timestamp_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        dst_ds.SetMetadataItem("AI_EDIT_PROMPT", prompt)
+
+
+        rid = request_id or (getattr(ctx, "request_id", None) if ctx is not None else None)
+        if rid:
+            dst_ds.SetMetadataItem("AI_EDIT_REQUEST_ID", str(rid))
         dst_ds.SetMetadataItem("AI_EDIT_TIMESTAMP", timestamp_iso)
         dst_ds.SetMetadataItem("AI_EDIT_CRS", crs_wkt[:200])
         dst_ds.SetMetadataItem(
@@ -526,7 +579,6 @@ def _write_geotiff_gdal(
 
         if ctx is not None:
             for tag, value in (
-                ("AI_EDIT_REQUEST_ID", getattr(ctx, "request_id", None)),
                 ("AI_EDIT_PARENT_REQUEST_ID", getattr(ctx, "parent_request_id", None)),
                 ("AI_EDIT_TEMPLATE_ID", getattr(ctx, "template_id", None)),
                 ("AI_EDIT_TEMPLATE_NAME", getattr(ctx, "template_name", None)),
@@ -540,11 +592,16 @@ def _write_geotiff_gdal(
         dst_ds.SetMetadataItem(
             "TIFFTAG_DATETIME", time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime())
         )
-        dst_ds.SetMetadataItem("TIFFTAG_IMAGEDESCRIPTION", prompt[:512])
+        dst_ds.SetMetadataItem("TIFFTAG_IMAGEDESCRIPTION", AI_DISCLAIMER_TEXT)
+
+
 
 
         dst_ds.SetMetadataItem("AI_GENERATED", "TRUE")
         dst_ds.SetMetadataItem("AI_EDIT_DISCLAIMER", AI_DISCLAIMER_TEXT)
+
+        if dst_ds.SetMetadata([ai_generated_xmp(rid, timestamp_iso)], "xml:XMP") not in (0, None):
+            log_warning(f"XMP packet not written: {gdal.GetLastErrorMsg()}")
         if crop_polygon_wkt:
             dst_ds.SetMetadataItem("AI_EDIT_CROP", "POLYGON")
             dst_ds.SetMetadataItem("AI_EDIT_CROP_POLYGON_WKT", crop_polygon_wkt)

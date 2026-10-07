@@ -12,7 +12,6 @@ from ...core.date_format import format_reset_date
 from ...core.entitlements import paid_tier_default
 from ...core.i18n import tr
 from ...core.number_format import format_count
-from ...core.paywall_state import total_free_generations
 from ...core.pro_ceiling import pro_ceiling_enabled
 from .blocked_reasons import LAUNCH_BLOCK_NO_KEY
 from .design_tokens import FONT_HINT, GREEN_TEXT, LINK_INK, RED_TEXT
@@ -30,6 +29,17 @@ _PREWALL_DISMISSED = False
 
 def _prewall_dismissed_this_session() -> bool:
     return _PREWALL_DISMISSED
+
+
+
+
+
+_WALL_COLLAPSED_EPOCH: int | None = None
+
+
+def _wall_collapsed_this_session() -> bool:
+    from ...core.paywall_state import usage_epoch
+    return usage_epoch() == _WALL_COLLAPSED_EPOCH
 
 
 class DockAccountMixin:
@@ -271,15 +281,12 @@ class DockAccountMixin:
 
 
 
-        if not self._cached_limit:
-            return ""
-        unit_cost = self._resolution_credit_costs.get("1K")
-        if not unit_cost:
-            return ""
-        total = total_free_generations(self._cached_limit, unit_cost)
+        total = self._wall_total()
         if not total:
             return ""
-        date_str = format_reset_date(self._reset_date) if self._reset_date else ""
+        date_str = self._wall_date()
+
+
 
 
 
@@ -287,24 +294,34 @@ class DockAccountMixin:
 
         if date_str:
             title = get_export_copy(
-                "wall.title", tr("Your {total} free edits return on {date}")
+                "wall.credits_title", tr("Your {total} free credits return on {date}")
             )
             return title.replace("{total}", format_count(total)).replace("{date}", date_str)
 
 
 
         title = get_export_copy(
-            "wall.title_no_date", tr("Your {total} free edits return next month")
+            "wall.credits_title_no_date", tr("Your {total} free credits come back next month")
         )
         return title.replace("{total}", format_count(total))
+
+    def _wall_total(self) -> int:
+
+        try:
+            return max(0, int(self._cached_limit or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    def _wall_date(self) -> str:
+        return format_reset_date(self._reset_date) if self._reset_date else ""
 
     def set_subscribe_url(self, url: str) -> None:
 
         if url:
             self._trial_info_url = url
 
-    def show_trial_exhausted_info(self, fallback_message: str, subscribe_url: str):
-
+    def show_trial_exhausted_info(self, fallback_message: str, subscribe_url: str,
+                                  reopen: bool = False):
 
 
 
@@ -313,22 +330,74 @@ class DockAccountMixin:
 
 
         self._hide_limit_cta()
-        title = get_export_copy(
-            "dock.account.trial_exhausted_fallback_title",
-            tr("You've used this month's free edits"),
-        )
+        self._trial_info_url = subscribe_url
+        self._wall_fallback_message = (fallback_message or "").strip()
+        if reopen:
 
 
-        note = self._wall_title() or (fallback_message or "").strip()
+            global _WALL_COLLAPSED_EPOCH
+            reexpand = _wall_collapsed_this_session() and not self._trial_info_box.isHidden()
+            _WALL_COLLAPSED_EPOCH = None
+            self._wall_scrolled = False
+        else:
+            reexpand = False
+        if _wall_collapsed_this_session():
+            self._fill_wall_collapsed()
+        else:
+            self._fill_wall()
+        self._hide_status_box()
 
-        pitch = get_export_copy(
-            "wall.subtext",
-            tr("About 150 edits a month and higher-resolution results. Cancel anytime."),
-        )
+        self.hide_prewall_info()
+        self._place_wall()
+        if reexpand:
+
+            self._update_generate_style()
+            self._update_launch_style()
+            self._update_result_generate_enabled()
+        if reopen and self._launch_section.isHidden():
+            self._wall_scrolled = True
+            QtC.safe_single_shot(60, self, self._scroll_wall_into_view)
+        if not self._wall_telemetry_shown:
+            from ...core import telemetry
+            from ...core import telemetry_events as te
+            telemetry.track(te.TRIAL_EXHAUSTED_VIEWED, {"is_free_tier": True})
+            self._wall_telemetry_shown = True
+
+        self._track_upsell_view("exhausted_status")
+
+    def _wall_on_result(self) -> bool:
+        section = getattr(self, "_result_section", None)
+        return section is not None and not section.isHidden()
+
+    def _fill_wall(self) -> None:
+
         from ...core.pro_ceiling import pro_ceiling_contact_email
         from .pro_ceiling import custom_needs_line
 
-        self._trial_info_url = subscribe_url
+        total = self._wall_total()
+        date_str = self._wall_date()
+        self._wall_filled_on_result = self._wall_on_result()
+        if self._wall_filled_on_result:
+
+            title = get_export_copy("wall.headline_result", tr("Keep editing this result with Pro"))
+            note = self._wall_title() or getattr(self, "_wall_fallback_message", "")
+        else:
+            title = get_export_copy(
+                "wall.credits_headline", tr("You've used this month's free credits"))
+            if total and date_str:
+                note = get_export_copy(
+                    "wall.credits_return_note", tr("Your {total} free credits return on {date}")
+                ).replace("{total}", format_count(total)).replace("{date}", date_str)
+            else:
+                note = get_export_copy(
+                    "wall.credits_return_note_no_date", tr("They come back next month"))
+
+
+
+        pitch = get_export_copy(
+            "wall.credits_subtext",
+            tr("Pro: far more credits every month, 4K quality, commercial use. Cancel anytime."),
+        )
         self._trial_info_box.show_wall(
             title,
             note if note != title else "",
@@ -336,13 +405,100 @@ class DockAccountMixin:
 
             get_export_copy("nudge.header_pill", tr("Get Pro")),
             custom_needs_line(pro_ceiling_contact_email()),
+            get_export_copy("wall.not_now", tr("Not now")),
         )
-        self._hide_status_box()
-        if not self._wall_telemetry_shown:
-            from ...core import telemetry
-            from ...core import telemetry_events as te
-            telemetry.track(te.TRIAL_EXHAUSTED_VIEWED, {"is_free_tier": True})
-            self._wall_telemetry_shown = True
+
+    def _fill_wall_collapsed(self) -> None:
+        date_str = self._wall_date()
+        if date_str:
+            text = get_export_copy(
+                "wall.credits_collapsed", tr("Free credits return on {date}")
+            ).replace("{date}", date_str)
+        else:
+            text = get_export_copy(
+                "wall.credits_collapsed_no_date", tr("Free credits come back next month"))
+        self._trial_info_box.show_wall_collapsed(
+            text, get_export_copy("nudge.header_pill", tr("Get Pro"))
+        )
+
+    def _on_wall_not_now(self) -> None:
+
+        global _WALL_COLLAPSED_EPOCH
+        from ...core.paywall_state import usage_epoch
+        _WALL_COLLAPSED_EPOCH = usage_epoch()
+        self._fill_wall_collapsed()
+        self._place_wall()
+        self._update_generate_style()
+        self._update_launch_style()
+        self._update_result_generate_enabled()
+
+    def _wall_full_up(self) -> bool:
+        box = getattr(self, "_trial_info_box", None)
+        return box is not None and not box.isHidden() and box.state == "free_out"
+
+    def _place_wall(self) -> None:
+
+
+
+        box = getattr(self, "_trial_info_box", None)
+        launch_layout = getattr(self, "_launch_layout", None)
+        if box is None or launch_layout is None or getattr(self, "_placing_wall", False):
+            return
+        home = not self._launch_section.isHidden()
+        on_top = home and self._wall_full_up()
+        visible = not box.isHidden()
+        moved_off_home = False
+        self._placing_wall = True
+        try:
+            if on_top and launch_layout.indexOf(box) < 0:
+                self._main_layout.removeWidget(box)
+                launch_layout.insertWidget(0, box)
+            elif not on_top and self._main_layout.indexOf(box) < 0:
+                moved_off_home = visible and self._wall_full_up()
+                launch_layout.removeWidget(box)
+                self._main_layout.insertWidget(
+                    self._main_layout.indexOf(self._pro_limit_card) + 1, box
+                )
+
+            box.setVisible(visible)
+        finally:
+            self._placing_wall = False
+        if moved_off_home:
+
+            self._wall_scrolled = True
+            QtC.safe_single_shot(60, self, self._scroll_wall_into_view)
+        hero = getattr(self, "_launch_hero", None)
+        if hero is not None:
+            warning = getattr(self, "_warning_widget", None)
+            empty_canvas = warning is not None and not warning.isHidden()
+            hero.setVisible(not on_top and not empty_canvas)
+        if self._wall_full_up() and getattr(self, "_wall_filled_on_result", None) != self._wall_on_result():
+
+            self._fill_wall()
+
+    def _on_wall_shown_changed(self, up: bool) -> None:
+
+
+        if getattr(self, "_placing_wall", False):
+            return
+        self._place_wall()
+        if not up:
+            self._wall_scrolled = False
+            return
+        if getattr(self, "_wall_scrolled", False) or not self._launch_section.isHidden():
+            return
+        self._wall_scrolled = True
+        QtC.safe_single_shot(60, self, self._scroll_wall_into_view)
+
+    def _scroll_wall_into_view(self) -> None:
+        area = getattr(self, "_scroll_area", None)
+        box = getattr(self, "_trial_info_box", None)
+        if area is None or box is None or box.isHidden():
+            return
+        try:
+            area.ensureWidgetVisible(box, 0, 8)
+        except RuntimeError:
+            pass
 
     def show_usage_limit_info(self, message: str, subscribe_url: str):
 
@@ -381,6 +537,7 @@ class DockAccountMixin:
             from ...core import telemetry_events as te
             telemetry.track(te.PAYWALL_PREWALL_SHOWN, {})
             self._prewall_telemetry_shown = True
+        self._track_upsell_view("low_credit")
 
     def _on_prewall_dismissed(self, _shape: str) -> None:
         global _PREWALL_DISMISSED

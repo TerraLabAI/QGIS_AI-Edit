@@ -75,8 +75,8 @@ def offered_resolution_labels() -> str:
 
 
     try:
-        from ..core.resolution_labels import resolution_tiers
-        return ", ".join(resolution_tiers())
+        from ..core.resolution_labels import api_resolution_tiers
+        return ", ".join(api_resolution_tiers())
     except Exception:  # nosec B110
         return ""
 

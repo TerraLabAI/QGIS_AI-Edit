@@ -35,7 +35,7 @@ _PILL_GLYPH_PX = 14
 _PILL_QSS = (
     "QPushButton#proPill {"
     f" background: transparent; color: {tokens.INK};"
-    f" border: 1px solid {tokens.LINE_STRONG}; border-radius: {_PILL_PX // 2}px;"
+    f" border: 1px solid {tokens.LINE_STRONG}; border-radius: {min(tokens.RADIUS_CONTROL, _PILL_PX // 2)}px;"
     f" padding: 0 10px 0 8px; min-height: {_PILL_PX - 2}px; max-height: {_PILL_PX}px;"
     f" font-size: {tokens.FONT_BODY}px; font-weight: 600; }}"
     f"QPushButton#proPill:hover {{ background: {tokens.HOVER}; }}"
@@ -152,8 +152,8 @@ class DockProNudgesMixin:
         settings.setValue(_AFTER_SUCCESS_KEY, month)
 
         lead = get_export_copy(
-            "nudge.after_success_v2",
-            tr("Like it? Pro adds Detailed and Maximum quality, and commercial use."),
+            "nudge.after_success_4k",
+            tr("Like it? Pro adds Maximum (4K) quality, and commercial use."),
             escape=True,
         )
         link = get_export_copy("nudge.after_success_link", tr("See Pro"), escape=True)

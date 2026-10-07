@@ -5,7 +5,6 @@ import sys
 from contextlib import contextmanager
 
 from qgis.core import QgsApplication, QgsProject
-from qgis.PyQt.QtCore import QSettings
 from qgis.PyQt.QtGui import QIcon, QKeySequence
 
 from ...core import qt_compat as QtC
@@ -17,6 +16,7 @@ from ...core.errors import build_failure_props
 from ...core.i18n import tr
 from ...core.logger import log, log_warning
 from ...core.product_identity import PRODUCT_ID
+from ...core.qimage_strips import icon_from_file
 from ...core.qt_compat import QAction, QShortcut
 from ..dock_widget import AIEditDockWidget
 from ..tools.polygon_selection_tool import PolygonSelectionTool
@@ -52,6 +52,8 @@ LOADER_SIGNALS = {
     "_export_size_task": REQUEST_TASK_SIGNALS,
     "_zone_size_task": REQUEST_TASK_SIGNALS,
     "_zone_tier_size_task": REQUEST_TASK_SIGNALS,
+    "_zone_tier_size_task_b": REQUEST_TASK_SIGNALS,
+    "_zone_tier_size_task_c": REQUEST_TASK_SIGNALS,
     "_activation_config_loader": REQUEST_TASK_SIGNALS,
 
     "_basemap_probe_task": REQUEST_TASK_SIGNALS,
@@ -289,7 +291,7 @@ class PluginLifecycleMixin:
         self._terralab_menu = get_or_create_terralab_menu(main_window)
 
         self._action = QAction(
-            QIcon(icon_path) if os.path.exists(icon_path) else QIcon(),
+            icon_from_file(icon_path) if os.path.exists(icon_path) else QIcon(),
             tr("AI Edit"),
             main_window,
         )
@@ -310,7 +312,7 @@ class PluginLifecycleMixin:
 
         from ..cross_plugin_discovery import make_ai_seg_action
         ai_seg_icon_path = os.path.join(plugin_dir, "resources", "icons", "ai_segmentation_icon.png")
-        ai_seg_icon = QIcon(ai_seg_icon_path) if os.path.exists(ai_seg_icon_path) else None
+        ai_seg_icon = icon_from_file(ai_seg_icon_path) if os.path.exists(ai_seg_icon_path) else None
         self._ai_seg_action = make_ai_seg_action(
             main_window,
             self._iface,
@@ -377,17 +379,7 @@ class PluginLifecycleMixin:
         self._iface.addDockWidget(QtC.RightDockWidgetArea, self._dock_widget)
 
 
-
-        settings = QSettings()
-        current_version = self._read_plugin_version()
-        last_shown_version = settings.value("AIEdit/dock_shown_version", "", type=str)
-        auto_open_source = None
-        if last_shown_version != current_version:
-            settings.setValue("AIEdit/dock_shown_version", current_version)
-            auto_open_source = "auto_install" if not last_shown_version else "auto_upgrade"
-            self._dock_widget.show()
-            self._dock_widget.raise_()
-            self._ensure_dock_height()
+        auto_open_source = self._open_dock_at_start()
 
 
         self._update_check_done = False
@@ -403,6 +395,7 @@ class PluginLifecycleMixin:
         self._dock_widget.retry_clicked.connect(self._on_retry)
         self._dock_widget.base_version_selected.connect(self._on_base_version_selected)
         self._dock_widget.template_selected.connect(self._on_template_selected)
+        self._dock_widget.example_zone_requested.connect(self._on_example_zone_requested)
         self._dock_widget.catalog_refresh_requested.connect(self._load_server_catalog)
         self._dock_widget.history_add_to_map.connect(self._on_history_add_to_map)
         self._dock_widget.history_download.connect(self._on_history_download)

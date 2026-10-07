@@ -115,6 +115,12 @@ class DockPromptMixin:
                 "that: it outlines objects as polygons QGIS can count and "
                 "measure."
             ))
+
+
+
+        if kind in ("land_cover", "objects"):
+            from ..segmentation_handoff import rich_line
+            return rich_line(kind)
         if kind == "qa":
             return get_export_copy("guidance.qa", tr(
                 "AI Edit edits the image, it doesn't answer questions or count. "
@@ -136,7 +142,15 @@ class DockPromptMixin:
         if href != "ai_seg":
             return
         from ..cross_plugin_discovery import open_ai_segmentation
-        installed = open_ai_segmentation()
+        if getattr(self, "_last_guidance_kind", None) in ("land_cover", "objects"):
+
+            from ..segmentation_handoff import is_installed, run
+            installed = is_installed()
+            run()
+
+            self._update_prompt_guidance_hint()
+        else:
+            installed = open_ai_segmentation()
         telemetry.track(te.SEG_REDIRECT_CLICKED, {
             "guidance_kind": getattr(self, "_last_guidance_kind", None) or "",
             "installed": installed,
@@ -535,7 +549,7 @@ class DockPromptMixin:
 
 
         wall = getattr(self, "_trial_info_box", None)
-        wall_up = wall is not None and wall.isVisible()
+        wall_up = wall is not None and wall.isVisible() and wall.state == "free_out"
         state = (self._generate_btn.isEnabled(), wall_up)
         if getattr(self, "_generate_style_state", None) == state:
             return
@@ -548,7 +562,7 @@ class DockPromptMixin:
 
 
         wall = getattr(self, "_trial_info_box", None)
-        wall_up = wall is not None and wall.isVisible()
+        wall_up = wall is not None and wall.isVisible() and wall.state == "free_out"
         if getattr(self, "_launch_style_wall", None) is wall_up:
             return
         self._launch_style_wall = wall_up
@@ -565,7 +579,11 @@ class DockPromptMixin:
             prompt = self._result_prompt_input.toPlainText().strip()
         enabled = bool(prompt)
         self._result_regenerate_btn.setEnabled(enabled)
-        if getattr(self, "_result_generate_style_state", None) is enabled:
+
+        wall = getattr(self, "_trial_info_box", None)
+        wall_up = wall is not None and wall.isVisible() and wall.state == "free_out"
+        state = (enabled, wall_up)
+        if getattr(self, "_result_generate_style_state", None) == state:
             return
-        self._result_generate_style_state = enabled
-        self._result_regenerate_btn.setStyleSheet(BTN_PRIMARY_WIDE_QSS)
+        self._result_generate_style_state = state
+        self._result_regenerate_btn.setStyleSheet(BTN_GHOST_WIDE_QSS if wall_up else BTN_PRIMARY_WIDE_QSS)

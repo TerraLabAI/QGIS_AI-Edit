@@ -419,6 +419,16 @@ class _ResolutionChipButton(_FooterIconButton):
             painter.end()
 
 
+def format_ground_m(metres: float) -> str:
+
+
+    if metres >= 10:
+        return str(int(round(metres)))
+    if metres >= 1:
+        return f"{metres:.1f}"
+    return f"{metres:.2f}"
+
+
 class _ResolutionMenuItem(QWidget):
 
 
@@ -466,6 +476,7 @@ class _ResolutionMenuItem(QWidget):
         selected: bool,
         locked: bool,
         parent: QWidget | None = None,
+        ground_m: float | None = None,
     ):
         super().__init__(parent)
         _glyph, hue = resolution_visual(resolution)
@@ -479,8 +490,8 @@ class _ResolutionMenuItem(QWidget):
 
 
             self.setToolTip(get_export_copy(
-                "dock.prompt_container.quality_pro_tooltip",
-                tr("Pro unlocks Detailed and Maximum, for printing and zooming in"),
+                "dock.prompt_container.quality_pro_tooltip_4k",
+                tr("Pro unlocks Maximum (4K), for printing and zooming in"),
             ))
 
         row = QHBoxLayout(self)
@@ -549,7 +560,15 @@ class _ResolutionMenuItem(QWidget):
         head.addWidget(check, 0, QtC.AlignVCenter)
         column.addLayout(head)
 
-        note = QLabel(resolution_note(resolution), self)
+
+
+        if ground_m is not None and ground_m > 0:
+            note_text = get_export_copy(
+                "dock.prompt_container.quality_ground_note", tr("{m} m/px on this zone")
+            ).replace("{m}", format_ground_m(ground_m))
+        else:
+            note_text = resolution_note(resolution)
+        note = QLabel(note_text, self)
         note.setStyleSheet(
             f"font-size: {tokens.FONT_HINT}px; background: transparent; color: {tokens.INK_2};"
         )

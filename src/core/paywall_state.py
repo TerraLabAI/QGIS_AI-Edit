@@ -45,6 +45,13 @@ def forget() -> None:
     _last["epoch"] = int(_last["epoch"]) + 1
 
 
+def remember_refusal_wall() -> None:
+
+
+
+    _last["state"] = WALL
+
+
 def served_paywall_state() -> str | None:
 
     return _last["state"]

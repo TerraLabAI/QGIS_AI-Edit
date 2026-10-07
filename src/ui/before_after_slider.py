@@ -106,6 +106,8 @@ class BeforeAfterSlider(QWidget):
 
         self._example_badge = example_badge or None
 
+        self._badge_texts: tuple[str | None, str | None] = (None, None)
+
 
         self._placeholder_text = get_export_copy(
             "widgets.before_after_slider.loading_placeholder", tr("Loading..."))
@@ -170,6 +172,11 @@ class BeforeAfterSlider(QWidget):
 
     def set_after(self, pixmap: QPixmap | None) -> None:
         self._after = pixmap if pixmap and not pixmap.isNull() else None
+        self.update()
+
+    def set_badge_texts(self, left: str | None, right: str | None) -> None:
+
+        self._badge_texts = (left, right)
         self.update()
 
     def has_images(self) -> bool:
@@ -407,12 +414,17 @@ class BeforeAfterSlider(QWidget):
 
 
         if self._show_badges:
-            before = get_export_copy("widgets.before_after_slider.before_badge", tr("Before"))
-            after = get_export_copy("widgets.before_after_slider.after_badge", tr("After"))
-            self._draw_badge(painter, before, x=_BADGE_INSET_PX, y=_BADGE_INSET_PX)
-            self._draw_badge(
-                painter, after, x=rect.width() - _BADGE_INSET_PX, y=_BADGE_INSET_PX, align_right=True
-            )
+            left, right = self._badge_texts
+            before = left if left is not None else get_export_copy(
+                "widgets.before_after_slider.before_badge", tr("Before"))
+            after = right if right is not None else get_export_copy(
+                "widgets.before_after_slider.after_badge", tr("After"))
+            if before:
+                self._draw_badge(painter, before, x=_BADGE_INSET_PX, y=_BADGE_INSET_PX)
+            if after:
+                self._draw_badge(
+                    painter, after, x=rect.width() - _BADGE_INSET_PX, y=_BADGE_INSET_PX, align_right=True
+                )
 
         if self._example_badge:
             self._draw_example_badge(painter, rect, self._example_badge)

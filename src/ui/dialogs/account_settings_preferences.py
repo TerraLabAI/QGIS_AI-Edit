@@ -13,6 +13,7 @@ from ...core.i18n import tr
 from ...core.output_paths import OUTPUT_DIR_SETTING, documents_default_dir
 from ..onboarding_hint import reset_hints
 from ..raster_writer import get_output_dir, set_output_dir
+from .history_retention import HistoryRetentionRow
 
 
 class AccountPreferencesMixin:
@@ -43,6 +44,8 @@ class AccountPreferencesMixin:
                                self._telemetry_switch, group)
         stats_row.setToolTip(self._telemetry_switch.toolTip())
         group.add_row(stats_row)
+        self._retention = HistoryRetentionRow(self, group)
+        group.add_row(self._retention.row)
 
         self._guidance_btn = make_button(tr("Show again"), BTN_GHOST_QSS, group)
         self._guidance_btn.setToolTip(tr("Bring back the tips you closed"))

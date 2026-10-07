@@ -143,7 +143,19 @@ class BuildUiMixin:
             self._fs_btn.setFixedSize(30, 30)
             self._fs_btn.clicked.connect(self._toggle_fullscreen)
             self._aspect_box.set_overlay(self._fs_btn)
-            root.addWidget(self._aspect_box, 1)
+            if self._has_vector_step():
+
+                left = QWidget(self)
+                left_col = QVBoxLayout(left)
+                left_col.setContentsMargins(0, 0, 0, 0)
+                left_col.setSpacing(0)
+                left_col.addWidget(self._aspect_box, 1)
+                self._flow_steps_widget = self._build_flow_steps()
+                left_col.addWidget(self._flow_steps_widget, 0)
+                left.setSizePolicy(QtC.SizePolicyExpanding, QtC.SizePolicyExpanding)
+                root.addWidget(left, 1)
+            else:
+                root.addWidget(self._aspect_box, 1)
         else:
             self._slider = None
             self._fs_btn = None
@@ -193,6 +205,11 @@ class BuildUiMixin:
 
         col.addWidget(self._build_prompt_block())
 
+        example_block = self._build_example_block()
+        if example_block is not None:
+            col.addWidget(self._section_label(tr("Example")))
+            col.addWidget(example_block)
+
         if self._is_generation:
             refs = self._job.get("reference_image_urls") or []
             if refs:
@@ -227,6 +244,10 @@ class BuildUiMixin:
             dl = self._build_download_group()
             if dl is not None:
                 footer_col.addWidget(dl)
+        if not self._is_generation:
+            try_btn = self._build_try_zone_button()
+            if try_btn is not None:
+                footer_col.addWidget(try_btn)
         footer_col.addLayout(self._build_actions())
         right_col.addWidget(footer, 0)
 
@@ -438,6 +459,15 @@ class BuildUiMixin:
             self._prompt_star_btn.clicked.connect(self._on_prompt_star)
             row.addWidget(self._prompt_star_btn)
 
+            handoff = (self._preset or {}).get("segmentation_handoff")
+            if handoff in ("land_cover", "objects"):
+
+
+
+
+                row.addWidget(self._build_segmentation_handoff(handoff), 1)
+                return row
+
             use_btn = QPushButton(get_export_copy("dialogs.build.use_prompt_button", tr("Use this prompt")))
             use_btn.setStyleSheet(_PRIMARY_BTN)
             use_btn.setMinimumHeight(BTN_PRIMARY_WIDE_PX)
@@ -484,6 +514,36 @@ class BuildUiMixin:
         use_btn.clicked.connect(self._on_use)
         row.addWidget(use_btn, 1)
         return row
+
+    def _build_segmentation_handoff(self, kind: str) -> QWidget:
+
+
+
+        host = QWidget(self)
+        col = QVBoxLayout(host)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(6)
+        from ...segmentation_handoff import action_label, current_state, restart_note, sentence
+        state = current_state()
+        text = sentence(kind, state)
+        verb = action_label(state)
+        label = QLabel(text if verb else f"{text} {restart_note()}", host)
+        label.setWordWrap(True)
+        label.setStyleSheet(f"color: {INK}; background: transparent;")
+        col.addWidget(label)
+        btn = QPushButton(verb, host)
+        btn.setVisible(bool(verb))
+        btn.setStyleSheet(_PRIMARY_BTN)
+        btn.setMinimumHeight(BTN_PRIMARY_WIDE_PX)
+        btn.setCursor(QtC.PointingHandCursor)
+        btn.clicked.connect(self._on_segmentation_handoff)
+        col.addWidget(btn)
+        return host
+
+    def _on_segmentation_handoff(self) -> None:
+        from ...segmentation_handoff import run
+        run()
+        self.reject()
 
     def _build_session_actions(self):
 

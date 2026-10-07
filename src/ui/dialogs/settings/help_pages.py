@@ -227,7 +227,7 @@ def shortcut_sections(window=None) -> tuple:
             "dialogs.settings.shortcuts.undo_while_drawing", tr("While drawing")), undo_key),
     )
     tools = (
-        (get_export_copy("dialogs.settings.shortcuts.draw", tr("Draw")), "",
+        (get_export_copy("dialogs.settings.shortcuts.markup", tr("Mark up")), "",
          _native_key(tool_keys["markup"])),
         (tr("Vectorize"), "", _native_key(tool_keys["vectorize"])),
         (get_export_copy("dialogs.settings.shortcuts.compare", tr("Compare")), "",

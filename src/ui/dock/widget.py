@@ -102,6 +102,10 @@ class AIEditDockWidget(
 
 
 
+    example_zone_requested = pyqtSignal(dict)
+
+
+
 
     catalog_refresh_requested = pyqtSignal()
 
@@ -232,7 +236,10 @@ class AIEditDockWidget(
 
 
 
-        self._selected_resolution = "1K"
+        self._selected_resolution = "2K"
+
+
+        self._api_resolution: str | None = None
         self._resolution_user_choice = False
 
 

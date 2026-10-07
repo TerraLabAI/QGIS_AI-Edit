@@ -124,6 +124,10 @@ def detect_prompt_guidance(prompt_text: str, has_template: bool = False) -> str 
 
 
 
+
+
+
+
     if has_template:
         return None
     text = (prompt_text or "").strip()
@@ -133,6 +137,10 @@ def detect_prompt_guidance(prompt_text: str, has_template: bool = False) -> str 
         return "vector_file"
     if _matches("guidance_measure", text):
         return "measure"
+    if _matches("guidance_land_cover", text):
+        return "land_cover"
+    if _matches("guidance_objects", text):
+        return "objects"
     if _matches("guidance_qa", text):
         return "qa"
     return None

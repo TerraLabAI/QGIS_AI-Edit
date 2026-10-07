@@ -57,7 +57,14 @@ DEFAULT_RESOLUTION_CREDIT_COSTS = _ServedCreditCosts()
 
 
 
-DEFAULT_RESOLUTION_TIERS: tuple[str, ...] = ("1K", "2K", "4K")
+
+
+DEFAULT_RESOLUTION_TIERS: tuple[str, ...] = ("2K", "4K")
+
+
+
+
+API_ONLY_RESOLUTION_TIERS: tuple[str, ...] = ("1K",)
 
 
 _MAX_RESOLUTION_TIERS = 8
@@ -79,6 +86,12 @@ def resolution_tiers() -> tuple[str, ...]:
         max_len=_MAX_RESOLUTION_TIERS,
         require_base_overlap=True,
     )
+
+
+def api_resolution_tiers() -> tuple[str, ...]:
+
+    tiers = resolution_tiers()
+    return tuple(tiers) + tuple(t for t in API_ONLY_RESOLUTION_TIERS if t not in tiers)
 
 
 def shipped_tier_name(resolution: str) -> str | None:

@@ -17,6 +17,9 @@
 
 
 
+
+
+
 from __future__ import annotations
 
 from qgis.PyQt.QtCore import QSize, Qt, pyqtSignal
@@ -70,7 +73,8 @@ _CARD_QSS_TEMPLATE = (
 _CARD_QSS = _CARD_QSS_TEMPLATE.format(ground=SURFACE, line=LINE)
 
 
-_SHAPE_LEFT = {"low": 0.1, "low_contact": 0.1, "free_out": 0.0, "paid_out": 0.0}
+_SHAPE_LEFT = {"low": 0.1, "low_contact": 0.1, "free_out": 0.0,
+               "free_collapsed": 0.0, "paid_out": 0.0}
 
 
 def _card_qss(state: str) -> str:
@@ -135,6 +139,8 @@ class QuotaCard(QWidget):
     ghost_clicked = pyqtSignal()
     manage_clicked = pyqtSignal()
 
+    not_now_clicked = pyqtSignal()
+
     dismissed = pyqtSignal(str)
 
     def __init__(self, parent: QWidget | None = None, object_name: str = ""):
@@ -196,6 +202,10 @@ class QuotaCard(QWidget):
         self.wide_button = _pill(self._plan, BTN_PRIMARY_WIDE_QSS, BTN_PRIMARY_WIDE_PX)
         self.wide_button.clicked.connect(self.primary_clicked.emit)
         plan.addWidget(self.wide_button)
+        self.not_now_button = _pill(self._plan, BTN_QUIET_QSS, BTN_SMALL_PX)
+        self.not_now_button.clicked.connect(self.not_now_clicked.emit)
+        self.not_now_button.setVisible(False)
+        plan.addWidget(self.not_now_button, 0, Qt.AlignmentFlag.AlignHCenter)
         col.addWidget(self._plan)
 
 
@@ -245,7 +255,8 @@ class QuotaCard(QWidget):
         self._set_escape(escape)
         self._show_only(self._row, self._escape if escape else None)
 
-    def show_wall(self, title: str, note: str, pitch: str, button_text: str, escape: str) -> None:
+    def show_wall(self, title: str, note: str, pitch: str, button_text: str, escape: str,
+                  not_now: str = "") -> None:
 
         self.state = "free_out"
         self._title.setText(title)
@@ -253,9 +264,21 @@ class QuotaCard(QWidget):
         self._pitch.setText(pitch)
         self._pitch.setVisible(bool(pitch))
         self.wide_button.setText(button_text)
+        self.not_now_button.setText(not_now)
+        self.not_now_button.setVisible(bool(not_now))
         self._set_escape(escape)
         self._show_only(self._title, self._note if note else None, self._plan,
                         self._escape if escape else None)
+
+    def show_wall_collapsed(self, text: str, button_text: str) -> None:
+
+        self.state = "free_collapsed"
+        self._compact.setText(text)
+        self._set_compact_kind(ghost=False, text=button_text)
+        self.dismiss_button.setVisible(False)
+
+        self.compact_button.setStyleSheet(_SMALL_GHOST_QSS)
+        self._show_only(self._row)
 
     def show_contact(self, title: str, body: str, ghost_text: str, escape: str,
                      manage_text: str = "", note: str = "") -> None:

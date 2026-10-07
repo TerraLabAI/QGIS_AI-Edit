@@ -221,8 +221,18 @@ class DockChromeMixin:
         if free_n is None:
             return tr("Free plan with AI edits every month. Signing up "
                       "takes 15 seconds in your browser.")
-        return tr("Free plan, {n} AI edits every month. Signing up "
-                  "takes 15 seconds in your browser.").replace("{n}", str(free_n))
+
+
+        from ...core.resolution_labels import served_credit_costs
+
+        cost_2k = served_credit_costs().get("2K")
+        if cost_2k is None:
+            return tr("Free plan, {n} AI edits every month. Signing up "
+                      "takes 15 seconds in your browser.").replace("{n}", str(free_n))
+        return (tr("Free plan, {credits} credits every month ({n} edits at 2K). "
+                   "Signing up takes 15 seconds in your browser.")
+                .replace("{credits}", str(free_n * cost_2k))
+                .replace("{n}", str(free_n)))
 
     def refresh_free_plan_line(self) -> None:
 

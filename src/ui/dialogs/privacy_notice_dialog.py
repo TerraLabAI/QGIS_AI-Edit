@@ -38,6 +38,7 @@ from ...core.auth.activation_manager import (
     get_terms_url,
 )
 from ...core.i18n import tr
+from ...core.qimage_strips import pixmap_from_file
 from ..external_url import open_external
 from ..panel_helpers import is_dark_palette, make_hidpi_pixmap
 
@@ -74,7 +75,7 @@ def _load_mark(widget, size: int) -> QPixmap | None:
 
     from ..dock.style import ICONS_DIR
 
-    pixmap = QPixmap(os.path.join(ICONS_DIR, "icon.png"))
+    pixmap = pixmap_from_file(os.path.join(ICONS_DIR, "icon.png"))
     if pixmap.isNull():
         return None
     ratio = widget.devicePixelRatioF() or 1.0
@@ -210,8 +211,8 @@ class PrivacyNoticeDialog(QDialog):
 
 
                 tr("Your generations stay in your history until you delete "
-                   "them. On {pro} you can set 30 days, 90 days or 1 year in "
-                   "Settings."),
+                   "them. On {pro} you choose how long in Settings: 30 days "
+                   "to 1 year, or until you delete them."),
             ),
             (
                 "sliders",

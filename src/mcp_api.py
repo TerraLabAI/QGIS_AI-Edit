@@ -42,6 +42,7 @@
 
 
 
+
 from __future__ import annotations
 
 import copy
@@ -57,6 +58,7 @@ from qgis.core import QgsProject, QgsRasterLayer
 from .mcp_api_generation import GenerationMixin
 from .mcp_api_guide import GUIDE_MISSING_TEXT, WORKFLOW, guide_text
 from .mcp_api_history import HistoryMixin
+from .mcp_api_interactive import InteractiveMixin
 from .mcp_api_library import LibraryMixin
 from .mcp_api_markup import MarkupMixin
 from .mcp_api_references import ReferencesMixin
@@ -89,7 +91,8 @@ __all__ = [
 
 
 
-API_VERSION = 2
+
+API_VERSION = 3
 
 
 PUBLIC_METHODS = (
@@ -138,6 +141,11 @@ PUBLIC_METHODS = (
     "set_reference_note",
     "set_resolution",
     "set_zone",
+
+    "get_input_layer",
+    "set_input_layer",
+    "prepare_interactive",
+    "get_interactive_state",
 )
 
 
@@ -176,6 +184,7 @@ def _load_saved_config() -> None:
 
 
 class EditMCPAPI(
+    InteractiveMixin,
     ZoneMixin,
     GenerationMixin,
     LibraryMixin,
@@ -287,7 +296,7 @@ class EditMCPAPI(
         if dock is None:
             return None
         try:
-            return dock.get_selected_resolution()
+            return getattr(dock, "_api_resolution", None) or dock.get_selected_resolution()
         except Exception:
             return None
 
@@ -343,6 +352,8 @@ class EditMCPAPI(
             "can_vectorize": self._can_vectorize(),
             "resolution": self._selected_resolution(),
             "has_zone": bool(getattr(plugin, "_selected_extent", None)),
+            "input_layer": self.get_input_layer(),
+            "interactive": self.get_interactive_state(),
         }
         if not ready:
             status["action_required"] = (
@@ -431,7 +442,7 @@ class EditMCPAPI(
             free_tier_allowed_tiers,
         )
         from .core.paywall_state import served_paywall_state
-        from .core.resolution_labels import resolution_tiers
+        from .core.resolution_labels import api_resolution_tiers
 
         auth = getattr(self._plugin, "_auth_manager", None)
         signed_in = False
@@ -459,7 +470,7 @@ class EditMCPAPI(
 
 
             "allowed_resolutions": None if free_tier is None else (
-                list(free_tier_allowed_tiers()) if free_tier else list(resolution_tiers())
+                list(free_tier_allowed_tiers()) if free_tier else list(api_resolution_tiers())
             ),
             "default_resolution": None if free_tier is None else default_tier_for(free_tier),
             "paywall_state": paywall,
@@ -474,16 +485,22 @@ class EditMCPAPI(
 
 
         from .core.entitlements import free_tier_allowed_tiers
-        from .core.resolution_labels import resolution_tiers, served_credit_costs
+        from .core.resolution_labels import (
+            API_ONLY_RESOLUTION_TIERS,
+            api_resolution_tiers,
+            served_credit_costs,
+        )
 
         dock = self._dock()
         costs = getattr(dock, "_resolution_credit_costs", None) if dock is not None else None
         free_tier = self._is_free_tier()
-        tiers = list(resolution_tiers())
+        tiers = list(api_resolution_tiers())
         allowed = list(free_tier_allowed_tiers()) if free_tier else tiers
         costs = dict(costs) if isinstance(costs, dict) and costs else served_credit_costs()
         answer = {
             "resolutions": tiers,
+
+            "api_only_resolutions": [t for t in API_ONLY_RESOLUTION_TIERS if t in tiers],
             "credit_costs": costs,
             "allowed": allowed,
             "current": self._selected_resolution(),
@@ -633,6 +650,7 @@ class EditMCPAPI(
             f"vectorize_{base}_{time.strftime('%Y%m%d_%H%M%S')}",
             classes,
             raster.name(),
+            (raster.source() or "").split("|", 1)[0],
         )
         if persisted is not None:
             layer = persisted

@@ -29,6 +29,8 @@ from qgis.PyQt.QtGui import (
     QPolygonF,
 )
 
+from ..core.qimage_strips import pixmap_from_file
+
 
 def widget_pixel_ratio(widget) -> float:
 
@@ -1454,7 +1456,7 @@ def logo_pixmap(widget, size: int = 18) -> QPixmap:
     cached = _LOGO_CACHE.get(key)
     if cached is not None:
         return cached
-    source = QPixmap(_LOGO_FILE)
+    source = pixmap_from_file(_LOGO_FILE)
     if source.isNull():
         pixmap = QPixmap(physical, physical)
         pixmap.fill(Qt.GlobalColor.transparent)

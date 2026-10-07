@@ -185,8 +185,11 @@ class _PromptContainer(QFrame):
 
 
 
-        self._selected_resolution = "1K"
+        self._selected_resolution = "2K"
         self._resolution_costs: dict[str, int] = served_credit_costs()
+
+
+        self._tier_ground_m: dict[str, float] = {}
         self._free_tier = False
 
 
@@ -237,7 +240,10 @@ class _PromptContainer(QFrame):
 
         footer_row = QHBoxLayout()
         footer_row.setContentsMargins(0, 0, 0, 0)
-        footer_row.setSpacing(4)
+
+
+
+        footer_row.setSpacing(0)
 
         self._templates_btn = _FooterIconButton(self)
         self._templates_btn.setText(get_export_copy("dock.prompt_container.library_btn", tr("Library")))
@@ -293,7 +299,7 @@ class _PromptContainer(QFrame):
         self._markup_chip = _FooterIconButton(self)
         self._chip_glyph(self._markup_chip, "pencil")
         self._markup_chip.setText(
-            get_export_copy("dock.prompt_container.markup_chip_draw", tr("Draw"))
+            get_export_copy("dock.prompt_container.markup_chip_markup", tr("Mark up"))
         )
         self._markup_chip.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
@@ -408,7 +414,11 @@ class _PromptContainer(QFrame):
 
 
 
-        avail = self.width() - 16
+
+
+
+        margins = self.layout().contentsMargins()
+        avail = self.contentsRect().width() - margins.left() - margins.right()
         if avail <= 0:
             return
 
@@ -445,7 +455,18 @@ class _PromptContainer(QFrame):
         self._attach_btn.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonIconOnly
         )
-        fits()
+        if fits():
+
+
+            self._templates_btn.setToolButtonStyle(
+                Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+            )
+            if fits():
+                return
+            self._templates_btn.setToolButtonStyle(
+                Qt.ToolButtonStyle.ToolButtonIconOnly
+            )
+            fits()
 
     def minimumSizeHint(self):  # noqa: N802
 
@@ -571,6 +592,7 @@ class _PromptContainer(QFrame):
 
 
         self._attach_btn.setVisible(enabled)
+        self._apply_footer_fit()
 
     def set_markup_available(self, available: bool) -> None:
 
@@ -579,6 +601,7 @@ class _PromptContainer(QFrame):
 
 
         self._markup_chip.setVisible(available)
+        self._apply_footer_fit()
 
     def set_reference_count(self, count: int) -> None:
 
@@ -596,6 +619,8 @@ class _PromptContainer(QFrame):
             self._ref_count.hide()
             self._attach_btn.setStyleSheet(self._CHIP_BTN_HOVERPROP_STYLE)
 
+        self._apply_footer_fit()
+
     def set_markup_count(self, count: int) -> None:
 
 
@@ -609,6 +634,7 @@ class _PromptContainer(QFrame):
         else:
             self._markup_count.hide()
             self._markup_chip.setStyleSheet(self._CHIP_BTN_HOVERPROP_STYLE)
+        self._apply_footer_fit()
 
     def _position_ref_badge(self) -> None:
 
@@ -672,6 +698,20 @@ class _PromptContainer(QFrame):
 
         self._apply_footer_fit()
 
+    def set_tier_ground_resolution(self, tier: str, metres: float | None) -> None:
+
+        if metres is None or metres <= 0:
+            if self._tier_ground_m.pop(tier, None) is None:
+                return
+        else:
+            self._tier_ground_m[tier] = float(metres)
+        self._rebuild_resolution_menu()
+
+    def clear_tier_ground_resolutions(self) -> None:
+        if self._tier_ground_m:
+            self._tier_ground_m = {}
+            self._rebuild_resolution_menu()
+
 
 
     def _update_resolution_label(self) -> None:
@@ -724,7 +764,7 @@ class _PromptContainer(QFrame):
             credits = self._resolution_costs.get(res)
             widget = _ResolutionMenuItem(
                 resolution_quality_name(res), res, credits, selected, locked,
-                self._resolution_menu,
+                self._resolution_menu, ground_m=self._tier_ground_m.get(res),
             )
             widget.clicked.connect(lambda r=res: self._on_menu_item_clicked(r))
             action = QWidgetAction(self._resolution_menu)
@@ -736,8 +776,8 @@ class _PromptContainer(QFrame):
             )
             if locked:
                 action.setToolTip(get_export_copy(
-                    "dock.prompt_container.quality_pro_tooltip",
-                    tr("Pro unlocks Detailed and Maximum, for printing and zooming in"),
+                    "dock.prompt_container.quality_pro_tooltip_4k",
+                    tr("Pro unlocks Maximum (4K), for printing and zooming in"),
                 ))
             self._resolution_menu.addAction(action)
 

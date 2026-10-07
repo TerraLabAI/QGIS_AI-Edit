@@ -435,6 +435,7 @@ class RunLifecycleMixin:
             table_name,
             classes,
             params.get("raster_name", ""),
+            params.get("raster_path", ""),
         )
         if layer is None:
             telemetry.track(te.PLUGIN_ERROR, {

@@ -35,6 +35,11 @@ ZONE_DRAWN = "zone_drawn"
 
 GENERATE_BLOCKED = "generate_blocked"
 TEMPLATE_SELECTED = "template_selected"
+
+
+
+EXAMPLE_FLOW_VIEWED = "example_flow_viewed"
+EXAMPLE_ZONE_TRIED = "example_zone_tried"
 GENERATION_STARTED = "generation_started"
 GENERATION_COMPLETED = "generation_completed"
 GENERATION_FAILED = "generation_failed"
@@ -146,6 +151,8 @@ ALL_EVENTS = frozenset({
     ZONE_DRAWN,
     GENERATE_BLOCKED,
     TEMPLATE_SELECTED,
+    EXAMPLE_FLOW_VIEWED,
+    EXAMPLE_ZONE_TRIED,
     GENERATION_STARTED,
     GENERATION_COMPLETED,
     GENERATION_FAILED,
@@ -208,6 +215,8 @@ REQUIRED_PROPS: dict[str, tuple[str, ...]] = {
     ZONE_DRAWN: (),
     GENERATE_BLOCKED: ("reason",),
     TEMPLATE_SELECTED: ("template_id",),
+    EXAMPLE_FLOW_VIEWED: ("template_id", "step"),
+    EXAMPLE_ZONE_TRIED: ("template_id",),
     GENERATION_STARTED: ("used_template", "used_markup", "has_geo_context", "is_retry"),
     GENERATION_COMPLETED: ("is_retry", "used_markup", "used_template", "output_rescued"),
     GENERATION_FAILED: ("error_code", "is_retry"),

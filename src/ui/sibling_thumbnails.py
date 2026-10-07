@@ -34,6 +34,7 @@ from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 from qgis.PyQt.QtWidgets import QLabel, QSizePolicy
 
 from ..core.config_store import get_export_dial
+from ..core.qimage_strips import pixmap_from_file
 from ..core.qt_compat import set_transfer_timeout
 from .dock import design_tokens as tokens
 from .dock.design_tokens import ACCENT_TINT, LINE, RADIUS_CARD, qcolor
@@ -99,7 +100,7 @@ def sibling_logo_path(file_name: str) -> str:
 
 def logo_tile_pixmap(path: str, side: int, ratio: float = 1.0):
 
-    source = QPixmap(str(path or ""))
+    source = pixmap_from_file(str(path or ""))
     if source.isNull():
         return None
     ratio = max(1.0, float(ratio or 1.0))

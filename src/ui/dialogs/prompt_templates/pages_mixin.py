@@ -470,6 +470,12 @@ class PagesMixin:
                 elif preset is not None:
                     self._selected_preset = preset
                 self.accept()
+            elif outcome == "try_zone" and not self._browse_only and preset is not None:
+
+
+                self._selected_preset = preset
+                self._example_zone_wanted = True
+                self.accept()
             elif outcome == "close":
                 self.accept()
         finally:

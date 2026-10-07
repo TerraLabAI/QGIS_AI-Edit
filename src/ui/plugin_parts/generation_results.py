@@ -122,7 +122,10 @@ class GenerationResultsMixin:
 
 
 
-            self._dock_widget.show_trial_exhausted_info(message, get_wall_url())
+
+            from ...core.paywall_state import remember_refusal_wall
+            remember_refusal_wall()
+            self._dock_widget.show_trial_exhausted_info(message, get_wall_url(), reopen=True)
 
 
             telemetry.flush()

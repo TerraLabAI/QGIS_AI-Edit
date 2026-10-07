@@ -237,6 +237,11 @@ class _BeforeAfterCard(QFrame):
         footer_outer.addLayout(title_row)
 
 
+
+
+        if preset.get("segmentation_handoff") in ("land_cover", "objects"):
+            from ...segmentation_handoff import card_hint
+            hint = card_hint()
         hint_lbl = ElidedLabel(hint)
         hint_lbl.setStyleSheet(CARD_HINT_QSS)
         footer_outer.addWidget(hint_lbl)

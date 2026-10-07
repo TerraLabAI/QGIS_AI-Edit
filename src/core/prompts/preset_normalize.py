@@ -55,6 +55,8 @@ _KNOWN_PRESET_FIELDS = frozenset({
     "need",
     "demo_url_before",
     "demo_url_after",
+    "demo_url_vector",
+    "example",
 })
 
 
@@ -132,6 +134,182 @@ def _preset_extras(preset: dict) -> dict:
     return extras
 
 
+_HEX_COLOR_CHARS = frozenset("0123456789abcdefABCDEF")
+_VECTORIZE_MODES = frozenset({"classes", "single", "none"})
+_VECTORIZE_NUMBERS = ("tolerance", "simplify", "sieve", "min_pixels", "feature_count")
+
+
+def _safe_example_url(value: Any) -> str | None:
+
+
+
+    if not isinstance(value, str) or not value or len(value) > _MAX_EXTRA_CHARS:
+        return None
+    if any(ord(char) < 32 or ord(char) == 127 for char in value) or "\\" in value:
+        return None
+    from urllib.parse import urlsplit
+
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return None
+    if parsed.scheme:
+        if parsed.scheme.lower() != "https" or not parsed.hostname or parsed.username:
+            return None
+        return value
+    if parsed.netloc or not value.startswith("/"):
+        return None
+    return value
+
+
+def _clean_text(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip() and len(value) <= _MAX_EXTRA_CHARS:
+        return value.strip()
+    return None
+
+
+def _clean_number(value: Any, minimum: float = 0.0) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not math.isfinite(value) or value < minimum:
+        return None
+    return value
+
+
+def _clean_hex_color(value: Any) -> str | None:
+    if (
+        isinstance(value, str)
+        and len(value) == 7
+        and value.startswith("#")
+        and all(c in _HEX_COLOR_CHARS for c in value[1:])
+    ):
+        return value
+    return None
+
+
+def _clean_bbox_4326(value: Any) -> list[float] | None:
+
+    if not isinstance(value, list) or len(value) != 4:
+        return None
+    nums = [_clean_number(v, minimum=-180.0) for v in value]
+    if any(n is None for n in nums):
+        return None
+    west, south, east, north = (float(n) for n in nums)
+    if not (-180.0 <= west < east <= 180.0 and -90.0 <= south < north <= 90.0):
+        return None
+    return [west, south, east, north]
+
+
+def _clean_basemap(value: Any) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+    xyz = value.get("xyz")
+    if not isinstance(xyz, str) or not xyz.lower().startswith("https://") or len(xyz) > _MAX_EXTRA_CHARS:
+        return None
+    if any(ord(char) < 32 or ord(char) == 127 for char in xyz) or "\\" in xyz:
+        return None
+    out: dict = {"xyz": xyz}
+    name = _clean_text(value.get("name"))
+    if name:
+        out["name"] = name
+    how = _clean_text(value.get("how"))
+    if how:
+        out["how"] = how
+    zmax = value.get("zmax")
+    if isinstance(zmax, int) and not isinstance(zmax, bool) and 0 <= zmax <= 24:
+        out["zmax"] = zmax
+    return out
+
+
+def _clean_vectorize(value: Any) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+    mode = value.get("mode")
+    if mode not in _VECTORIZE_MODES:
+        return None
+    out: dict = {"mode": mode}
+    color = _clean_hex_color(value.get("color"))
+    if color:
+        out["color"] = color
+    classes = value.get("classes")
+    if isinstance(classes, list):
+        kept = []
+        for item in classes[:_MAX_EXTRA_ITEMS]:
+            if not isinstance(item, dict):
+                continue
+            label = _clean_text(item.get("label"))
+            if not label:
+                continue
+            entry = {"label": label}
+            item_color = _clean_hex_color(item.get("color"))
+            if item_color:
+                entry["color"] = item_color
+            kept.append(entry)
+        if kept:
+            out["classes"] = kept
+    for key in _VECTORIZE_NUMBERS:
+        number = _clean_number(value.get(key))
+        if number is not None:
+            out[key] = number
+    note = _clean_text(value.get("note"))
+    if note:
+        out["note"] = note
+    return out
+
+
+def _sanitize_example(value: Any) -> dict | None:
+
+
+
+    try:
+        if not isinstance(value, dict) or not _is_json_shaped(value):
+            return None
+        out: dict = {}
+        place = _clean_text(value.get("place"))
+        if place:
+            out["place"] = place
+        gsd = _clean_number(value.get("gsd_m"))
+        if gsd:
+            out["gsd_m"] = gsd
+        resolution = _clean_text(value.get("resolution"))
+        if resolution and len(resolution) <= 8:
+            out["resolution"] = resolution
+        credits = value.get("credits")
+        if isinstance(credits, int) and not isinstance(credits, bool) and credits >= 0:
+            out["credits"] = credits
+        zone = value.get("zone")
+        if isinstance(zone, dict):
+            bbox = _clean_bbox_4326(zone.get("bbox_4326"))
+            if bbox:
+                out["zone"] = {"bbox_4326": bbox}
+        basemap = _clean_basemap(value.get("basemap"))
+        if basemap:
+            out["basemap"] = basemap
+        vectorize = _clean_vectorize(value.get("vectorize"))
+        if vectorize:
+            out["vectorize"] = vectorize
+        chain = value.get("chain")
+        if isinstance(chain, dict):
+            chain_prompt = _clean_text(chain.get("prompt"))
+            if chain_prompt:
+                out["chain"] = {"prompt": chain_prompt}
+        limits = _clean_text(value.get("limits"))
+        if limits:
+            out["limits"] = limits
+        assets = value.get("assets")
+        if isinstance(assets, dict):
+            kept_assets = {
+                key: url
+                for key in ("result_url", "polygons_url", "recipe_url")
+                if (url := _safe_example_url(assets.get(key)))
+            }
+            if kept_assets:
+                out["assets"] = kept_assets
+        return out or None
+    except Exception:  # nosec B110
+        return None
+
+
 def _normalize_preset(preset: dict, source_category: str, placeholder: bool = False) -> dict:
 
 
@@ -166,6 +344,10 @@ def _normalize_preset(preset: dict, source_category: str, placeholder: bool = Fa
         "need": preset.get("need"),
         "demo_url_before": preset.get("demo_url_before"),
         "demo_url_after": preset.get("demo_url_after"),
+
+
+        "demo_url_vector": _safe_example_url(preset.get("demo_url_vector")),
+        "example": _sanitize_example(preset.get("example")),
     })
     if placeholder or is_placeholder_preset(normalized):
 

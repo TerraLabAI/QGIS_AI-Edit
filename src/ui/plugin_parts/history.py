@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+import time
 
 from qgis.core import QgsApplication, QgsGeometry, QgsRectangle
 
@@ -15,6 +16,7 @@ from ...core.logger import log_warning
 from ...core.number_format import format_count
 from ...core.prompts import conversation_thumbs, history_cache
 from ...core.prompts.session_grouping import session_jobs_for
+from ...core.qimage_strips import pixmap_from_bytes
 from ...core.version_lineage import original_version_record, restored_version_record
 from ...workers.generic_request_task import GenericRequestTask
 from ..raster_writer import (
@@ -233,7 +235,7 @@ class HistoryMixin(SessionBaseNoticeMixin):
             from ..raster_writer import before_file_base, write_geotiff
 
             data = client.download_image(url)
-            path = write_geotiff(data, ed, wkt, d, prompt=p)
+            path = write_geotiff(data, ed, wkt, d, prompt=p, request_id=rid or None)
 
 
             before_path = ""
@@ -319,8 +321,6 @@ class HistoryMixin(SessionBaseNoticeMixin):
 
         from qgis.PyQt.QtWidgets import QFileDialog
 
-        from ...core.slug import slugify
-
         side = job.get("download_side") or "output"
         output_url = job.get("input_url") if side == "input" else job.get("output_url")
         if not output_url:
@@ -334,8 +334,7 @@ class HistoryMixin(SessionBaseNoticeMixin):
             return
 
 
-        base_slug = slugify(job.get("prompt") or "")[:40] or "ai_edit"
-        slug = f"{base_slug}_{side}"
+        slug = f"ai_edit_{time.strftime('%Y-%m-%d')}_{side}"
         geo = extent_and_crs_from_job(job)
         client = self._client
 
@@ -352,13 +351,15 @@ class HistoryMixin(SessionBaseNoticeMixin):
             if not dest:
                 return
 
-            def _work(url=output_url, ed=extent_dict, wkt=crs_wkt, p=prompt, path=dest):
+            rid = (job.get("request_id") or None) if side == "output" else None
+
+            def _work(url=output_url, ed=extent_dict, wkt=crs_wkt, p=prompt, path=dest, rid=rid):
                 from ..raster_writer import write_geotiff
 
                 data = client.download_image(url)
                 tmp_dir = tempfile.mkdtemp(prefix="ai_edit_dl_")
                 try:
-                    produced = write_geotiff(data, ed, wkt, tmp_dir, prompt=p)
+                    produced = write_geotiff(data, ed, wkt, tmp_dir, prompt=p, request_id=rid)
 
 
 
@@ -919,7 +920,7 @@ class HistoryMixin(SessionBaseNoticeMixin):
         pixmap = QPixmap()
         if blob:
             try:
-                pixmap.loadFromData(blob)
+                pixmap = pixmap_from_bytes(blob)
             except Exception:  # nosec B110
                 pixmap = QPixmap()
         return pixmap

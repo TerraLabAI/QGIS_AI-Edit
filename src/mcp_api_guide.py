@@ -17,6 +17,9 @@ WORKFLOW = {
     "typical_order": [
         "get_status",
         "get_credits",
+        "set_input_layer",
+        "prepare_interactive",
+        "get_interactive_state",
         "set_zone",
         "get_presets",
         "attach_reference",
@@ -52,6 +55,8 @@ WORKFLOW = {
         "capabilities",
         "guide",
         "get_status",
+        "get_input_layer",
+        "get_interactive_state",
         "get_account",
         "get_credits",
         "get_presets",

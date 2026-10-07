@@ -15,6 +15,7 @@ from qgis.PyQt.QtWidgets import QMenu
 
 from ..core.config_store import get_export_copy
 from ..core.i18n import tr
+from ..core.qimage_strips import icon_from_file
 
 TERRALAB_URL = "https://terra-lab.ai?utm_source=qgis&utm_medium=plugin&utm_campaign=ai-edit&utm_content=menu_more"
 
@@ -125,7 +126,7 @@ def get_or_create_terralab_menu(main_window) -> QMenu:
     )
     check_update.triggered.connect(_open_plugin_manager_updates)
     logo_path = _find_terralab_logo()
-    website_icon = QIcon(logo_path) if logo_path else QIcon()
+    website_icon = icon_from_file(logo_path) if logo_path else QIcon()
     plugins_icon = QIcon(":/images/themes/default/mActionShowPluginManager.svg")
     other_action = menu.addAction(
         plugins_icon,
@@ -210,7 +211,7 @@ def _get_or_create_plugins_submenu(iface) -> QMenu:
                     or a.text() == _PLUGINS_MENU_NAME):
             return sub
     logo_path = _find_terralab_logo()
-    logo_icon = QIcon(logo_path) if logo_path else QIcon()
+    logo_icon = icon_from_file(logo_path) if logo_path else QIcon()
     submenu = plugin_menu.addMenu(logo_icon, _PLUGINS_MENU_NAME)
     submenu.setObjectName(_SUBMENU_OBJECT_NAME)
     sep = submenu.addSeparator()
@@ -220,7 +221,7 @@ def _get_or_create_plugins_submenu(iface) -> QMenu:
         update_icon, get_export_copy("widgets.terralab_menu.check_for_updates", tr("Check for Updates"))
     )
     check_update.triggered.connect(_open_plugin_manager_updates)
-    website_icon = QIcon(logo_path) if logo_path else QIcon()
+    website_icon = icon_from_file(logo_path) if logo_path else QIcon()
     plugins_icon = QIcon(":/images/themes/default/mActionShowPluginManager.svg")
     other_action = submenu.addAction(
         plugins_icon,

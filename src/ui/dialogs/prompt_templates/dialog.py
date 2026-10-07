@@ -468,6 +468,10 @@ class PromptTemplatesDialog(
     def get_selected_preset(self) -> dict | None:
         return self._selected_preset
 
+    def wants_example_zone(self) -> bool:
+
+        return bool(getattr(self, "_example_zone_wanted", False))
+
     def get_restore_job(self) -> dict | None:
 
         return self._restore_job

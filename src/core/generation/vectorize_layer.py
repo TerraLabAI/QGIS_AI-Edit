@@ -34,6 +34,32 @@ from ..raster_writer import ascii_safe_dir
 AI_EDIT_GPKG_FILENAME = "ai_edit.gpkg"
 
 
+
+_AI_NOTE_PROPERTY = "ai_edit/ai_generated_note"
+
+
+def ai_note_for_raster(raster_path: str) -> str:
+
+
+    if not raster_path or not os.path.exists(raster_path):
+        return ""
+    try:
+        from osgeo import gdal
+
+        ds = gdal.Open(raster_path)
+        if ds is None:
+            return ""
+        generated = ds.GetMetadataItem("AI_GENERATED")
+        request_id = ds.GetMetadataItem("AI_EDIT_REQUEST_ID")
+        ds = None
+    except Exception:  # nosec B110
+        return ""
+    if generated != "TRUE":
+        return ""
+    note = "AI generated (TerraLab AI Edit)"
+    return f"{note}, request {request_id}" if request_id else note
+
+
 def _plugin_version() -> str:
 
     from ..request_context import plugin_version
@@ -173,6 +199,7 @@ def persist_layer_to_gpkg(
     table_name: str,
     classes: list[dict],
     source_raster_name: str = "",
+    source_raster_path: str = "",
 ) -> tuple[QgsVectorLayer | None, str]:
 
 
@@ -226,13 +253,16 @@ def persist_layer_to_gpkg(
 
     default_label = classes[0].get("label", "") if len(classes) == 1 else ""
     _configure_attribute_table(layer, default_label)
-    set_layer_provenance(layer, source_raster_name, classes)
+    set_layer_provenance(
+        layer, source_raster_name, classes, ai_note=ai_note_for_raster(source_raster_path)
+    )
     apply_class_style(layer, classes)
     try:
 
         layer.saveStyleToDatabase(table_name, "AI Edit Vectorize", True, "")
     except Exception:  # nosec B110
         pass
+    _save_metadata_to_gpkg(layer)
     log_debug(f"Vectorize layer persisted: {gpkg_path}|{table_name}")
     return layer, PERSIST_OK
 
@@ -313,11 +343,23 @@ def _drop_features_not_in(layer: QgsVectorLayer, keep_ids: set) -> None:
         log_warning(f"Vectorize: could not roll back a partial transplant ({err})")
 
 
+def _save_metadata_to_gpkg(layer: QgsVectorLayer) -> None:
+
+
+    try:
+        layer.saveDefaultMetadata()
+    except Exception:  # nosec B110
+        pass
+
+
 def set_layer_provenance(
     layer: QgsVectorLayer,
     source_raster_name: str,
     classes: list[dict],
+    ai_note: str = "",
 ) -> None:
+
+
 
 
     described = ", ".join(
@@ -330,6 +372,12 @@ def set_layer_provenance(
     abstract = f"Polygons traced by AI Edit (TerraLab) Vectorize. Classes: {described}."
     if source_raster_name:
         abstract += f" Source raster: {source_raster_name}."
+    if ai_note:
+        layer.setCustomProperty(_AI_NOTE_PROPERTY, ai_note)
+    else:
+        ai_note = str(layer.customProperty(_AI_NOTE_PROPERTY, "") or "")
+    if ai_note:
+        abstract += f" {ai_note}."
     version = _plugin_version()
     if version:
         abstract += f" Plugin version: {version}."
@@ -390,19 +438,32 @@ def apply_class_style(layer: QgsVectorLayer, classes: list[dict]) -> None:
     others = _class_fill_symbol((128, 128, 128))
     fill = others.symbolLayer(0)
     fill.setDataDefinedProperty(
-        QgsSymbolLayer.Property.FillColor,
+        _symbol_property("FillColor"),
         QgsProperty.fromExpression(
             "coalesce(color_rgba(color_part(\"class_color\", 'red'), color_part(\"class_color\", 'green'),"
             " color_part(\"class_color\", 'blue'), 205), '128,128,128,205')"
         ),
     )
     fill.setDataDefinedProperty(
-        QgsSymbolLayer.Property.StrokeColor,
+        _symbol_property("StrokeColor"),
         QgsProperty.fromExpression("coalesce(\"class_color\", '#808080')"),
     )
     categories.append(QgsRendererCategory(None, others, tr("Other")))
     layer.setRenderer(QgsCategorizedSymbolRenderer("class_name", categories))
     layer.triggerRepaint()
+
+
+def _symbol_property(name: str):
+
+
+
+
+    scope = getattr(QgsSymbolLayer, "Property", None)
+    for owner, attr in ((scope, name), (scope, f"Property{name}"), (QgsSymbolLayer, f"Property{name}")):
+        value = getattr(owner, attr, None) if owner is not None else None
+        if value is not None:
+            return value
+    raise AttributeError(f"QgsSymbolLayer has no {name} property")
 
 
 def refresh_class_setup(
@@ -421,6 +482,7 @@ def refresh_class_setup(
             layer.saveStyleToDatabase(table, "AI Edit Vectorize", True, "")
         except Exception:  # nosec B110
             pass
+        _save_metadata_to_gpkg(layer)
 
 
 def _configure_attribute_table(layer: QgsVectorLayer, class_label: str) -> None:

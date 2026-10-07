@@ -197,10 +197,10 @@ def _no_tool_hint() -> str:
 
 def _stroke_count_text(count: int) -> str:
     if count <= 0:
-        return get_export_copy("widgets.markup_panel.count_none", tr("No strokes yet"))
+        return get_export_copy("widgets.markup_panel.count_none_marks", tr("No marks yet"))
     if count == 1:
-        return tr("1 stroke")
-    return tr("{n} strokes").format(n=count)
+        return tr("1 mark")
+    return tr("{n} marks").format(n=count)
 
 
 def _undo_shortcut_text() -> str:
@@ -303,8 +303,9 @@ class MarkupPanel(QWidget):
         head_col.setContentsMargins(0, 0, 0, 0)
         head_col.setSpacing(2)
 
+
         head_col.addWidget(build_panel_header(
-            get_export_copy("widgets.markup_panel.header_title_draw", tr("Draw")),
+            get_export_copy("widgets.markup_panel.header_title_markup", tr("Mark up")),
             show_close=False,
         ))
 
@@ -903,13 +904,13 @@ class MarkupPanel(QWidget):
             if count > 0:
                 self._status_label.setText(
                     get_export_copy(
-                        "widgets.markup_panel.stroke_count_singular",
-                        tr("{n} stroke. Click Done to guide the edit with it."),
+                        "widgets.markup_panel.mark_count_singular",
+                        tr("{n} mark. Click Done to guide the edit with it."),
                     ).format(n=count)
                     if count == 1
                     else get_export_copy(
-                        "widgets.markup_panel.stroke_count_plural",
-                        tr("{n} strokes. Click Done to guide the edit with them."),
+                        "widgets.markup_panel.mark_count_plural",
+                        tr("{n} marks. Click Done to guide the edit with them."),
                     ).format(n=count)
                 )
             else:
@@ -928,8 +929,8 @@ class MarkupPanel(QWidget):
 
         if count > 0:
             done_tip = get_export_copy(
-                "widgets.markup_panel.done_tooltip_strokes",
-                tr("Keep your strokes to guide the edit. They are removed from the result."),
+                "widgets.markup_panel.done_tooltip_marks",
+                tr("Keep your marks to guide the edit. They are removed from the result."),
             )
         else:
             done_tip = get_export_copy("widgets.markup_panel.done_tooltip_empty",

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from qgis.PyQt.QtCore import QTimer
+from qgis.PyQt.QtCore import Qt, QTimer
 
 from ...core.config_store import get_export_copy, get_export_dial
-from ...core.entitlements import coerce_tier, is_tier_allowed
+from ...core.entitlements import coerce_dock_tier, is_tier_allowed
 from ...core.i18n import tr
+from ...core.number_format import format_count
 from ..reference_images_widget import free_tier_max_references
 
 _SUBSCRIBE_BANNER_MS = 12000
@@ -36,6 +37,7 @@ class DockVersionsMixin:
 
 
         self._saved_layer_id = ""
+        self.update_result_layer_line()
         self._version_strip.reset(original_pixmap, prompt, meta)
 
 
@@ -83,6 +85,46 @@ class DockVersionsMixin:
 
         del text
 
+    def update_result_layer_line(self) -> None:
+
+
+        label = getattr(self, "_result_layer_line", None)
+        if label is None:
+            return
+        layer_id = getattr(self, "_saved_layer_id", "")
+        name = group = ""
+        if layer_id:
+            try:
+                from qgis.core import QgsProject
+
+                project = QgsProject.instance()
+                layer = project.mapLayer(layer_id)
+                if layer is not None:
+                    name = layer.name()
+                    node = project.layerTreeRoot().findLayer(layer_id)
+                    parent = node.parent() if node is not None else None
+                    if parent is not None and parent is not project.layerTreeRoot():
+                        group = parent.name() or ""
+            except Exception:  # noqa: BLE001
+                name = ""
+        if not name:
+            label.setVisible(False)
+            return
+        if group:
+            where = get_export_copy(
+                "dock.versions.layer_added_in_group",
+                tr('Added to your map in {group} as "{name}"'),
+            ).replace("{group}", group).replace("{name}", name)
+        else:
+            where = get_export_copy(
+                "dock.versions.layer_added",
+                tr('Added to your map as "{name}"'),
+            ).replace("{name}", name)
+        marked = get_export_copy("dock.versions.marked_ai", tr("Marked as AI generated"))
+        label.setTextFormat(Qt.TextFormat.PlainText)
+        label.setText(f"{where}\n{marked}")
+        label.setVisible(True)
+
     def saved_layer_probe(self):
 
 
@@ -127,7 +169,7 @@ class DockVersionsMixin:
 
 
 
-        self._selected_resolution = coerce_tier(
+        self._selected_resolution = coerce_dock_tier(
             self._selected_resolution, self._is_free_tier
         )
         for container in (self._prompt_container, self._result_prompt_container):
@@ -136,6 +178,13 @@ class DockVersionsMixin:
                 self._resolution_credit_costs,
                 self._is_free_tier,
             )
+
+        if (
+            getattr(self, "_generate_btn", None) is not None
+            and getattr(self, "_version_strip", None) is not None
+            and getattr(self, "_result_regenerate_btn", None) is not None
+        ):
+            self._update_generate_button_text()
 
     def _show_subscribe_banner(self, message: str, surface: str) -> None:
 
@@ -183,6 +232,8 @@ class DockVersionsMixin:
 
         self._hide_status_box()
 
+        self._api_resolution = None
+
         self._selected_resolution = label
 
 
@@ -199,8 +250,9 @@ class DockVersionsMixin:
 
 
         loading = bool(self._imagery_loading)
-        if getattr(self, "_generate_label_loading", None) is not loading:
-            self._generate_label_loading = loading
+        cost = self._selected_credit_cost()
+        if getattr(self, "_generate_label_loading", None) != (loading, cost):
+            self._generate_label_loading = (loading, cost)
             if loading:
                 self._generate_btn.setText(
                     get_export_copy("dock.versions.imagery_loading", tr("Loading imagery..."))
@@ -210,11 +262,36 @@ class DockVersionsMixin:
                     tr("Waiting for the example basemap to finish loading before you generate"),
                 ))
             else:
-                self._generate_btn.setText(get_export_copy("dock.versions.generate", tr("Generate")))
+                self._generate_btn.setText(self._with_cost(
+                    get_export_copy("dock.versions.generate", tr("Generate")), cost))
                 self._generate_btn.setToolTip(
                     get_export_copy("dock.versions.generate_zone_tooltip", tr("Generate the edit on your zone"))
                 )
         self._update_result_generate_label()
+
+    def _selected_credit_cost(self) -> int | None:
+
+
+        try:
+            tier = coerce_dock_tier(self._selected_resolution, self._is_free_tier)
+        except Exception:  # noqa: BLE001
+            return None
+        cost = (self._resolution_credit_costs or {}).get(tier)
+        return cost if isinstance(cost, int) and cost > 0 else None
+
+    @staticmethod
+    def _with_cost(label: str, cost: int | None) -> str:
+
+
+        if cost is None:
+            return label
+        if cost == 1:
+            suffix = tr("{n} credit")
+        else:
+            suffix = tr("{n} credits")
+        return get_export_copy(
+            "dock.versions.button_with_cost", tr("{label}, {cost}")
+        ).replace("{label}", label).replace("{cost}", suffix.replace("{n}", format_count(cost)))
 
     def _update_result_generate_label(self):
 
@@ -228,16 +305,18 @@ class DockVersionsMixin:
 
 
         base = self._version_strip.label_for(self._version_strip.selected_index())
-        if getattr(self, "_result_generate_base", None) == base:
+        cost = self._selected_credit_cost()
+        if getattr(self, "_result_generate_base", None) == (base, cost):
             return
-        self._result_generate_base = base
+        self._result_generate_base = (base, cost)
 
 
-        self._result_regenerate_btn.setText(
+        self._result_regenerate_btn.setText(self._with_cost(
             get_export_copy(
                 "dock.versions.generate_from_base", tr("Generate from {base}")
-            ).replace("{base}", base)
-        )
+            ).replace("{base}", base),
+            cost,
+        ))
         self._result_prompt_input.setPlaceholderText(
             get_export_copy(
                 "dock.versions.next_change_placeholder",
@@ -258,10 +337,10 @@ class DockVersionsMixin:
         row = getattr(self, "_result_rerun_row", None)
         if row is None:
             return
-        has_result = self._version_strip.count() > 1
+
+
         self._result_try_again_btn.setVisible(self._version_strip.selected_index() > 0)
-        row.setVisible(has_result)
-        row._fit(row.width())
+        row.setVisible(False)
 
     def set_resolution_credit_costs(self, costs: dict[str, int]):
 
@@ -271,6 +350,15 @@ class DockVersionsMixin:
         self._refresh_resolution_triggers()
 
         self.refresh_free_plan_line()
+
+    def set_tier_ground_resolution(self, tier: str, metres: float | None) -> None:
+
+        for container in (self._prompt_container, self._result_prompt_container):
+            container.set_tier_ground_resolution(tier, metres)
+
+    def clear_tier_ground_resolutions(self) -> None:
+        for container in (self._prompt_container, self._result_prompt_container):
+            container.clear_tier_ground_resolutions()
 
     def get_selected_resolution(self) -> str:
 

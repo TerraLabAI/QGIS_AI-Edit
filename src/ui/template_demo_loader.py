@@ -25,6 +25,7 @@ from ..api.network_response import transfer_timeout, valid_http_url
 from ..core.config_store import get_export_dial
 from ..core.logger import log_debug, log_warning
 from ..core.output_paths import replace_with_retry
+from ..core.qimage_strips import pixmap_from_bytes, pixmap_from_file
 from ..core.qt_compat import (
     CacheLocation,
     HttpStatusCodeAttribute,
@@ -152,7 +153,7 @@ def read_cached_pixmap(template_id: str, which: str) -> QPixmap | None:
         age = time.time() - path.stat().st_mtime
         if age < 0 or age > _demo_cache_ttl():
             return None
-        pm = QPixmap(str(path))
+        pm = pixmap_from_file(str(path))
         if pm.isNull() or pm.width() < 2 or pm.height() < 2:
             return None
         return pm
@@ -344,8 +345,8 @@ class TemplateDemoLoader(QObject):
         buf = bytes(data)
         if len(buf) < get_export_dial("widgets.template_demo_loader.min_image_bytes", _MIN_IMAGE_BYTES):
             return None
-        pm = QPixmap()
-        if not pm.loadFromData(buf) or pm.width() < 2 or pm.height() < 2:
+        pm = pixmap_from_bytes(buf)
+        if pm.isNull() or pm.width() < 2 or pm.height() < 2:
             log_debug(f"Demo bytes did not decode for {template_id}/{which}")
             return None
         for key in keys:

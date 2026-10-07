@@ -59,7 +59,7 @@ def _pro_points() -> list[str]:
             points.append(line)
         return points
     points = [
-        get_export_copy("dialogs.account_settings_dialog.pro_point_quality", tr("Detailed and Maximum quality")),
+        get_export_copy("dialogs.account_settings_dialog.pro_point_quality_4k", tr("Maximum quality (4K)")),
         get_export_copy("dialogs.account_settings_dialog.pro_point_commercial", tr("Commercial use")),
     ]
     if cap is not None:

@@ -455,3 +455,43 @@ class OnboardingMixin:
                 pass  # nosec B110
         if self._dock_widget is not None:
             self._dock_widget.set_imagery_loading(False)
+
+    def _on_example_zone_requested(self, preset: dict):
+
+
+
+
+        from ..canvas_exporter import validate_zone
+        from ..example_zone import prepare_example_map
+
+        example = preset.get("example") if isinstance(preset, dict) else None
+        if not isinstance(example, dict) or self._dock_widget is None or self._canvas is None:
+            return
+        if self._worker is not None and self._worker.is_active():
+            self._dock_widget._show_status_box(
+                tr("Wait for the current generation before changing its zone."), "info")
+            return
+        layer, rect = prepare_example_map(example, self._canvas)
+        if layer is not None:
+
+
+            combo = getattr(self._dock_widget, "_layer_combo", None)
+            if combo is not None:
+                try:
+                    combo.setLayer(layer)
+                except (RuntimeError, AttributeError):
+                    pass  # nosec B110
+            self._start_imagery_gate()
+        if rect is None:
+            log_warning("example zone could not be placed on this map")
+            return
+        try:
+            validate_zone(rect, self._canvas.mapSettings().destinationCrs(), self._canvas.rotation())
+        except Exception as err:  # noqa: BLE001
+            message = getattr(err, "message", "") or tr("This zone cannot be used.")
+            self._dock_widget._show_status_box(message, "error")
+            return
+        self._on_zone_selected(rect, None)
+
+
+        self._dock_widget._apply_example_resolution(preset)

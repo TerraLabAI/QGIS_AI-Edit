@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 
 from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import Qt, QTimer
+from qgis.PyQt.QtCore import QSettings, Qt, QTimer
 
 from ...core import qt_compat as QtC
 from ...core import telemetry
@@ -24,6 +24,12 @@ from .errors import _enrich_error_message, _localize_server_error
 
 
 _BOOTSTRAP_RETRY_DELAYS_MS = (30_000, 120_000, 300_000)
+
+
+_SEEN_VERSION_KEY = "AIEdit/dock_shown_version"
+
+
+_DOCK_OPEN_KEY = "AIEdit/dock_open"
 
 
 def _server_catalog_request(client, force_refresh: bool, auth: dict | None = None):
@@ -56,6 +62,49 @@ class StartupMixin:
             self._ensure_dock_height()
             self._emit_plugin_opened("manual")
             log_debug("Dock shown")
+
+    def _open_dock_at_start(self) -> str | None:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        settings = QSettings()
+        dock = self._dock_widget
+        first_start = not settings.value(_SEEN_VERSION_KEY, "", type=str)
+        settings.setValue(_SEEN_VERSION_KEY, self._read_plugin_version())
+        if first_start:
+            dock.show()
+            dock.raise_()
+            self._ensure_dock_height()
+            settings.setValue(_DOCK_OPEN_KEY, True)
+            return "auto_install"
+        if settings.value(_DOCK_OPEN_KEY, False, type=bool):
+            dock.show()
+        return None
+
+    def _remember_dock_open(self) -> None:
+
+
+
+
+
+        dock = self._dock_widget
+        if dock is None:
+            return
+        try:
+            QSettings().setValue(_DOCK_OPEN_KEY, not dock.isHidden())
+        except RuntimeError:  # nosec B110
+            pass
 
     def _emit_plugin_opened(self, open_source: str) -> None:
 
@@ -530,6 +579,7 @@ class StartupMixin:
         return False
 
     def _on_dock_visibility_changed(self, visible: bool):
+        self._remember_dock_open()
         if visible:
 
 

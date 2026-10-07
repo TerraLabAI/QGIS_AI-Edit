@@ -551,7 +551,7 @@ def _build_guide_ai_hint(dock: AIEditDockWidget) -> None:
         ("{ref}", link.format("ref", tokens.LINK_INK, get_export_copy(
             "dock.prompt_container.reference_chip_plural", tr("References"), escape=True))),
         ("{markup}", link.format("draw", tokens.LINK_INK, get_export_copy(
-            "dock.prompt_container.markup_chip_draw", tr("Draw"), escape=True))),
+            "dock.prompt_container.markup_chip_markup", tr("Mark up"), escape=True))),
         ("{library}", link.format("library", tokens.LINK_INK, get_export_copy(
             "dock.prompt_container.library_btn", tr("Library"), escape=True))),
     ):

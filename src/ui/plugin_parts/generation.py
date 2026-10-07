@@ -12,7 +12,7 @@ from ...core import telemetry
 from ...core import telemetry_events as te
 from ...core.auth.activation_manager import ACTIVATION_TIMESTAMP_KEY, has_consent, save_consent
 from ...core.config_store import get_config_origin
-from ...core.entitlements import coerce_tier
+from ...core.entitlements import coerce_dock_tier, coerce_tier
 from ...core.errors import NETWORK_ERROR_CODES, build_failure_props
 from ...core.i18n import tr
 from ...core.logger import log, log_debug, log_warning
@@ -103,6 +103,11 @@ class GenerationMixin:
             enriched["days_since_activation"] = days
         return enriched
 
+    def _record_generation_cancelled(self):
+
+        self._last_generation_error = tr("Generation cancelled")
+        self._last_generation_error_code = "GENERATION_CANCELLED"
+
     def _on_generation_task_terminated(self):
 
 
@@ -116,6 +121,7 @@ class GenerationMixin:
         if self._generation_cancel_handled:
             self._generation_cancel_handled = False
             return
+        self._record_generation_cancelled()
 
 
 
@@ -262,7 +268,7 @@ class GenerationMixin:
         telemetry.track(te.MARKUP_HIDDEN_WARNED, {})
         bar = self._iface.messageBar()
         widget = bar.createMessage(
-            tr("Your drawing won't be used"), tr("The AI Edit drawing layer is hidden.")
+            tr("Your mark up won't be used"), tr("The AI Edit Mark up layer is hidden.")
         )
         show_button = QPushButton(tr("Show it and generate"))
         without_button = QPushButton(tr("Generate without it"))
@@ -382,10 +388,17 @@ class GenerationMixin:
 
 
 
-        suggested_res = coerce_tier(
-            self._dock_widget.get_selected_resolution(),
-            self._dock_widget._is_free_tier,
-        )
+
+
+        api_res = getattr(self._dock_widget, "_api_resolution", None)
+        self._dock_widget._api_resolution = None
+        if api_res:
+            suggested_res = coerce_tier(api_res, self._dock_widget._is_free_tier)
+        else:
+            suggested_res = coerce_dock_tier(
+                self._dock_widget.get_selected_resolution(),
+                self._dock_widget._is_free_tier,
+            )
 
 
 
@@ -638,6 +651,7 @@ class GenerationMixin:
             cancelled = True
         if not cancelled:
             return
+        self._record_generation_cancelled()
         pending = self._pending_generation
         self._pending_generation = None
         self._export_worker = None

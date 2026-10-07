@@ -20,9 +20,11 @@ class GenerationMixin:
     def _apply_resolution(self, label: str | None) -> dict:
 
         from .core.entitlements import is_tier_allowed
-        from .core.resolution_labels import resolution_tiers
+        from .core.resolution_labels import api_resolution_tiers
 
-        tiers = list(resolution_tiers())
+
+
+        tiers = list(api_resolution_tiers())
         label = (label or "").strip()
         if not label:
             return {"resolution": self._selected_resolution(), "applied": False}
@@ -37,6 +39,12 @@ class GenerationMixin:
                 "plan_restricted": True,
             }
         dock = self._dock()
+        from .core.resolution_labels import resolution_tiers as picker_tiers
+
+        if dock is not None and label not in picker_tiers():
+
+            dock._api_resolution = label
+            return {"resolution": label, "applied": True}
         setter = getattr(dock, "_on_resolution_selected", None) if dock is not None else None
         if not callable(setter):
             return {"resolution": label, "applied": False}
@@ -228,6 +236,14 @@ class GenerationMixin:
                 "busy": True,
                 "_error": "A generation is already running",
             }
+        drawing = self._interactive_drawing()
+        if drawing:
+            return {
+                "submitted": False,
+                "error_code": "INPUT_IN_PROGRESS",
+                "drawing": drawing,
+                "_error": "Finish or cancel the current drawing before generating. Nothing was sent or billed.",
+            }
         dock = self._open_dock()
         if dock is None:
             return {"submitted": False, "_error": "The AI Edit panel is not available."}
@@ -350,16 +366,23 @@ class GenerationMixin:
 
 
 
+
+
+
+
         plugin = self._plugin
         running = self._busy()
         last_request_id = getattr(plugin, "_last_completed_request_id", None)
         last_error = str(getattr(plugin, "_last_generation_error", "") or "")
         last_error_code = str(getattr(plugin, "_last_generation_error_code", "") or "")
+        cancelled = not running and last_error_code == "GENERATION_CANCELLED"
         if running:
             hint = (
                 "Poll generation_status() again in about 5 seconds; it is finished "
                 "when running is False and state is 'done'."
             )
+        elif cancelled:
+            hint = "The latest attempt was cancelled. Historical results do not belong to that attempt."
         elif last_error:
             hint = (
                 "The last run failed: read error and error_code. Fix what they name "
@@ -372,14 +395,29 @@ class GenerationMixin:
             )
         else:
             hint = "Call set_zone(bbox) then generate(prompt) to start an edit."
+        state = "generating" if running else ("done" if last_request_id else "idle")
+        if cancelled:
+            state = "cancelled"
         result_layers = self._result_layers()
+        loaded_ids = {layer_id for layer_id, _name in result_layers}
+        latest_id = None
+        if last_request_id and not running and not last_error:
+            latest_id = next((record.get("layer_id")
+                              for record in reversed(getattr(plugin, "_versions", []) or [])
+                              if record.get("request_id") == last_request_id
+                              and record.get("layer_id") in loaded_ids), None)
         return {
             "running": running,
 
             "in_flight": running,
-            "state": "generating" if running else ("done" if last_request_id else "idle"),
+            "state": state,
+            "cancelled": cancelled,
             "result_layers": [name for _id, name in result_layers],
             "result_layer_ids": [layer_id for layer_id, _name in result_layers],
+            "latest_result_layer_id": latest_id,
+            "output_kind": "generated_image",
+            "requires_visual_review": True,
+            "input_layer": self.get_input_layer(),
             "last_completed_request_id": last_request_id,
             "dock_status": self._dock_status(),
             "error": last_error,

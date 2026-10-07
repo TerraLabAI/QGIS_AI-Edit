@@ -43,7 +43,6 @@ class ZoneDrawHint(QObject):
         self._state_text = ""
         self._state_count = -1
         self._shown = False
-        self._status_shown = False
         self._flash_timer = QTimer(self)
         self._flash_timer.setSingleShot(True)
         self._flash_timer.timeout.connect(self._end_flash)
@@ -78,7 +77,6 @@ class ZoneDrawHint(QObject):
         self._flash_timer.stop()
         if self._label is not None:
             self._label.hide()
-        self._clear_status()
         self._set_dock_text(None)
 
     def dispose(self) -> None:
@@ -123,7 +121,6 @@ class ZoneDrawHint(QObject):
         self._place()
         label.show()
         label.raise_()
-        self._show_status(text)
         self._set_dock_text(text)
 
     def _ensure_label(self) -> QLabel:
@@ -183,28 +180,6 @@ class ZoneDrawHint(QObject):
         except ImportError:
             return None
         return iface
-
-    def _show_status(self, text: str) -> None:
-        iface = self._iface()
-        if iface is None:
-            return
-        try:
-            iface.statusBarIface().showMessage(text)
-            self._status_shown = True
-        except (AttributeError, RuntimeError):
-            pass
-
-    def _clear_status(self) -> None:
-        if not self._status_shown:
-            return
-        self._status_shown = False
-        iface = self._iface()
-        if iface is None:
-            return
-        try:
-            iface.statusBarIface().clearMessage()
-        except (AttributeError, RuntimeError):
-            pass
 
     def _set_dock_text(self, text: str | None) -> None:
 

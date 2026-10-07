@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 
 from qgis.core import QgsProcessingProvider
-from qgis.PyQt.QtGui import QIcon
 
 from .algorithm_edit_status import EditStatusAlgorithm
 from .algorithm_generate_imagery import GenerateImageryAlgorithm
@@ -21,6 +20,9 @@ from .algorithm_vectorize_color import VectorizeColorAlgorithm
 
 
 TERRAEDIT_PROVIDER_ID = "terraedit"
+
+
+_PROVIDER_ICON = None
 
 
 class TerraEditProcessingProvider(QgsProcessingProvider):
@@ -36,13 +38,20 @@ class TerraEditProcessingProvider(QgsProcessingProvider):
         return "TerraLab AI Edit for QGIS"
 
     def icon(self):
-        icon_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-            "resources", "icons", "icon.png",
-        )
-        if os.path.exists(icon_path):
-            return QIcon(icon_path)
-        return super().icon()
+
+
+
+        global _PROVIDER_ICON
+        if _PROVIDER_ICON is None:
+            from ..core.qimage_strips import icon_from_file
+            icon_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                "resources", "icons", "icon.png",
+            )
+            _PROVIDER_ICON = icon_from_file(icon_path) if os.path.exists(icon_path) else False
+        if _PROVIDER_ICON is False or _PROVIDER_ICON.isNull():
+            return super().icon()
+        return _PROVIDER_ICON
 
     def loadAlgorithms(self):
         self.addAlgorithm(EditStatusAlgorithm())

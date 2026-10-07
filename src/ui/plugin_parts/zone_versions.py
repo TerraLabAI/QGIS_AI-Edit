@@ -19,6 +19,7 @@ from ...core.canvas_export.zone_validation import (
 from ...core.config_store import get_export_copy, get_export_dial
 from ...core.i18n import tr
 from ...core.logger import log_debug, log_warning
+from ...core.qimage_strips import pixmap_from_bytes
 from ..dock.blocked_reasons import LAUNCH_BLOCK_WORKER_BUSY
 
 
@@ -36,6 +37,14 @@ _NOTIFY_EXIT_HISTORY_HINT_S = 6
 def zone_crs_changed_message() -> str:
 
     return tr("The map CRS changed after you drew the zone. Draw the zone again.")
+
+
+
+_ZONE_TIER_SIZE_TASK_ATTRS = (
+    "_zone_tier_size_task",
+    "_zone_tier_size_task_b",
+    "_zone_tier_size_task_c",
+)
 
 
 class ZoneVersionsMixin:
@@ -74,6 +83,11 @@ class ZoneVersionsMixin:
 
 
 
+        if (self._pending_generation is not None
+                or getattr(self, "_size_request_token", None) is not None
+                or (self._worker is not None and self._worker.is_active())
+                or (self._export_worker is not None and self._export_worker.is_active())):
+            self._record_generation_cancelled()
         self._disarm_swipe()
         self._pills_armed = False
 
@@ -547,7 +561,6 @@ class ZoneVersionsMixin:
 
 
 
-        from ...core.entitlements import coerce_tier
         from ...workers.generic_request_task import GenericRequestTask
         from ..canvas_exporter import ground_resolution_for_size
         from .generation import _served_size, export_size_inputs
@@ -584,29 +597,45 @@ class ZoneVersionsMixin:
         self._zone_size_task = task
         QgsApplication.taskManager().addTask(task)
 
+
+
+
+        from ...core.resolution_labels import resolution_tiers
+
         try:
-            tier = coerce_tier(
-                self._dock_widget.get_selected_resolution(), self._dock_widget._is_free_tier
-            )
+            self._dock_widget.clear_tier_ground_resolutions()
         except (AttributeError, RuntimeError):
-            tier = None
-        tier_inputs = export_size_inputs(settings, extent, tier) if tier else None
-        if not tier_inputs:
-            return
+            pass
 
-        def _on_tier_size(result, i=tier_inputs):
-            size = _served_size(result)
-            if size is not None:
+
+        for slot, tier in zip(_ZONE_TIER_SIZE_TASK_ATTRS, resolution_tiers()):
+            tier_inputs = export_size_inputs(settings, extent, tier)
+            if not tier_inputs:
+                continue
+
+            def _on_tier_size(result, i=tier_inputs, t=tier, ext=zone, ms=settings):
+                size = _served_size(result)
+                if size is None or size[0] <= 0 or size[1] <= 0:
+                    return
                 self._remember_export_size(i, size)
+                if self._dock_widget is None or self._selected_extent is None:
+                    return
+                if QgsRectangle(self._selected_extent) != ext:
+                    return
+                try:
+                    gr = ground_resolution_for_size(ms, ext, size[0], size[1])
+                    self._dock_widget.set_tier_ground_resolution(t, gr)
+                except RuntimeError:  # nosec B110
+                    pass
 
-        tier_task = GenericRequestTask(
-            "AI Edit zone size",
-            lambda c=self._client, a=auth, i=tier_inputs: c.get_export_size(a, i),
-            silent=True,
-        )
-        tier_task.succeeded.connect(_on_tier_size)
-        self._zone_tier_size_task = tier_task
-        QgsApplication.taskManager().addTask(tier_task)
+            tier_task = GenericRequestTask(
+                "AI Edit zone size",
+                lambda c=self._client, a=auth, i=tier_inputs: c.get_export_size(a, i),
+                silent=True,
+            )
+            tier_task.succeeded.connect(_on_tier_size)
+            setattr(self, slot, tier_task)
+            QgsApplication.taskManager().addTask(tier_task)
 
     def _publish_shared_zone(self, label: str = "") -> None:
 
@@ -974,8 +1003,7 @@ class ZoneVersionsMixin:
         try:
             import base64
 
-            pixmap = QPixmap()
-            pixmap.loadFromData(base64.b64decode(image_b64))
+            pixmap = pixmap_from_bytes(base64.b64decode(image_b64))
             return pixmap if not pixmap.isNull() else None
         except Exception as err:  # nosec B110
             log_warning(f"version thumb decode failed: {err}")

@@ -22,6 +22,7 @@ from qgis.PyQt.QtGui import QPixmap
 from ..config_store import get_export_dial
 from ..logger import log_warning
 from ..output_paths import remove_with_retry, replace_with_retry
+from ..qimage_strips import pixmap_from_file
 
 _THUMB_DIR_NAME = "ai_edit_conversation_thumbs"
 
@@ -110,7 +111,7 @@ def load_thumb(request_id: str) -> QPixmap | None:
     path = _thumb_path(request_id)
     if path is None or not os.path.isfile(path):
         return None
-    pixmap = QPixmap(path)
+    pixmap = pixmap_from_file(path)
     return None if pixmap.isNull() else pixmap
 
 

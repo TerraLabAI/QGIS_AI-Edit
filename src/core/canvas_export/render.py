@@ -34,6 +34,14 @@ _BLANK_MIN_SHARE = 0.999
 _BLANK_MAX_CONTENT_PX = 64
 
 
+
+
+
+
+_BLANK_RETRY_PASSES = 2
+_TILED_PROVIDERS = ("wms", "wmts", "xyz", "arcgismapserver")
+
+
 class MapNotLoadedError(RuntimeError):
     pass
 
@@ -302,6 +310,17 @@ def prepare_export(
     )
 
 
+def _has_tiled_layer(settings: QgsMapSettings) -> bool:
+
+    try:
+        return any(
+            layer is not None and layer.providerType() in _TILED_PROVIDERS
+            for layer in settings.layers()
+        )
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _render_settings_to_image(
     settings: QgsMapSettings,
     out_w: int,
@@ -445,6 +464,14 @@ def render_export(
         prep.settings, prep.out_w, prep.out_h, prep.background_color, progress_cb
     )
 
+    if is_blank_render(image, prep.background_color) and _has_tiled_layer(prep.settings):
+        for attempt in range(_BLANK_RETRY_PASSES):
+            log_warning(f"Export render came back blank; tile pass {attempt + 1}")
+            image = _render_settings_to_image(
+                prep.settings, prep.out_w, prep.out_h, prep.background_color
+            )
+            if not is_blank_render(image, prep.background_color):
+                break
     if is_blank_render(image, prep.background_color):
         raise MapNotLoadedError(map_not_loaded_message())
     if _marks_are_baked(prep):

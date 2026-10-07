@@ -92,6 +92,8 @@ class AIEditPlugin(
         self._export_size_task = None
         self._zone_size_task = None
         self._zone_tier_size_task = None
+        self._zone_tier_size_task_b = None
+        self._zone_tier_size_task_c = None
         self._size_request_token = None
 
 
