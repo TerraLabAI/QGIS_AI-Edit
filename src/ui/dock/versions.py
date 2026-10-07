@@ -120,9 +120,8 @@ class DockVersionsMixin:
                 "dock.versions.layer_added",
                 tr('Added to your map as "{name}"'),
             ).replace("{name}", name)
-        marked = get_export_copy("dock.versions.marked_ai", tr("Marked as AI generated"))
         label.setTextFormat(Qt.TextFormat.PlainText)
-        label.setText(f"{where}\n{marked}")
+        label.setText(where)
         label.setVisible(True)
 
     def saved_layer_probe(self):
@@ -337,10 +336,10 @@ class DockVersionsMixin:
         row = getattr(self, "_result_rerun_row", None)
         if row is None:
             return
-
-
+        has_result = self._version_strip.count() > 1
         self._result_try_again_btn.setVisible(self._version_strip.selected_index() > 0)
-        row.setVisible(False)
+        row.setVisible(has_result)
+        row._fit(row.width())
 
     def set_resolution_credit_costs(self, costs: dict[str, int]):
 

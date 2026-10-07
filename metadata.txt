@@ -6,12 +6,15 @@ qgisMaximumVersion=4.99
 # Qt6 builds of QGIS 3.x refuse to load a plugin that omits this line.
 # QGIS 4 dropped the check and a Qt5 build never runs it.
 supportsQt6=True
-version=1.13.0
+version=1.13.1
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.13.1
+    - After a result, New edit, Try again and Same edit elsewhere are one click away again
+
     1.13.0
     - Pick 2K or 4K output, with the ground resolution and the credit cost shown on Generate
     - Library examples show a finished result; Try on this zone runs the same edit on your map
@@ -35,12 +38,6 @@ changelog=
     - The demo map opens with a ready zone and prompt, plus three one-click starting prompts
     - Try again makes a new variation; Same edit elsewhere reuses your prompt on a new zone
     - Closing the panel keeps your zone and prompt, and new results show up ticked on the map
-
-    1.9.3
-    - Vectorize runs again on QGIS 3.44 instead of stopping with a Python error
-    - Vectorized classes fit together with no gap or overlap, rounded corners included
-    - Shapes under the minimum size join the class around them instead of leaving holes
-    - A class renamed in the attribute table stays visible on the map
 
 about=
     Show a project before it exists, on the aerial imagery you already have open
