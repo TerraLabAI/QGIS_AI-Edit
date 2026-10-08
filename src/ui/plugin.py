@@ -123,6 +123,18 @@ class AIEditPlugin(
 
         self._pairing_codes: list[str] = []
 
+
+
+        self._pairing_attempts: dict = {}
+        self._pairing_secrets: dict = {}
+        self._pairing_listener = None
+        self._pairing_fallback_timer = None
+        self._pairing_code_target = ""
+
+        self._pairing_claims_in_flight: dict = {}
+
+        self._pairing_typed_unanswered: set = set()
+
         self._last_key_validation_unix: float = 0.0
 
         self._markup_manager: MarkupLayerManager | None = None

@@ -653,6 +653,7 @@ class DockAccountMixin:
         )
         self._connect_section.setVisible(False)
         self._activation_message.setVisible(False)
+        self._pairing_code_box.setVisible(False)
         self._pairing_wait_section.setVisible(True)
         self._pairing_anim_timer.start()
 
@@ -691,7 +692,42 @@ class DockAccountMixin:
 
         self._pairing_active = False
         self._pairing_anim_timer.stop()
+        self._pairing_code_box.setVisible(False)
         self._pairing_wait_section.setVisible(False)
+
+    def show_pairing_code_input(self):
+
+
+        if not self._pairing_active or self._pairing_code_box.isVisible():
+            return
+        self._pairing_code_input.clear()
+        self._pairing_code_error.setVisible(False)
+        self._pairing_code_btn.setEnabled(True)
+        self._pairing_code_box.setVisible(True)
+        self._pairing_code_input.setFocus()
+
+    def is_pairing_code_input_shown(self) -> bool:
+        return self._pairing_code_box.isVisible()
+
+    def show_pairing_code_error(self, text: str):
+
+        self._pairing_code_btn.setEnabled(True)
+        self._pairing_code_error.setStyleSheet(f"color: {RED_TEXT}; font-size: {FONT_HINT}px;")
+        self._pairing_code_error.setText(text)
+        self._pairing_code_error.setVisible(bool(text))
+
+    def _on_pairing_code_edited(self, text: str):
+        from ...core.auth.pairing_v2 import format_user_code
+        shown = format_user_code(text)
+        if shown != text:
+            self._pairing_code_input.setText(shown)
+        self._pairing_code_error.setVisible(False)
+
+    def _on_pairing_code_submit(self):
+        if not self._pairing_code_btn.isEnabled():
+            return
+        self._pairing_code_btn.setEnabled(False)
+        self.pairing_code_entered.emit(self._pairing_code_input.text())
 
     def show_pairing_idle(self):
 

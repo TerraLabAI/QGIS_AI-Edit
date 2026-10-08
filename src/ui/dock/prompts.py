@@ -7,7 +7,7 @@ from qgis.PyQt.QtWidgets import QTextEdit
 from ...core import qt_compat as QtC
 from ...core import telemetry
 from ...core import telemetry_events as te
-from ...core.config_store import ConfigMissing, get_export_copy, require_dial
+from ...core.config_store import get_export_copy
 from ...core.i18n import tr
 from ...core.number_format import format_count
 from ...core.prompts.prompt_minimum import (
@@ -15,7 +15,6 @@ from ...core.prompts.prompt_minimum import (
     check_prompt_minimum,
     served_max_prompt_chars,
 )
-from ...core.prompts.prompt_presets import detect_prompt_guidance
 from ..onboarding_hint import (
     BLUE_TINT,
     HINT_MARKUP_PROMPT,
@@ -25,7 +24,7 @@ from ..onboarding_hint import (
 )
 from .blocked_reasons import GENERATE_BLOCK_NO_ZONE, cjk_prompt_minimum_text
 from .design_tokens import BTN_GHOST_WIDE_QSS, BTN_PRIMARY_WIDE_QSS
-from .zone_sources import large_zone_km2
+from .prompt_hint_requests import PromptHintRequester
 
 _NUMBERS_RE = re.compile(r"\d+")
 
@@ -84,15 +83,9 @@ class DockPromptMixin:
         self._clear_active_template_if_empty(prompt)
         self._update_prompt_guidance_hint(prompt)
 
-    def _guidance_message_for(self, text: str) -> str | None:
+    def _guidance_message_for(self, kind: str | None) -> str | None:
 
 
-        kind = detect_prompt_guidance(
-            text, has_template=bool(self._active_template_id)
-        )
-
-
-        self._last_guidance_kind = kind
 
 
 
@@ -148,7 +141,7 @@ class DockPromptMixin:
             installed = is_installed()
             run()
 
-            self._update_prompt_guidance_hint()
+            self._refresh_guidance_hints()
         else:
             installed = open_ai_segmentation()
         telemetry.track(te.SEG_REDIRECT_CLICKED, {
@@ -157,12 +150,70 @@ class DockPromptMixin:
         })
         telemetry.flush()
 
+    def _prompt_hint_requester(self) -> PromptHintRequester:
+
+        requester = getattr(self, "_prompt_hints", None)
+        if requester is None:
+            requester = PromptHintRequester(
+                self._show_prompt_hint_kind, self._prompt_hint_client_and_auth, self
+            )
+            self._prompt_hints = requester
+        return requester
+
+    def _prompt_hint_client_and_auth(self) -> tuple:
+        client = getattr(self, "_library_client", None)
+        manager = getattr(self, "_library_auth_manager", None)
+        try:
+            auth = manager.get_auth_header() if manager is not None else None
+        except Exception:  # noqa: BLE001
+            auth = None
+        return client, auth
+
+    def _ask_prompt_hint(self, box: str, prompt: str) -> None:
+        self._prompt_hint_requester().request(
+            box, prompt, bool(self._active_template_id)
+        )
+
+    def _show_prompt_hint_kind(self, box: str, kind: str | None) -> None:
+
+
+
+        self._last_guidance_kind = kind
+        kinds = getattr(self, "_guidance_kind_by_box", None)
+        if kinds is None:
+            kinds = {}
+            self._guidance_kind_by_box = kinds
+        kinds[box] = kind
+        try:
+            if box == "result":
+                self._apply_guidance_hint(
+                    self._result_guidance_hint, self._guidance_message_for(kind)
+                )
+            else:
+                self._apply_prompt_guidance_message(self._guidance_message_for(kind))
+        except RuntimeError:  # nosec B110
+            pass
+
+    def _refresh_guidance_hints(self) -> None:
+
+
+        kinds = getattr(self, "_guidance_kind_by_box", None) or {}
+        if "prompt" in kinds:
+            self._apply_prompt_guidance_message(self._guidance_message_for(kinds["prompt"]))
+        if "result" in kinds:
+            self._apply_guidance_hint(
+                self._result_guidance_hint, self._guidance_message_for(kinds["result"])
+            )
+
     def _update_prompt_guidance_hint(self, prompt: str | None = None) -> None:
+
 
 
         if prompt is None:
             prompt = self.get_prompt()
-        message = self._guidance_message_for(prompt)
+        self._ask_prompt_hint("prompt", prompt)
+
+    def _apply_prompt_guidance_message(self, message: str | None) -> None:
         self._apply_guidance_hint(self._prompt_guidance_hint, message)
 
 
@@ -176,20 +227,22 @@ class DockPromptMixin:
 
         if prompt is None:
             prompt = self._result_prompt_input.toPlainText().strip()
-        self._apply_guidance_hint(
-            self._result_guidance_hint, self._guidance_message_for(prompt)
-        )
+        self._ask_prompt_hint("result", prompt)
 
     def set_zone_guidance(
-        self, ground_resolution_m: float | None, area_km2: float | None = None
+        self,
+        ground_resolution_m: float | None,
+        area_km2: float | None = None,
+        hints: dict | None = None,
     ) -> None:
 
 
 
 
 
-        area_threshold = large_zone_km2()
-        if area_km2 is not None and area_threshold is not None and area_km2 >= area_threshold:
+
+        flags = hints if isinstance(hints, dict) else {}
+        if flags.get("large_zone") is True and area_km2 is not None and area_km2 > 0:
             shipped = tr(
                 "Very large zone (about {km2} km²): the AI keeps only broad "
                 "shapes at this size. Select a smaller area for object-level "
@@ -203,22 +256,12 @@ class DockPromptMixin:
             self._zone_guidance_hint.setText(msg)
             self._zone_guidance_hint.setVisible(True)
             return
-
-        try:
-            threshold = require_dial("guidance.coarse_zone_m_per_px", lo=0)
-        except ConfigMissing:
-            threshold = None
-        coarse = (
-            threshold is not None
-            and ground_resolution_m is not None
-            and ground_resolution_m >= threshold
-        )
-        if not coarse:
+        metres = ground_resolution_m
+        if flags.get("coarse_zone") is not True or metres is None or metres <= 0:
             self._zone_guidance_hint.setVisible(False)
             return
 
 
-        metres = ground_resolution_m
         value = format_count(round(metres)) if metres >= 10 else f"{metres:.1f}"
         msg = get_export_copy("guidance.coarse_zone_m", tr(
             "At this zoom one pixel covers about {m} m. Zoom in or draw a "

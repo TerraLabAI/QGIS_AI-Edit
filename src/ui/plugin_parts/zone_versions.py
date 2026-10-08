@@ -516,13 +516,14 @@ class ZoneVersionsMixin:
 
 
 
+
         try:
             from ..canvas_exporter import estimate_zone_area_km2
 
             area_km2 = estimate_zone_area_km2(
                 extent, self._canvas.mapSettings().destinationCrs()
             )
-            self._dock_widget.set_zone_guidance(None, area_km2)
+            self._dock_widget.set_zone_guidance(None, area_km2, None)
             self._request_zone_ground_resolution(QgsRectangle(extent), area_km2)
         except Exception:  # nosec B110
             pass
@@ -561,6 +562,7 @@ class ZoneVersionsMixin:
 
 
 
+
         from ...workers.generic_request_task import GenericRequestTask
         from ..canvas_exporter import ground_resolution_for_size
         from .generation import _served_size, export_size_inputs
@@ -583,8 +585,9 @@ class ZoneVersionsMixin:
                 return
             self._remember_export_size(i, size)
             gr = ground_resolution_for_size(ms, ext, size[0], size[1])
+            hints = result.get("hints") if isinstance(result, dict) else None
             try:
-                self._dock_widget.set_zone_guidance(gr, area)
+                self._dock_widget.set_zone_guidance(gr, area, hints)
             except RuntimeError:  # nosec B110
                 pass
 

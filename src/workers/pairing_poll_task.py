@@ -32,6 +32,29 @@ _NETWORK_PROBLEM_AFTER = 3
 _RETRY_AFTER_CLAMP_S = (1.0, 15.0)
 
 
+def pairing_status_failure(status: str) -> tuple[str, str]:
+
+
+    if status == "no_plan":
+        return (
+            get_export_copy(
+                "pipeline.pairing_poll_task.no_plan",
+                tr(
+                    "This account has no active AI Edit plan. "
+                    "Reactivate it on terra-lab.ai, then click Connect again."
+                ),
+            ),
+            "NO_PLAN",
+        )
+    return (
+        get_export_copy(
+            "pipeline.pairing_poll_task.cancelled",
+            tr("Sign-in was cancelled in the browser. Click Connect to try again."),
+        ),
+        "CANCELLED",
+    )
+
+
 class PairingPollTask(QgsTask):
 
 
@@ -55,6 +78,9 @@ class PairingPollTask(QgsTask):
 
 
     pairing_network_problem = pyqtSignal(str)
+
+
+    pairing_confirmed = pyqtSignal(str)
 
 
 
@@ -201,6 +227,7 @@ class PairingPollTask(QgsTask):
 
     def _run_poll(self) -> bool:
         browser_seen = False
+        confirmed: set[str] = set()
         stall_hinted = False
         network_failures = 0
         network_hinted = False
@@ -253,29 +280,14 @@ class PairingPollTask(QgsTask):
 
                 if status == "no_plan":
 
-                    self._end_code(code, (
-                        get_export_copy(
-                            "pipeline.pairing_poll_task.no_plan",
-                            tr(
-                                "This account has no active AI Edit plan. "
-                                "Reactivate it on terra-lab.ai, then click Connect again."
-                            ),
-                        ),
-                        "NO_PLAN",
-                    ))
+                    self._end_code(code, pairing_status_failure("no_plan"))
                     continue
 
                 if status == "cancelled":
 
 
 
-                    self._end_code(code, (
-                        get_export_copy(
-                            "pipeline.pairing_poll_task.cancelled",
-                            tr("Sign-in was cancelled in the browser. Click Connect to try again."),
-                        ),
-                        "CANCELLED",
-                    ))
+                    self._end_code(code, pairing_status_failure("cancelled"))
                     continue
 
 
@@ -284,7 +296,10 @@ class PairingPollTask(QgsTask):
 
 
 
-                if status == "pending" and not browser_seen:
+                if status == "confirmed" and code not in confirmed:
+                    confirmed.add(code)
+                    self.pairing_confirmed.emit(code)
+                if status in ("pending", "confirmed") and not browser_seen:
                     browser_seen = True
                     self.pairing_browser_seen.emit()
 

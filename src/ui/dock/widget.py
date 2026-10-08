@@ -63,6 +63,7 @@ class AIEditDockWidget(
     retry_clicked = pyqtSignal(str)
     pairing_requested = pyqtSignal(str)
     pairing_cancel_requested = pyqtSignal(str)
+    pairing_code_entered = pyqtSignal(str)
     settings_clicked = pyqtSignal()
     launch_clicked = pyqtSignal()
     try_example_requested = pyqtSignal()
@@ -495,6 +496,13 @@ class AIEditDockWidget(
 
         self.cleanup_account_check()
         self.disconnect_update_refresh()
+
+        hints = getattr(self, "_prompt_hints", None)
+        if hints is not None:
+            try:
+                hints.shutdown()
+            except Exception:  # nosec B110
+                pass
 
 
 

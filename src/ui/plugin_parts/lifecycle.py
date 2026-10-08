@@ -37,6 +37,7 @@ PAIRING_TASK_SIGNALS = (
     "pairing_browser_seen",
     "pairing_stalled",
     "pairing_network_problem",
+    "pairing_confirmed",
     "taskTerminated",
 )
 
@@ -402,6 +403,7 @@ class PluginLifecycleMixin:
         self._dock_widget.history_restore.connect(self._on_history_restore)
         self._dock_widget.pairing_requested.connect(self._on_pairing_requested)
         self._dock_widget.pairing_cancel_requested.connect(self._on_cancel_pairing)
+        self._dock_widget.pairing_code_entered.connect(self._on_pairing_code_entered)
         self._dock_widget.settings_clicked.connect(self._on_settings_clicked)
         self._dock_widget.launch_clicked.connect(self._on_launch_clicked)
         self._dock_widget.try_example_requested.connect(self._on_try_example)

@@ -629,6 +629,40 @@ class TerraLabClient:
             timeout_ms=timeout_ms,
         )
 
+    def start_pairing(self, secret_hash: str, loopback_port: int | None, ttl: int = 1800) -> dict:
+
+
+
+
+
+
+        payload: dict = {"product": PRODUCT_ID, "secret_hash": secret_hash, "ttl": int(ttl)}
+        if loopback_port:
+            payload["loopback_port"] = int(loopback_port)
+        return self._request(
+            "POST",
+            "/api/plugin/pair/start",
+            body=json_body(payload),
+            timeout_ms=get_export_dial("pipeline.terralab_client.write_timeout_ms", _TIMEOUT_WRITE_MS),
+        )
+
+    def claim_pairing(self, code: str, secret: str, grant: str = "", user_code: str = "") -> dict:
+
+
+
+        payload = {"code": code, "secret": secret}
+        if grant:
+            payload["grant"] = grant
+        else:
+            payload["user_code"] = user_code
+        return self._request(
+            "POST",
+            "/api/plugin/pair/claim",
+            body=json_body(payload),
+            timeout_ms=get_export_dial("pipeline.terralab_client.write_timeout_ms", _TIMEOUT_WRITE_MS),
+            keep_status_body=True,
+        )
+
     def cancel_pairing(self, code: str) -> dict:
 
 
@@ -703,11 +737,27 @@ class TerraLabClient:
 
 
 
+
+
         body = json_body(inputs)
         timeout_ms = _startup_timeout_ms()
         return self._with_read_retry(lambda: self._request(
             "POST", "/api/ai-edit/export-size", auth=auth, body=body, timeout_ms=timeout_ms,
         ))
+
+    def get_prompt_hints(self, auth: dict, text: str, has_template: bool) -> dict:
+
+
+
+
+        body = json_body({"text": text, "has_template": bool(has_template)})
+        return self._request(
+            "POST",
+            "/api/ai-edit/prompt-hints",
+            auth=auth,
+            body=body,
+            timeout_ms=get_export_dial("pipeline.terralab_client.quick_post_timeout_ms", _TIMEOUT_QUICK_POST_MS),
+        )
 
     def analyze_palette(self, auth: dict, total: int, bins: list) -> dict:
 
@@ -759,7 +809,10 @@ class TerraLabClient:
         auth: dict | None = None,
         body: bytes | None = None,
         timeout_ms: int | None = None,
+        keep_status_body: bool = False,
     ) -> dict:
+
+
 
 
 
@@ -811,7 +864,9 @@ class TerraLabClient:
         )
         parsed = response_object(raw) if raw else None
         if _reply_failed(err, blocker):
-            if status is not None and status >= 400 and parsed is not None and "error" in parsed:
+            if status is not None and status >= 400 and parsed is not None and (
+                "error" in parsed or (keep_status_body and "status" in parsed)
+            ):
                 return http_failure(parsed, status, reply.rawHeader(b"Retry-After"))
             code, msg = _classify_network_error(blocker, timeout_ms)
             result = {"error": msg, "code": code}

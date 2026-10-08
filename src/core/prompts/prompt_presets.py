@@ -28,7 +28,6 @@ from .preset_normalize import (
     _pick_label,
     _preset_extras,
 )
-from .prompt_detect import detect_prompt_guidance
 from .prompt_format import format_template_prompt
 
 
@@ -44,7 +43,6 @@ __all__ = [
     "_normalize_preset",
     "_pick_label",
     "_preset_extras",
-    "detect_prompt_guidance",
     "format_template_prompt",
     "get_all_categories",
     "get_need_groups",

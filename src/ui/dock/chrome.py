@@ -5,6 +5,7 @@ from qgis.PyQt.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
@@ -19,6 +20,7 @@ from .design_tokens import (
     BODY_QSS,
     BTN_GHOST_QSS,
     BTN_LINK_QSS,
+    BTN_PRIMARY_QSS,
     BTN_PRIMARY_WIDE_PX,
     BTN_PRIMARY_WIDE_QSS,
     BTN_QUIET_QSS,
@@ -26,6 +28,7 @@ from .design_tokens import (
     GREEN,
     HEADLINE_QSS,
     HINT_QSS,
+    INPUT_QSS,
     SPACE_CARD,
     SPACE_STAGE,
     qcolor,
@@ -183,6 +186,42 @@ class DockChromeMixin:
         self._pairing_copy_btn.setStyleSheet(BTN_LINK_QSS)
         self._pairing_copy_btn.clicked.connect(self._on_pairing_copy_clicked)
         wait_layout.addWidget(self._pairing_copy_btn, 0, QtC.AlignCenter)
+
+
+
+        self._pairing_code_box = QWidget()
+        code_layout = QVBoxLayout(self._pairing_code_box)
+        code_layout.setContentsMargins(0, 0, 0, 0)
+        code_layout.setSpacing(SPACE_CARD)
+        code_title = QLabel(tr("Type the code shown in your browser:"))
+        code_title.setWordWrap(True)
+        code_title.setStyleSheet(BODY_QSS)
+        code_layout.addWidget(code_title)
+        code_row = QHBoxLayout()
+        code_row.setSpacing(SPACE_CARD)
+        self._pairing_code_input = QLineEdit()
+        self._pairing_code_input.setPlaceholderText("K7P-4QX")
+        self._pairing_code_input.setMaxLength(9)
+        self._pairing_code_input.setStyleSheet(INPUT_QSS)
+        self._pairing_code_input.textEdited.connect(self._on_pairing_code_edited)
+        self._pairing_code_input.returnPressed.connect(self._on_pairing_code_submit)
+        code_row.addWidget(self._pairing_code_input, 1)
+        self._pairing_code_btn = QPushButton(tr("Sign in"))
+        self._pairing_code_btn.setCursor(QtC.PointingHandCursor)
+        self._pairing_code_btn.setStyleSheet(BTN_PRIMARY_QSS)
+        self._pairing_code_btn.clicked.connect(self._on_pairing_code_submit)
+        code_row.addWidget(self._pairing_code_btn, 0)
+        code_layout.addLayout(code_row)
+        self._pairing_code_error = QLabel("")
+        self._pairing_code_error.setWordWrap(True)
+        self._pairing_code_error.setVisible(False)
+        code_layout.addWidget(self._pairing_code_error)
+        code_note = QLabel(tr("Only type a code you see on terra-lab.ai, on a page you opened from this QGIS."))
+        code_note.setWordWrap(True)
+        code_note.setStyleSheet(HINT_QSS)
+        code_layout.addWidget(code_note)
+        self._pairing_code_box.setVisible(False)
+        wait_layout.addWidget(self._pairing_code_box)
 
         self._pairing_wait_section.setVisible(False)
         self._pairing_active = False
