@@ -1,17 +1,23 @@
 [general]
 name=AI Edit by TerraLab
-description=Show a project on real aerial imagery, from a text prompt: a redevelopment before it is built, a street planted with trees, a flood, or an orthophoto redrawn as a clean site plan. Land cover maps, cloud and object removal too. Georeferenced output.
+description=Generative AI image editing for QGIS 3.22 to 4. Show a redevelopment, a planted street, a flood or an orthophoto redrawn as a clean site plan from a text prompt, on your own aerial imagery. Georeferenced output. Free tier, no card.
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
 # Qt6 builds of QGIS 3.x refuse to load a plugin that omits this line.
 # QGIS 4 dropped the check and a Qt5 build never runs it.
 supportsQt6=True
-version=1.15.0
-author=Yvann and Lilien from TerraLab
+version=1.15.1
+author=TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.15.1
+    - Drawing a zone in a project whose zone is a file layer no longer deletes that file's features
+    - On Windows, your activation key is stored encrypted even without a QGIS master password
+    - The demo backdrop is TerraLab Sentinel-2 imagery; the Esri and OpenTopoMap basemaps are gone
+    - Prompt tips wait for the privacy notice, and results never land in a folder other accounts read
+
     1.15.0
     - Your allowance is counted in images: "37 of 100 images left this month"
     - When other accounts used the free images on this computer, AI Edit says so
@@ -31,14 +37,8 @@ changelog=
     - Saved GeoTIFFs get neutral names (ai_edit_date_vN) and never carry your prompt
     - Choose how long edit history is kept in Settings; the Processing toolbox no longer freezes QGIS
 
-    1.12.0
-    - The zone is an "Area of interest" layer, saved with the project and shared by our other plugins
-    - Generate starts on slow connections, with the layers above the image still sent as references
-    - Opening Sessions no longer crashes QGIS
-    - Clearer interface text in all 11 languages
-
 about=
-    Show a project before it exists, on the aerial imagery you already have open
+    AI Edit by TerraLab shows a project before it exists, on the aerial imagery you already have open
 
     • Select an area, write what you want, get the result back as a georeferenced layer on the same extent and CRS as your source imagery, tagged as AI-generated
 
@@ -54,11 +54,13 @@ about=
 
     • What it is not: a preview, not a document. No dimensions, no legal value, not a site plan for a permit. Not a detector: for building, tree or parcel outlines with real geometry, use AI Segmentation. Not a prediction: a flood scenario is an illustration
 
-    • Windows, macOS, Linux, no GPU needed. Free tier without a card. Powered by Google's Nano Banana image model, run on TerraLab servers
+    • QGIS 3.22 to QGIS 4, on Windows, macOS and Linux. No GPU needed. Free tier without a card. Powered by Google's Nano Banana image model, run on TerraLab servers
+
+    By TerraLab, terra-lab.ai
 
 tracker=https://github.com/TerraLabAI/QGIS_AI-Edit/issues
 repository=https://github.com/TerraLabAI/QGIS_AI-Edit
-homepage=https://terra-lab.ai/ai-edit
+homepage=https://terra-lab.ai/ai-edit?utm_source=plugins.qgis.org&utm_medium=referral
 
 hasProcessingProvider=yes
 

@@ -22,9 +22,14 @@ from ...core.served_url_checks import SERVED_URL_FORBIDDEN_RE
 
 
 
-_ESRI_WORLD_IMAGERY_URI = (
-    "type=xyz&url=https://server.arcgisonline.com/ArcGIS/rest/services/"
-    "World_Imagery/MapServer/tile/%7Bz%7D/%7By%7D/%7Bx%7D&zmax=21&zmin=0"
+
+_GLOBAL_IMAGERY_URI = (
+    "type=xyz&url=https://tiles.terra-lab.ai"
+    "/satellite-s2-2021/%7Bz%7D/%7Bx%7D/%7By%7D.jpg&zmax=14&zmin=0"
+)
+_GLOBAL_IMAGERY_CREDIT = (
+    "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) "
+    "processed by ESA WorldCover consortium"
 )
 
 
@@ -328,10 +333,13 @@ class OnboardingMixin:
             if candidate.isValid():
                 layer, source = candidate, "ign"
         if layer is None:
-            uri = _served_basemap_uri("global_basemap_uri", _ESRI_WORLD_IMAGERY_URI)
-            candidate = QgsRasterLayer(uri, "Satellite (Esri)", "wms")
+            uri = _served_basemap_uri("global_basemap_uri", _GLOBAL_IMAGERY_URI)
+            candidate = QgsRasterLayer(uri, "Satellite (Sentinel-2 2021)", "wms")
             if candidate.isValid():
-                layer, source = candidate, "esri"
+                metadata = candidate.metadata()
+                metadata.setRights([_GLOBAL_IMAGERY_CREDIT])
+                candidate.setMetadata(metadata)
+                layer, source = candidate, "sentinel2"
         if layer is None:
             log_warning("onboarding basemap: no source loaded")
             return None

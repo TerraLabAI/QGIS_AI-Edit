@@ -69,18 +69,126 @@ def ascii_safe_dir(directory: str) -> str:
 
 
 
-    for env_name in ("LOCALAPPDATA", "PUBLIC"):
-        root = os.environ.get(env_name)
-        if not root or not root.isascii():
-            continue
+
+
+
+
+    root = os.environ.get("LOCALAPPDATA")
+    if root and root.isascii():
         safe = os.path.join(root, "terralab_ai_edit")
         try:
             os.makedirs(safe, exist_ok=True)
         except OSError:
-            continue
-        log_warning(f"Output folder has non-ASCII characters; writing to {safe} instead")
-        return safe
+            pass
+        else:
+            log_warning(f"Output folder has non-ASCII characters; writing to {safe} instead")
+            return safe
+    root = os.environ.get("PUBLIC")
+    if root and root.isascii():
+        safe = _private_public_dir(root)
+        if safe:
+            log_warning(f"Output folder has non-ASCII characters; writing to {safe} instead")
+            return safe
     return directory
+
+
+
+_private_public = {"path": ""}
+
+
+def _private_public_dir(root: str) -> str:
+
+
+
+
+    held = _private_public["path"]
+    if held and os.path.isdir(held):
+        return held
+    try:
+        import ctypes
+        import uuid
+        from ctypes import wintypes
+
+        advapi = ctypes.WinDLL("advapi32", use_last_error=True)
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.GetCurrentProcess.argtypes = []
+        kernel.GetCurrentProcess.restype = wintypes.HANDLE
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel.CloseHandle.restype = wintypes.BOOL
+        kernel.LocalFree.argtypes = [ctypes.c_void_p]
+        kernel.LocalFree.restype = ctypes.c_void_p
+        advapi.OpenProcessToken.argtypes = [
+            wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+        advapi.OpenProcessToken.restype = wintypes.BOOL
+        advapi.GetTokenInformation.argtypes = [
+            wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD)]
+        advapi.GetTokenInformation.restype = wintypes.BOOL
+        advapi.ConvertSidToStringSidW.argtypes = [
+            ctypes.c_void_p, ctypes.POINTER(wintypes.LPWSTR)]
+        advapi.ConvertSidToStringSidW.restype = wintypes.BOOL
+        convert_sd = advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW
+        convert_sd.argtypes = [
+            wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p),
+            ctypes.POINTER(wintypes.DWORD)]
+        convert_sd.restype = wintypes.BOOL
+
+        class _SecurityAttributes(ctypes.Structure):
+            _fields_ = [("nLength", wintypes.DWORD),
+                        ("lpSecurityDescriptor", ctypes.c_void_p),
+                        ("bInheritHandle", wintypes.BOOL)]
+
+        kernel.CreateDirectoryW.argtypes = [
+            wintypes.LPCWSTR, ctypes.POINTER(_SecurityAttributes)]
+        kernel.CreateDirectoryW.restype = wintypes.BOOL
+
+        token_query, token_user = 0x0008, 1
+        token = wintypes.HANDLE()
+        if not advapi.OpenProcessToken(kernel.GetCurrentProcess(), token_query,
+                                       ctypes.byref(token)):
+            return ""
+        try:
+            size = wintypes.DWORD(0)
+            advapi.GetTokenInformation(token, token_user, None, 0, ctypes.byref(size))
+            if not size.value:
+                return ""
+            info = ctypes.create_string_buffer(size.value)
+            if not advapi.GetTokenInformation(token, token_user, info, size,
+                                              ctypes.byref(size)):
+                return ""
+        finally:
+            kernel.CloseHandle(token)
+
+        sid_ptr = ctypes.cast(info, ctypes.POINTER(ctypes.c_void_p))[0]
+        sid_text = wintypes.LPWSTR()
+        if not advapi.ConvertSidToStringSidW(sid_ptr, ctypes.byref(sid_text)):
+            return ""
+        try:
+            sid = sid_text.value or ""
+        finally:
+            kernel.LocalFree(ctypes.cast(sid_text, ctypes.c_void_p))
+        if not sid.startswith("S-1-"):
+            return ""
+
+
+
+        descriptor = ctypes.c_void_p()
+        sddl = f"D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)"
+        if not convert_sd(sddl, 1, ctypes.byref(descriptor), None):
+            return ""
+        try:
+            attrs = _SecurityAttributes(ctypes.sizeof(_SecurityAttributes),
+                                        descriptor, False)
+            path = os.path.join(root, f"terralab_ai_edit_{uuid.uuid4().hex[:12]}")
+            if not kernel.CreateDirectoryW(path, ctypes.byref(attrs)):
+                return ""
+        finally:
+            kernel.LocalFree(descriptor)
+    except Exception as e:  # noqa: BLE001
+        log_warning(f"private output folder not created: {e}")
+        return ""
+    _private_public["path"] = path
+    return path
 
 
 def unique_output_path(directory: str, base: str, ext: str = "tif") -> str:

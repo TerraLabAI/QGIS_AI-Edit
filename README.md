@@ -58,4 +58,14 @@ plugin, before anything is sent. See our
 - Plugin page on the QGIS repository: https://plugins.qgis.org/plugins/AI_Edit/
 - Bugs and requests: https://github.com/TerraLabAI/QGIS_AI-Edit/issues
 
-License: GPL-2.0-or-later. Made by [TerraLab](https://terra-lab.ai).
+## License
+
+The plugin code is GPL-2.0-or-later ([LICENSE](LICENSE)). The TerraLab names and
+logos are not covered, see [TRADEMARKS.md](TRADEMARKS.md).
+
+The hosted service (API responses, prompts, model settings) is not in this
+repository and is not licensed for reuse. Text and data mining rights on it are
+reserved (EU Directive 2019/790, Art. 4). See our
+[Terms of Use](https://terra-lab.ai/terms-of-use).
+
+Made by [TerraLab](https://terra-lab.ai).

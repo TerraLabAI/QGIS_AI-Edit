@@ -57,6 +57,11 @@ def _ctx_snapshot(ctx) -> dict:
         "flat_foreground": getattr(ctx, "flat_foreground", None),
         "output_rescued": bool(getattr(ctx, "output_rescued", False)),
         "failure_code": getattr(ctx, "failure_code", None),
+
+        "submit_timestamp": getattr(ctx, "submit_timestamp", None),
+        "poll_count": getattr(ctx, "poll_count", None),
+        "total_wait_seconds": getattr(ctx, "total_wait_seconds", None),
+        "received_size_bytes": getattr(ctx, "received_size_bytes", None),
     }
 
 

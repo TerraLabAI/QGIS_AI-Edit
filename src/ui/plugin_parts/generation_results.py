@@ -387,6 +387,7 @@ class GenerationResultsMixin:
                 "template_id": template_id,
                 "template_name": template_name,
                 "used_template": bool(template_id),
+                **self._generation_phase_props(result_info),
             }, request_id=result_info.get("request_id")))
             telemetry.flush()
             completed_emitted = True
@@ -540,6 +541,7 @@ class GenerationResultsMixin:
                 "template_name": template_name,
                 "used_template": bool(template_id),
                 "layer_add_failed": True,
+                **self._generation_phase_props(result_info),
             }, request_id=result_info.get("request_id")))
             telemetry.track(
                 te.PLUGIN_ERROR,

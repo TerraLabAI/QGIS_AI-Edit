@@ -44,30 +44,19 @@ from .mcp_api_support import (
 
 
 BASEMAP_XYZ_TEMPLATES: dict[str, dict[str, Any]] = {
+
+
+
     "Satellite": {
         "url": (
-            "https://server.arcgisonline.com/ArcGIS/rest/services/"
-            "World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            "https://tiles.terra-lab.ai"
+            "/satellite-s2-2021/{z}/{x}/{y}.jpg"
         ),
-        "zmax": 21,
+        "zmax": 14,
     },
     "Streets": {
-        "url": (
-            "https://server.arcgisonline.com/ArcGIS/rest/services/"
-            "World_Street_Map/MapServer/tile/{z}/{y}/{x}"
-        ),
+        "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         "zmax": 19,
-    },
-    "Terrain": {
-        "url": "https://tile.opentopomap.org/{z}/{x}/{y}.png",
-        "zmax": 17,
-    },
-    "Hillshade": {
-        "url": (
-            "https://server.arcgisonline.com/ArcGIS/rest/services/"
-            "Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}"
-        ),
-        "zmax": 16,
     },
     "OpenStreetMap": {
         "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -83,17 +72,13 @@ _BASEMAP_ALIASES = {
     "worldimagery": "Satellite",
     "aerial": "Satellite",
     "imagery": "Satellite",
+    "sentinel": "Satellite",
+    "sentinel2": "Satellite",
     "osm": "OpenStreetMap",
     "street": "Streets",
     "streetmap": "Streets",
     "roads": "Streets",
     "roadmap": "Streets",
-    "topographic": "Terrain",
-    "topo": "Terrain",
-    "opentopomap": "Terrain",
-    "relief": "Hillshade",
-    "shadedrelief": "Hillshade",
-    "elevation": "Hillshade",
 }
 
 _BASEMAP_SEPARATORS_RE = re.compile(r"[\s_-]+")

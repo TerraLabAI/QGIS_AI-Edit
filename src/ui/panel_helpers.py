@@ -249,6 +249,19 @@ _ARROW_PX = 10
 _ARROW_URLS: dict = {}
 
 
+
+_GLYPH_DIR = {"path": ""}
+
+
+def _glyph_dir() -> str:
+    held = _GLYPH_DIR["path"]
+    if held and os.path.isdir(held):
+        return held
+    held = tempfile.mkdtemp(prefix="ai_edit_glyphs_")
+    _GLYPH_DIR["path"] = held
+    return held
+
+
 def _glyph_url(name: str, ink: str = "", size: int = _ARROW_PX) -> str:
 
     color = qcolor(ink or T.INK_2)
@@ -258,9 +271,7 @@ def _glyph_url(name: str, ink: str = "", size: int = _ARROW_PX) -> str:
         return cached
     url = ""
     try:
-        folder = os.path.join(tempfile.gettempdir(), "ai_edit_panel_glyphs")
-        os.makedirs(folder, exist_ok=True)
-        path = os.path.join(folder, f"{name}_{color.rgba():08x}_{size}.png")
+        path = os.path.join(_glyph_dir(), f"{name}_{color.rgba():08x}_{size}.png")
         if not os.path.exists(path):
             render_pixmap(name, color, size, 2.0).save(path, "PNG")
         url = path.replace("\\", "/")

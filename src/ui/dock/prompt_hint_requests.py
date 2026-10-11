@@ -6,6 +6,7 @@
 
 
 
+
 from __future__ import annotations
 
 import time
@@ -15,6 +16,7 @@ from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import QObject, QTimer
 
 from ...core.logger import log_debug
+from ...core.privacy_notice import has_accepted_privacy_notice
 
 
 PROMPT_HINT_KINDS = frozenset({"vector_file", "measure", "land_cover", "objects", "qa"})
@@ -126,6 +128,11 @@ class PromptHintRequester(QObject):
         self._cancel_task(box)
         client, auth = self._client_and_auth()
         if client is None or not auth or auth == self._refused_auth or time.monotonic() < self._paused_until:
+            self._deliver(box, None)
+            return
+
+
+        if not has_accepted_privacy_notice():
             self._deliver(box, None)
             return
         from ...workers.generic_request_task import GenericRequestTask

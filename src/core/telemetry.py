@@ -20,6 +20,7 @@ from qgis.core import QgsApplication, QgsTask
 from qgis.PyQt.QtCore import QThread
 
 from . import telemetry_events as te
+from .log_scrub import scrub_file_paths, scrub_user_paths
 from .privacy_notice import (
     add_privacy_notice_accepted_hook,
     has_accepted_privacy_notice,
@@ -234,6 +235,24 @@ def _policy_number(key: str, fallback, lo: float, hi: float):
     return fallback if value is None else value
 
 
+
+
+
+
+_FREE_TEXT_KEYS = frozenset({
+    "error", "error_message", "exception_msg", "message", "detail", "reason", "traceback",
+})
+
+
+def _scrub_free_text(properties: dict) -> dict:
+    out = dict(properties)
+    for key in _FREE_TEXT_KEYS.intersection(out):
+        value = out[key]
+        if isinstance(value, str) and value:
+            out[key] = scrub_file_paths(scrub_user_paths(value))
+    return out
+
+
 def _sampled_out(event: str) -> bool:
 
 
@@ -384,7 +403,7 @@ class TelemetryCollector:
             "timestamp": self._now_iso(),
             "properties": {
                 **self._session_props,
-                **(properties or {}),
+                **_scrub_free_text(properties or {}),
             },
         }
         full = False

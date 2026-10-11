@@ -103,6 +103,32 @@ class GenerationMixin:
             enriched["days_since_activation"] = days
         return enriched
 
+    def _generation_phase_props(self, result_info: dict) -> dict:
+
+
+
+
+
+
+
+
+        props: dict = {}
+        try:
+            submitted = result_info.get("submit_timestamp")
+            started = getattr(self, "_generation_start_time", None)
+            if isinstance(submitted, (int, float)) and isinstance(started, (int, float)):
+                props["submit_ms"] = max(0, int((submitted - started) * 1000))
+            wait_s = result_info.get("total_wait_seconds")
+            if isinstance(wait_s, (int, float)) and not isinstance(wait_s, bool):
+                props["wait_ms"] = max(0, int(wait_s * 1000))
+            for key, out in (("poll_count", "polls"), ("received_size_bytes", "received_size_bytes")):
+                value = result_info.get(key)
+                if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                    props[out] = value
+        except Exception:  # noqa: BLE001  # nosec B110
+            pass
+        return props
+
     def _record_generation_cancelled(self):
 
         self._last_generation_error = tr("Generation cancelled")
