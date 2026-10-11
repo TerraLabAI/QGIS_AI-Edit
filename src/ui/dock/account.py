@@ -294,14 +294,14 @@ class DockAccountMixin:
 
         if date_str:
             title = get_export_copy(
-                "wall.credits_title", tr("Your {total} free credits return on {date}")
+                "wall.images_title", tr("Your {total} free images return on {date}")
             )
             return title.replace("{total}", format_count(total)).replace("{date}", date_str)
 
 
 
         title = get_export_copy(
-            "wall.credits_title_no_date", tr("Your {total} free credits come back next month")
+            "wall.images_title_no_date", tr("Your {total} free images come back next month")
         )
         return title.replace("{total}", format_count(total))
 
@@ -371,32 +371,52 @@ class DockAccountMixin:
 
     def _fill_wall(self) -> None:
 
+        from ...core.paywall_state import account_cap_blocked
         from ...core.pro_ceiling import pro_ceiling_contact_email
         from .pro_ceiling import custom_needs_line
 
         total = self._wall_total()
         date_str = self._wall_date()
         self._wall_filled_on_result = self._wall_on_result()
+        cap_text = account_cap_blocked()
+        if cap_text is not None:
+
+
+            from ...core.paywall_state import split_cap_text
+
+
+
+            cap_title, cap_text = split_cap_text(cap_text)
+            self._trial_info_box.show_wall(
+                cap_title or tr("Free AI Edit was already used by other accounts on this computer."),
+                cap_text or tr(
+                    "Upgrade to Pro to keep going. Shared computer, or a mistake? "
+                    "Contact yvann.barbot@terra-lab.ai and we will unlock it."),
+                "",
+                get_export_copy("nudge.header_pill", tr("Get Pro")),
+                "",
+                get_export_copy("wall.not_now", tr("Not now")),
+            )
+            return
         if self._wall_filled_on_result:
 
             title = get_export_copy("wall.headline_result", tr("Keep editing this result with Pro"))
             note = self._wall_title() or getattr(self, "_wall_fallback_message", "")
         else:
             title = get_export_copy(
-                "wall.credits_headline", tr("You've used this month's free credits"))
+                "wall.images_headline", tr("You've used this month's free images"))
             if total and date_str:
                 note = get_export_copy(
-                    "wall.credits_return_note", tr("Your {total} free credits return on {date}")
+                    "wall.images_return_note", tr("Your {total} free images return on {date}")
                 ).replace("{total}", format_count(total)).replace("{date}", date_str)
             else:
                 note = get_export_copy(
-                    "wall.credits_return_note_no_date", tr("They come back next month"))
-
+                    "wall.images_return_note_no_date", tr("They come back next month"))
 
 
         pitch = get_export_copy(
-            "wall.credits_subtext",
-            tr("Pro: far more credits every month, 4K quality, commercial use. Cancel anytime."),
+            "wall.images_subtext",
+            tr("Pro: far more images every month, 4K quality, commercial use. Cancel anytime."),
         )
         self._trial_info_box.show_wall(
             title,
@@ -409,14 +429,20 @@ class DockAccountMixin:
         )
 
     def _fill_wall_collapsed(self) -> None:
+        from ...core.paywall_state import account_cap_blocked, split_cap_text
+
         date_str = self._wall_date()
-        if date_str:
+        cap_text = account_cap_blocked()
+        if cap_text is not None:
+            text = split_cap_text(cap_text)[0] or tr(
+                "Free AI Edit was already used by other accounts on this computer.")
+        elif date_str:
             text = get_export_copy(
-                "wall.credits_collapsed", tr("Free credits return on {date}")
+                "wall.images_collapsed", tr("Free images return on {date}")
             ).replace("{date}", date_str)
         else:
             text = get_export_copy(
-                "wall.credits_collapsed_no_date", tr("Free credits come back next month"))
+                "wall.images_collapsed_no_date", tr("Free images come back next month"))
         self._trial_info_box.show_wall_collapsed(
             text, get_export_copy("nudge.header_pill", tr("Get Pro"))
         )
@@ -528,7 +554,7 @@ class DockAccountMixin:
 
         self._prewall_url = cta_url
         self._prewall_banner.show_low(
-            get_export_copy("prewall.text", tr("Last free edit this month.")),
+            get_export_copy("prewall.images_text", tr("Last free image this month.")),
 
             get_export_copy("nudge.header_pill", tr("Get Pro")),
         )

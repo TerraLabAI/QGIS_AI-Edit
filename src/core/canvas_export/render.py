@@ -48,7 +48,7 @@ class MapNotLoadedError(RuntimeError):
 
 def map_not_loaded_message() -> str:
     return tr(
-        "The map had not finished loading, so nothing was sent and no credit was used. "
+        "The map had not finished loading, so nothing was sent and no image was counted. "
         "Wait for the map to appear, then press Generate again."
     )
 

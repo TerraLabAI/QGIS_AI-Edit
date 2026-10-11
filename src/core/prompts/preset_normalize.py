@@ -274,9 +274,6 @@ def _sanitize_example(value: Any) -> dict | None:
         resolution = _clean_text(value.get("resolution"))
         if resolution and len(resolution) <= 8:
             out["resolution"] = resolution
-        credits = value.get("credits")
-        if isinstance(credits, int) and not isinstance(credits, bool) and credits >= 0:
-            out["credits"] = credits
         zone = value.get("zone")
         if isinstance(zone, dict):
             bbox = _clean_bbox_4326(zone.get("bbox_4326"))

@@ -214,14 +214,14 @@ class AuthManager:
 
                 return (
                     False,
-                    tr("You've used this month's {limit} free credits. They renew at your next monthly reset.").format(
+                    tr("You've used this month's {limit} free images. They renew at your next monthly reset.").format(
                         limit=limit,
                     ),
                     ErrorCode.TRIAL_EXHAUSTED.value,
                 )
             return (
                 False,
-                tr("Monthly limit reached ({used}/{limit}).").format(used=used, limit=limit),
+                tr("Monthly limit reached ({used} of {limit} images).").format(used=used, limit=limit),
                 ErrorCode.QUOTA_EXCEEDED.value,
             )
 

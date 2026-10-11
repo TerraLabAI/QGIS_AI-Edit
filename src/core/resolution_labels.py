@@ -9,13 +9,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 from .config_store import ConfigMissing, get_export_copy, get_export_dial_seq, require_table
 from .i18n import tr
 
 
 def served_credit_costs() -> dict[str, int]:
+
 
 
 
@@ -35,24 +34,6 @@ def served_credit_costs() -> dict[str, int]:
                 costs[tier] = int(value)
     return costs
 
-
-class _ServedCreditCosts(Mapping):
-
-
-
-
-    def __getitem__(self, tier):
-        return served_credit_costs()[tier]
-
-    def __iter__(self):
-        return iter(served_credit_costs())
-
-    def __len__(self):
-        return len(served_credit_costs())
-
-
-
-DEFAULT_RESOLUTION_CREDIT_COSTS = _ServedCreditCosts()
 
 
 

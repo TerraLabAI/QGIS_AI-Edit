@@ -763,7 +763,7 @@ class GenerationMixin:
             self._restore_failed_iteration()
 
 
-        msg = tr("Could not start the edit. No credit was used. Press Generate to try again.")
+        msg = tr("Could not start the edit. This image was not counted. Press Generate to try again.")
         with teardown_step("hand-off status", stage="generation"):
             self._dock_widget.set_status(msg, is_error=True)
         with teardown_step("hand-off telemetry", stage="generation"):

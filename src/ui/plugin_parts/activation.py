@@ -933,7 +933,7 @@ class ActivationMixin:
     def _refresh_credits(self):
 
         self._credits_loader = GenericRequestTask(
-            "AI Edit credits",
+            "AI Edit usage",
             self._auth_manager.get_usage_info,
             silent=True,
         )

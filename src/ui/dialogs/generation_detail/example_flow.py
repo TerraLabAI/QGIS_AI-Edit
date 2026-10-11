@@ -151,14 +151,8 @@ class ExampleFlowMixin:
         if gsd:
             chips.append((tr("Ground resolution"), tr("{n} m per pixel").format(n=f"{float(gsd):g}")))
         res = example.get("resolution")
-        credits = example.get("credits")
-        if res or credits is not None:
-            parts = []
-            if res:
-                parts.append(str(res))
-            if credits is not None:
-                parts.append(tr("{n} credits").format(n=format_count(int(credits))))
-            chips.append((tr("Resolution and credits"), ", ".join(parts)))
+        if res:
+            chips.append((tr("Resolution"), str(res)))
         vector_text = self._example_vector_text(example.get("vectorize"))
         if vector_text:
             chips.append((tr("Vectorized"), vector_text))

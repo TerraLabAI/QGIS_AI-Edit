@@ -110,15 +110,15 @@ class BillingPageMixin:
         card = BillingCard(plan_display_name(plan), parent, category="amber")
         left = plan.left
         if left is not None:
-            card.add_stat(format_count(left), tr("credits left of {limit}").format(
+            card.add_stat(format_count(left), tr("of {limit} images left this month").format(
                 limit=format_count(plan.limit)))
             card.add(make_usage_bar(left, plan.limit or 0, card))
         else:
 
 
             card.add_status(get_export_copy(
-                "dialogs.account_settings_dialog.credits_unknown",
-                tr("Credit count not available"),
+                "dialogs.account_settings_dialog.images_unknown",
+                tr("Image count not available"),
             ))
         if plan.has_subscription and plan.status not in ("active", "trialing"):
             from ..account_settings_dialog import _status_display
@@ -127,7 +127,13 @@ class BillingPageMixin:
             card.add_status(status_text)
 
 
-        reset_on = format_reset_date(plan.period_end) if plan.period_end else ""
+        from ....core.paywall_state import account_cap_blocked
+
+
+        reset_on = (
+            format_reset_date(plan.period_end)
+            if plan.period_end and account_cap_blocked() is None else ""
+        )
         if reset_on:
             resets_word = get_export_copy("dialogs.account_settings_dialog.resets_label", tr("Resets"))
             card.add_note(f"{resets_word} {reset_on}")
@@ -143,8 +149,14 @@ class BillingPageMixin:
             "dialogs.account_settings_dialog.pro_headline",
             tr("Keep editing with Pro"),
         ))
-        if plan.left == 0:
-            card.add_status(tr("Free credits used up this month"))
+        from ....core.paywall_state import account_cap_blocked, split_cap_text
+
+        cap_text = account_cap_blocked()
+        if cap_text is not None:
+            card.add_status(split_cap_text(cap_text)[0] or tr(
+                "Free AI Edit was already used by other accounts on this computer."))
+        elif plan.left == 0:
+            card.add_status(tr("Free images used up this month"))
         for point in _pro_points():
             card.add_point(point, ACCENT)
         upgrade = QPushButton(tr("Upgrade to Pro"), card)

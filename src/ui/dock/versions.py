@@ -5,7 +5,6 @@ from qgis.PyQt.QtCore import Qt, QTimer
 from ...core.config_store import get_export_copy, get_export_dial
 from ...core.entitlements import coerce_dock_tier, is_tier_allowed
 from ...core.i18n import tr
-from ...core.number_format import format_count
 from ..reference_images_widget import free_tier_max_references
 
 _SUBSCRIBE_BANNER_MS = 12000
@@ -174,10 +173,8 @@ class DockVersionsMixin:
         for container in (self._prompt_container, self._result_prompt_container):
             container.set_resolution_state(
                 self._selected_resolution,
-                self._resolution_credit_costs,
                 self._is_free_tier,
             )
-
         if (
             getattr(self, "_generate_btn", None) is not None
             and getattr(self, "_version_strip", None) is not None
@@ -249,9 +246,8 @@ class DockVersionsMixin:
 
 
         loading = bool(self._imagery_loading)
-        cost = self._selected_credit_cost()
-        if getattr(self, "_generate_label_loading", None) != (loading, cost):
-            self._generate_label_loading = (loading, cost)
+        if getattr(self, "_generate_label_loading", None) != loading:
+            self._generate_label_loading = loading
             if loading:
                 self._generate_btn.setText(
                     get_export_copy("dock.versions.imagery_loading", tr("Loading imagery..."))
@@ -261,36 +257,12 @@ class DockVersionsMixin:
                     tr("Waiting for the example basemap to finish loading before you generate"),
                 ))
             else:
-                self._generate_btn.setText(self._with_cost(
-                    get_export_copy("dock.versions.generate", tr("Generate")), cost))
+                self._generate_btn.setText(
+                    get_export_copy("dock.versions.generate", tr("Generate")))
                 self._generate_btn.setToolTip(
                     get_export_copy("dock.versions.generate_zone_tooltip", tr("Generate the edit on your zone"))
                 )
         self._update_result_generate_label()
-
-    def _selected_credit_cost(self) -> int | None:
-
-
-        try:
-            tier = coerce_dock_tier(self._selected_resolution, self._is_free_tier)
-        except Exception:  # noqa: BLE001
-            return None
-        cost = (self._resolution_credit_costs or {}).get(tier)
-        return cost if isinstance(cost, int) and cost > 0 else None
-
-    @staticmethod
-    def _with_cost(label: str, cost: int | None) -> str:
-
-
-        if cost is None:
-            return label
-        if cost == 1:
-            suffix = tr("{n} credit")
-        else:
-            suffix = tr("{n} credits")
-        return get_export_copy(
-            "dock.versions.button_with_cost", tr("{label}, {cost}")
-        ).replace("{label}", label).replace("{cost}", suffix.replace("{n}", format_count(cost)))
 
     def _update_result_generate_label(self):
 
@@ -304,18 +276,16 @@ class DockVersionsMixin:
 
 
         base = self._version_strip.label_for(self._version_strip.selected_index())
-        cost = self._selected_credit_cost()
-        if getattr(self, "_result_generate_base", None) == (base, cost):
+        if getattr(self, "_result_generate_base", None) == base:
             return
-        self._result_generate_base = (base, cost)
+        self._result_generate_base = base
 
 
-        self._result_regenerate_btn.setText(self._with_cost(
+        self._result_regenerate_btn.setText(
             get_export_copy(
                 "dock.versions.generate_from_base", tr("Generate from {base}")
-            ).replace("{base}", base),
-            cost,
-        ))
+            ).replace("{base}", base)
+        )
         self._result_prompt_input.setPlaceholderText(
             get_export_copy(
                 "dock.versions.next_change_placeholder",
@@ -341,11 +311,9 @@ class DockVersionsMixin:
         row.setVisible(has_result)
         row._fit(row.width())
 
-    def set_resolution_credit_costs(self, costs: dict[str, int]):
+    def on_export_config_loaded(self):
 
 
-        if costs:
-            self._resolution_credit_costs = costs
         self._refresh_resolution_triggers()
 
         self.refresh_free_plan_line()

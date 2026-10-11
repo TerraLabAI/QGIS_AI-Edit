@@ -39,7 +39,10 @@ class EditStatusAlgorithm(QgsProcessingAlgorithm):
     STATE = "STATE"
     ACTION_REQUIRED = "ACTION_REQUIRED"
     PLAN = "PLAN"
+
+
     CREDITS_REMAINING = "CREDITS_REMAINING"
+    IMAGES_REMAINING = "IMAGES_REMAINING"
     BUSY = "BUSY"
     NEXT_ALGORITHMS = "NEXT_ALGORITHMS"
 
@@ -56,7 +59,7 @@ class EditStatusAlgorithm(QgsProcessingAlgorithm):
 
     def displayName(self):
         return tr(
-            "Check AI Edit status, credits and plan before you generate or edit satellite "
+            "Check AI Edit status, images left and plan before you generate or edit satellite "
             "imagery"
         )
 
@@ -65,7 +68,7 @@ class EditStatusAlgorithm(QgsProcessingAlgorithm):
     def shortDescription(self):
         return (
             "Report whether AI Edit is signed in and ready to generate or edit satellite and "
-            "aerial imagery, how many credits are left, and what to run next."
+            "aerial imagery, how many images are left this month, and what to run next."
         )
 
     def group(self):
@@ -76,7 +79,7 @@ class EditStatusAlgorithm(QgsProcessingAlgorithm):
 
     def tags(self):
         return EDIT_SEARCH_TAGS + [
-            "status", "ready", "check", "credits", "plan", "setup", "account", "health",
+            "status", "ready", "check", "images", "credits", "plan", "setup", "account", "health",
         ]
 
 
@@ -120,9 +123,10 @@ class EditStatusAlgorithm(QgsProcessingAlgorithm):
                 "What this one returns: INSTALLED and READY (true or false), STATE (READY, "
                 "NEEDS_ACTIVATION or NO_PANEL), ACTION_REQUIRED (what a person has to do "
                 "when READY is false), PLAN ('free', 'pro' or empty when unknown), "
-                "CREDITS_REMAINING, BUSY (true while a generation is already running) and "
-                "NEXT_ALGORITHMS. CREDITS_REMAINING is -1 when the account did not report a "
-                "number, which usually means nobody is signed in yet."
+                "IMAGES_REMAINING (images left this month; CREDITS_REMAINING carries the "
+                "same number for older scripts), BUSY (true while a generation is already "
+                "running) and NEXT_ALGORITHMS. IMAGES_REMAINING is -1 when the account did "
+                "not report a number, which usually means nobody is signed in yet."
             ),
             tr(
                 "When READY is false, read ACTION_REQUIRED out to the user and stop. "
@@ -153,7 +157,9 @@ class EditStatusAlgorithm(QgsProcessingAlgorithm):
         self.addOutput(QgsProcessingOutputString(
             self.PLAN, tr("Plan on the signed-in account")))
         self.addOutput(QgsProcessingOutputNumber(
-            self.CREDITS_REMAINING, tr("Credits left on the plan")))
+            self.IMAGES_REMAINING, tr("Images left this month")))
+        self.addOutput(QgsProcessingOutputNumber(
+            self.CREDITS_REMAINING, tr("Images left this month (older name)")))
         self.addOutput(QgsProcessingOutputBoolean(
             self.BUSY, tr("A generation is already running")))
         self.addOutput(QgsProcessingOutputString(
@@ -185,13 +191,13 @@ class EditStatusAlgorithm(QgsProcessingAlgorithm):
 
         remaining, credits_error = self._credits_remaining(api) if ready else (-1, "")
         if remaining >= 0:
-            feedback.pushInfo(tr("Credits left: {count}.").format(count=remaining))
+            feedback.pushInfo(tr("Images left this month: {count}.").format(count=remaining))
         elif ready:
 
 
 
             feedback.pushWarning(tr(
-                "The balance could not be read, so CREDITS_REMAINING is -1 rather than a "
+                "The balance could not be read, so IMAGES_REMAINING is -1 rather than a "
                 "count. Reason: {reason}."
             ).format(reason=credits_error or tr("the account returned no number")))
 
@@ -201,6 +207,7 @@ class EditStatusAlgorithm(QgsProcessingAlgorithm):
             self.STATE: state,
             self.ACTION_REQUIRED: action,
             self.PLAN: str(status.get("plan") or ""),
+            self.IMAGES_REMAINING: remaining,
             self.CREDITS_REMAINING: remaining,
             self.BUSY: busy,
             self.NEXT_ALGORITHMS: f"{GENERATE_ALGORITHM_ID}, {VECTORIZE_ALGORITHM_ID}",
@@ -214,7 +221,7 @@ class EditStatusAlgorithm(QgsProcessingAlgorithm):
 
 
 
-        credits = api.get_credits()
+        credits = api.get_images() if hasattr(api, "get_images") else api.get_credits()
         if not isinstance(credits, dict):
             return -1, tr("the account call returned nothing usable")
         failure = credits.get("_error") or credits.get("error")

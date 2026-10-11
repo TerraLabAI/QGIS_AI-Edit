@@ -16,7 +16,7 @@ WORKFLOW = {
     "start_here": "get_status",
     "typical_order": [
         "get_status",
-        "get_credits",
+        "get_images",
         "set_input_layer",
         "prepare_interactive",
         "get_interactive_state",
@@ -31,7 +31,9 @@ WORKFLOW = {
         "vectorize",
         "finish_session",
     ],
+
     "costs_credits": ["generate"],
+    "counts_images": ["generate"],
     "slow_poll_required": {
         "generate": "generation_status",
     },
@@ -41,6 +43,7 @@ WORKFLOW = {
         "attach_reference",
     ],
     "makes_a_network_call": [
+        "get_images",
         "get_credits",
         "get_account",
         "rename_session",
@@ -58,6 +61,7 @@ WORKFLOW = {
         "get_input_layer",
         "get_interactive_state",
         "get_account",
+        "get_images",
         "get_credits",
         "get_presets",
         "get_preset",

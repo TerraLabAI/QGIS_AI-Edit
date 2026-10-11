@@ -108,7 +108,7 @@ class DockProCeilingMixin:
         date_str = format_reset_date(reset) if isinstance(reset, str) and reset else ""
         if not date_str:
             return ""
-        note = get_activation_copy("pro_ceiling.reset_note", tr("Credits renew on {date}"))
+        note = get_activation_copy("pro_ceiling.images_reset_note", tr("Images renew on {date}"))
         return note.replace("{date}", date_str)
 
     def pro_limit_title(self, fallback: str) -> str:
@@ -131,7 +131,7 @@ class DockProCeilingMixin:
         used, limit = self._cached_used, self._cached_limit
         left = max(0, limit - used)
         email = pro_ceiling_contact_email()
-        text = get_activation_copy("pro_ceiling.low_title", tr("{left} of {total} credits left this month"))
+        text = get_activation_copy("pro_ceiling.images_low_title", tr("{left} of {total} images left this month"))
         text = text.replace("{left}", format_count(left)).replace("{total}", format_count(limit))
 
 

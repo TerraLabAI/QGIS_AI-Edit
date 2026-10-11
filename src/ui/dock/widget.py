@@ -10,7 +10,6 @@ from ...core.config_store import get_export_copy
 from ...core.i18n import tr
 from ...core.qt_compat import QShortcut
 from ...core.reference_image_store import ReferenceImageStore
-from ...core.resolution_labels import served_credit_costs
 from ..keyboard_focus import apply_keyboard_focus_policy
 from .account import DockAccountMixin
 from .blocked_reasons import DockBlockedReasonsMixin
@@ -242,11 +241,6 @@ class AIEditDockWidget(
 
         self._api_resolution: str | None = None
         self._resolution_user_choice = False
-
-
-
-
-        self._resolution_credit_costs: dict[str, int] = served_credit_costs()
 
 
 

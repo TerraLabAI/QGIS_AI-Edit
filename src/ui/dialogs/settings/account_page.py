@@ -245,7 +245,7 @@ class AccountPageMixin:
 
 
         link = make_button(tr("See usage"), BTN_LINK_QSS, parent)
-        link.setToolTip(tr("Credits left and reset date"))
+        link.setToolTip(tr("Images left and reset date"))
         link.clicked.connect(lambda: self.show_page(getattr(self, "_billing_row", 1)))
         return SettingRow(tr("Usage"), "", link, parent)
 

@@ -515,9 +515,8 @@ class StartupMixin:
             log_warning("Export config: unexpected shape, keeping the previous one")
             return
         set_server_config(config)
-        costs = config.get("resolution_credit_costs")
         if self._dock_widget:
-            self._dock_widget.set_resolution_credit_costs(costs if isinstance(costs, dict) else {})
+            self._dock_widget.on_export_config_loaded()
 
 
         self._resume_layers_above_soon()

@@ -61,6 +61,7 @@ READ_ONLY_METHODS = {
     "generation_status",
     "get_account",
     "get_credits",
+    "get_images",
     "get_generation",
     "get_preset",
     "get_preset_families",

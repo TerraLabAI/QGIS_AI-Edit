@@ -92,7 +92,7 @@ __all__ = [
 
 
 
-API_VERSION = 3
+API_VERSION = 4
 
 
 PUBLIC_METHODS = (
@@ -146,6 +146,10 @@ PUBLIC_METHODS = (
     "set_input_layer",
     "prepare_interactive",
     "get_interactive_state",
+
+    "get_images",
+
+    "apply_preset",
 )
 
 
@@ -408,7 +412,32 @@ class EditMCPAPI(
         }
 
     @_never_raises
+    def get_images(self) -> dict:
+
+
+
+
+
+
+
+
+        auth = getattr(self._plugin, "_auth_manager", None)
+        if auth is None:
+            return {"_error": "The account manager is not available."}
+        fields = _usage_fields(auth.get_usage_info())
+        used, limit = fields.get("used"), fields.get("limit")
+        fields["remaining"] = (
+            max(0, int(limit) - int(used))
+            if isinstance(used, (int, float)) and isinstance(limit, (int, float))
+            else None
+        )
+        fields["unit"] = "images"
+        return fields
+
+    @_never_raises
     def get_credits(self) -> dict:
+
+
 
 
 
@@ -484,6 +513,8 @@ class EditMCPAPI(
 
 
 
+
+
         from .core.entitlements import free_tier_allowed_tiers
         from .core.resolution_labels import (
             API_ONLY_RESOLUTION_TIERS,
@@ -491,16 +522,15 @@ class EditMCPAPI(
             served_credit_costs,
         )
 
-        dock = self._dock()
-        costs = getattr(dock, "_resolution_credit_costs", None) if dock is not None else None
         free_tier = self._is_free_tier()
         tiers = list(api_resolution_tiers())
         allowed = list(free_tier_allowed_tiers()) if free_tier else tiers
-        costs = dict(costs) if isinstance(costs, dict) and costs else served_credit_costs()
+        costs = served_credit_costs()
         answer = {
             "resolutions": tiers,
 
             "api_only_resolutions": [t for t in API_ONLY_RESOLUTION_TIERS if t in tiers],
+            "images_per_generation": 1,
             "credit_costs": costs,
             "allowed": allowed,
             "current": self._selected_resolution(),
@@ -509,7 +539,7 @@ class EditMCPAPI(
         if not costs:
 
             answer["credit_costs_status"] = "loading"
-            answer["note"] = "Prices are loading from the server. Ask again in a moment."
+            answer["note"] = "The older credit_costs table is loading. Every run counts as one image."
         return answer
 
 

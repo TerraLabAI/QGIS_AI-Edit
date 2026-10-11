@@ -398,6 +398,8 @@ class ReferencesMixin:
 
 
 
+
+
         widget = self._reference_widget()
         store = self._reference_store()
         if widget is None or store is None:
@@ -406,6 +408,21 @@ class ReferencesMixin:
         path = (path or "").strip()
         if bool(layer_name) == bool(path):
             return {"_error": "Pass layer_name or path, exactly one of the two."}
+
+        if layer_name:
+
+            wanted = {layer_name}
+            named = QgsProject.instance().mapLayer(layer_name)
+            if named is not None:
+                wanted.add(named.name())
+            held = next((r for r in store.list()
+                         if r.source_kind == "layer" and r.source_filename in wanted), None)
+            if held is not None:
+                return {"ok": True, "added": False, "already_attached": True,
+                        "reference_id": held.id, "count": store.count(),
+                        "at_capacity": bool(widget.at_capacity()),
+                        "references": self._reference_entries(),
+                        "note": f"The layer '{held.source_filename}' is already attached."}
 
         if widget.at_capacity():
             return {"ok": False, "added": False, "at_capacity": True, "count": store.count(),

@@ -6,12 +6,18 @@ qgisMaximumVersion=4.99
 # Qt6 builds of QGIS 3.x refuse to load a plugin that omits this line.
 # QGIS 4 dropped the check and a Qt5 build never runs it.
 supportsQt6=True
-version=1.14.0
+version=1.15.0
 author=Yvann and Lilien from TerraLab
 email=yvann.barbot@terra-lab.ai
 license=GPLv2
 
 changelog=
+    1.15.0
+    - Your allowance is counted in images: "37 of 100 images left this month"
+    - When other accounts used the free images on this computer, AI Edit says so
+    - Limit and billing cards show one clear message, in one language
+    - AI Agent can load a library preset and never attaches the same reference twice
+
     1.14.0
     - Safer sign-in: the browser hands your account straight back to QGIS, or you type a short code
     - Prompt and zone tips stay current without a plugin update
@@ -30,12 +36,6 @@ changelog=
     - Generate starts on slow connections, with the layers above the image still sent as references
     - Opening Sessions no longer crashes QGIS
     - Clearer interface text in all 11 languages
-
-    1.11.0
-    - On a slow or unstable connection, AI Edit waits and retries instead of failing
-    - A result cut off while downloading resumes where it stopped, never saved half-empty
-    - Before/after compare works on QGIS builds without WebP support
-    - A prompt too short to work is refused before any credit is used
 
 about=
     Show a project before it exists, on the aerial imagery you already have open

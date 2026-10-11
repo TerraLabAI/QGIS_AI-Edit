@@ -5557,5 +5557,117 @@ We horen graag van u!</translation>
         <source>price loading</source>
         <translation>prijs wordt geladen</translation>
     </message>
+    <message>
+        <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Detailed (2K) or Maximum (4K). Each edit counts as one image, whatever the quality.</source>
+        <translation>&lt;b&gt;Kwaliteit&lt;/b&gt;&lt;br&gt;Gedetailleerd (2K) of Maximaal (4K). Elke bewerking telt als een afbeelding, ongeacht de kwaliteit.</translation>
+    </message>
+    <message>
+        <source>Check AI Edit status, images left and plan before you generate or edit satellite imagery</source>
+        <translation>Controleer de status van AI Edit, het aantal resterende afbeeldingen en je abonnement voordat je satellietbeelden genereert of bewerkt</translation>
+    </message>
+    <message>
+        <source>Could not start the edit. This image was not counted. Press Generate to try again.</source>
+        <translation>De bewerking kon niet worden gestart. Deze afbeelding is niet geteld. Klik op Genereren om het opnieuw te proberen.</translation>
+    </message>
+    <message>
+        <source>Free images come back next month</source>
+        <translation>Gratis afbeeldingen komen volgende maand terug</translation>
+    </message>
+    <message>
+        <source>Free images return on {date}</source>
+        <translation>Gratis afbeeldingen komen terug op {date}</translation>
+    </message>
+    <message>
+        <source>Free images used up this month</source>
+        <translation>Gratis afbeeldingen deze maand op</translation>
+    </message>
+    <message>
+        <source>Free plan, {n} images every month. Signing up takes 15 seconds in your browser.</source>
+        <translation>Gratis abonnement, {n} afbeeldingen per maand. Aanmelden duurt 15 seconden in je browser.</translation>
+    </message>
+    <message>
+        <source>If this image was counted, it will be given back.</source>
+        <translation>Als deze afbeelding wel is geteld, krijg je die terug.</translation>
+    </message>
+    <message>
+        <source>Image count not available</source>
+        <translation>Aantal afbeeldingen niet beschikbaar</translation>
+    </message>
+    <message>
+        <source>Images left and reset date</source>
+        <translation>Resterende afbeeldingen en vernieuwingsdatum</translation>
+    </message>
+    <message>
+        <source>Images left this month</source>
+        <translation>Resterende afbeeldingen deze maand</translation>
+    </message>
+    <message>
+        <source>Images left this month (older name)</source>
+        <translation>Resterende afbeeldingen deze maand (oudere naam)</translation>
+    </message>
+    <message>
+        <source>Images left this month: {count}.</source>
+        <translation>Resterende afbeeldingen deze maand: {count}.</translation>
+    </message>
+    <message>
+        <source>Images renew on {date}</source>
+        <translation>Afbeeldingen worden vernieuwd op {date}</translation>
+    </message>
+    <message>
+        <source>Last free image this month.</source>
+        <translation>Laatste gratis afbeelding deze maand.</translation>
+    </message>
+    <message>
+        <source>Monthly limit reached ({used} of {limit} images).</source>
+        <translation>Maandlimiet bereikt ({used} van {limit} afbeeldingen).</translation>
+    </message>
+    <message>
+        <source>Pro: far more images every month, 4K quality, commercial use. Cancel anytime.</source>
+        <translation>Pro: veel meer afbeeldingen per maand, 4K-kwaliteit en commercieel gebruik. Je kunt altijd opzeggen.</translation>
+    </message>
+    <message>
+        <source>The balance could not be read, so IMAGES_REMAINING is -1 rather than a count. Reason: {reason}.</source>
+        <translation>Het saldo kon niet worden gelezen, dus IMAGES_REMAINING is -1 in plaats van een aantal. Reden: {reason}.</translation>
+    </message>
+    <message>
+        <source>The map had not finished loading, so nothing was sent and no image was counted. Wait for the map to appear, then press Generate again.</source>
+        <translation>De kaart was nog niet klaar met laden, dus er is niets verstuurd en geen afbeelding geteld. Wacht tot de kaart verschijnt en klik daarna opnieuw op Genereren.</translation>
+    </message>
+    <message>
+        <source>They come back next month</source>
+        <translation>Ze komen volgende maand terug</translation>
+    </message>
+    <message>
+        <source>This image was not counted.</source>
+        <translation>Deze afbeelding is niet geteld.</translation>
+    </message>
+    <message>
+        <source>You've used this month's free images</source>
+        <translation>Je gratis afbeeldingen voor deze maand zijn op</translation>
+    </message>
+    <message>
+        <source>You've used this month's {limit} free images. They renew at your next monthly reset.</source>
+        <translation>Je {limit} gratis afbeeldingen voor deze maand zijn op. Ze worden vernieuwd bij je volgende maandelijkse reset.</translation>
+    </message>
+    <message>
+        <source>Your {total} free images come back next month</source>
+        <translation>Je {total} gratis afbeeldingen komen volgende maand terug</translation>
+    </message>
+    <message>
+        <source>Your {total} free images return on {date}</source>
+        <translation>Je {total} gratis afbeeldingen komen terug op {date}</translation>
+    </message>
+    <message>
+        <source>of {limit} images left this month</source>
+        <translation>van {limit} afbeeldingen over deze maand</translation>
+    </message>
+    <message>
+        <source>{left} of {total} images left this month</source>
+        <translation>{left} van {total} afbeeldingen over deze maand</translation>
+    </message>
+    <message>
+        <source>What this one returns: INSTALLED and READY (true or false), STATE (READY, NEEDS_ACTIVATION or NO_PANEL), ACTION_REQUIRED (what a person has to do when READY is false), PLAN ('free', 'pro' or empty when unknown), IMAGES_REMAINING (images left this month; CREDITS_REMAINING carries the same number for older scripts), BUSY (true while a generation is already running) and NEXT_ALGORITHMS. IMAGES_REMAINING is -1 when the account did not report a number, which usually means nobody is signed in yet.</source>
+        <translation>Wat deze teruggeeft: INSTALLED en READY (true of false), STATE (READY, NEEDS_ACTIVATION of NO_PANEL), ACTION_REQUIRED (wat iemand moet doen als READY false is), PLAN ('free', 'pro' of leeg als onbekend), IMAGES_REMAINING (afbeeldingen over deze maand; CREDITS_REMAINING geeft voor oudere scripts hetzelfde getal), BUSY (true zolang een generatie al loopt) en NEXT_ALGORITHMS. IMAGES_REMAINING is -1 wanneer het account geen getal heeft gemeld, meestal omdat er nog niemand is aangemeld.</translation>
+    </message>
 </context>
 </TS>

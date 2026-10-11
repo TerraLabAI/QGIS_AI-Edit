@@ -5557,5 +5557,117 @@ Kami senang mendengar dari Anda!</translation>
         <source>price loading</source>
         <translation>memuat harga</translation>
     </message>
+    <message>
+        <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Detailed (2K) or Maximum (4K). Each edit counts as one image, whatever the quality.</source>
+        <translation>&lt;b&gt;Kualitas&lt;/b&gt;&lt;br&gt;Detail (2K) atau Maksimum (4K). Setiap edit dihitung sebagai satu gambar, apa pun kualitasnya.</translation>
+    </message>
+    <message>
+        <source>Check AI Edit status, images left and plan before you generate or edit satellite imagery</source>
+        <translation>Cek status AI Edit, sisa gambar, dan paket Anda sebelum membuat atau mengedit citra satelit</translation>
+    </message>
+    <message>
+        <source>Could not start the edit. This image was not counted. Press Generate to try again.</source>
+        <translation>Edit tidak bisa dimulai. Gambar ini tidak dihitung. Tekan Generate untuk mencoba lagi.</translation>
+    </message>
+    <message>
+        <source>Free images come back next month</source>
+        <translation>Gambar gratis kembali bulan depan</translation>
+    </message>
+    <message>
+        <source>Free images return on {date}</source>
+        <translation>Gambar gratis kembali pada {date}</translation>
+    </message>
+    <message>
+        <source>Free images used up this month</source>
+        <translation>Gambar gratis bulan ini sudah habis</translation>
+    </message>
+    <message>
+        <source>Free plan, {n} images every month. Signing up takes 15 seconds in your browser.</source>
+        <translation>Paket gratis, {n} gambar setiap bulan. Mendaftar hanya butuh 15 detik di browser Anda.</translation>
+    </message>
+    <message>
+        <source>If this image was counted, it will be given back.</source>
+        <translation>Jika gambar ini sudah terhitung, jumlahnya akan dikembalikan.</translation>
+    </message>
+    <message>
+        <source>Image count not available</source>
+        <translation>Jumlah gambar tidak tersedia</translation>
+    </message>
+    <message>
+        <source>Images left and reset date</source>
+        <translation>Sisa gambar dan tanggal reset</translation>
+    </message>
+    <message>
+        <source>Images left this month</source>
+        <translation>Sisa gambar bulan ini</translation>
+    </message>
+    <message>
+        <source>Images left this month (older name)</source>
+        <translation>Sisa gambar bulan ini (nama lama)</translation>
+    </message>
+    <message>
+        <source>Images left this month: {count}.</source>
+        <translation>Sisa gambar bulan ini: {count}.</translation>
+    </message>
+    <message>
+        <source>Images renew on {date}</source>
+        <translation>Gambar diperbarui pada {date}</translation>
+    </message>
+    <message>
+        <source>Last free image this month.</source>
+        <translation>Gambar gratis terakhir bulan ini.</translation>
+    </message>
+    <message>
+        <source>Monthly limit reached ({used} of {limit} images).</source>
+        <translation>Batas bulanan tercapai ({used} dari {limit} gambar).</translation>
+    </message>
+    <message>
+        <source>Pro: far more images every month, 4K quality, commercial use. Cancel anytime.</source>
+        <translation>Pro: jauh lebih banyak gambar setiap bulan, kualitas 4K, penggunaan komersial. Batalkan kapan saja.</translation>
+    </message>
+    <message>
+        <source>The balance could not be read, so IMAGES_REMAINING is -1 rather than a count. Reason: {reason}.</source>
+        <translation>Saldo tidak bisa dibaca, sehingga IMAGES_REMAINING bernilai -1, bukan jumlah. Alasan: {reason}.</translation>
+    </message>
+    <message>
+        <source>The map had not finished loading, so nothing was sent and no image was counted. Wait for the map to appear, then press Generate again.</source>
+        <translation>Peta belum selesai dimuat, jadi tidak ada yang dikirim dan tidak ada gambar yang dihitung. Tunggu peta muncul, lalu tekan Generate lagi.</translation>
+    </message>
+    <message>
+        <source>They come back next month</source>
+        <translation>Gambar itu kembali bulan depan</translation>
+    </message>
+    <message>
+        <source>This image was not counted.</source>
+        <translation>Gambar ini tidak dihitung.</translation>
+    </message>
+    <message>
+        <source>You've used this month's free images</source>
+        <translation>Anda sudah memakai gambar gratis bulan ini</translation>
+    </message>
+    <message>
+        <source>You've used this month's {limit} free images. They renew at your next monthly reset.</source>
+        <translation>Anda sudah memakai {limit} gambar gratis bulan ini. Gambar itu diperbarui pada reset bulanan berikutnya.</translation>
+    </message>
+    <message>
+        <source>Your {total} free images come back next month</source>
+        <translation>{total} gambar gratis Anda kembali bulan depan</translation>
+    </message>
+    <message>
+        <source>Your {total} free images return on {date}</source>
+        <translation>{total} gambar gratis Anda kembali pada {date}</translation>
+    </message>
+    <message>
+        <source>of {limit} images left this month</source>
+        <translation>dari {limit} gambar tersisa bulan ini</translation>
+    </message>
+    <message>
+        <source>{left} of {total} images left this month</source>
+        <translation>{left} dari {total} gambar tersisa bulan ini</translation>
+    </message>
+    <message>
+        <source>What this one returns: INSTALLED and READY (true or false), STATE (READY, NEEDS_ACTIVATION or NO_PANEL), ACTION_REQUIRED (what a person has to do when READY is false), PLAN ('free', 'pro' or empty when unknown), IMAGES_REMAINING (images left this month; CREDITS_REMAINING carries the same number for older scripts), BUSY (true while a generation is already running) and NEXT_ALGORITHMS. IMAGES_REMAINING is -1 when the account did not report a number, which usually means nobody is signed in yet.</source>
+        <translation>Yang dikembalikan: INSTALLED dan READY (true atau false), STATE (READY, NEEDS_ACTIVATION atau NO_PANEL), ACTION_REQUIRED (apa yang harus dilakukan seseorang saat READY bernilai false), PLAN ('free', 'pro', atau kosong jika tidak diketahui), IMAGES_REMAINING (sisa gambar bulan ini; CREDITS_REMAINING membawa angka yang sama untuk skrip lama), BUSY (true selama generasi sedang berjalan) dan NEXT_ALGORITHMS. IMAGES_REMAINING bernilai -1 ketika akun tidak melaporkan angka, yang biasanya berarti belum ada yang masuk.</translation>
+    </message>
 </context>
 </TS>

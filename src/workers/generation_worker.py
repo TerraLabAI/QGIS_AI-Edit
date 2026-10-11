@@ -586,11 +586,11 @@ class GenerationTask(QgsTask):
         )
 
         credit_note = (
-            get_export_copy("pipeline.generation_worker.credit_refunded", tr("Credit refunded."))
+            get_export_copy("pipeline.generation_worker.image_refunded", tr("This image was not counted."))
             if refunded
             else get_export_copy(
-                "pipeline.generation_worker.credit_refund_pending",
-                tr("If a credit was charged, it will be refunded."),
+                "pipeline.generation_worker.image_refund_pending",
+                tr("If this image was counted, it will be given back."),
             )
         )
 

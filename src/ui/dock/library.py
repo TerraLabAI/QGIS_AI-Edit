@@ -241,11 +241,11 @@ class DockLibraryMixin:
 
 
         from ...core.entitlements import is_tier_allowed
+        from ...core.resolution_labels import resolution_tiers
 
         example = preset.get("example") if isinstance(preset, dict) else None
         res = str((example or {}).get("resolution") or "") if isinstance(example, dict) else ""
-        costs = getattr(self, "_resolution_credit_costs", None) or {}
-        if not res or (costs and res not in costs) or not is_tier_allowed(res, self._is_free_tier):
+        if not res or res not in resolution_tiers() or not is_tier_allowed(res, self._is_free_tier):
             return
         self._selected_resolution = res
         self._resolution_user_choice = True

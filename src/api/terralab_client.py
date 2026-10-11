@@ -12,7 +12,7 @@ from ..core.config_store import get_export_copy, get_export_dial
 from ..core.errors import NETWORK_ERROR_CODES
 from ..core.i18n import tr
 from ..core.logger import log_debug, log_warning
-from ..core.paywall_state import remember_usage, usage_epoch
+from ..core.paywall_state import remember_account_cap_refusal, remember_usage, usage_epoch
 from ..core.product_identity import PRODUCT_ID
 from ..core.request_context import plugin_version, request_context
 from .blocking_request import BlockingRequest
@@ -323,13 +323,15 @@ class TerraLabClient:
         if self._raw_prompt:
             payload["raw_prompt"] = True
         body = json_body(payload)
-        return self._request(
+        result = self._request(
             "POST",
             "/api/ai-edit/generate",
             auth=auth,
             body=body,
             timeout_ms=_get_submit_timeout_ms(resolution),
         )
+        remember_account_cap_refusal(result)
+        return result
 
     def request_upload_url(self, auth: dict, image_format: str = "png") -> dict:
 

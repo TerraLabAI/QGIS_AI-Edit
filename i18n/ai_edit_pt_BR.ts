@@ -5557,5 +5557,117 @@ Adoraríamos receber seu retorno!</translation>
         <source>price loading</source>
         <translation>carregando preço</translation>
     </message>
+    <message>
+        <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Detailed (2K) or Maximum (4K). Each edit counts as one image, whatever the quality.</source>
+        <translation>&lt;b&gt;Qualidade&lt;/b&gt;&lt;br&gt;Detalhada (2K) ou Máxima (4K). Cada edição conta como uma imagem, qualquer que seja a qualidade.</translation>
+    </message>
+    <message>
+        <source>Check AI Edit status, images left and plan before you generate or edit satellite imagery</source>
+        <translation>Veja o status do AI Edit, as imagens restantes e o plano antes de gerar ou editar imagens de satélite</translation>
+    </message>
+    <message>
+        <source>Could not start the edit. This image was not counted. Press Generate to try again.</source>
+        <translation>Não foi possível iniciar a edição. Esta imagem não foi contada. Clique em Gerar para tentar de novo.</translation>
+    </message>
+    <message>
+        <source>Free images come back next month</source>
+        <translation>As imagens grátis voltam no próximo mês</translation>
+    </message>
+    <message>
+        <source>Free images return on {date}</source>
+        <translation>As imagens grátis voltam em {date}</translation>
+    </message>
+    <message>
+        <source>Free images used up this month</source>
+        <translation>Imagens grátis esgotadas neste mês</translation>
+    </message>
+    <message>
+        <source>Free plan, {n} images every month. Signing up takes 15 seconds in your browser.</source>
+        <translation>Plano gratuito, {n} imagens por mês. A inscrição leva 15 segundos no seu navegador.</translation>
+    </message>
+    <message>
+        <source>If this image was counted, it will be given back.</source>
+        <translation>Se esta imagem foi contada, ela será devolvida.</translation>
+    </message>
+    <message>
+        <source>Image count not available</source>
+        <translation>Contagem de imagens indisponível</translation>
+    </message>
+    <message>
+        <source>Images left and reset date</source>
+        <translation>Imagens restantes e data de renovação</translation>
+    </message>
+    <message>
+        <source>Images left this month</source>
+        <translation>Imagens restantes neste mês</translation>
+    </message>
+    <message>
+        <source>Images left this month (older name)</source>
+        <translation>Imagens restantes neste mês (nome antigo)</translation>
+    </message>
+    <message>
+        <source>Images left this month: {count}.</source>
+        <translation>Imagens restantes neste mês: {count}.</translation>
+    </message>
+    <message>
+        <source>Images renew on {date}</source>
+        <translation>As imagens são renovadas em {date}</translation>
+    </message>
+    <message>
+        <source>Last free image this month.</source>
+        <translation>Última imagem grátis deste mês.</translation>
+    </message>
+    <message>
+        <source>Monthly limit reached ({used} of {limit} images).</source>
+        <translation>Limite mensal atingido ({used} de {limit} imagens).</translation>
+    </message>
+    <message>
+        <source>Pro: far more images every month, 4K quality, commercial use. Cancel anytime.</source>
+        <translation>Pro: muito mais imagens por mês, qualidade 4K, uso comercial. Cancele quando quiser.</translation>
+    </message>
+    <message>
+        <source>The balance could not be read, so IMAGES_REMAINING is -1 rather than a count. Reason: {reason}.</source>
+        <translation>Não foi possível ler o saldo, então IMAGES_REMAINING é -1 em vez de uma contagem. Motivo: {reason}.</translation>
+    </message>
+    <message>
+        <source>The map had not finished loading, so nothing was sent and no image was counted. Wait for the map to appear, then press Generate again.</source>
+        <translation>O mapa ainda não tinha terminado de carregar, então nada foi enviado e nenhuma imagem foi contada. Espere o mapa aparecer e clique em Gerar de novo.</translation>
+    </message>
+    <message>
+        <source>They come back next month</source>
+        <translation>Elas voltam no próximo mês</translation>
+    </message>
+    <message>
+        <source>This image was not counted.</source>
+        <translation>Esta imagem não foi contada.</translation>
+    </message>
+    <message>
+        <source>You've used this month's free images</source>
+        <translation>Você usou as imagens grátis deste mês</translation>
+    </message>
+    <message>
+        <source>You've used this month's {limit} free images. They renew at your next monthly reset.</source>
+        <translation>Você usou as {limit} imagens grátis deste mês. Elas são renovadas na próxima redefinição mensal.</translation>
+    </message>
+    <message>
+        <source>Your {total} free images come back next month</source>
+        <translation>Suas {total} imagens grátis voltam no próximo mês</translation>
+    </message>
+    <message>
+        <source>Your {total} free images return on {date}</source>
+        <translation>Suas {total} imagens grátis voltam em {date}</translation>
+    </message>
+    <message>
+        <source>of {limit} images left this month</source>
+        <translation>de {limit} imagens restantes neste mês</translation>
+    </message>
+    <message>
+        <source>{left} of {total} images left this month</source>
+        <translation>{left} de {total} imagens restantes neste mês</translation>
+    </message>
+    <message>
+        <source>What this one returns: INSTALLED and READY (true or false), STATE (READY, NEEDS_ACTIVATION or NO_PANEL), ACTION_REQUIRED (what a person has to do when READY is false), PLAN ('free', 'pro' or empty when unknown), IMAGES_REMAINING (images left this month; CREDITS_REMAINING carries the same number for older scripts), BUSY (true while a generation is already running) and NEXT_ALGORITHMS. IMAGES_REMAINING is -1 when the account did not report a number, which usually means nobody is signed in yet.</source>
+        <translation>O que esta ferramenta retorna: INSTALLED e READY (true ou false), STATE (READY, NEEDS_ACTIVATION ou NO_PANEL), ACTION_REQUIRED (o que a pessoa precisa fazer quando READY é false), PLAN ('free', 'pro' ou vazio quando desconhecido), IMAGES_REMAINING (imagens restantes neste mês; CREDITS_REMAINING traz o mesmo número para scripts antigos), BUSY (true enquanto uma geração já está em andamento) e NEXT_ALGORITHMS. IMAGES_REMAINING é -1 quando a conta não informou um número, o que normalmente significa que ninguém entrou ainda.</translation>
+    </message>
 </context>
 </TS>

@@ -27,7 +27,6 @@ from ...core.resolution_labels import (
     resolution_chip_label,
     resolution_quality_name,
     resolution_tiers,
-    served_credit_costs,
 )
 from . import design_tokens as tokens
 from .mime import _file_paths_from_mime, _layers_from_mime, _mime_has_droppable
@@ -186,7 +185,6 @@ class _PromptContainer(QFrame):
 
 
         self._selected_resolution = "2K"
-        self._resolution_costs: dict[str, int] = served_credit_costs()
 
 
         self._tier_ground_m: dict[str, float] = {}
@@ -273,9 +271,8 @@ class _PromptContainer(QFrame):
         self._resolution_btn = _ResolutionChipButton(self)
         self._resolution_btn.setToolTip(get_export_copy(
             "dock.prompt_container.quality_tooltip",
-            tr("<b>Quality</b><br>Higher quality is sharper and more "
-               "precise, and costs more credits. Standard (1K), Detailed (2K), "
-               "Maximum (4K)."),
+            tr("<b>Quality</b><br>Detailed (2K) or Maximum (4K). "
+               "Each edit counts as one image, whatever the quality."),
         ))
         self._resolution_btn.setCursor(QtC.PointingHandCursor)
         self._resolution_btn.setStyleSheet(self._RESOLUTION_CHIP_STYLE)
@@ -686,13 +683,10 @@ class _PromptContainer(QFrame):
     def set_resolution_state(
         self,
         selected: str,
-        costs: dict[str, int] | None,
         free_tier: bool,
     ) -> None:
 
         self._selected_resolution = selected
-        if costs:
-            self._resolution_costs = costs
         self._free_tier = free_tier
         self._rebuild_resolution_menu()
 
@@ -760,10 +754,8 @@ class _PromptContainer(QFrame):
         for res in resolution_tiers():
             locked = not is_tier_allowed(res, self._free_tier)
             selected = res == self._selected_resolution
-
-            credits = self._resolution_costs.get(res)
             widget = _ResolutionMenuItem(
-                resolution_quality_name(res), res, credits, selected, locked,
+                resolution_quality_name(res), res, selected, locked,
                 self._resolution_menu, ground_m=self._tier_ground_m.get(res),
             )
             widget.clicked.connect(lambda r=res: self._on_menu_item_clicked(r))

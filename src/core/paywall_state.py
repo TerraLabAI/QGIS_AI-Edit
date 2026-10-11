@@ -17,7 +17,9 @@ _STATES = frozenset({WALL, PREWALL, NORMAL, PRO_LOW})
 
 
 
-_last: dict = {"state": None, "epoch": 0}
+
+
+_last: dict = {"state": None, "epoch": 0, "account_cap": None}
 
 
 def usage_epoch() -> int:
@@ -37,11 +39,18 @@ def remember_usage(usage, epoch: int | None = None) -> None:
         return
     state = usage.get("paywall_state")
     _last["state"] = state if isinstance(state, str) and state in _STATES else None
+    cap = usage.get("free_account_cap")
+    if isinstance(cap, dict) and cap.get("blocked") is True:
+        if _last["account_cap"] is None:
+            _last["account_cap"] = ""
+    else:
+        _last["account_cap"] = None
 
 
 def forget() -> None:
 
     _last["state"] = None
+    _last["account_cap"] = None
     _last["epoch"] = int(_last["epoch"]) + 1
 
 
@@ -52,22 +61,38 @@ def remember_refusal_wall() -> None:
     _last["state"] = WALL
 
 
+def remember_account_cap_refusal(result) -> None:
+
+
+    if not isinstance(result, dict) or result.get("reason") != "free_account_cap":
+        return
+    if str(result.get("code") or "").strip().upper() != "TRIAL_EXHAUSTED":
+        return
+    error = result.get("error")
+    _last["account_cap"] = error.strip() if isinstance(error, str) else ""
+
+
+def split_cap_text(text: str) -> tuple[str, str]:
+
+
+    import re
+
+    text = (text or "").strip()
+    match = re.search(r"[.!?](\s+)|[。！？]", text)
+    if not match:
+        return text, ""
+    return text[:match.end()].strip(), text[match.end():].strip()
+
+
+def account_cap_blocked() -> str | None:
+
+
+    return _last["account_cap"]
+
+
 def served_paywall_state() -> str | None:
 
     return _last["state"]
-
-
-def total_free_generations(limit: int, unit_cost: int) -> int:
-
-
-
-
-
-
-
-    if unit_cost <= 0 or limit <= 0:
-        return 0
-    return max(0, limit // unit_cost)
 
 
 def advertised_free_generations() -> int | None:

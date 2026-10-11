@@ -133,6 +133,31 @@ class LibraryMixin:
         }
 
     @_never_raises
+    def apply_preset(self, preset_id: str) -> dict:
+
+
+
+
+
+
+        found = self.get_preset(preset_id)
+        if not found.get("found"):
+            return {"applied": False, **found}
+        dock = self._open_dock()
+        primer = getattr(dock, "prime_prompt_from_preset", None) if dock is not None else None
+        if not callable(primer):
+            return {"applied": False, "_error": "The AI Edit panel is not available."}
+        preset = found["preset"]
+        primer(preset)
+        state = self.get_interactive_state()
+        return {
+            "applied": True,
+            "preset_id": found["preset_id"],
+            "label": str(preset.get("label") or ""),
+            "prompt": state.get("prompt") or "",
+        }
+
+    @_never_raises
     def search_presets(self, query: str, limit: int = 25) -> dict:
 
 

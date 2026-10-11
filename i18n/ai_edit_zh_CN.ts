@@ -5557,5 +5557,117 @@ We'd love to hear from you!</source>
         <source>price loading</source>
         <translation>价格加载中</translation>
     </message>
+    <message>
+        <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Detailed (2K) or Maximum (4K). Each edit counts as one image, whatever the quality.</source>
+        <translation>&lt;b&gt;质量&lt;/b&gt;&lt;br&gt;详细（2K）或最高（4K）。无论质量如何，每次编辑都计为 1 张图像。</translation>
+    </message>
+    <message>
+        <source>Check AI Edit status, images left and plan before you generate or edit satellite imagery</source>
+        <translation>在生成或编辑卫星影像前，查看 AI Edit 的状态、剩余图像数和套餐</translation>
+    </message>
+    <message>
+        <source>Could not start the edit. This image was not counted. Press Generate to try again.</source>
+        <translation>无法开始编辑。这张图像未被计数。请点击“生成”重试。</translation>
+    </message>
+    <message>
+        <source>Free images come back next month</source>
+        <translation>免费图像将在下个月恢复</translation>
+    </message>
+    <message>
+        <source>Free images return on {date}</source>
+        <translation>免费图像将于 {date} 恢复</translation>
+    </message>
+    <message>
+        <source>Free images used up this month</source>
+        <translation>本月免费图像已用完</translation>
+    </message>
+    <message>
+        <source>Free plan, {n} images every month. Signing up takes 15 seconds in your browser.</source>
+        <translation>免费套餐，每月 {n} 张图像。在浏览器中注册只需 15 秒。</translation>
+    </message>
+    <message>
+        <source>If this image was counted, it will be given back.</source>
+        <translation>如果这张图像已被计数，将会退还。</translation>
+    </message>
+    <message>
+        <source>Image count not available</source>
+        <translation>图像数量不可用</translation>
+    </message>
+    <message>
+        <source>Images left and reset date</source>
+        <translation>剩余图像数和重置日期</translation>
+    </message>
+    <message>
+        <source>Images left this month</source>
+        <translation>本月剩余图像数</translation>
+    </message>
+    <message>
+        <source>Images left this month (older name)</source>
+        <translation>本月剩余图像数（旧名称）</translation>
+    </message>
+    <message>
+        <source>Images left this month: {count}.</source>
+        <translation>本月剩余图像数：{count}。</translation>
+    </message>
+    <message>
+        <source>Images renew on {date}</source>
+        <translation>图像将于 {date} 续期</translation>
+    </message>
+    <message>
+        <source>Last free image this month.</source>
+        <translation>本月最后一张免费图像。</translation>
+    </message>
+    <message>
+        <source>Monthly limit reached ({used} of {limit} images).</source>
+        <translation>已达到每月上限（{limit} 张图像中已用 {used} 张）。</translation>
+    </message>
+    <message>
+        <source>Pro: far more images every month, 4K quality, commercial use. Cancel anytime.</source>
+        <translation>Pro：每月图像数量多得多，支持 4K 质量和商业用途。随时可取消。</translation>
+    </message>
+    <message>
+        <source>The balance could not be read, so IMAGES_REMAINING is -1 rather than a count. Reason: {reason}.</source>
+        <translation>无法读取余额，因此 IMAGES_REMAINING 为 -1，而不是实际数量。原因：{reason}。</translation>
+    </message>
+    <message>
+        <source>The map had not finished loading, so nothing was sent and no image was counted. Wait for the map to appear, then press Generate again.</source>
+        <translation>地图尚未加载完成，因此没有发送任何内容，也没有计数任何图像。请等待地图出现，然后再次点击“生成”。</translation>
+    </message>
+    <message>
+        <source>They come back next month</source>
+        <translation>它们将在下个月恢复</translation>
+    </message>
+    <message>
+        <source>This image was not counted.</source>
+        <translation>这张图像未被计数。</translation>
+    </message>
+    <message>
+        <source>You've used this month's free images</source>
+        <translation>你已用完本月的免费图像</translation>
+    </message>
+    <message>
+        <source>You've used this month's {limit} free images. They renew at your next monthly reset.</source>
+        <translation>你已用完本月的 {limit} 张免费图像。它们将在下一次月度重置时续期。</translation>
+    </message>
+    <message>
+        <source>Your {total} free images come back next month</source>
+        <translation>你的 {total} 张免费图像将在下个月恢复</translation>
+    </message>
+    <message>
+        <source>Your {total} free images return on {date}</source>
+        <translation>你的 {total} 张免费图像将于 {date} 恢复</translation>
+    </message>
+    <message>
+        <source>of {limit} images left this month</source>
+        <translation>/ {limit} 张图像，本月剩余</translation>
+    </message>
+    <message>
+        <source>{left} of {total} images left this month</source>
+        <translation>本月剩余 {left} / {total} 张图像</translation>
+    </message>
+    <message>
+        <source>What this one returns: INSTALLED and READY (true or false), STATE (READY, NEEDS_ACTIVATION or NO_PANEL), ACTION_REQUIRED (what a person has to do when READY is false), PLAN ('free', 'pro' or empty when unknown), IMAGES_REMAINING (images left this month; CREDITS_REMAINING carries the same number for older scripts), BUSY (true while a generation is already running) and NEXT_ALGORITHMS. IMAGES_REMAINING is -1 when the account did not report a number, which usually means nobody is signed in yet.</source>
+        <translation>此工具返回：INSTALLED 和 READY（true 或 false）、STATE（READY、NEEDS_ACTIVATION 或 NO_PANEL）、ACTION_REQUIRED（READY 为 false 时用户需要执行的操作）、PLAN（'free'、'pro'，未知时为空）、IMAGES_REMAINING（本月剩余图像数；CREDITS_REMAINING 为旧脚本保留同一数值）、BUSY（已有生成在进行时为 true）以及 NEXT_ALGORITHMS。账户未返回数字时 IMAGES_REMAINING 为 -1，这通常表示尚未有人登录。</translation>
+    </message>
 </context>
 </TS>

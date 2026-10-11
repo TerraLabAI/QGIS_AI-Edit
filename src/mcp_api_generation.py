@@ -386,7 +386,7 @@ class GenerationMixin:
         elif last_error:
             hint = (
                 "The last run failed: read error and error_code. Fix what they name "
-                "before calling generate() again, because a retry costs a credit."
+                "before calling generate() again, because a retry counts as another image."
             )
         elif last_request_id:
             hint = (

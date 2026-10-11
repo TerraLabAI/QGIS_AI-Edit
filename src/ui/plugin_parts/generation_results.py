@@ -226,8 +226,8 @@ class GenerationResultsMixin:
                 normalize=str.upper,
             ):
                 credit_note = get_export_copy(
-                    "flows.generation_results.no_credit_used",
-                    tr("No credit was used."),
+                    "flows.generation_results.image_not_counted",
+                    tr("This image was not counted."),
                     escape=True,
                 )
                 enriched = f"{enriched} {credit_note}"

@@ -5557,5 +5557,117 @@ We'd love to hear from you!</source>
         <source>price loading</source>
         <translation>価格を読み込み中</translation>
     </message>
+    <message>
+        <source>&lt;b&gt;Quality&lt;/b&gt;&lt;br&gt;Detailed (2K) or Maximum (4K). Each edit counts as one image, whatever the quality.</source>
+        <translation>&lt;b&gt;品質&lt;/b&gt;&lt;br&gt;詳細 (2K) または最大 (4K)。品質に関係なく、1回の編集は1枚として数えます。</translation>
+    </message>
+    <message>
+        <source>Check AI Edit status, images left and plan before you generate or edit satellite imagery</source>
+        <translation>衛星画像を生成または編集する前に、AI Edit の状態、残りの画像枚数、プランを確認</translation>
+    </message>
+    <message>
+        <source>Could not start the edit. This image was not counted. Press Generate to try again.</source>
+        <translation>編集を開始できませんでした。この画像は数えられていません。もう一度試すには「生成」を押してください。</translation>
+    </message>
+    <message>
+        <source>Free images come back next month</source>
+        <translation>無料の画像は来月に戻ります</translation>
+    </message>
+    <message>
+        <source>Free images return on {date}</source>
+        <translation>無料の画像は {date} に戻ります</translation>
+    </message>
+    <message>
+        <source>Free images used up this month</source>
+        <translation>今月の無料の画像を使い切りました</translation>
+    </message>
+    <message>
+        <source>Free plan, {n} images every month. Signing up takes 15 seconds in your browser.</source>
+        <translation>無料プラン、毎月 {n} 枚の画像。ブラウザでの登録は15秒で完了します。</translation>
+    </message>
+    <message>
+        <source>If this image was counted, it will be given back.</source>
+        <translation>この画像が数えられていた場合は、枚数が戻ります。</translation>
+    </message>
+    <message>
+        <source>Image count not available</source>
+        <translation>画像枚数を取得できません</translation>
+    </message>
+    <message>
+        <source>Images left and reset date</source>
+        <translation>残りの画像枚数とリセット日</translation>
+    </message>
+    <message>
+        <source>Images left this month</source>
+        <translation>今月の残り画像枚数</translation>
+    </message>
+    <message>
+        <source>Images left this month (older name)</source>
+        <translation>今月の残り画像枚数（旧名称）</translation>
+    </message>
+    <message>
+        <source>Images left this month: {count}.</source>
+        <translation>今月の残り画像枚数: {count} 枚。</translation>
+    </message>
+    <message>
+        <source>Images renew on {date}</source>
+        <translation>画像は {date} に更新されます</translation>
+    </message>
+    <message>
+        <source>Last free image this month.</source>
+        <translation>今月の最後の無料画像です。</translation>
+    </message>
+    <message>
+        <source>Monthly limit reached ({used} of {limit} images).</source>
+        <translation>月間の上限に達しました（{limit} 枚中 {used} 枚使用）。</translation>
+    </message>
+    <message>
+        <source>Pro: far more images every month, 4K quality, commercial use. Cancel anytime.</source>
+        <translation>Pro: 毎月はるかに多い画像枚数、4K 品質、商用利用。いつでも解約できます。</translation>
+    </message>
+    <message>
+        <source>The balance could not be read, so IMAGES_REMAINING is -1 rather than a count. Reason: {reason}.</source>
+        <translation>残高を読み取れなかったため、IMAGES_REMAINING は枚数ではなく -1 になっています。理由: {reason}。</translation>
+    </message>
+    <message>
+        <source>The map had not finished loading, so nothing was sent and no image was counted. Wait for the map to appear, then press Generate again.</source>
+        <translation>地図の読み込みが終わっていなかったため、何も送信されず、画像も数えられていません。地図が表示されるまで待ってから、もう一度「生成」を押してください。</translation>
+    </message>
+    <message>
+        <source>They come back next month</source>
+        <translation>来月に戻ります</translation>
+    </message>
+    <message>
+        <source>This image was not counted.</source>
+        <translation>この画像は数えられていません。</translation>
+    </message>
+    <message>
+        <source>You've used this month's free images</source>
+        <translation>今月の無料画像を使い切りました</translation>
+    </message>
+    <message>
+        <source>You've used this month's {limit} free images. They renew at your next monthly reset.</source>
+        <translation>今月の無料画像 {limit} 枚を使い切りました。次回の月次リセットで更新されます。</translation>
+    </message>
+    <message>
+        <source>Your {total} free images come back next month</source>
+        <translation>無料の画像 {total} 枚は来月に戻ります</translation>
+    </message>
+    <message>
+        <source>Your {total} free images return on {date}</source>
+        <translation>無料の画像 {total} 枚は {date} に戻ります</translation>
+    </message>
+    <message>
+        <source>of {limit} images left this month</source>
+        <translation>今月残り {limit} 枚中</translation>
+    </message>
+    <message>
+        <source>{left} of {total} images left this month</source>
+        <translation>今月残り {total} 枚中 {left} 枚</translation>
+    </message>
+    <message>
+        <source>What this one returns: INSTALLED and READY (true or false), STATE (READY, NEEDS_ACTIVATION or NO_PANEL), ACTION_REQUIRED (what a person has to do when READY is false), PLAN ('free', 'pro' or empty when unknown), IMAGES_REMAINING (images left this month; CREDITS_REMAINING carries the same number for older scripts), BUSY (true while a generation is already running) and NEXT_ALGORITHMS. IMAGES_REMAINING is -1 when the account did not report a number, which usually means nobody is signed in yet.</source>
+        <translation>この関数の戻り値: INSTALLED と READY (true または false)、STATE (READY、NEEDS_ACTIVATION、NO_PANEL のいずれか)、ACTION_REQUIRED (READY が false のときに必要な操作)、PLAN ('free'、'pro'、不明なときは空)、IMAGES_REMAINING (今月の残り画像枚数。古いスクリプト向けに、CREDITS_REMAINING も同じ数値を返します)、BUSY (生成が既に実行中のとき true)、NEXT_ALGORITHMS。アカウントが枚数を返さなかった場合、IMAGES_REMAINING は -1 になります。通常は、まだ誰もサインインしていないことを意味します。</translation>
+    </message>
 </context>
 </TS>
